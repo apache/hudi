@@ -21,15 +21,11 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.commons.io.IOUtils;
-import org.codehaus.jettison.json.JSONException;
-import org.codehaus.jettison.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringWriter;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -54,22 +50,6 @@ public class GenericHoodiePayload implements HoodieRecordPayload<GenericHoodiePa
     @Override public IndexedRecord getInsertValue(Schema schema) throws IOException {
         MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
         return jsonConverter.convert(getJsonData());
-    }
-
-    public String getRowKey(HoodieSQLStreamer.Config cfg) throws IOException, JSONException {
-        JSONObject object = new JSONObject(getJsonData());
-        if(!object.has(cfg.keyColumnField)) {
-            return "";
-        }
-        return (String) object.get(cfg.keyColumnField);
-    }
-
-    public String getPartitionPath(HoodieSQLStreamer.Config cfg) throws IOException, JSONException {
-        JSONObject object = new JSONObject(getJsonData());
-        if(!object.has(cfg.partitionPathField)) {
-            return "0000/00/00";
-        }
-        return object.getString(cfg.partitionPathField);
     }
 
     private String getJsonData() throws IOException {

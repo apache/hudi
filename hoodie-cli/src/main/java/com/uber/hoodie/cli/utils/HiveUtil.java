@@ -17,7 +17,6 @@
 package com.uber.hoodie.cli.utils;
 
 import com.uber.hoodie.common.model.HoodieTableMetadata;
-import com.uber.hoodie.hadoop.HoodieInputFormat;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.joda.time.DateTime;
 
@@ -62,7 +61,6 @@ public class HiveUtil {
             //stmt.execute("set mapred.job.queue.name=<queue_name>");
             stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat" );
             stmt.execute("set hive.stats.autogather=false" );
-            System.out.println("Class " + HoodieInputFormat.class.getName());
             rs = stmt.executeQuery(
                 "select count(`_hoodie_commit_time`) as cnt from " + dbName + "." + source
                     .getTableName());
