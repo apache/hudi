@@ -22,7 +22,7 @@ import com.uber.hoodie.common.model.HoodieRecord
 import com.uber.hoodie.common.util.ParquetUtils
 import com.uber.hoodie.config.{HoodieIndexConfig, HoodieStorageConfig}
 import com.uber.hoodie.io.storage.{HoodieParquetConfig, HoodieParquetWriter}
-import com.uber.hoodie.stream.GenericHoodiePayload
+import com.uber.hoodie.common.GenericHoodiePayload
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration

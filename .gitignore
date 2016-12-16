@@ -1,0 +1,70 @@
+# Directories #
+/build/
+target/
+ 
+# OS Files #
+.DS_Store
+ 
+*.class
+ 
+# Package Files #
+*.jar
+# But not these files...
+!/hoodie-cli/lib/dnl/utils/textutils/0.3.3/textutils-0.3.3.jar
+*.war
+*.ear
+*.db
+ 
+######################
+# OSX
+######################
+ 
+.DS_Store
+ 
+# Thumbnails
+._*
+ 
+######################
+# Eclipse
+######################
+ 
+*.pydevproject
+.project
+.metadata
+tmp/**
+tmp/**/*
+*.tmp
+*.bak
+*.swp
+*.pyc
+*~.nib
+local.properties
+.classpath
+.settings/
+.loadpath
+/src/main/resources/rebel.xml
+# External tool builders
+.externalToolBuilders/
+ 
+# Locally stored "Eclipse launch configurations"
+*.launch
+ 
+# CDT-specific
+.cproject
+ 
+# PDT-specific
+.buildpath
+
+#######################################
+# IntelliJ specific files/directories #
+#######################################
+.out
+.idea
+*.ipr
+*.iws
+*.iml
+
+#######################################
+# Maven
+#######################################
+dependency-reduced-pom.xml

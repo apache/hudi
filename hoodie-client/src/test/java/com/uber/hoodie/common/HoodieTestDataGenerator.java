@@ -1,0 +1,169 @@
+/*
+ * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.uber.hoodie.common;
+
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieAvroUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.UUID;
+
+/**
+ * Class to be used in tests to keep generating test inserts & updates against a corpus.
+ *
+ * Test data uses a toy Uber trips, data model.
+ */
+public class HoodieTestDataGenerator {
+
+
+    private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
+
+    static class KeyPartition {
+        HoodieKey key;
+        String partitionPath;
+    }
+
+    public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\","
+            + "\"name\": \"triprec\","
+            + "\"fields\": [ "
+            + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+            + "{\"name\": \"rider\", \"type\": \"string\"},"
+            + "{\"name\": \"driver\", \"type\": \"string\"},"
+            + "{\"name\": \"begin_lat\", \"type\": \"double\"},"
+            + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
+            + "{\"name\": \"end_lat\", \"type\": \"double\"},"
+            + "{\"name\": \"end_lon\", \"type\": \"double\"},"
+            + "{\"name\":\"fare\",\"type\": \"double\"}]}";
+
+
+    private List<KeyPartition> existingKeysList = new ArrayList<>();
+    private static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
+    private static Random rand = new Random(46474747);
+    private String[] partitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
+
+    public HoodieTestDataGenerator(String[] partitionPaths) {
+        this.partitionPaths = partitionPaths;
+    }
+
+    public HoodieTestDataGenerator() {
+        this(new String[]{"2016/03/15", "2015/03/16", "2015/03/17"});
+    }
+
+
+    /**
+     * Generates new inserts, uniformly across the partition paths above. It also updates the list
+     * of existing keys.
+     */
+    public List<HoodieRecord> generateInserts(String commitTime, int n) throws IOException {
+        List<HoodieRecord> inserts = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+            HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+            HoodieRecord record = new HoodieRecord(key, generateRandomValue(key, commitTime));
+            inserts.add(record);
+
+            KeyPartition kp = new KeyPartition();
+            kp.key = key;
+            kp.partitionPath = partitionPath;
+            existingKeysList.add(kp);
+
+            logger.info(" GENERATING INSERT FOR :" + key + "," + record.getPartitionPath());
+        }
+        return inserts;
+    }
+
+
+    public List<HoodieRecord> generateUpdates(String commitTime, List<HoodieRecord> baseRecords) throws IOException {
+        List<HoodieRecord> updates = new ArrayList<>();
+        for (HoodieRecord baseRecord: baseRecords) {
+            HoodieRecord record = new HoodieRecord(baseRecord.getKey(), generateRandomValue(baseRecord.getKey(), commitTime));
+            updates.add(record);
+            logger.info(" GENERATING UPDATE FOR :" + baseRecord.getKey());
+        }
+        return updates;
+    }
+
+    /**
+     * Generates new updates, randomly distributed across the keys above.
+     */
+    public List<HoodieRecord> generateUpdates(String commitTime, int n) throws IOException {
+        List<HoodieRecord> updates = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            KeyPartition kp = existingKeysList.get(rand.nextInt(existingKeysList.size() - 1));
+            HoodieRecord record = new HoodieRecord(kp.key, generateRandomValue(kp.key, commitTime));
+            updates.add(record);
+            logger.info(" GENERATING UPDATE FOR :" + kp.key);
+        }
+        return updates;
+    }
+
+
+    /**
+     * Generates a new avro record of the above schema format, retaining the key if optionally
+     * provided.
+     */
+    public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
+        GenericRecord rec = new GenericData.Record(avroSchema);
+        rec.put("_row_key", key.getRecordKey());
+        rec.put("rider", "rider-" + commitTime);
+        rec.put("driver", "driver-" + commitTime);
+        rec.put("begin_lat", rand.nextDouble());
+        rec.put("begin_lon", rand.nextDouble());
+        rec.put("end_lat", rand.nextDouble());
+        rec.put("end_lon", rand.nextDouble());
+        rec.put("fare", rand.nextDouble() * 100);
+        HoodieAvroUtils.addCommitMetadataToRecord(rec, commitTime, "-1");
+        return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+    }
+
+    public static void createCommitFile(String basePath, String commitTime) throws IOException {
+        Path commitFile =
+            new Path(basePath + "/" + HoodieTableMetadata.METAFOLDER_NAME + "/" + FSUtils.makeCommitFileName(commitTime));
+        FileSystem fs = FSUtils.getFs();
+        FSDataOutputStream os = fs.create(commitFile, true);
+        HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+        try {
+            // Write empty commit metadata
+            os.writeBytes(new String(commitMetadata.toJsonString().getBytes(
+                StandardCharsets.UTF_8)));
+        } finally {
+            os.close();
+        }
+
+    }
+
+    public String[] getPartitionPaths() {
+        return partitionPaths;
+    }
+}

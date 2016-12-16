@@ -188,16 +188,6 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-mr</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-tools</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit-dep</artifactId>
       <version>${junit.version}</version>
