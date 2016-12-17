@@ -26,6 +26,7 @@
         <module>hoodie-common</module>
         <module>hoodie-client</module>
         <module>hoodie-cli</module>
+        <module>hoodie-hadoop-mr</module>
     </modules>
 
     <licenses>
@@ -74,6 +75,7 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>${junit.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -251,12 +253,6 @@
                 <version>${hive.version}-cdh${cdh.version}</version>
                 <scope>provided</scope>
             </dependency>
-            <!--<dependency>-->
-                <!--<groupId>org.apache.hive</groupId>-->
-                <!--<artifactId>hive-jdbc</artifactId>-->
-                <!--<version>${hive.version}-cdh${cdh.version}</version>-->
-                <!--<scope>provided</scope>-->
-            <!--</dependency>-->
             <dependency>
                 <groupId>org.apache.hadoop</groupId>
                 <artifactId>hadoop-mapreduce-client-core</artifactId>
@@ -379,6 +375,12 @@
                 <groupId>org.codehaus.jackson</groupId>
                 <artifactId>jackson-mapper-asl</artifactId>
                 <version>1.9.13</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.hive</groupId>
+                <artifactId>hive-jdbc</artifactId>
+                <version>1.1.0-cdh5.7.2</version>
             </dependency>
 
         </dependencies>
