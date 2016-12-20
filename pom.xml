@@ -27,6 +27,7 @@
         <module>hoodie-client</module>
         <module>hoodie-cli</module>
         <module>hoodie-hadoop-mr</module>
+        <module>hoodie-hive</module>
     </modules>
 
     <licenses>
@@ -173,6 +174,9 @@
                             <exclude>**/.*</exclude>
                             <exclude>**/*.txt</exclude>
                             <exclude>**/*.sh</exclude>
+                            <exclude>**/test/resources/*.avro</exclude>
+                            <exclude>**/test/resources/*.schema</exclude>
+                            <exclude>**/test/resources/*.csv</exclude>
                         </excludes>
                     </configuration>
                     <executions>
@@ -361,6 +365,12 @@
                 <version>1.7.5</version>
             </dependency>
             <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-log4j12</artifactId>
+                <version>1.7.5</version>
+            </dependency>
+
+            <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-configuration2</artifactId>
                 <version>2.1</version>
@@ -380,9 +390,43 @@
             <dependency>
                 <groupId>org.apache.hive</groupId>
                 <artifactId>hive-jdbc</artifactId>
-                <version>1.1.0-cdh5.7.2</version>
+                <version>${hive.version}-cdh${cdh.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.apache.hive</groupId>
+                <artifactId>hive-service</artifactId>
+                <version>${hive.version}-cdh${cdh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.hive</groupId>
+                <artifactId>hive-metastore</artifactId>
+                <version>${hive.version}-cdh${cdh.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>4.12</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-hdfs</artifactId>
+                <classifier>tests</classifier>
+                <version>${hadoop.version}-cdh${cdh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-common</artifactId>
+                <classifier>tests</classifier>
+                <version>${hadoop.version}-cdh${cdh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-all</artifactId>
+                <scope>test</scope>
+                <version>1.10.19</version>
+            </dependency>
         </dependencies>
 
     </dependencyManagement>
