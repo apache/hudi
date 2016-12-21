@@ -92,7 +92,8 @@ public class HDroneDatasetTest {
         assertEquals("Table schema should be evolved schema", expectedSchema, newDatasetSchema);
         assertEquals("Table schema should have 6 fields", 6,
             hiveClient.getTableSchema(metadata).size());
-        assertEquals("", "BIGINT", hiveClient.getTableSchema(metadata).get("region_key"));
+        assertEquals("Valid Evolution should be reflected", "BIGINT",
+            hiveClient.getTableSchema(metadata).get("region_key"));
     }
 
 }

@@ -45,10 +45,6 @@ import java.util.UUID;
  * Test data uses a toy Uber trips, data model.
  */
 public class HoodieTestDataGenerator {
-
-
-    private static Logger logger = LogManager.getLogger(HoodieTestDataGenerator.class);
-
     static class KeyPartition {
         HoodieKey key;
         String partitionPath;
@@ -97,8 +93,6 @@ public class HoodieTestDataGenerator {
             kp.key = key;
             kp.partitionPath = partitionPath;
             existingKeysList.add(kp);
-
-            logger.info(" GENERATING INSERT FOR :" + key + "," + record.getPartitionPath());
         }
         return inserts;
     }
@@ -109,7 +103,6 @@ public class HoodieTestDataGenerator {
         for (HoodieRecord baseRecord: baseRecords) {
             HoodieRecord record = new HoodieRecord(baseRecord.getKey(), generateRandomValue(baseRecord.getKey(), commitTime));
             updates.add(record);
-            logger.info(" GENERATING UPDATE FOR :" + baseRecord.getKey());
         }
         return updates;
     }
@@ -123,7 +116,6 @@ public class HoodieTestDataGenerator {
             KeyPartition kp = existingKeysList.get(rand.nextInt(existingKeysList.size() - 1));
             HoodieRecord record = new HoodieRecord(kp.key, generateRandomValue(kp.key, commitTime));
             updates.add(record);
-            logger.info(" GENERATING UPDATE FOR :" + kp.key);
         }
         return updates;
     }

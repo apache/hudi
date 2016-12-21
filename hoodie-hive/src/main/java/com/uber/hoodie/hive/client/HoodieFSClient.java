@@ -106,7 +106,9 @@ public class HoodieFSClient {
                 Path path = files.next().getPath();
                 if (path.getName().endsWith(PARQUET_EXTENSION) || path.getName()
                     .endsWith(PARQUET_EXTENSION_ZIPPED)) {
-                    returnPath = path;
+                    if(returnPath == null || path.toString().compareTo(returnPath.toString()) > 0) {
+                        returnPath = path;
+                    }
                 }
             }
             if (returnPath != null) {
