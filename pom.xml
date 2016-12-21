@@ -467,7 +467,7 @@
             <id>ossrh</id>
             <activation>
                 <property>
-                    <name>performRelease</name>
+                    <name>deployArtifacts</name>
                     <value>true</value>
                 </property>
             </activation>
