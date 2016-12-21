@@ -172,7 +172,7 @@ select count(*) from hive.default.hoodie_test
 
 If all is good you should get a command prompt similar to this one
 ```
-prasanna@hadoopgw01-sjc1:~/hoodie/hoodie-cli$ ./hoodie-cli.sh 
+prasanna@:~/hoodie/hoodie-cli$ ./hoodie-cli.sh 
 16/07/13 21:27:47 INFO xml.XmlBeanDefinitionReader: Loading XML bean definitions from URL [jar:file:/home/prasanna/hoodie/hoodie-cli/target/hoodie-cli-0.1-SNAPSHOT.jar!/META-INF/spring/spring-shell-plugin.xml]
 16/07/13 21:27:47 INFO support.GenericApplicationContext: Refreshing org.springframework.context.support.GenericApplicationContext@372688e8: startup date [Wed Jul 13 21:27:47 UTC 2016]; root of context hierarchy
 16/07/13 21:27:47 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
