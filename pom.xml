@@ -21,7 +21,7 @@
     <groupId>com.uber.hoodie</groupId>
     <artifactId>hoodie</artifactId>
     <packaging>pom</packaging>
-    <version>0.2.6-SNAPSHOT</version>
+    <version>0.2.6</version>
     <modules>
         <module>hoodie-common</module>
         <module>hoodie-client</module>
@@ -99,7 +99,7 @@
         <connection>scm:git:git@github.com:uber/hoodie.git</connection>
         <developerConnection>scm:git:git@github.com:uber/hoodie.git</developerConnection>
         <url>git@github.com:uber/hoodie.git</url>
-        <tag>HEAD</tag>
+        <tag>hoodie-0.2.6</tag>
     </scm>
 
     <mailingLists>
