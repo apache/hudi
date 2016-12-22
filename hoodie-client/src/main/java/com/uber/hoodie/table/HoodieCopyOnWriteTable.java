@@ -115,7 +115,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     /**
-     * Helper class for a bucket's type (INSERT & UPDATE) and its file location
+     * Helper class for a bucket's type (INSERT and UPDATE) and its file location
      */
     class BucketInfo implements Serializable {
         BucketType bucketType;

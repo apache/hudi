@@ -77,7 +77,6 @@ public class HoodieTableMetadata implements Serializable {
      * @param fs
      * @param basePath
      * @param tableName
-     * @throws IOException
      */
     public HoodieTableMetadata(FileSystem fs, String basePath, String tableName) {
         this(fs, basePath, tableName, true);
@@ -87,7 +86,6 @@ public class HoodieTableMetadata implements Serializable {
      * Constructor which loads the hoodie table metadata, It requires the meta-data to be present already
      * @param fs
      * @param basePath
-     * @throws IOException
      */
     public HoodieTableMetadata(FileSystem fs, String basePath) {
         this(fs, basePath, null, false);
@@ -137,8 +135,7 @@ public class HoodieTableMetadata implements Serializable {
      * Returns all the commit metadata for this table. Reads all the commit files from HDFS.
      * Expensive operation, use with caution.
      *
-     * @return SortedMap of CommitTime,<class>HoodieCommitMetadata</class>
-     * @throws IOException
+     * @return SortedMap of CommitTime,HoodieCommitMetadata
      */
     public SortedMap<String, HoodieCommitMetadata> getAllCommitMetadata() {
         try {
@@ -169,7 +166,7 @@ public class HoodieTableMetadata implements Serializable {
 
     /**
      * Lookup the file name for specified <code>HoodieRecord</code>
-     * <p/>
+     *
      * TODO(vc): This metadata needs to be cached in each executor, statically, and used across, if
      * we need to be nicer to the NameNode
      */
@@ -200,7 +197,7 @@ public class HoodieTableMetadata implements Serializable {
 
 
     /**
-     * Get only the latest file in the partition with precondition commitTime(file) < maxCommitTime
+     * Get only the latest file in the partition with precondition commitTime(file) lt maxCommitTime
      *
      * @param fs
      * @param partitionPathStr

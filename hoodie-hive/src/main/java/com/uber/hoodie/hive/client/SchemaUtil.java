@@ -138,7 +138,7 @@ public class SchemaUtil {
      * Returns equivalent Hive table schema read from a parquet file
      *
      * @param messageType : Parquet Schema
-     * @return : Hive Table schema read from parquet file MAP<String,String>
+     * @return : Hive Table schema read from parquet file MAP[String,String]
      * @throws IOException
      */
     public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType)

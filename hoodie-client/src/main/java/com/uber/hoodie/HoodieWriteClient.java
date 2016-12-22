@@ -105,7 +105,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * @param jsc
      * @param clientConfig
      * @param rollbackInFlight
-     * @throws Exception
      */
     public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackInFlight) {
         this.fs = FSUtils.getFs();
@@ -234,7 +233,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      *
      * @param records HoodieRecords to insert
      * @param commitTime Commit Time handle
-     * @return JavaRDD<WriteStatus> - RDD of WriteStatus to inspect errors and counts
+     * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
      *
      */
     public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {

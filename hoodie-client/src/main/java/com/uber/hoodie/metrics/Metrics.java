@@ -26,11 +26,7 @@ import org.apache.commons.configuration.ConfigurationException;
 import java.io.Closeable;
 
 /**
- * This is the main class of the metrics system. To use it,
- * users need to call the {@link #init(HoodieMetricsConfig) init} method to initialize the system.
- * Input for {@link #init(HoodieMetricsConfig) init} includes a configuration object, where
- * users can specify the reporter type, and special configs for that reporter.
- * Refer to {@see MetricsConfiguration} for more configurable fields.
+ * This is the main class of the metrics system.
  */
 public class Metrics {
     private static volatile boolean initialized = false;

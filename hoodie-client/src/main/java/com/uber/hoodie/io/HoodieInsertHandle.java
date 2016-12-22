@@ -64,9 +64,9 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
     /**
      * Determines whether we can accept the incoming records, into the current file, depending on
-     * <p/>
+     *
      * - Whether it belongs to the same partitionPath as existing records
-     * - Whether the current file written bytes < max file size
+     * - Whether the current file written bytes lt max file size
      *
      * @return
      */

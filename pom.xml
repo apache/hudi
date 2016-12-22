@@ -22,6 +22,10 @@
     <artifactId>hoodie</artifactId>
     <packaging>pom</packaging>
     <version>0.2.7-SNAPSHOT</version>
+    <description>Hoodie is a Apache Spark library that provides the ability to efficiently do incremental processing on datasets in HDFS</description>
+    <url>https://github.com/uber/hoodie</url>
+    <name>Hoodie</name>
+
     <modules>
         <module>hoodie-common</module>
         <module>hoodie-client</module>
@@ -498,10 +502,6 @@
                                 </goals>
                             </execution>
                         </executions>
-                        <configuration>
-                            <failOnError>false</failOnError>
-                            <quiet>true</quiet>
-                        </configuration>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>

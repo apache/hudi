@@ -128,7 +128,7 @@ public class HoodieCommits implements Serializable {
     }
 
     /**
-     * Returns the nth commit from the latest commit such that lastCommit(0) => lastCommit()
+     * Returns the nth commit from the latest commit such that lastCommit(0) gteq lastCommit()
      */
     public String lastCommit(int n) {
         if (commitList.size() < n + 1) {

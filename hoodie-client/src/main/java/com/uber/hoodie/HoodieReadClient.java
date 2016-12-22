@@ -60,7 +60,7 @@ import scala.Tuple2;
  * Provides first class support for accessing Hoodie tables for data processing via Apache Spark.
  *
  *
- * TODO: Need to move all read operations here, since Hoodie is a single writer & multiple reader
+ * TODO: Need to move all read operations here, since Hoodie is a single writer and multiple reader
  */
 public class HoodieReadClient implements Serializable {
 
@@ -247,7 +247,7 @@ public class HoodieReadClient implements Serializable {
 
     /**
      * Checks if the given [Keys] exists in the hoodie table and returns [Key,
-     * Optional<FullFilePath>] If the optional FullFilePath value is not present, then the key is
+     * Optional[FullFilePath]] If the optional FullFilePath value is not present, then the key is
      * not found. If the FullFilePath value is present, it is the path component (without scheme) of
      * the URI underlying file
      */

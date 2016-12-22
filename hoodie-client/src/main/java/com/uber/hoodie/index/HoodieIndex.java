@@ -33,7 +33,7 @@ import java.io.Serializable;
 
 /**
  * Base class for different types of indexes to determine the mapping from uuid
- * <p/>
+ *
  * TODO(vc): need methods for recovery and rollback
  */
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
@@ -53,7 +53,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     }
 
     /**
-     * Checks if the given [Keys] exists in the hoodie table and returns [Key, Optional<FullFilePath>]
+     * Checks if the given [Keys] exists in the hoodie table and returns [Key, Optional[FullFilePath]]
      * If the optional FullFilePath value is not present, then the key is not found. If the FullFilePath
      * value is present, it is the path component (without scheme) of the URI underlying file
      *
@@ -74,7 +74,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
 
     /**
      * Extracts the location of written records, and updates the index.
-     * <p/>
+     *
      * TODO(vc): We may need to propagate the record as well in a WriteStatus class
      */
     public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
