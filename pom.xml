@@ -28,6 +28,7 @@
         <module>hoodie-cli</module>
         <module>hoodie-hadoop-mr</module>
         <module>hoodie-hive</module>
+        <module>hoodie-utilities</module>
     </modules>
 
     <licenses>

@@ -18,9 +18,13 @@ package com.uber.hoodie.common;
 
 import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.exception.HoodieException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.commons.io.IOUtils;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -30,16 +34,16 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
-public class GenericHoodiePayload implements HoodieRecordPayload<GenericHoodiePayload> {
+public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload> {
     private byte[] jsonDataCompressed;
     private int dataSize;
 
-    public GenericHoodiePayload(String json) throws IOException {
+    public HoodieJsonPayload(String json) throws IOException {
         this.jsonDataCompressed = compressData(json);
         this.dataSize = json.length();
     }
 
-    @Override public GenericHoodiePayload preCombine(GenericHoodiePayload another) {
+    @Override public HoodieJsonPayload preCombine(HoodieJsonPayload another) {
         return this;
     }
 
@@ -85,4 +89,19 @@ public class GenericHoodiePayload implements HoodieRecordPayload<GenericHoodiePa
         }
     }
 
+    private String getFieldFromJsonOrFail(String field) throws IOException {
+        JsonNode node = new ObjectMapper().readTree(getJsonData());
+        if(!node.has(field)) {
+            throw new HoodieException("Field :" + field + " not found in payload => " + node.toString());
+        }
+        return node.get(field).getTextValue();
+    }
+
+    public String getRowKey(String keyColumnField) throws IOException {
+        return getFieldFromJsonOrFail(keyColumnField);
+    }
+
+    public String getPartitionPath(String partitionPathField) throws IOException {
+        return getFieldFromJsonOrFail(partitionPathField);
+    }
 }
