@@ -17,12 +17,11 @@
 package com.uber.hoodie.cli
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport
-import com.uber.hoodie.common.BloomFilter
+import com.uber.hoodie.common.{BloomFilter, HoodieJsonPayload}
 import com.uber.hoodie.common.model.HoodieRecord
 import com.uber.hoodie.common.util.ParquetUtils
 import com.uber.hoodie.config.{HoodieIndexConfig, HoodieStorageConfig}
 import com.uber.hoodie.io.storage.{HoodieParquetConfig, HoodieParquetWriter}
-import com.uber.hoodie.common.GenericHoodiePayload
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
@@ -44,7 +43,7 @@ object SparkHelpers {
     val filter: BloomFilter = new BloomFilter(HoodieIndexConfig.DEFAULT_BLOOM_FILTER_NUM_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_FILTER_FPP.toDouble)
     val writeSupport: HoodieAvroWriteSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter)
     val parquetConfig: HoodieParquetConfig = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP, HoodieStorageConfig.DEFAULT_PARQUET_BLOCK_SIZE_BYTES.toInt, HoodieStorageConfig.DEFAULT_PARQUET_PAGE_SIZE_BYTES.toInt, HoodieStorageConfig.DEFAULT_PARQUET_FILE_MAX_BYTES.toInt, fs.getConf)
-    val writer = new HoodieParquetWriter[GenericHoodiePayload, IndexedRecord](commitTime, destinationFile, parquetConfig, schema)
+    val writer = new HoodieParquetWriter[HoodieJsonPayload, IndexedRecord](commitTime, destinationFile, parquetConfig, schema)
     for (rec <- sourceRecords) {
       val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
       if (!keysToSkip.contains(key)) {
