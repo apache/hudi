@@ -1,0 +1,58 @@
+# This is your sidebar TOC. The sidebar code loops through sections here and provides the appropriate formatting.
+
+entries:
+- title: sidebar
+  product: Hoodie Ver
+  version: 0.2
+  folders:
+
+  - title: Getting Started
+    output: web
+    folderitems:
+
+    - title: Overview
+      url: /index.html
+      output: web
+      type: homepage
+
+    - title: Quickstart
+      url: /quickstart.html
+      output: web
+
+    - title: Use Cases
+      url: /use_cases.html
+      output: web
+
+    - title: Powered By
+      url: /powered_by.html
+      output: web
+
+  - title: Documentation
+    output: web
+    folderitems:
+
+    - title: Concepts
+      url: /concepts.html
+      output: web
+
+    - title: SQL Queries
+      url: /sql_queries.html
+      output: web
+
+    - title: Incremental Processing
+      url: /incremental_processing.html
+      output: web
+
+    - title: Admin Guide
+      url: /admin_guide.html
+      output: web
+
+    - title: Performance
+      url: /performance.html
+      output: web
+
+    - title: Comparison
+      url: /comparison.html
+      output: web
+
+
