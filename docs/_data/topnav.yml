@@ -1,0 +1,30 @@
+## Topnav single links
+## if you want to list an external url, use external_url instead of url. the theme will apply a different link base.
+topnav:
+- title: Topnav
+  items:
+    - title: News
+      url: /news
+    - title: Community
+      url: /community.html
+    - title: Github
+      external_url: https://github.com/uber/hoodie
+
+#Topnav dropdowns
+topnav_dropdowns:
+- title: Topnav dropdowns
+  folders:
+    - title: Developer Resources
+      folderitems:
+          - title: Setup
+            url: /dev_setup.html
+            output: web
+          - title: API Docs
+            url: /api_docs.html
+            output: web
+          - title: Code Structure
+            url: /code_structure.html
+            output: web
+          - title: Roadmap
+            url: /roadmap.html
+            output: web
