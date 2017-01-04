@@ -17,20 +17,20 @@
 package com.uber.hoodie.cli.utils;
 
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 public class CommitUtil {
-    public static long countNewRecords(HoodieTableMetadata target, List<String> commitsToCatchup)
+    public static long countNewRecords(HoodieTableMetaClient target, List<String> commitsToCatchup)
         throws IOException {
         long totalNew = 0;
-        SortedMap<String, HoodieCommitMetadata> meta = target.getAllCommitMetadata();
+        HoodieTimeline timeline = target.getActiveCommitTimeline();
+        timeline = timeline.reload();
         for(String commit:commitsToCatchup) {
-            HoodieCommitMetadata c = meta.get(commit);
+            HoodieCommitMetadata c = HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commit).get());
             totalNew += c.fetchTotalRecordsWritten() - c.fetchTotalUpdateRecordsWritten();
         }
         return totalNew;

@@ -16,11 +16,11 @@
 
 package com.uber.hoodie.func;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 
 import com.uber.hoodie.io.HoodieIOHandle;
 import com.uber.hoodie.io.HoodieInsertHandle;
@@ -40,17 +40,17 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
 
     private final HoodieWriteConfig hoodieConfig;
     private final String commitTime;
-    private final HoodieTableMetadata tableMetadata;
+    private final HoodieTableMetaClient metaClient;
     private Set<String> partitionsCleaned;
     private HoodieInsertHandle handle;
 
     public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
-        String commitTime, HoodieTableMetadata metadata) {
+        String commitTime, HoodieTableMetaClient metaClient) {
         super(sortedRecordItr);
         this.partitionsCleaned = new HashSet<>();
         this.hoodieConfig = config;
         this.commitTime = commitTime;
-        this.tableMetadata = metadata;
+        this.metaClient = metaClient;
     }
 
     @Override protected void start() {
@@ -78,7 +78,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
             // lazily initialize the handle, for the first time
             if (handle == null) {
                 handle =
-                    new HoodieInsertHandle(hoodieConfig, commitTime, tableMetadata,
+                    new HoodieInsertHandle(hoodieConfig, commitTime, metaClient,
                         record.getPartitionPath());
             }
 
@@ -90,7 +90,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
                 statuses.add(handle.close());
                 // Need to handle the rejected record & open new handle
                 handle =
-                    new HoodieInsertHandle(hoodieConfig, commitTime, tableMetadata,
+                    new HoodieInsertHandle(hoodieConfig, commitTime, metaClient,
                         record.getPartitionPath());
                 handle.write(record); // we should be able to write 1 record.
                 break;

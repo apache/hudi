@@ -16,7 +16,11 @@
 
 package com.uber.hoodie.cli
 
-import com.uber.hoodie.common.model.{HoodieRecord, HoodieTableMetadata}
+import java.util.stream.Collectors
+
+import com.uber.hoodie.common.model.{HoodieDataFile, HoodieRecord}
+import com.uber.hoodie.common.table.HoodieTableMetaClient
+import com.uber.hoodie.common.table.view.ReadOptimizedTableView
 import com.uber.hoodie.common.util.FSUtils
 import com.uber.hoodie.exception.HoodieException
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
@@ -70,9 +74,12 @@ class DedupeSparkJob (basePath: String,
     val tmpTableName = s"htbl_${System.currentTimeMillis()}"
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 
-    val metadata = new HoodieTableMetadata(fs, basePath)
+    val metadata = new HoodieTableMetaClient(fs, basePath)
+    val fsView = new ReadOptimizedTableView(fs, metadata)
+
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"${basePath}/${duplicatedPartitionPath}"))
-    val filteredStatuses = metadata.getLatestVersions(allFiles).map(f => f.getPath.toString);
+    val latestFiles:java.util.List[HoodieDataFile] = fsView.streamLatestVersions(allFiles).collect(Collectors.toList[HoodieDataFile]())
+    val filteredStatuses = latestFiles.map(f => f.getPath)
     LOG.info(s" List of files under partition: ${} =>  ${filteredStatuses.mkString(" ")}")
 
     val df = sqlContext.parquetFile(filteredStatuses:_*)
@@ -118,9 +125,13 @@ class DedupeSparkJob (basePath: String,
 
 
   def fixDuplicates(dryRun: Boolean = true) = {
-    val metadata = new HoodieTableMetadata(fs, basePath)
+    val metadata = new HoodieTableMetaClient(fs, basePath)
+    val fsView = new ReadOptimizedTableView(fs, metadata)
+
     val allFiles = fs.listStatus(new Path(s"${basePath}/${duplicatedPartitionPath}"))
-    val fileNameToPathMap = metadata.getLatestVersions(allFiles).map(f => (FSUtils.getFileId(f.getPath.getName), f.getPath)).toMap;
+    val latestFiles:java.util.List[HoodieDataFile] = fsView.streamLatestVersions(allFiles).collect(Collectors.toList[HoodieDataFile]())
+
+    val fileNameToPathMap = latestFiles.map(f => (f.getFileId, new Path(f.getPath))).toMap
     val dupeFixPlan = planDuplicateFix()
 
     // 1. Copy all latest files into the temp fix path

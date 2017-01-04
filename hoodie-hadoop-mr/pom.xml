@@ -90,7 +90,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.3</version>
+        <version>2.4</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -98,6 +98,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml</dependencyReducedPomLocation>
               <minimizeJar>true</minimizeJar>
               <artifactSet>
                 <includes>

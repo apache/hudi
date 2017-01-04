@@ -17,9 +17,7 @@
 package com.uber.hoodie.cli.commands;
 
 import com.uber.hoodie.cli.HoodieCLI;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -31,12 +29,13 @@ import java.io.IOException;
 public class DatasetsCommand implements CommandMarker {
     @CliCommand(value = "connect", help = "Connect to a hoodie dataset")
     public String connect(
-            @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset")
-            final String path) throws IOException {
+        @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset")
+        final String path) throws IOException {
         boolean initialized = HoodieCLI.initConf();
         HoodieCLI.initFS(initialized);
-        HoodieCLI.setTableMetadata(new HoodieTableMetadata(HoodieCLI.fs, path));
+        HoodieCLI.setTableMetadata(new HoodieTableMetaClient(HoodieCLI.fs, path));
         HoodieCLI.state = HoodieCLI.CLIState.DATASET;
-        return "Metadata for table " + HoodieCLI.tableMetadata.getTableName() + " loaded";
+        return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName()
+            + " loaded";
     }
 }

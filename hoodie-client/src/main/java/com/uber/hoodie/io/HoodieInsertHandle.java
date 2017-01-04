@@ -16,12 +16,12 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieInsertException;
@@ -45,7 +45,7 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
     private int recordsWritten = 0;
 
     public HoodieInsertHandle(HoodieWriteConfig config, String commitTime,
-                              HoodieTableMetadata metadata, String partitionPath) {
+                              HoodieTableMetaClient metadata, String partitionPath) {
         super(config, commitTime, metadata);
         this.status = new WriteStatus();
         status.setFileId(UUID.randomUUID().toString());
