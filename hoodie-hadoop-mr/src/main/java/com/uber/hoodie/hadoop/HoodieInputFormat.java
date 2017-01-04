@@ -63,6 +63,7 @@ import static parquet.filter2.predicate.FilterApi.gt;
  * then they are passed in as is (as what FileInputFormat.listStatus() would do).
  * The JobConf could have paths from multipe Hoodie/Non-Hoodie datasets
  */
+@UseFileSplitsFromInputFormat
 public class HoodieInputFormat extends MapredParquetInputFormat
     implements Configurable {
     public static final Log LOG = LogFactory.getLog(HoodieInputFormat.class);
