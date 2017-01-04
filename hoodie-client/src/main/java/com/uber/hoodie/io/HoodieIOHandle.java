@@ -16,9 +16,12 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -36,15 +39,19 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     protected final String commitTime;
     protected final HoodieWriteConfig config;
     protected final FileSystem fs;
-    protected final HoodieTableMetadata metadata;
+    protected final HoodieTableMetaClient metaClient;
+    protected final HoodieTimeline hoodieTimeline;
+    protected final TableFileSystemView fileSystemView;
     protected final Schema schema;
 
     public HoodieIOHandle(HoodieWriteConfig config, String commitTime,
-                          HoodieTableMetadata metadata) {
+                          HoodieTableMetaClient metaClient) {
         this.commitTime = commitTime;
         this.config = config;
         this.fs = FSUtils.getFs();
-        this.metadata = metadata;
+        this.metaClient = metaClient;
+        this.hoodieTimeline = metaClient.getActiveCommitTimeline();
+        this.fileSystemView = new ReadOptimizedTableView(fs, metaClient);
         this.schema =
             HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     }

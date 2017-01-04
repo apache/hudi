@@ -16,13 +16,13 @@
 
 package com.uber.hoodie.func;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
@@ -48,14 +48,14 @@ public class TestUpdateMapFunction {
         TemporaryFolder folder = new TemporaryFolder();
         folder.create();
         this.basePath = folder.getRoot().getAbsolutePath();
-        HoodieTestUtils.initializeHoodieDirectory(basePath);
+        HoodieTestUtils.init(basePath);
     }
 
     @Test
     public void testSchemaEvolutionOnUpdate() throws Exception {
         // Create a bunch of records with a old version of schema
         HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-        HoodieTableMetadata metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath);
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
         HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable("100", config, metadata);
 
         String recordStr1 =
@@ -79,13 +79,13 @@ public class TestUpdateMapFunction {
                 rowChange3));
         Iterator<List<WriteStatus>> insertResult = table.handleInsert(records.iterator());
         Path commitFile =
-            new Path(config.getBasePath() + "/.hoodie/" + FSUtils.makeCommitFileName("100"));
+            new Path(config.getBasePath() + "/.hoodie/" + HoodieTableMetaClient.makeCommitFileName("100"));
         FSUtils.getFs().create(commitFile);
 
         // Now try an update with an evolved schema
         // Evolved schema does not have guarantee on preserving the original field ordering
         config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath);
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
         String fileId = insertResult.next().get(0).getFileId();
         System.out.println(fileId);
 

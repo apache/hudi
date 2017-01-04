@@ -24,6 +24,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -186,5 +187,9 @@ public class HoodieCommitMetadata implements Serializable {
     @Override
     public int hashCode() {
         return partitionToWriteStats != null ? partitionToWriteStats.hashCode() : 0;
+    }
+
+    public static HoodieCommitMetadata fromBytes(byte[] bytes) throws IOException {
+        return fromJsonString(new String(bytes, Charset.forName("utf-8")));
     }
 }

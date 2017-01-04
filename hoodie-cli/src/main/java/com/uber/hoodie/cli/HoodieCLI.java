@@ -16,7 +16,7 @@
 
 package com.uber.hoodie.cli;
 
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
@@ -26,8 +26,8 @@ public class HoodieCLI {
     public static Configuration conf;
     public static FileSystem fs;
     public static CLIState state = CLIState.INIT;
-    public static HoodieTableMetadata tableMetadata;
-    public static HoodieTableMetadata syncTableMetadata;
+    public static HoodieTableMetaClient tableMetadata;
+    public static HoodieTableMetaClient syncTableMetadata;
 
 
     public enum CLIState {
@@ -48,7 +48,7 @@ public class HoodieCLI {
         }
     }
 
-    public static void setTableMetadata(HoodieTableMetadata tableMetadata) {
+    public static void setTableMetadata(HoodieTableMetaClient tableMetadata) {
         HoodieCLI.tableMetadata = tableMetadata;
     }
 }

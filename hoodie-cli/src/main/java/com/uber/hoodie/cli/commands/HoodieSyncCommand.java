@@ -19,8 +19,8 @@ package com.uber.hoodie.cli.commands;
 import com.uber.hoodie.cli.utils.CommitUtil;
 import com.uber.hoodie.cli.utils.HiveUtil;
 import com.uber.hoodie.cli.HoodieCLI;
-import com.uber.hoodie.common.model.HoodieCommits;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -28,6 +28,7 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class HoodieSyncCommand implements CommandMarker {
@@ -58,8 +59,10 @@ public class HoodieSyncCommand implements CommandMarker {
         @CliOption(key = {
             "hivePass"}, mandatory = true, unspecifiedDefaultValue = "", help = "hive password to connect to")
         final String hivePass) throws Exception {
-        HoodieTableMetadata target = HoodieCLI.syncTableMetadata;
-        HoodieTableMetadata source = HoodieCLI.tableMetadata;
+        HoodieTableMetaClient target = HoodieCLI.syncTableMetadata;
+        HoodieTimeline targetTimeline = target.getActiveCommitTimeline();
+        HoodieTableMetaClient source = HoodieCLI.tableMetadata;
+        HoodieTimeline sourceTimeline = source.getActiveCommitTimeline();
         long sourceCount = 0;
         long targetCount = 0;
         if ("complete".equals(mode)) {
@@ -71,33 +74,39 @@ public class HoodieSyncCommand implements CommandMarker {
         }
 
         String targetLatestCommit =
-            target.isCommitsEmpty() ? "0" : target.getAllCommits().lastCommit();
+            targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get();
         String sourceLatestCommit =
-            source.isCommitsEmpty() ? "0" : source.getAllCommits().lastCommit();
+            sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get();
 
-        if (sourceLatestCommit != null && HoodieCommits
-            .isCommit1After(targetLatestCommit, sourceLatestCommit)) {
+        if (sourceLatestCommit != null && sourceTimeline
+            .compareInstants(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
             // source is behind the target
-            List<String> commitsToCatchup = target.findCommitsSinceTs(sourceLatestCommit);
+            List<String> commitsToCatchup =
+                targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
+                    .collect(Collectors.toList());
             if (commitsToCatchup.isEmpty()) {
-                return "Count difference now is (count(" + target.getTableName() + ") - count("
-                    + source.getTableName() + ") == " + (targetCount - sourceCount);
+                return "Count difference now is (count(" + target.getTableConfig().getTableName()
+                    + ") - count(" + source.getTableConfig().getTableName() + ") == " + (targetCount
+                    - sourceCount);
             } else {
                 long newInserts = CommitUtil.countNewRecords(target, commitsToCatchup);
-                return "Count difference now is (count(" + target.getTableName() + ") - count("
-                    + source.getTableName() + ") == " + (targetCount - sourceCount)
-                    + ". Catch up count is " + newInserts;
+                return "Count difference now is (count(" + target.getTableConfig().getTableName()
+                    + ") - count(" + source.getTableConfig().getTableName() + ") == " + (targetCount
+                    - sourceCount) + ". Catch up count is " + newInserts;
             }
         } else {
-            List<String> commitsToCatchup = source.findCommitsSinceTs(targetLatestCommit);
+            List<String> commitsToCatchup =
+                sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
+                    .collect(Collectors.toList());
             if (commitsToCatchup.isEmpty()) {
-                return "Count difference now is (count(" + source.getTableName() + ") - count("
-                    + target.getTableName() + ") == " + (sourceCount - targetCount);
+                return "Count difference now is (count(" + source.getTableConfig().getTableName()
+                    + ") - count(" + target.getTableConfig().getTableName() + ") == " + (sourceCount
+                    - targetCount);
             } else {
                 long newInserts = CommitUtil.countNewRecords(source, commitsToCatchup);
-                return "Count difference now is (count(" + source.getTableName() + ") - count("
-                    + target.getTableName() + ") == " + (sourceCount - targetCount)
-                    + ". Catch up count is " + newInserts;
+                return "Count difference now is (count(" + source.getTableConfig().getTableName()
+                    + ") - count(" + target.getTableConfig().getTableName() + ") == " + (sourceCount
+                    - targetCount) + ". Catch up count is " + newInserts;
             }
 
         }

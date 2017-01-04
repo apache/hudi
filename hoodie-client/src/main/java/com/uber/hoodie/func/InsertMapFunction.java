@@ -16,11 +16,11 @@
 
 package com.uber.hoodie.func;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import org.apache.spark.api.java.function.Function2;
 
 import java.util.Iterator;
@@ -35,18 +35,18 @@ public class InsertMapFunction<T extends HoodieRecordPayload>
 
     private String commitTime;
     private HoodieWriteConfig config;
-    private HoodieTableMetadata metadata;
+    private HoodieTableMetaClient metaClient;
 
     public InsertMapFunction(String commitTime, HoodieWriteConfig config,
-        HoodieTableMetadata metadata) {
+        HoodieTableMetaClient metaClient) {
         this.commitTime = commitTime;
         this.config = config;
-        this.metadata = metadata;
+        this.metaClient = metaClient;
     }
 
     @Override
     public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr)
         throws Exception {
-        return new LazyInsertIterable<>(sortedRecordItr, config, commitTime, metadata);
+        return new LazyInsertIterable<>(sortedRecordItr, config, commitTime, metaClient);
     }
 }

@@ -16,11 +16,11 @@
 
 package com.uber.hoodie.table;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.exception.HoodieException;
 
@@ -39,12 +39,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
     protected final HoodieWriteConfig config;
 
-    protected final HoodieTableMetadata metadata;
+    protected final HoodieTableMetaClient metaClient;
 
-    protected HoodieTable(String commitTime, HoodieWriteConfig config, HoodieTableMetadata metadata) {
+    protected HoodieTable(String commitTime, HoodieWriteConfig config,
+        HoodieTableMetaClient metaClient) {
         this.commitTime = commitTime;
         this.config = config;
-        this.metadata = metadata;
+        this.metaClient = metaClient;
     }
 
     /**
@@ -81,18 +82,16 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      * @param partitioner
      */
     public abstract Iterator<List<WriteStatus>> handleUpsertPartition(Integer partition,
-                                                                      Iterator<HoodieRecord<T>> recordIterator,
-                                                                      Partitioner partitioner);
+        Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
 
-    public static HoodieTable getHoodieTable(HoodieTableType type,
+    public static HoodieTable getHoodieTable(HoodieTableMetaClient metaClient,
                                              String commitTime,
-                                             HoodieWriteConfig config,
-                                             HoodieTableMetadata metadata) {
-        if (type == HoodieTableType.COPY_ON_WRITE) {
-            return new HoodieCopyOnWriteTable(commitTime, config, metadata);
+                                             HoodieWriteConfig config) {
+        if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+            return new HoodieCopyOnWriteTable(commitTime, config, metaClient);
         } else {
-            throw new HoodieException("Unsupported table type :"+ type);
+            throw new HoodieException("Unsupported table type :"+ metaClient.getTableType());
         }
     }
 }
