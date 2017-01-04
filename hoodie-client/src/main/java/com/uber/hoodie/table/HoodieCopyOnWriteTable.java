@@ -16,6 +16,11 @@
 
 package com.uber.hoodie.table;
 
+import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
@@ -23,7 +28,6 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
@@ -32,7 +36,6 @@ import com.uber.hoodie.io.HoodieUpdateHandle;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -51,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import scala.Option;
 import scala.Tuple2;
@@ -132,8 +136,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
 
-    public HoodieCopyOnWriteTable(String commitTime, HoodieWriteConfig config, HoodieTableMetadata metadata) {
-        super(commitTime, config, metadata);
+    public HoodieCopyOnWriteTable(String commitTime, HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+        super(commitTime, config, metaClient);
     }
 
     /**
@@ -286,21 +290,22 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             FileSystem fs = FSUtils.getFs();
             List<SmallFile> smallFileLocations = new ArrayList<>();
 
-            if (metadata.getAllCommits().getNumCommits() > 0) { // if we have some commits
-                String latestCommitTime = metadata.getAllCommits().lastCommit();
-                FileStatus[] allFiles = metadata.getLatestVersionInPartition(fs, partitionPath, latestCommitTime);
+            HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+            TableFileSystemView fileSystemView = new ReadOptimizedTableView(fs, metaClient);
 
-                if (allFiles != null && allFiles.length > 0) {
-                    for (FileStatus fileStatus : allFiles) {
-                        if (fileStatus.getLen() < config.getParquetSmallFileLimit()) {
-                            String filename = fileStatus.getPath().getName();
-                            SmallFile sf = new SmallFile();
-                            sf.location = new HoodieRecordLocation(
-                                    FSUtils.getCommitTime(filename),
-                                    FSUtils.getFileId(filename));
-                            sf.sizeBytes = fileStatus.getLen();
-                            smallFileLocations.add(sf);
-                        }
+            if (commitTimeline.hasInstants()) { // if we have some commits
+                String latestCommitTime = commitTimeline.lastInstant().get();
+                List<HoodieDataFile> allFiles = fileSystemView.streamLatestVersionInPartition(partitionPath, latestCommitTime).collect(
+                    Collectors.toList());
+
+                for (HoodieDataFile file : allFiles) {
+                    if (file.getFileSize() < config.getParquetSmallFileLimit()) {
+                        String filename = file.getFileName();
+                        SmallFile sf = new SmallFile();
+                        sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename),
+                            FSUtils.getFileId(filename));
+                        sf.sizeBytes = file.getFileSize();
+                        smallFileLocations.add(sf);
                     }
                 }
             }
@@ -316,11 +321,15 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
          */
         private long averageBytesPerRecord() {
             long avgSize = 0L;
+            HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
             try {
-                if (metadata.getAllCommits().getNumCommits() > 0) {
-                    String latestCommitTime = metadata.getAllCommits().lastCommit();
-                    HoodieCommitMetadata commitMetadata = metadata.getCommitMetadata(latestCommitTime);
-                    avgSize =(long) Math.ceil((1.0 * commitMetadata.fetchTotalBytesWritten())/commitMetadata.fetchTotalRecordsWritten());
+                if (commitTimeline.hasInstants()) {
+                    String latestCommitTime = commitTimeline.lastInstant().get();
+                    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                        .fromBytes(commitTimeline.readInstantDetails(latestCommitTime).get());
+                    avgSize = (long) Math.ceil(
+                        (1.0 * commitMetadata.fetchTotalBytesWritten()) / commitMetadata
+                            .fetchTotalRecordsWritten());
                 }
             } catch (Throwable t) {
                 // make this fail safe.
@@ -389,7 +398,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr) throws Exception {
         // these are updates
         HoodieUpdateHandle upsertHandle =
-                new HoodieUpdateHandle<>(config, commitTime, metadata, recordItr, fileLoc);
+                new HoodieUpdateHandle<>(config, commitTime, metaClient, recordItr, fileLoc);
         if (upsertHandle.getOldFilePath() == null) {
             throw new HoodieUpsertException("Error in finding the old file path at commit " +
                     commitTime +" at fileLoc: " + fileLoc);
@@ -424,7 +433,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     public Iterator<List<WriteStatus>> handleInsert(Iterator<HoodieRecord<T>> recordItr) throws Exception {
-        return new LazyInsertIterable<>(recordItr, config, commitTime, metadata);
+        return new LazyInsertIterable<>(recordItr, config, commitTime, metaClient);
     }
 
 

@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.common.util;
 
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -66,14 +65,6 @@ public class FSUtils {
 
     public static String maskWithOnlyCommitTime(String commitTime) {
         return String.format("*_*_%s.parquet", commitTime);
-    }
-
-    public static String makeInflightCommitFileName(String commitTime) {
-        return commitTime + HoodieTableMetadata.INFLIGHT_FILE_SUFFIX;
-    }
-
-    public static String makeCommitFileName(String commitTime) {
-        return commitTime + HoodieTableMetadata.COMMIT_FILE_SUFFIX;
     }
 
     public static String getCommitFromCommitFile(String commitFileName) {

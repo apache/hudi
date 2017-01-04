@@ -21,9 +21,9 @@ import com.uber.hoodie.cli.HoodiePrintHelper;
 import com.uber.hoodie.cli.utils.InputStreamConsumer;
 import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCommits;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.NumericUtils;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -38,7 +38,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
+import java.util.stream.Collectors;
 
 @Component
 public class CommitsCommand implements CommandMarker {
@@ -67,17 +67,14 @@ public class CommitsCommand implements CommandMarker {
         @CliOption(key = {
             "limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "10")
         final Integer limit) throws IOException {
-        SortedMap<String, HoodieCommitMetadata> map =
-            HoodieCLI.tableMetadata.getAllCommitMetadata();
-        int arraySize =
-            Math.min(limit, HoodieCLI.tableMetadata.getAllCommits().getCommitList().size());
-        String[][] rows = new String[arraySize][];
-        ArrayList<String> commitList =
-            new ArrayList<String>(HoodieCLI.tableMetadata.getAllCommits().getCommitList());
-        Collections.reverse(commitList);
-        for (int i = 0; i < arraySize; i++) {
-            String commit = commitList.get(i);
-            HoodieCommitMetadata commitMetadata = map.get(commit);
+        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
+        List<String> commits = timeline.getInstants().collect(Collectors.toList());
+        String[][] rows = new String[commits.size()][];
+        Collections.reverse(commits);
+        for (int i = 0; i < commits.size(); i++) {
+            String commit = commits.get(i);
+            HoodieCommitMetadata commitMetadata =
+                HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commit).get());
             rows[i] = new String[] {commit,
                 NumericUtils.humanReadableByteCount(commitMetadata.fetchTotalBytesWritten()),
                 String.valueOf(commitMetadata.fetchTotalFilesInsert()),
@@ -95,10 +92,10 @@ public class CommitsCommand implements CommandMarker {
 
     @CliCommand(value = "commits refresh", help = "Refresh the commits")
     public String refreshCommits() throws IOException {
-        HoodieTableMetadata metadata =
-            new HoodieTableMetadata(HoodieCLI.fs, HoodieCLI.tableMetadata.getBasePath());
+        HoodieTableMetaClient metadata =
+            new HoodieTableMetaClient(HoodieCLI.fs, HoodieCLI.tableMetadata.getBasePath());
         HoodieCLI.setTableMetadata(metadata);
-        return "Metadata for table " + metadata.getTableName() + " refreshed.";
+        return "Metadata for table " + metadata.getTableConfig().getTableName() + " refreshed.";
     }
 
     @CliCommand(value = "commit rollback", help = "Rollback a commit")
@@ -107,9 +104,9 @@ public class CommitsCommand implements CommandMarker {
         final String commitTime,
         @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path")
         final String sparkPropertiesPath) throws Exception {
-        if (!HoodieCLI.tableMetadata.getAllCommits().contains(commitTime)) {
+        if (!HoodieCLI.tableMetadata.getActiveCommitTimeline().containsInstant(commitTime)) {
             return "Commit " + commitTime + " not found in Commits " + HoodieCLI.tableMetadata
-                .getAllCommits();
+                .getActiveCommitTimeline().getInstants().collect(Collectors.toList());
         }
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
         sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(),
@@ -130,11 +127,13 @@ public class CommitsCommand implements CommandMarker {
     public String showCommitPartitions(
         @CliOption(key = {"commit"}, help = "Commit to show")
         final String commitTime) throws Exception {
-        if (!HoodieCLI.tableMetadata.getAllCommits().contains(commitTime)) {
+        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
+        if (!timeline.containsInstant(commitTime)) {
             return "Commit " + commitTime + " not found in Commits " + HoodieCLI.tableMetadata
-                .getAllCommits();
+                .getActiveCommitTimeline().getInstants().collect(Collectors.toList());
         }
-        HoodieCommitMetadata meta = HoodieCLI.tableMetadata.getAllCommitMetadata().get(commitTime);
+        HoodieCommitMetadata meta =
+            HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commitTime).get());
         List<String[]> rows = new ArrayList<String[]>();
         for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats()
             .entrySet()) {
@@ -174,11 +173,13 @@ public class CommitsCommand implements CommandMarker {
     public String showCommitFiles(
         @CliOption(key = {"commit"}, help = "Commit to show")
         final String commitTime) throws Exception {
-        if (!HoodieCLI.tableMetadata.getAllCommits().contains(commitTime)) {
+        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
+        if (!timeline.containsInstant(commitTime)) {
             return "Commit " + commitTime + " not found in Commits " + HoodieCLI.tableMetadata
-                .getAllCommits();
+                .getActiveCommitTimeline().getInstants().collect(Collectors.toList());
         }
-        HoodieCommitMetadata meta = HoodieCLI.tableMetadata.getAllCommitMetadata().get(commitTime);
+        HoodieCommitMetadata meta =
+            HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commitTime).get());
         List<String[]> rows = new ArrayList<String[]>();
         for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats()
             .entrySet()) {
@@ -206,23 +207,29 @@ public class CommitsCommand implements CommandMarker {
     public String compareCommits(
         @CliOption(key = {"path"}, help = "Path of the dataset to compare to")
         final String path) throws Exception {
-        HoodieTableMetadata target = new HoodieTableMetadata(HoodieCLI.fs, path);
-        HoodieTableMetadata source = HoodieCLI.tableMetadata;
+        HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.fs, path);
+        HoodieTimeline targetTimeline = target.getActiveCommitTimeline();
+        HoodieTableMetaClient source = HoodieCLI.tableMetadata;
+        HoodieTimeline sourceTimeline = source.getActiveCommitTimeline();
         String targetLatestCommit =
-            target.isCommitsEmpty() ? "0" : target.getAllCommits().lastCommit();
+            targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get();
         String sourceLatestCommit =
-            source.isCommitsEmpty() ? "0" : source.getAllCommits().lastCommit();
+            sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get();
 
-        if (sourceLatestCommit != null && HoodieCommits
-            .isCommit1After(targetLatestCommit, sourceLatestCommit)) {
+        if (sourceLatestCommit != null && sourceTimeline
+            .compareInstants(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
             // source is behind the target
-            List<String> commitsToCatchup = target.findCommitsSinceTs(sourceLatestCommit);
-            return "Source " + source.getTableName() + " is behind by " + commitsToCatchup.size()
+            List<String> commitsToCatchup =
+                targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
+                    .collect(Collectors.toList());
+            return "Source " + source.getTableConfig().getTableName() + " is behind by " + commitsToCatchup.size()
                 + " commits. Commits to catch up - " + commitsToCatchup;
         } else {
-            List<String> commitsToCatchup = source.findCommitsSinceTs(targetLatestCommit);
-            return "Source " + source.getTableName() + " is ahead by " + commitsToCatchup.size()
-                + " commits. Commits to catch up - " + commitsToCatchup;
+            List<String> commitsToCatchup =
+                sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
+                    .collect(Collectors.toList());
+            return "Source " + source.getTableConfig().getTableName() + " is ahead by "
+                + commitsToCatchup.size() + " commits. Commits to catch up - " + commitsToCatchup;
         }
     }
 
@@ -235,10 +242,10 @@ public class CommitsCommand implements CommandMarker {
     public String syncCommits(
         @CliOption(key = {"path"}, help = "Path of the dataset to compare to")
         final String path) throws Exception {
-        HoodieCLI.syncTableMetadata = new HoodieTableMetadata(HoodieCLI.fs, path);
+        HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.fs, path);
         HoodieCLI.state = HoodieCLI.CLIState.SYNC;
-        return "Load sync state between " + HoodieCLI.tableMetadata.getTableName() + " and "
-            + HoodieCLI.syncTableMetadata.getTableName();
+        return "Load sync state between " + HoodieCLI.tableMetadata.getTableConfig().getTableName()
+            + " and " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName();
     }
 
 }

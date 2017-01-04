@@ -31,13 +31,13 @@ public class HoodiePrompt extends DefaultPromptProvider {
             case INIT:
                 return "hoodie->";
             case DATASET:
-                return "hoodie:" + HoodieCLI.tableMetadata.getTableName() + "->";
+                return "hoodie:" + HoodieCLI.tableMetadata.getTableConfig().getTableName() + "->";
             case SYNC:
-                return "hoodie:" + HoodieCLI.tableMetadata.getTableName() + " <==> "
-                    + HoodieCLI.syncTableMetadata.getTableName() + "->";
+                return "hoodie:" + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " <==> "
+                    + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
         }
         if (HoodieCLI.tableMetadata != null)
-            return "hoodie:" + HoodieCLI.tableMetadata.getTableName() + "->";
+            return "hoodie:" + HoodieCLI.tableMetadata.getTableConfig().getTableName() + "->";
         return "hoodie->";
     }
 

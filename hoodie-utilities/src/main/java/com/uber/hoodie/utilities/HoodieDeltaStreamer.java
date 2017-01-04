@@ -22,10 +22,10 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.HoodieJsonPayload;
-import com.uber.hoodie.common.model.HoodieCommits;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -65,22 +65,23 @@ public class HoodieDeltaStreamer implements Serializable {
     private void sync() throws Exception {
         JavaSparkContext sc = getSparkContext(cfg);
         FileSystem fs = FSUtils.getFs();
-        HoodieTableMetadata targetHoodieMetadata =
-                new HoodieTableMetadata(fs, cfg.targetPath, cfg.targetTableName);
+        HoodieTableMetaClient targetHoodieMetadata = new HoodieTableMetaClient(fs, cfg.targetPath);
+        HoodieTimeline timeline = targetHoodieMetadata.getActiveCommitTimeline();
         String lastCommitPulled = findLastCommitPulled(fs, cfg.dataPath);
         log.info("Last commit pulled on the source dataset is " + lastCommitPulled);
-        if (!targetHoodieMetadata.getAllCommits().isEmpty() && HoodieCommits
-                .isCommit1After(targetHoodieMetadata.getAllCommits().lastCommit(), lastCommitPulled)) {
+        if (!timeline.getInstants().iterator().hasNext() && timeline
+            .compareInstants(timeline.lastInstant().get(), lastCommitPulled,
+                HoodieTimeline.GREATER)) {
             // this should never be the case
             throw new IllegalStateException(
-                    "Last commit pulled from source table " + lastCommitPulled
-                            + " is before the last commit in the target table " + targetHoodieMetadata
-                            .getAllCommits().lastCommit());
+                "Last commit pulled from source table " + lastCommitPulled
+                    + " is before the last commit in the target table " + timeline.lastInstant()
+                    .get());
         }
-        if (!cfg.override && targetHoodieMetadata.getAllCommits().contains(lastCommitPulled)) {
+        if (!cfg.override && timeline.containsOrBeforeTimelineStarts(lastCommitPulled)) {
             throw new IllegalStateException(
-                    "Target Table already has the commit " + lastCommitPulled
-                            + ". Not overriding as cfg.override is false");
+                "Target Table already has the commit " + lastCommitPulled
+                    + ". Not overriding as cfg.override is false");
         }
         syncTill(lastCommitPulled, targetHoodieMetadata, sc);
     }
@@ -98,7 +99,7 @@ public class HoodieDeltaStreamer implements Serializable {
         return commitTimes.get(0);
     }
 
-    private void syncTill(String lastCommitPulled, HoodieTableMetadata target,
+    private void syncTill(String lastCommitPulled, HoodieTableMetaClient target,
                           JavaSparkContext sc) throws Exception {
         // Step 1 : Scan incrementally and get the input records as a RDD of source format
         String dataPath = cfg.dataPath + "/" + lastCommitPulled;
@@ -159,13 +160,13 @@ public class HoodieDeltaStreamer implements Serializable {
 //        })
     }
 
-    private HoodieWriteConfig getHoodieClientConfig(HoodieTableMetadata metadata)
+    private HoodieWriteConfig getHoodieClientConfig(HoodieTableMetaClient metadata)
             throws Exception {
         final String schemaStr = Files.toString(new File(cfg.schemaFile), Charset.forName("UTF-8"));
         return HoodieWriteConfig.newBuilder().withPath(metadata.getBasePath())
                 .withSchema(schemaStr)
                 .withParallelism(cfg.groupByParallelism, cfg.groupByParallelism)
-                .forTable(metadata.getTableName()).withIndexConfig(
+                .forTable(metadata.getTableConfig().getTableName()).withIndexConfig(
                         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
                 .build();
     }
