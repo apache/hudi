@@ -24,11 +24,15 @@ import java.io.IOException;
  * </p>
  */
 public class HoodieIOException extends HoodieException {
-    private final IOException ioException;
+    private IOException ioException;
 
     public HoodieIOException(String msg, IOException t) {
         super(msg, t);
         this.ioException = t;
+    }
+
+    public HoodieIOException(String msg) {
+        super(msg);
     }
 
     public IOException getIOException() {

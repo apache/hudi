@@ -46,7 +46,7 @@ public class TestHoodieSnapshotCopier {
         folder.create();
         rootPath = folder.getRoot().getAbsolutePath();
         basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
-        HoodieTestUtils.initializeHoodieDirectory(basePath);
+        HoodieTestUtils.init(basePath);
         outputPath = rootPath + "/output";
         fs = FSUtils.getFs();
         // Start a local Spark job

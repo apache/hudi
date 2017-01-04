@@ -16,11 +16,11 @@
 
 package com.uber.hoodie.io.storage;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.util.FSUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -32,7 +32,7 @@ import java.io.IOException;
 
 public class HoodieStorageWriterFactory {
     public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
-            String commitTime, Path path, HoodieTableMetadata metadata, HoodieWriteConfig config, Schema schema)
+            String commitTime, Path path, HoodieTableMetaClient metaClient, HoodieWriteConfig config, Schema schema)
         throws IOException {
         //TODO - based on the metadata choose the implementation of HoodieStorageWriter
         // Currently only parquet is supported

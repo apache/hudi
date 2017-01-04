@@ -18,7 +18,7 @@ package com.uber.hoodie.common;
 
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 
 import java.io.File;
@@ -53,18 +53,18 @@ public class HoodieClientTestUtils {
     }
 
     private static void fakeMetaFile(String basePath, String commitTime, String suffix) throws IOException {
-        String parentPath = basePath + "/"+ HoodieTableMetadata.METAFOLDER_NAME;
+        String parentPath = basePath + "/"+ HoodieTableMetaClient.METAFOLDER_NAME;
         new File(parentPath).mkdirs();
         new File(parentPath + "/" + commitTime + suffix).createNewFile();
     }
 
 
     public static void fakeCommitFile(String basePath, String commitTime) throws IOException {
-        fakeMetaFile(basePath, commitTime, HoodieTableMetadata.COMMIT_FILE_SUFFIX);
+        fakeMetaFile(basePath, commitTime, HoodieTableMetaClient.COMMIT_EXTENSION);
     }
 
     public static void fakeInFlightFile(String basePath, String commitTime) throws IOException {
-        fakeMetaFile(basePath, commitTime, HoodieTableMetadata.INFLIGHT_FILE_SUFFIX);
+        fakeMetaFile(basePath, commitTime, HoodieTableMetaClient.INFLIGHT_FILE_SUFFIX);
     }
 
     public static void fakeDataFile(String basePath, String partitionPath, String commitTime, String fileId) throws Exception {

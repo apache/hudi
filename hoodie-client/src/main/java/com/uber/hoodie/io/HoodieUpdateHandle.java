@@ -16,12 +16,12 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieUpsertException;
@@ -52,10 +52,10 @@ import java.util.Iterator;
 
     public HoodieUpdateHandle(HoodieWriteConfig config,
                               String commitTime,
-                              HoodieTableMetadata metadata,
+                              HoodieTableMetaClient metaClient,
                               Iterator<HoodieRecord<T>> recordItr,
                               String fileId) {
-        super(config, commitTime, metadata);
+        super(config, commitTime, metaClient);
         WriteStatus writeStatus = new WriteStatus();
         writeStatus.setStat(new HoodieWriteStat());
         this.writeStatus = writeStatus;
@@ -74,7 +74,9 @@ import java.util.Iterator;
                 HoodieRecord<T> record = newRecordsItr.next();
                 // If the first record, we need to extract some info out
                 if (oldFilePath == null) {
-                    String latestValidFilePath = metadata.getFilenameForRecord(fs, record, fileId);
+                    String latestValidFilePath = fileSystemView
+                        .getLatestDataFilesForFileId(record.getPartitionPath(), fileId).findFirst()
+                        .get().getFileName();
                     writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
                     oldFilePath = new Path(
                         config.getBasePath() + "/" + record.getPartitionPath() + "/"
@@ -102,14 +104,14 @@ import java.util.Iterator;
             }
             // Create the writer for writing the new version file
             storageWriter = HoodieStorageWriterFactory
-                .getStorageWriter(commitTime, newFilePath, metadata, config, schema);
+                .getStorageWriter(commitTime, newFilePath, metaClient, config, schema);
 
         } catch (Exception e) {
             logger.error("Error in update task at commit " + commitTime, e);
             writeStatus.setGlobalError(e);
             throw new HoodieUpsertException(
                 "Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
-                    + commitTime + " on HDFS path " + metadata.getBasePath());
+                    + commitTime + " on HDFS path " + metaClient.getBasePath());
         }
     }
 
