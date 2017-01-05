@@ -62,7 +62,7 @@ apply the processing logic, and efficiently update/reconcile late data with a do
 like 15 mins, and providing an end-end latency of 30 mins at `HD`.
 
 
-{% include callout.html content="To achieve this, Hoodie borrows concepts from stream processing frameworks like [Spark Streaming](https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations) , Pub/Sub systems like [Kafka](http://kafka.apache.org/documentation/#theconsumer)
+{% include callout.html content="To achieve this, Hoodie has embraced similar concepts from stream processing frameworks like [Spark Streaming](https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations) , Pub/Sub systems like [Kafka](http://kafka.apache.org/documentation/#theconsumer)
 or database replication technologies like [Oracle XStream](https://docs.oracle.com/cd/E11882_01/server.112/e16545/xstrm_cncpt.htm#XSTRM187).
 For the more curious, a more detailed explanation of the benefits of Incremetal Processing (compared to Stream Processing & Batch Processing) can be found [here](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop)" type="info" %}
 
