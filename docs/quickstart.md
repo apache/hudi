@@ -6,5 +6,149 @@ sidebar: mydoc_sidebar
 permalink: quickstart.html
 ---
 
-Work In Progress
+
+
+
+## Download Hoodie
+
+Check out code and pull it into Intellij as a normal maven project.
+
+Normally build the maven project, from command line
+```
+$ mvn clean install -DskipTests
+```
+
+{% include callout.html content="You might want to add your spark assembly jar to project dependencies under 'Module Setttings', to be able to run Spark from IDE" type="info" %}
+
+{% include note.html content="Setup your local hadoop/hive test environment, so you can play with entire ecosystem. See [this](http://www.bytearray.io/2016/05/setting-up-hadoopyarnsparkhive-on-mac.html) for reference" %}
+
+
+
+## Generate a Hoodie Dataset
+
+Create the output folder on your local HDFS
+```
+hdfs dfs -mkdir -p /tmp/hoodie/sample-table
+```
+
+You can run the __HoodieClientExample__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS at /tmp/hoodie/sample-table
+
+
+## Register Dataset to Hive Metastore
+
+Add in the hoodie-hadoop-mr jar so, Hive can read the Hoodie dataset and answer the query.
+
+```
+hive> add jar file:///tmp/hoodie-hadoop-mr-0.2.7.jar;
+Added [file:///tmp/hoodie-hadoop-mr-0.2.7.jar] to class path
+Added resources: [file:///tmp/hoodie-hadoop-mr-0.2.7.jar]
+```
+
+Then, you need to create a ReadOptimized table as below (only type supported as of now)and register the sample partitions
+
+
+```
+drop table hoodie_test;
+CREATE EXTERNAL TABLE hoodie_test(`_row_key`  string,
+`_hoodie_commit_time` string,
+`_hoodie_commit_seqno` string,
+ rider string,
+ driver string,
+ begin_lat double,
+ begin_lon double,
+ end_lat double,
+ end_lon double,
+ fare double)
+PARTITIONED BY (`datestr` string)
+ROW FORMAT SERDE
+   'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT
+   'com.uber.hoodie.hadoop.HoodieInputFormat'
+OUTPUTFORMAT
+   'com.uber.hoodie.hadoop.HoodieOutputFormat'
+LOCATION
+   'hdfs:///tmp/hoodie/sample-table';
+
+ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'hdfs:///tmp/hoodie/sample-table/2016/03/15';
+ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/16';
+ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/17';
+```
+
+## Querying The Dataset
+
+Now, we can proceed to query the dataset, as we would normally do across all the three query engines supported.
+
+### HiveQL
+
+Let's first perform a query on the latest committed snapshot of the table
+
+```
+hive> select count(*) from hoodie_test;
+...
+OK
+100
+Time taken: 18.05 seconds, Fetched: 1 row(s)
+hive>
+```
+
+### SparkSQL
+
+Spark is super easy, once you get Hive working as above. Just spin up a Spark Shell as below
+
+```
+$ cd $SPARK_INSTALL
+$ export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+$ spark-shell --jars /tmp/hoodie-hadoop-mr-0.2.7.jar --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false
+
+
+scala> sqlContext.sql("show tables").show(10000)
+scala> sqlContext.sql("describe hoodie_test").show(10000)
+scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
+```
+
+
+### Presto
+
+Checkout the 'master' branch on OSS Presto, build it, and place your installation somewhere.
+
+* Copy the hoodie-hadoop-mr-0.2.7 jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
+* Startup your server and you should be able to query the same Hive table via Presto
+
+```
+show columns from hive.default.hoodie_test;
+select count(*) from hive.default.hoodie_test
+```
+
+
+
+## Incremental Queries
+
+Let's now perform a query, to obtain the __ONLY__ changed rows since a commit in the past.
+
+```
+hive> set hoodie.scan.mode=INCREMENTAL;
+hive> set hoodie.last.commitTs=001;
+hive> select `_hoodie_commit_time`, rider, driver from hoodie_test limit 10;
+OK
+All commits :[001, 002]
+002	rider-001	driver-001
+002	rider-001	driver-001
+002	rider-002	driver-002
+002	rider-001	driver-001
+002	rider-001	driver-001
+002	rider-002	driver-002
+002	rider-001	driver-001
+002	rider-002	driver-002
+002	rider-002	driver-002
+002	rider-001	driver-001
+Time taken: 0.056 seconds, Fetched: 10 row(s)
+hive>
+hive>
+```
+
+
+
+
+
+
 
