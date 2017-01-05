@@ -5,6 +5,10 @@ sidebar: mydoc_sidebar
 permalink: concepts.html
 ---
 
-Work In Progress
+Hoodie provides the following primitives to build & access datasets on HDFS
+
+ * Upsert                     (how do I change the table efficiently?)
+ * Incremental consumption    (how do I obtain records that changed?)
+
 
 
