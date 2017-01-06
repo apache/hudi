@@ -391,7 +391,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         HoodieUpdateHandle upsertHandle =
                 new HoodieUpdateHandle<>(config, commitTime, metadata, recordItr, fileLoc);
         if (upsertHandle.getOldFilePath() == null) {
-            logger.error("Error in finding the old file path at commit " + commitTime);
+            throw new HoodieUpsertException("Error in finding the old file path at commit " +
+                    commitTime +" at fileLoc: " + fileLoc);
         } else {
             Configuration conf = FSUtils.getFs().getConf();
             AvroReadSupport.setAvroReadSchema(conf, upsertHandle.getSchema());
@@ -414,9 +415,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
                 upsertHandle.close();
             }
         }
+        //TODO(vc): This needs to be revisited
         if (upsertHandle.getWriteStatus().getPartitionPath() == null) {
-            logger.info(
-                    "Upsert Handle has partition path as null " + upsertHandle.getOldFilePath()
+            logger.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath()
                             + ", " + upsertHandle.getWriteStatus());
         }
         return Collections.singletonList(Collections.singletonList(upsertHandle.getWriteStatus())).iterator();

@@ -114,17 +114,19 @@ import java.util.Iterator;
     }
 
 
-    private void writeUpdateRecord(HoodieRecord<T> hoodieRecord, IndexedRecord indexedRecord) {
+    private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, IndexedRecord indexedRecord) {
         try {
             storageWriter.writeAvroWithMetadata(indexedRecord, hoodieRecord);
             hoodieRecord.deflate();
             writeStatus.markSuccess(hoodieRecord);
             recordsWritten ++;
             updatedRecordsWritten ++;
+            return true;
         } catch (Exception e) {
             logger.error("Error writing record  "+ hoodieRecord, e);
             writeStatus.markFailure(hoodieRecord, e);
         }
+        return false;
     }
 
     /**
@@ -133,16 +135,27 @@ import java.util.Iterator;
     public void write(GenericRecord oldRecord) {
         String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
+        boolean copyOldRecord = true;
         if (keyToNewRecords.containsKey(key)) {
             try {
                 IndexedRecord avroRecord = hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, schema);
-                writeUpdateRecord(hoodieRecord, avroRecord);
+                if (writeUpdateRecord(hoodieRecord, avroRecord)) {
+                    /* ONLY WHEN
+                     * 1) we have an update for this key AND
+                     * 2) We are able to successfully write the the combined new value
+                     *
+                     * We no longer need to copy the old record over.
+                     */
+                    copyOldRecord = false;
+                }
                 keyToNewRecords.remove(key);
             } catch (Exception e) {
                 throw new HoodieUpsertException("Failed to combine/merge new record with old value in storage, for new record {"
                         + keyToNewRecords.get(key) + "}, old value {" + oldRecord + "}", e);
             }
-        } else {
+        }
+
+        if (copyOldRecord) {
             // this should work as it is, since this is an existing record
             String errMsg = "Failed to merge old record into new file for key " + key + " from old file "
                 + getOldFilePath() + " to new file " + newFilePath;
