@@ -4,9 +4,10 @@ keywords: usecases
 sidebar: mydoc_sidebar
 permalink: use_cases.html
 toc: false
+summary: "Following are some sample use-cases for Hoodie, which illustrate the benefits in terms of faster processing & increased efficiency"
+
 ---
 
-Following are some sample use-cases for Hoodie.
 
 
 ## Near Real-Time Ingestion
@@ -25,8 +26,7 @@ For NoSQL datastores like [Cassandra](http://cassandra.apache.org/) / [Voldemort
 It goes without saying that __full bulk loads are simply infeasible__ and more efficient approaches are needed if ingestion is to keep up with the typically high update volumes.
 
 
-Even for immutable data sources like [Kafka](kafka.apache.org) , Hoodie helps __enforces a minimum file size on HDFS__, which improves [NameNode health](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/).
-This is all the more important in such an use-case since typically event data is high volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.
+Even for immutable data sources like [Kafka](kafka.apache.org) , Hoodie helps __enforces a minimum file size on HDFS__, which improves NameNode health by solving one of the [age old problems in Hadoop land](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/) in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.
 
 Across all sources, Hoodie adds the much needed ability to atomically publish new data to consumers via notion of commits, shielding them from partial ingestion failures
 
@@ -34,14 +34,13 @@ Across all sources, Hoodie adds the much needed ability to atomically publish ne
 ## Near Real-time Analytics
 
 Typically, real-time [datamarts](https://en.wikipedia.org/wiki/Data_mart) are powered by specialized analytical stores such as [Druid](http://druid.io/) or [Memsql](http://www.memsql.com/) or [even OpenTSDB](http://opentsdb.net/) .
-This is absolutely perfect for lower scale ([relative to Hadoop installations like this](https://blog.twitter.com/2015/hadoop-filesystem-at-twitter)) data,
-that needs sub-second query responses such as system monitoring or interactive real-time analysis.
+This is absolutely perfect for lower scale ([relative to Hadoop installations like this](https://blog.twitter.com/2015/hadoop-filesystem-at-twitter)) data, that needs sub-second query responses such as system monitoring or interactive real-time analysis.
 But, typically these systems end up getting abused for less interactive queries also since data on Hadoop is intolerably stale. This leads to under utilization & wasteful hardware/license costs.
 
 
 On the other hand, interactive SQL solutions on Hadoop such as Presto & SparkSQL excel in __queries that finish within few seconds__.
 By bringing __data freshness to a few minutes__, Hoodie can provide a much efficient alternative, as well unlock real-time analytics on __several magnitudes larger datasets__ stored in HDFS.
-Also, Hoodie has no external dependencies (like a dedicated HBase cluster, purely used for real-time analytics) and thus enabled faster analytics on much fresher analytics, without increasing the operational overhead.
+Also, Hoodie has no external dependencies (like a dedicated HBase cluster, purely used for real-time analytics) and thus enables faster analytics on much fresher analytics, without increasing the operational overhead.
 
 
 ## Incremental Processing Pipelines
@@ -70,10 +69,9 @@ For the more curious, a more detailed explanation of the benefits of Incremetal 
 ## Data Dispersal From Hadoop
 
 A popular use-case for Hadoop, is to crunch data and then disperse it back to an online serving store, to be used by an application.
-For e.g, a Spark Pipeline can [determine hard braking events on Hadoop](https://eng.uber.com/telematics/) and load them into a serving store like ElasticSearch,
-to be used by the Uber application to increase safe driving. Typical architectures for this employ a `queue` between Hadoop and serving store, to prevent overwhelming the target serving store.
+For e.g, a Spark Pipeline can [determine hard braking events on Hadoop](https://eng.uber.com/telematics/) and load them into a serving store like ElasticSearch, to be used by the Uber application to increase safe driving. Typical architectures for this employ a `queue` between Hadoop and serving store, to prevent overwhelming the target serving store.
 A popular choice for this queue is Kafka and this model often results in __redundant storage of same data on HDFS (for offline analysis on computed results) and Kafka (for dispersal)__
 
-Once again Hoodie can efficiently solve this problem efficiently. Using the same example, the Spark Pipeline can keep upserting output from
-each run into a Hoodie dataset, which can now be incrementally tailed (just like a Kafka topic) for new data to be written into the serving store.
+Once again Hoodie can efficiently solve this problem, by having the Spark Pipeline upsert output from
+each run into a Hoodie dataset, which can then be incrementally tailed (just like a Kafka topic) for new data & written into the serving store.
 
