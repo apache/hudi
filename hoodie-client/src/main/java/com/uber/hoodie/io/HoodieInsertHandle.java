@@ -90,6 +90,8 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
             record.deflate();
             recordsWritten++;
         } catch (Throwable t) {
+            // Not throwing exception from here, since we don't want to fail the entire job
+            // for a single record
             status.markFailure(record, t);
             logger.error("Error writing record " + record, t);
         }
