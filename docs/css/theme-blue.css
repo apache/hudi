@@ -89,14 +89,14 @@ body.print h4 {color: #679DCE !important; font-size:14px; font-style: italic !im
 }
 
 div.sidebarTitle {
-    color: #015CAE;
+    color: #333;
 }
 
 li.sidebarTitle {
     margin-top:40px;
     font-weight:normal;
     font-size:130%;
-    color: #ED1951;
+    color: #333;
     margin-bottom:10px;
     margin-left: 5px;
 
