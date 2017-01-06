@@ -51,7 +51,6 @@ import java.util.List;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target dataset.
- * <p/>
  * Does not maintain any state, queries at runtime to see how far behind the target dataset is from
  * the source dataset. This can be overriden to force sync from a timestamp.
  */

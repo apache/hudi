@@ -47,7 +47,7 @@ import java.util.List;
 import java.util.Scanner;
 
 /**
- * Utility to pull data after a given commit, based on the supplied HiveQL & save the delta as another hive temporary table.
+ * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary table.
  *
  * Current Limitations:
  *
