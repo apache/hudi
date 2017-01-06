@@ -107,6 +107,9 @@ import java.util.Iterator;
         } catch (Exception e) {
             logger.error("Error in update task at commit " + commitTime, e);
             writeStatus.setGlobalError(e);
+            throw new HoodieUpsertException(
+                "Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
+                    + commitTime + " on HDFS path " + metadata.getBasePath());
         }
     }
 
