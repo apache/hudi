@@ -11,4 +11,4 @@ Hoodie provides the following primitives to build & access datasets on HDFS
  * Incremental consumption    (how do I obtain records that changed?)
 
 
-
+To reason about consistency of the above primitives, Hoodie introduces a notion of `COMMIT`
