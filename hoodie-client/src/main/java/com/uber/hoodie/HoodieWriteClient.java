@@ -206,16 +206,25 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             // Update the index back.
             JavaRDD<WriteStatus> resultRDD = index.updateLocation(upsertStatusRDD, metadata);
             resultRDD = resultRDD.persist(config.getWriteStatusStorageLevel());
-            boolean commitResult = commit(commitTime, resultRDD);
-            if (!commitResult) {
-                throw new HoodieCommitException("Failed to commit " + commitTime);
-            }
+            commitOnAutoCommit(commitTime, resultRDD);
             return resultRDD;
         } catch (Throwable e) {
             if (e instanceof HoodieUpsertException) {
                 throw (HoodieUpsertException) e;
             }
             throw new HoodieUpsertException("Failed to upsert for commit time " + commitTime, e);
+        }
+    }
+
+    private void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD) {
+        if(config.shouldAutoCommit()) {
+            logger.info("Auto commit enabled: Committing " + commitTime);
+            boolean commitResult = commit(commitTime, resultRDD);
+            if (!commitResult) {
+                throw new HoodieCommitException("Failed to commit " + commitTime);
+            }
+        } else {
+            logger.info("Auto commit disabled for " + commitTime);
         }
     }
 
@@ -271,10 +280,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, metadata);
             // Trigger the insert and collect statuses
             statuses = statuses.persist(config.getWriteStatusStorageLevel());
-            boolean commitResult = commit(commitTime, statuses);
-            if (!commitResult) {
-                throw new HoodieCommitException("Failed to commit " + commitTime);
-            }
+            commitOnAutoCommit(commitTime, statuses);
             return statuses;
         } catch (Throwable e) {
             if (e instanceof HoodieInsertException) {
@@ -287,7 +293,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     /**
      * Commit changes performed at the given commitTime marker
      */
-    private boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
+    public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
+        logger.info("Comitting " + commitTime);
         Path commitFile =
             new Path(config.getBasePath() + "/.hoodie/" + FSUtils.makeCommitFileName(commitTime));
         try {
@@ -331,6 +338,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     writeContext = null;
                 }
             }
+            logger.info("Status of the commit " + commitTime + ": " + success);
             return success;
         } catch (IOException e) {
             throw new HoodieCommitException(
