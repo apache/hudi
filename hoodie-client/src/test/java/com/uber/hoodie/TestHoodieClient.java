@@ -149,6 +149,35 @@ public class TestHoodieClient implements Serializable {
     }
 
     @Test
+    public void testAutoCommit() throws Exception {
+        // Set autoCommit false
+        HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+        HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+
+        String newCommitTime = "001";
+        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+        JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+        JavaRDD<WriteStatus> result = client.insert(writeRecords, newCommitTime);
+
+        assertFalse("If Autocommit is false, then commit should not be made automatically",
+            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+        assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+        assertTrue("After explicit commit, commit file should be created",
+            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+
+        newCommitTime = "002";
+        records = dataGen.generateUpdates(newCommitTime, 100);
+        JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(records, 1);
+        result = client.upsert(writeRecords, newCommitTime);
+        assertFalse("If Autocommit is false, then commit should not be made automatically",
+            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+        assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+        assertTrue("After explicit commit, commit file should be created",
+            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+    }
+
+    @Test
     public void testUpserts() throws Exception {
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
@@ -210,13 +239,12 @@ public class TestHoodieClient implements Serializable {
 
         // Check that the incremental consumption from time 000
         assertEquals("Incremental consumption from time 002, should give all records in commit 004",
-                readClient.readCommit(newCommitTime).count(),
-                readClient.readSince("002").count());
+            readClient.readCommit(newCommitTime).count(),
+            readClient.readSince("002").count());
         assertEquals("Incremental consumption from time 001, should give all records in commit 004",
-                readClient.readCommit(newCommitTime).count(),
-                readClient.readSince("001").count());
+            readClient.readCommit(newCommitTime).count(),
+            readClient.readSince("001").count());
     }
-
     @Test
     public void testInsertAndCleanByVersions() throws Exception {
         int maxVersions = 2; // keep upto 2 versions for each file
@@ -512,6 +540,8 @@ public class TestHoodieClient implements Serializable {
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12) &&
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
     }
+
+
 
     @Test
     public void testSmallInsertHandling() throws Exception {

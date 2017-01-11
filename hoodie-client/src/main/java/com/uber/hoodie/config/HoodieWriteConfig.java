@@ -46,6 +46,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
     private static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
     private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
+    private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
+    private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
+
 
     private HoodieWriteConfig(Properties props) {
         super(props);
@@ -64,6 +67,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public String getTableName() {
         return props.getProperty(TABLE_NAME);
+    }
+
+    public Boolean shouldAutoCommit() {
+        return Boolean.parseBoolean(props.getProperty(HOODIE_AUTO_COMMIT_PROP));
     }
 
     public int getInsertShuffleParallelism() {
@@ -211,6 +218,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         private boolean isStorageConfigSet = false;
         private boolean isCompactionConfigSet = false;
         private boolean isMetricsConfigSet = false;
+        private boolean isAutoCommit = true;
 
         public Builder fromFile(File propertiesFile) throws IOException {
             FileReader reader = new FileReader(propertiesFile);
@@ -279,6 +287,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withAutoCommit(boolean autoCommit) {
+            props.setProperty(HOODIE_AUTO_COMMIT_PROP, String.valueOf(autoCommit));
+            return this;
+        }
+
         public HoodieWriteConfig build() {
             HoodieWriteConfig config = new HoodieWriteConfig(props);
             // Check for mandatory properties
@@ -293,6 +306,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
                 COMBINE_BEFORE_UPSERT_PROP, DEFAULT_COMBINE_BEFORE_UPSERT);
             setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL),
                 WRITE_STATUS_STORAGE_LEVEL, DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
+            setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP),
+                HOODIE_AUTO_COMMIT_PROP, DEFAULT_HOODIE_AUTO_COMMIT);
 
 
             setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().build());
