@@ -23,8 +23,8 @@ import java.io.Serializable;
 /**
  * HoodieKey consists of
  *
- * - recordKey     : a recordKey that acts as primary key for a record - partitionPath : path to the
- * partition that contains the record
+ * - recordKey     : a recordKey that acts as primary key for a record
+ * - partitionPath : path to the partition that contains the record
  */
 public class HoodieKey implements Serializable {
 
