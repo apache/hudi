@@ -36,7 +36,7 @@ public class ReadOptimizedTableView extends AbstractTableFileSystemView {
         Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
         try {
             return fs.listStatus(partitionPath, path -> path.getName()
-                .contains(metaClient.getTableConfig().getROStorageFormat().getFileExtension()));
+                .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension()));
         } catch (IOException e) {
             throw new HoodieIOException(
                 "Failed to list data files in partition " + partitionPathStr, e);

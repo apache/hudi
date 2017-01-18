@@ -20,6 +20,7 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
@@ -291,13 +292,15 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             FileSystem fs = FSUtils.getFs();
             List<SmallFile> smallFileLocations = new ArrayList<>();
 
-            HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+            HoodieTimeline commitTimeline =
+                metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
             TableFileSystemView fileSystemView = new ReadOptimizedTableView(fs, metaClient);
 
-            if (commitTimeline.hasInstants()) { // if we have some commits
-                String latestCommitTime = commitTimeline.lastInstant().get();
-                List<HoodieDataFile> allFiles = fileSystemView.streamLatestVersionInPartition(partitionPath, latestCommitTime).collect(
-                    Collectors.toList());
+            if (!commitTimeline.empty()) { // if we have some commits
+                HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
+                List<HoodieDataFile> allFiles = fileSystemView
+                    .getLatestVersionInPartition(partitionPath, latestCommitTime.getTimestamp())
+                    .collect(Collectors.toList());
 
                 for (HoodieDataFile file : allFiles) {
                     if (file.getFileSize() < config.getParquetSmallFileLimit()) {
@@ -322,12 +325,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
          */
         private long averageBytesPerRecord() {
             long avgSize = 0L;
-            HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+            HoodieTimeline commitTimeline =
+                metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
             try {
-                if (commitTimeline.hasInstants()) {
-                    String latestCommitTime = commitTimeline.lastInstant().get();
+                if (!commitTimeline.empty()) {
+                    HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
                     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                        .fromBytes(commitTimeline.readInstantDetails(latestCommitTime).get());
+                        .fromBytes(commitTimeline.getInstantDetails(latestCommitTime).get());
                     avgSize = (long) Math.ceil(
                         (1.0 * commitMetadata.fetchTotalBytesWritten()) / commitMetadata
                             .fetchTotalRecordsWritten());

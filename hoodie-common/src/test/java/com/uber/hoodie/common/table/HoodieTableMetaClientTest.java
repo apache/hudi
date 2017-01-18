@@ -16,14 +16,12 @@
 
 package com.uber.hoodie.common.table;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.Lists;
 import com.uber.hoodie.common.model.HoodieTestUtils;
-import com.uber.hoodie.common.table.timeline.HoodieArchivedCommitTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.ArrayFile;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
@@ -31,13 +29,15 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class HoodieTableMetaClientTest {
     private HoodieTableMetaClient metaClient;
@@ -61,48 +61,53 @@ public class HoodieTableMetaClientTest {
     }
 
     @Test
-    public void checkSerDe() throws IOException {
-        // check if this object is serialized and se-serialized, we are able to read from the file system
+    public void checkSerDe() throws IOException, ClassNotFoundException {
+        // check if this object is serialized and de-serialized, we are able to read from the file system
         HoodieTableMetaClient deseralizedMetaClient =
             HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
-        commitTimeline.saveInstantAsInflight("1");
-        commitTimeline.saveInstantAsComplete("1", Optional.of("test-detail".getBytes()));
+        assertNotNull(deseralizedMetaClient);
+        HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
+        HoodieInstant instant =
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+        commitTimeline.createInflight(instant);
+        commitTimeline.saveAsComplete(instant, Optional.of("test-detail".getBytes()));
         commitTimeline = commitTimeline.reload();
-        assertEquals("Commit should be 1", "1", commitTimeline.getInstants().findFirst().get());
+        HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
+        assertEquals("Commit should be 1 and completed", completedInstant,
+            commitTimeline.getInstants().findFirst().get());
         assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
-            commitTimeline.readInstantDetails("1").get());
+            commitTimeline.getInstantDetails(completedInstant).get());
     }
 
     @Test
     public void checkCommitTimeline() throws IOException {
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
-        assertFalse("Should be empty commit timeline",
-            commitTimeline.getInstants().findFirst().isPresent());
-        assertFalse("Should be empty commit timeline",
-            commitTimeline.getInflightInstants().findFirst().isPresent());
-        commitTimeline.saveInstantAsInflight("1");
-        commitTimeline.saveInstantAsComplete("1", Optional.of("test-detail".getBytes()));
+        HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+        HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+        assertTrue("Should be empty commit timeline", activeCommitTimeline.empty());
+
+        HoodieInstant instant =
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+        activeTimeline.createInflight(instant);
+        activeTimeline.saveAsComplete(instant, Optional.of("test-detail".getBytes()));
 
         // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
-        commitTimeline = metaClient.getActiveCommitTimeline();
-        assertFalse("Should be empty commit timeline",
-            commitTimeline.getInstants().findFirst().isPresent());
-        assertFalse("Should be empty commit timeline",
-            commitTimeline.getInflightInstants().findFirst().isPresent());
+        activeTimeline = metaClient.getActiveTimeline();
+        activeCommitTimeline = activeTimeline.getCommitTimeline();
+        assertTrue("Should be empty commit timeline", activeCommitTimeline.empty());
 
-        commitTimeline = commitTimeline.reload();
-        assertTrue("Should be the 1 commit we made",
-            commitTimeline.getInstants().findFirst().isPresent());
-        assertEquals("Commit should be 1", "1", commitTimeline.getInstants().findFirst().get());
+        HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
+        activeTimeline = activeTimeline.reload();
+        activeCommitTimeline = activeTimeline.getCommitTimeline();
+        assertFalse("Should be the 1 commit we made", activeCommitTimeline.empty());
+        assertEquals("Commit should be 1", completedInstant,
+            activeCommitTimeline.getInstants().findFirst().get());
         assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
-            commitTimeline.readInstantDetails("1").get());
+            activeCommitTimeline.getInstantDetails(completedInstant).get());
     }
 
     @Test
     public void checkArchiveCommitTimeline() throws IOException {
-        Path archiveLogPath =
-            HoodieArchivedCommitTimeline.getArchiveLogPath(metaClient.getMetaPath());
+        Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getMetaPath());
         SequenceFile.Writer writer = SequenceFile
             .createWriter(HoodieTestUtils.fs.getConf(), SequenceFile.Writer.file(archiveLogPath),
                 SequenceFile.Writer.keyClass(Text.class),
@@ -114,13 +119,24 @@ public class HoodieTableMetaClientTest {
 
         IOUtils.closeStream(writer);
 
-        HoodieTimeline archivedTimeline = metaClient.getArchivedCommitTimeline();
-        assertEquals(Lists.newArrayList("1", "2", "3"),
+        HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+
+        HoodieInstant instant1 =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
+        HoodieInstant instant2 =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
+        HoodieInstant instant3 =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
+
+        assertEquals(Lists.newArrayList(instant1, instant2, instant3),
             archivedTimeline.getInstants().collect(Collectors.toList()));
-        System.out.println(new String( archivedTimeline.readInstantDetails("1").get()));
-        assertArrayEquals(new Text("data1").getBytes(), archivedTimeline.readInstantDetails("1").get());
-        assertArrayEquals(new Text("data2").getBytes(), archivedTimeline.readInstantDetails("2").get());
-        assertArrayEquals(new Text("data3").getBytes(), archivedTimeline.readInstantDetails("3").get());
+
+        assertArrayEquals(new Text("data1").getBytes(),
+            archivedTimeline.getInstantDetails(instant1).get());
+        assertArrayEquals(new Text("data2").getBytes(),
+            archivedTimeline.getInstantDetails(instant2).get());
+        assertArrayEquals(new Text("data3").getBytes(),
+            archivedTimeline.getInstantDetails(instant3).get());
     }
 
 
