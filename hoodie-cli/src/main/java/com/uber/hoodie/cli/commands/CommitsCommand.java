@@ -24,6 +24,8 @@ import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.NumericUtils;
 
 import org.apache.spark.launcher.SparkLauncher;
@@ -38,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Component
@@ -67,15 +70,16 @@ public class CommitsCommand implements CommandMarker {
         @CliOption(key = {
             "limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "10")
         final Integer limit) throws IOException {
-        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
-        List<String> commits = timeline.getInstants().collect(Collectors.toList());
+        HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+        HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+        List<HoodieInstant> commits = timeline.getInstants().collect(Collectors.toList());
         String[][] rows = new String[commits.size()][];
         Collections.reverse(commits);
         for (int i = 0; i < commits.size(); i++) {
-            String commit = commits.get(i);
+            HoodieInstant commit = commits.get(i);
             HoodieCommitMetadata commitMetadata =
-                HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commit).get());
-            rows[i] = new String[] {commit,
+                HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get());
+            rows[i] = new String[] {commit.getTimestamp(),
                 NumericUtils.humanReadableByteCount(commitMetadata.fetchTotalBytesWritten()),
                 String.valueOf(commitMetadata.fetchTotalFilesInsert()),
                 String.valueOf(commitMetadata.fetchTotalFilesUpdated()),
@@ -104,10 +108,14 @@ public class CommitsCommand implements CommandMarker {
         final String commitTime,
         @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path")
         final String sparkPropertiesPath) throws Exception {
-        if (!HoodieCLI.tableMetadata.getActiveCommitTimeline().containsInstant(commitTime)) {
-            return "Commit " + commitTime + " not found in Commits " + HoodieCLI.tableMetadata
-                .getActiveCommitTimeline().getInstants().collect(Collectors.toList());
+        HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+        HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+        HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+
+        if (!timeline.containsInstant(commitInstant)) {
+            return "Commit " + commitTime + " not found in Commits " + timeline;
         }
+
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
         sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(),
                 commitTime,
@@ -127,13 +135,15 @@ public class CommitsCommand implements CommandMarker {
     public String showCommitPartitions(
         @CliOption(key = {"commit"}, help = "Commit to show")
         final String commitTime) throws Exception {
-        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
-        if (!timeline.containsInstant(commitTime)) {
-            return "Commit " + commitTime + " not found in Commits " + HoodieCLI.tableMetadata
-                .getActiveCommitTimeline().getInstants().collect(Collectors.toList());
+        HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+        HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+        HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+
+        if (!timeline.containsInstant(commitInstant)) {
+            return "Commit " + commitTime + " not found in Commits " + timeline;
         }
         HoodieCommitMetadata meta =
-            HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commitTime).get());
+            HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get());
         List<String[]> rows = new ArrayList<String[]>();
         for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats()
             .entrySet()) {
@@ -173,13 +183,15 @@ public class CommitsCommand implements CommandMarker {
     public String showCommitFiles(
         @CliOption(key = {"commit"}, help = "Commit to show")
         final String commitTime) throws Exception {
-        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
-        if (!timeline.containsInstant(commitTime)) {
-            return "Commit " + commitTime + " not found in Commits " + HoodieCLI.tableMetadata
-                .getActiveCommitTimeline().getInstants().collect(Collectors.toList());
+        HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+        HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+        HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+
+        if (!timeline.containsInstant(commitInstant)) {
+            return "Commit " + commitTime + " not found in Commits " + timeline;
         }
         HoodieCommitMetadata meta =
-            HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commitTime).get());
+            HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get());
         List<String[]> rows = new ArrayList<String[]>();
         for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats()
             .entrySet()) {
@@ -208,26 +220,26 @@ public class CommitsCommand implements CommandMarker {
         @CliOption(key = {"path"}, help = "Path of the dataset to compare to")
         final String path) throws Exception {
         HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.fs, path);
-        HoodieTimeline targetTimeline = target.getActiveCommitTimeline();
+        HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitTimeline().filterCompletedInstants();;
         HoodieTableMetaClient source = HoodieCLI.tableMetadata;
-        HoodieTimeline sourceTimeline = source.getActiveCommitTimeline();
+        HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitTimeline().filterCompletedInstants();;
         String targetLatestCommit =
-            targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get();
+            targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get().getTimestamp();
         String sourceLatestCommit =
-            sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get();
+            sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get().getTimestamp();
 
         if (sourceLatestCommit != null && sourceTimeline
-            .compareInstants(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
+            .compareTimestamps(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
             // source is behind the target
             List<String> commitsToCatchup =
                 targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
-                    .collect(Collectors.toList());
-            return "Source " + source.getTableConfig().getTableName() + " is behind by " + commitsToCatchup.size()
-                + " commits. Commits to catch up - " + commitsToCatchup;
+                    .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+            return "Source " + source.getTableConfig().getTableName() + " is behind by "
+                + commitsToCatchup.size() + " commits. Commits to catch up - " + commitsToCatchup;
         } else {
             List<String> commitsToCatchup =
                 sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
-                    .collect(Collectors.toList());
+                    .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
             return "Source " + source.getTableConfig().getTableName() + " is ahead by "
                 + commitsToCatchup.size() + " commits. Commits to catch up - " + commitsToCatchup;
         }

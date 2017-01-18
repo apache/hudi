@@ -66,11 +66,11 @@ public class HoodieDeltaStreamer implements Serializable {
         JavaSparkContext sc = getSparkContext(cfg);
         FileSystem fs = FSUtils.getFs();
         HoodieTableMetaClient targetHoodieMetadata = new HoodieTableMetaClient(fs, cfg.targetPath);
-        HoodieTimeline timeline = targetHoodieMetadata.getActiveCommitTimeline();
+        HoodieTimeline timeline = targetHoodieMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
         String lastCommitPulled = findLastCommitPulled(fs, cfg.dataPath);
         log.info("Last commit pulled on the source dataset is " + lastCommitPulled);
         if (!timeline.getInstants().iterator().hasNext() && timeline
-            .compareInstants(timeline.lastInstant().get(), lastCommitPulled,
+            .compareTimestamps(timeline.lastInstant().get().getTimestamp(), lastCommitPulled,
                 HoodieTimeline.GREATER)) {
             // this should never be the case
             throw new IllegalStateException(

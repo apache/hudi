@@ -16,51 +16,29 @@
 
 package com.uber.hoodie.common.table.string;
 
-import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hadoop.fs.FileSystem;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 
 import java.io.IOException;
-import java.util.Optional;
+import java.util.Comparator;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class MockHoodieTimeline extends HoodieDefaultTimeline {
-    private String fileExt;
-
-    public MockHoodieTimeline(FileSystem fs, String metaPath, String fileExtension)
+public class MockHoodieTimeline extends HoodieActiveTimeline {
+    public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights)
         throws IOException {
-        super(fs, metaPath, fileExtension);
-        this.fileExt = fileExtension;
-    }
-
-    public MockHoodieTimeline(Stream<String> instants, Stream<String> inflights)
-        throws IOException {
-        super(instants, inflights);
-    }
-
-    @Override
-    public HoodieTimeline reload() throws IOException {
-        return new MockHoodieTimeline(fs, metaPath, fileExt);
-    }
-
-    @Override
-    public Optional<byte[]> readInstantDetails(String instant) {
-        return Optional.empty();
-    }
-
-    @Override
-    protected String getInflightFileName(String instant) {
-        return HoodieTestUtils.makeInflightTestFileName(instant);
-    }
-
-    @Override
-    protected String getCompletedFileName(String instant) {
-        return HoodieTestUtils.makeTestFileName(instant);
-    }
-
-    @Override
-    protected String getTimelineName() {
-        return "mock-test";
+        super();
+        this.instants = Stream.concat(completed
+                .map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
+            inflights.map(
+                s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
+            .sorted(Comparator.comparing(new Function<HoodieInstant, String>() {
+                @Override
+                public String apply(HoodieInstant hoodieInstant) {
+                    return hoodieInstant.getFileName();
+                }
+            })).collect(Collectors.toList());
     }
 }

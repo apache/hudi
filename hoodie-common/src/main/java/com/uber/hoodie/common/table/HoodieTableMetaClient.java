@@ -17,10 +17,8 @@
 package com.uber.hoodie.common.table;
 
 import com.uber.hoodie.common.model.HoodieTableType;
-import com.uber.hoodie.common.table.timeline.HoodieActiveCommitTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieArchivedCommitTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieCleanerTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieSavePointTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import org.apache.hadoop.fs.FileStatus;
@@ -30,8 +28,13 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.Externalizable;
 import java.io.File;
 import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.Properties;
@@ -50,28 +53,22 @@ import java.util.Properties;
 public class HoodieTableMetaClient implements Serializable {
     private final transient static Logger log = LogManager.getLogger(HoodieTableMetaClient.class);
     public static String METAFOLDER_NAME = ".hoodie";
-    public static String COMMIT_EXTENSION = ".commit";
-    public static String CLEAN_EXTENSION = ".clean";
-    public static String SAVEPOINT_EXTENSION = ".savepoint";
-    public static String INFLIGHT_FILE_SUFFIX = ".inflight";
 
     private String basePath;
     private transient FileSystem fs;
     private String metaPath;
     private HoodieTableType tableType;
     private HoodieTableConfig tableConfig;
-    private HoodieTimeline activeCommitTimeline;
-    private HoodieTimeline archivedCommitTimeline;
-    private HoodieTimeline savePointTimeline;
-    private HoodieTimeline cleanerTimeline;
+    private HoodieActiveTimeline activeTimeline;
+    private HoodieArchivedTimeline archivedTimeline;
 
     public HoodieTableMetaClient(FileSystem fs, String basePath) throws DatasetNotFoundException {
         // Do not load any timeline by default
         this(fs, basePath, false);
     }
 
-    public HoodieTableMetaClient(FileSystem fs, String basePath,
-        boolean loadActiveCommitTimelineOnLoad) throws DatasetNotFoundException {
+    public HoodieTableMetaClient(FileSystem fs, String basePath, boolean loadActiveTimelineOnLoad)
+        throws DatasetNotFoundException {
         log.info("Loading HoodieTableMetaClient from " + basePath);
         this.basePath = basePath;
         this.fs = fs;
@@ -82,14 +79,15 @@ public class HoodieTableMetaClient implements Serializable {
         this.tableConfig = new HoodieTableConfig(fs, metaPath);
         this.tableType = tableConfig.getTableType();
         log.info("Finished Loading Table of type " + tableType + " from " + basePath);
-        if (loadActiveCommitTimelineOnLoad) {
+        if (loadActiveTimelineOnLoad) {
             log.info("Loading Active commit timeline for " + basePath);
-            getActiveCommitTimeline();
+            getActiveTimeline();
         }
     }
 
     /**
      * For serailizing and de-serializing
+     *
      * @deprecated
      */
     public HoodieTableMetaClient() {
@@ -97,12 +95,18 @@ public class HoodieTableMetaClient implements Serializable {
 
     /**
      * This method is only used when this object is deserialized in a spark executor.
+     *
      * @deprecated
      */
     private void readObject(java.io.ObjectInputStream in)
         throws IOException, ClassNotFoundException {
         in.defaultReadObject();
         this.fs = FSUtils.getFs();
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out)
+        throws IOException {
+        out.defaultWriteObject();
     }
 
     /**
@@ -134,16 +138,16 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     /**
-     * Get the active commits as a timeline
+     * Get the active instants as a timeline
      *
-     * @return Active commit timeline
+     * @return Active instants timeline
      * @throws IOException
      */
-    public synchronized HoodieTimeline getActiveCommitTimeline() {
-        if (activeCommitTimeline == null) {
-            activeCommitTimeline = new HoodieActiveCommitTimeline(fs, metaPath);
+    public synchronized HoodieActiveTimeline getActiveTimeline() {
+        if (activeTimeline == null) {
+            activeTimeline = new HoodieActiveTimeline(fs, metaPath);
         }
-        return activeCommitTimeline;
+        return activeTimeline;
     }
 
     /**
@@ -153,39 +157,12 @@ public class HoodieTableMetaClient implements Serializable {
      * @return Active commit timeline
      * @throws IOException
      */
-    public HoodieTimeline getArchivedCommitTimeline() {
-        if (archivedCommitTimeline == null) {
-            archivedCommitTimeline = new HoodieArchivedCommitTimeline(fs, metaPath);
+    public synchronized HoodieArchivedTimeline getArchivedTimeline() {
+        if (archivedTimeline == null) {
+            archivedTimeline = new HoodieArchivedTimeline(fs, metaPath);
         }
-        return archivedCommitTimeline;
+        return archivedTimeline;
     }
-
-    /**
-     * Get the save points as a timeline.
-     *
-     * @return Savepoint timeline
-     * @throws IOException
-     */
-    public HoodieTimeline getSavePointsTimeline() {
-        if (savePointTimeline == null) {
-            savePointTimeline = new HoodieSavePointTimeline(fs, metaPath);
-        }
-        return savePointTimeline;
-    }
-
-    /**
-     * Get the cleaner activity as a timeline.
-     *
-     * @return Cleaner activity
-     * @throws IOException
-     */
-    public HoodieTimeline getCleanerTimeline() {
-        if (cleanerTimeline == null) {
-            cleanerTimeline = new HoodieCleanerTimeline(fs, metaPath);
-        }
-        return cleanerTimeline;
-    }
-
 
     /**
      * Helper method to initialize a given path as a hoodie dataset with configs passed in as as Properties
@@ -215,34 +192,6 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     // HELPER METHODS TO CREATE META FILE NAMES
-    public static String makeCommitFileName(String commitTime) {
-        return commitTime + COMMIT_EXTENSION;
-    }
-
-    public static String makeInflightCommitFileName(String commitTime) {
-        return commitTime + INFLIGHT_FILE_SUFFIX;
-    }
-
-    public static String makeCleanerFileName(String instant) {
-        return instant + CLEAN_EXTENSION;
-    }
-
-    public static String makeInflightCleanerFileName(String instant) {
-        return instant + CLEAN_EXTENSION + INFLIGHT_FILE_SUFFIX;
-    }
-
-    public static String makeInflightSavePointFileName(String commitTime) {
-        return commitTime + SAVEPOINT_EXTENSION + INFLIGHT_FILE_SUFFIX;
-    }
-
-    public static String makeSavePointFileName(String commitTime) {
-        return commitTime + SAVEPOINT_EXTENSION;
-    }
-
-    public static String getCommitFromCommitFile(String commitFileName) {
-        return commitFileName.split("\\.")[0];
-    }
-
     public static FileStatus[] scanFiles(FileSystem fs, Path metaPath, PathFilter nameFilter)
         throws IOException {
         return fs.listStatus(metaPath, nameFilter);

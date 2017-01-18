@@ -16,12 +16,12 @@
 
 package com.uber.hoodie.common.model;
 
-public enum HoodieStorageType {
+public enum HoodieFileFormat {
     PARQUET(".parquet");
 
     private final String extension;
 
-    HoodieStorageType(String extension) {
+    HoodieFileFormat(String extension) {
         this.extension = extension;
     }
 

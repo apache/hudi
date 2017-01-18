@@ -17,153 +17,125 @@
 package com.uber.hoodie.common.table;
 
 import com.uber.hoodie.common.table.timeline.HoodieDefaultTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.FSUtils;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
 
 /**
- * HoodieTimeline allows representation of meta-data events as a timeline.
- * Instants are specific points in time represented as strings.
- * in this format YYYYMMDDHHmmSS. e.g. 20170101193218
- * Any operation on the timeline starts with the inflight instant and then when complete marks
- * the completed instant and removes the inflight instant.
- * Completed instants are plainly referred to as just instants
+ * HoodieTimeline is a view of meta-data instants in the hoodie dataset.
+ * Instants are specific points in time represented as HoodieInstant.
  * <p>
- * Timelines as immutable once created. Any operation to change the timeline (like create/delete instants)
- * will not be reflected unless explicitly reloaded using the reload()
+ * Timelines are immutable once created and operations create new instance of
+ * timelines which filter on the instants and this can be chained.
  *
  * @see com.uber.hoodie.common.table.HoodieTableMetaClient
  * @see HoodieDefaultTimeline
+ * @see HoodieInstant
  * @since 0.3.0
  */
 public interface HoodieTimeline extends Serializable {
+    String COMMIT_ACTION = "commit";
+    String CLEAN_ACTION = "clean";
+    String SAVEPOINT_ACTION = "savepoint";
+    String INFLIGHT_EXTENSION = ".inflight";
+    String COMMIT_EXTENSION = "." + COMMIT_ACTION;
+    String CLEAN_EXTENSION = "." + CLEAN_ACTION;
+    String SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION;
+    //this is to preserve backwards compatibility on commit in-flight filenames
+    String INFLIGHT_COMMIT_EXTENSION = INFLIGHT_EXTENSION;
+    String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
+    String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
+
+
     /**
-     * Find all the completed instants after startTs and before or on endTs
+     * Filter this timeline to just include the in-flights
+     *
+     * @return New instance of HoodieTimeline with just in-flights
+     */
+    HoodieTimeline filterInflights();
+
+    /**
+     * Filter this timeline to just include the completed instants
+     *
+     * @return New instance of HoodieTimeline with just completed instants
+     */
+    HoodieTimeline filterCompletedInstants();
+
+
+    /**
+     * Create a new Timeline with instants after startTs and before or on endTs
      *
      * @param startTs
      * @param endTs
-     * @return Stream of instants
      */
-    Stream<String> findInstantsInRange(String startTs, String endTs);
+    HoodieTimeline findInstantsInRange(String startTs, String endTs);
 
     /**
-     * Find all the completed instants after startTs
+     * Create a new Timeline with all the instants after startTs
      *
      * @param commitTime
      * @param numCommits
-     * @return Stream of instants
      */
-    Stream<String> findInstantsAfter(String commitTime, int numCommits);
+    HoodieTimeline findInstantsAfter(String commitTime, int numCommits);
 
     /**
-     * If the timeline has any completed instants
+     * If the timeline has any instants
      *
-     * @return true if timeline is not empty
+     * @return true if timeline is empty
      */
-    boolean hasInstants();
-
-    /**
-     * If the timeline has any in-complete instants
-     *
-     * @return true if timeline has any in-complete instants
-     */
-    boolean hasInflightInstants();
+    boolean empty();
 
     /**
      * @return total number of completed instants
      */
-    int getTotalInstants();
+    int countInstants();
 
     /**
      * @return first completed instant if available
      */
-    Optional<String> firstInstant();
+    Optional<HoodieInstant> firstInstant();
 
     /**
      * @param n
      * @return nth completed instant from the first completed instant
      */
-    Optional<String> nthInstant(int n);
+    Optional<HoodieInstant> nthInstant(int n);
 
     /**
      * @return last completed instant if available
      */
-    Optional<String> lastInstant();
+    Optional<HoodieInstant> lastInstant();
 
     /**
      * @param n
      * @return nth completed instant going back from the last completed instant
      */
-    Optional<String> nthFromLastInstant(int n);
+    Optional<HoodieInstant> nthFromLastInstant(int n);
 
     /**
      * @return true if the passed instant is present as a completed instant on the timeline
      */
-    boolean containsInstant(String instant);
+    boolean containsInstant(HoodieInstant instant);
 
     /**
      * @return true if the passed instant is present as a completed instant on the timeline or
      * if the instant is before the first completed instant in the timeline
      */
-    boolean containsOrBeforeTimelineStarts(String instant);
+    boolean containsOrBeforeTimelineStarts(String ts);
 
     /**
      * @return Get the stream of completed instants
      */
-    Stream<String> getInstants();
-
-    /**
-     * @return Get the stream of in-flight instants
-     */
-    Stream<String> getInflightInstants();
+    Stream<HoodieInstant> getInstants();
 
     /**
      * @return true if the passed in instant is before the first completed instant in the timeline
      */
-    boolean isInstantBeforeTimelineStarts(String instant);
-
-    /**
-     * Register the passed in instant as a in-flight
-     *
-     * @param instant
-     */
-    void saveInstantAsInflight(String instant);
-
-    /**
-     * Register the passed in instant as a completed instant.
-     * It needs to have a corresponding in-flight instant, otherwise it will fail.
-     * Pass a optional byte[] to save with the instant.
-     *
-     * @param instant
-     * @param data
-     */
-    void saveInstantAsComplete(String instant, Optional<byte[]> data);
-
-    /**
-     * Un-Register a completed instant as in-flight. This is usually atomic way to
-     * revert the effects of a operation on hoodie datasets
-     *
-     * @param instant
-     */
-    void revertInstantToInflight(String instant);
-
-    /**
-     * Remove the in-flight instant from the timeline
-     *
-     * @param instant
-     */
-    void removeInflightFromTimeline(String instant);
-
-    /**
-     * Reload the timeline. Timelines are immutable once created.
-     *
-     * @return
-     * @throws IOException
-     */
-    HoodieTimeline reload() throws IOException;
+    boolean isBeforeTimelineStarts(String ts);
 
     /**
      * Read the completed instant details
@@ -171,7 +143,7 @@ public interface HoodieTimeline extends Serializable {
      * @param instant
      * @return
      */
-    Optional<byte[]> readInstantDetails(String instant);
+    Optional<byte[]> getInstantDetails(HoodieInstant instant);
 
     /**
      * Helper methods to compare instants
@@ -183,8 +155,55 @@ public interface HoodieTimeline extends Serializable {
         (commit1, commit2) -> commit1.compareTo(commit2) <= 0;
     BiPredicate<String, String> LESSER = (commit1, commit2) -> commit1.compareTo(commit2) < 0;
 
-    default boolean compareInstants(String commit1, String commit2,
+    default boolean compareTimestamps(String commit1, String commit2,
         BiPredicate<String, String> predicateToApply) {
         return predicateToApply.test(commit1, commit2);
     }
+
+    static HoodieInstant getCompletedInstant(final HoodieInstant instant) {
+        return new HoodieInstant(false, instant.getAction(), instant.getTimestamp());
+    }
+
+
+    static HoodieInstant getInflightInstant(final HoodieInstant instant) {
+        return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
+    }
+
+    static String makeCommitFileName(String commitTime) {
+        return commitTime + HoodieTimeline.COMMIT_EXTENSION;
+    }
+
+    static String makeInflightCommitFileName(String commitTime) {
+        return commitTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
+    }
+
+    static String makeCleanerFileName(String instant) {
+        return instant + HoodieTimeline.CLEAN_EXTENSION;
+    }
+
+    static String makeInflightCleanerFileName(String instant) {
+        return instant + HoodieTimeline.INFLIGHT_CLEAN_EXTENSION;
+    }
+
+    static String makeInflightSavePointFileName(String commitTime) {
+        return commitTime + HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION;
+    }
+
+    static String makeSavePointFileName(String commitTime) {
+        return commitTime + HoodieTimeline.SAVEPOINT_EXTENSION;
+    }
+
+    static String getCommitFromCommitFile(String commitFileName) {
+        return commitFileName.split("\\.")[0];
+    }
+
+    static String makeFileNameAsComplete(String fileName) {
+        return fileName.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
+    }
+
+    static String makeFileNameAsInflight(String fileName) {
+        return fileName + HoodieTimeline.INFLIGHT_EXTENSION;
+    }
+
+
 }

@@ -19,6 +19,7 @@ package com.uber.hoodie.common;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 
 import java.io.File;
@@ -60,11 +61,11 @@ public class HoodieClientTestUtils {
 
 
     public static void fakeCommitFile(String basePath, String commitTime) throws IOException {
-        fakeMetaFile(basePath, commitTime, HoodieTableMetaClient.COMMIT_EXTENSION);
+        fakeMetaFile(basePath, commitTime, HoodieTimeline.COMMIT_EXTENSION);
     }
 
     public static void fakeInFlightFile(String basePath, String commitTime) throws IOException {
-        fakeMetaFile(basePath, commitTime, HoodieTableMetaClient.INFLIGHT_FILE_SUFFIX);
+        fakeMetaFile(basePath, commitTime, HoodieTimeline.INFLIGHT_EXTENSION);
     }
 
     public static void fakeDataFile(String basePath, String partitionPath, String commitTime, String fileId) throws Exception {
