@@ -25,6 +25,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -89,8 +90,10 @@ public class HoodieReadClient implements Serializable {
         this.jsc = jsc;
         this.fs = FSUtils.getFs();
         this.metaClient = new HoodieTableMetaClient(fs, basePath, true);
-        this.commitTimeline = metaClient.getActiveCommitTimeline();
-        this.index = new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
+        this.commitTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        this.index =
+            new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
         this.sqlContextOpt = Optional.absent();
     }
 
@@ -191,7 +194,7 @@ public class HoodieReadClient implements Serializable {
                             + metaClient.getBasePath());
                 }
 
-                List<HoodieDataFile> latestFiles = fileSystemView.streamLatestVersions(fs.globStatus(new Path(path))).collect(
+                List<HoodieDataFile> latestFiles = fileSystemView.getLatestVersions(fs.globStatus(new Path(path))).collect(
                     Collectors.toList());
                 for (HoodieDataFile file : latestFiles) {
                     filteredPaths.add(file.getPath());
@@ -212,17 +215,17 @@ public class HoodieReadClient implements Serializable {
      */
     public DataFrame readSince(String lastCommitTimestamp) {
 
-        List<String> commitsToReturn =
+        List<HoodieInstant> commitsToReturn =
             commitTimeline.findInstantsAfter(lastCommitTimestamp, Integer.MAX_VALUE)
-                .collect(Collectors.toList());
+                .getInstants().collect(Collectors.toList());
         //TODO: we can potentially trim this down to only affected partitions, using CommitMetadata
         try {
 
             // Go over the commit metadata, and obtain the new files that need to be read.
             HashMap<String, String> fileIdToFullPath = new HashMap<>();
-            for (String commit: commitsToReturn) {
+            for (HoodieInstant commit: commitsToReturn) {
                 HoodieCommitMetadata metadata =
-                    HoodieCommitMetadata.fromBytes(commitTimeline.readInstantDetails(commit).get());
+                    HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get());
                 // get files from each commit, and replace any previous versions
                 fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths());
             }
@@ -240,13 +243,15 @@ public class HoodieReadClient implements Serializable {
      */
     public DataFrame readCommit(String commitTime) {
         assertSqlContext();
-        if (!commitTimeline.containsInstant(commitTime)) {
+        HoodieInstant commitInstant =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+        if (!commitTimeline.containsInstant(commitInstant)) {
             new HoodieException("No commit exists at " + commitTime);
         }
 
         try {
             HoodieCommitMetadata commitMetdata =
-                HoodieCommitMetadata.fromBytes(commitTimeline.readInstantDetails(commitTime).get());
+                HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commitInstant).get());
             Collection<String> paths = commitMetdata.getFileIdAndFullPaths().values();
             return sqlContextOpt.get().read()
                     .parquet(paths.toArray(new String[paths.size()]))
@@ -298,13 +303,14 @@ public class HoodieReadClient implements Serializable {
      * @return
      */
     public List<String> listCommitsSince(String commitTimestamp) {
-        return commitTimeline.findInstantsAfter(commitTimestamp, Integer.MAX_VALUE).collect(Collectors.toList());
+        return commitTimeline.findInstantsAfter(commitTimestamp, Integer.MAX_VALUE).getInstants()
+            .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     }
 
     /**
      * Returns the last successful commit (a successful write operation) into a Hoodie table.
      */
     public String latestCommit() {
-        return commitTimeline.lastInstant().get();
+        return commitTimeline.lastInstant().get().getTimestamp();
     }
 }

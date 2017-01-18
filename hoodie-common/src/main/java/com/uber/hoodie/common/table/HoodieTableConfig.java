@@ -16,9 +16,8 @@
 
 package com.uber.hoodie.common.table;
 
-import com.uber.hoodie.common.model.HoodieStorageType;
+import com.uber.hoodie.common.model.HoodieFileFormat;
 import com.uber.hoodie.common.model.HoodieTableType;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -46,10 +45,10 @@ public class HoodieTableConfig implements Serializable {
     public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
     public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
     public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
-    public static final String HOODIE_RO_STORAGE_FORMAT_PROP_NAME =
-        "hoodie.table.ro.storage.format";
+    public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME =
+        "hoodie.table.ro.file.format";
     public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
-    public static final HoodieStorageType DEFAULT_RO_STORAGE_FORMAT = HoodieStorageType.PARQUET;
+    public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
     private Properties props;
 
     public HoodieTableConfig(FileSystem fs, String metaPath) {
@@ -127,12 +126,12 @@ public class HoodieTableConfig implements Serializable {
     /**
      * Get the Read Optimized Storage Format
      *
-     * @return HoodieStorageType for the Read Optimized Storage format
+     * @return HoodieFileFormat for the Read Optimized Storage format
      */
-    public HoodieStorageType getROStorageFormat() {
-        if (props.contains(HOODIE_RO_STORAGE_FORMAT_PROP_NAME)) {
-            return HoodieStorageType.valueOf(props.getProperty(HOODIE_RO_STORAGE_FORMAT_PROP_NAME));
+    public HoodieFileFormat getROFileFormat() {
+        if (props.contains(HOODIE_RO_FILE_FORMAT_PROP_NAME)) {
+            return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RO_FILE_FORMAT_PROP_NAME));
         }
-        return DEFAULT_RO_STORAGE_FORMAT;
+        return DEFAULT_RO_FILE_FORMAT;
     }
 }

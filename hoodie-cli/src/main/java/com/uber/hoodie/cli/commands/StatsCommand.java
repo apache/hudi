@@ -24,6 +24,8 @@ import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.HoodiePrintHelper;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.NumericUtils;
 
@@ -53,21 +55,22 @@ public class StatsCommand implements CommandMarker {
         long totalRecordsUpserted = 0;
         long totalRecordsWritten = 0;
 
-        HoodieTimeline timeline = HoodieCLI.tableMetadata.getActiveCommitTimeline();
+        HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+        HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
 
-        String[][] rows = new String[new Long(timeline.getTotalInstants()).intValue() + 1][];
+        String[][] rows = new String[new Long(timeline.countInstants()).intValue() + 1][];
         int i = 0;
         DecimalFormat df = new DecimalFormat("#.00");
-        for (String commitTime : timeline.getInstants().collect(
+        for (HoodieInstant commitTime : timeline.getInstants().collect(
             Collectors.toList())) {
             String waf = "0";
-            HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(timeline.readInstantDetails(commitTime).get());
+            HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitTime).get());
             if (commit.fetchTotalUpdateRecordsWritten() > 0) {
                 waf = df.format(
                     (float) commit.fetchTotalRecordsWritten() / commit
                         .fetchTotalUpdateRecordsWritten());
             }
-            rows[i++] = new String[] {commitTime,
+            rows[i++] = new String[] {commitTime.getTimestamp(),
                 String.valueOf(commit.fetchTotalUpdateRecordsWritten()),
                 String.valueOf(commit.fetchTotalRecordsWritten()), waf};
             totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();

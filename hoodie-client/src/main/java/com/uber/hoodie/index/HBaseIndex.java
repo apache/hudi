@@ -19,6 +19,7 @@ package com.uber.hoodie.index;
 import com.google.common.base.Optional;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
@@ -128,9 +129,12 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                         String fileId =
                                 Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
 
-                        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+                        HoodieTimeline commitTimeline =
+                            metaClient.getActiveTimeline().getCommitTimeline()
+                                .filterCompletedInstants();
                         // if the last commit ts for this row is less than the system commit ts
-                        if (commitTimeline.hasInstants() && commitTimeline.containsInstant(commitTs)) {
+                        if (!commitTimeline.empty() && commitTimeline.containsInstant(
+                            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))) {
                             rec.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
                         }
                     }

@@ -19,8 +19,10 @@ package com.uber.hoodie.common.model;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -30,6 +32,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -65,13 +69,13 @@ public class HoodieTestUtils {
 
     public static final void createCommitFiles(String basePath, String... commitTimes) throws IOException {
         for (String commitTime: commitTimes) {
-            new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTableMetaClient.makeCommitFileName(commitTime)).createNewFile();
+            new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTimeline.makeCommitFileName(commitTime)).createNewFile();
         }
     }
 
     public static final void createInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
         for (String commitTime: commitTimes) {
-            new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTableMetaClient.makeInflightCommitFileName(commitTime)).createNewFile();
+            new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTimeline.makeInflightCommitFileName(commitTime)).createNewFile();
         }
     }
 
@@ -92,15 +96,15 @@ public class HoodieTestUtils {
     }
 
     public static final boolean doesCommitExist(String basePath, String commitTime) {
-        return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTableMetaClient.COMMIT_EXTENSION).exists();
+        return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTimeline.COMMIT_EXTENSION).exists();
     }
 
     public static final boolean doesInflightExist(String basePath, String commitTime) {
-        return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTableMetaClient.INFLIGHT_FILE_SUFFIX).exists();
+        return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTimeline.INFLIGHT_EXTENSION).exists();
     }
 
     public static String makeInflightTestFileName(String instant) {
-        return instant + TEST_EXTENSION + HoodieTableMetaClient.INFLIGHT_FILE_SUFFIX;
+        return instant + TEST_EXTENSION + HoodieTimeline.INFLIGHT_EXTENSION;
     }
 
     public static String makeTestFileName(String instant) {
@@ -118,9 +122,12 @@ public class HoodieTestUtils {
         assert !iter1.hasNext() && !iter2.hasNext();
     }
 
-    public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
+    public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz)
+        throws IOException, ClassNotFoundException {
         // Using Kyro as the default serializer in Spark Jobs
         Kryo kryo = new Kryo();
+        kryo.register(HoodieTableMetaClient.class, new JavaSerializer());
+
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         Output output = new Output(baos);
         kryo.writeObject(output, object);

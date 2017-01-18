@@ -50,7 +50,8 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
         this.config = config;
         this.fs = FSUtils.getFs();
         this.metaClient = metaClient;
-        this.hoodieTimeline = metaClient.getActiveCommitTimeline();
+        this.hoodieTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
         this.fileSystemView = new ReadOptimizedTableView(fs, metaClient);
         this.schema =
             HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));

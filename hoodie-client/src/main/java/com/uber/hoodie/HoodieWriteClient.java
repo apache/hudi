@@ -25,6 +25,8 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
@@ -302,7 +304,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         logger.info("Comitting " + commitTime);
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+        HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
         List<Tuple2<String, HoodieWriteStat>> stats =
             writeStatuses.mapToPair(new PairFunction<WriteStatus, String, HoodieWriteStat>() {
@@ -319,7 +321,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         }
 
         try {
-            commitTimeline.saveInstantAsComplete(commitTime,
+            activeTimeline.saveAsComplete(
+                new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime),
                 Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
             // Save was a success
             // We cannot have unbounded commit files. Archive commits if we have to archive
@@ -356,17 +359,19 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         final Timer.Context context = metrics.getRollbackCtx();
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+        HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+        HoodieTimeline inflightTimeline = activeTimeline.getCommitTimeline().filterInflights();
+        HoodieTimeline commitTimeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
 
         try {
             if (commitTimeline.lastInstant().isPresent()
-                && commitTimeline.findInstantsAfter(commitTime, Integer.MAX_VALUE).count() > 0) {
+                && !commitTimeline.findInstantsAfter(commitTime, Integer.MAX_VALUE).empty()) {
                 throw new HoodieRollbackException("Found commits after time :" + commitTime +
                     ", please rollback greater commits first");
             }
 
-            List<String> inflights =
-                commitTimeline.getInflightInstants().collect(Collectors.toList());
+            List<String> inflights = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
+                .collect(Collectors.toList());
             if (!inflights.isEmpty() && inflights.indexOf(commitTime) != inflights.size() - 1) {
                     throw new HoodieRollbackException(
                         "Found in-flight commits after time :" + commitTime +
@@ -374,10 +379,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             }
 
             if (inflights.contains(commitTime) || (commitTimeline.lastInstant().isPresent()
-                && commitTimeline.lastInstant().get().equals(commitTime))) {
+                && commitTimeline.lastInstant().get().getTimestamp().equals(commitTime))) {
                 // 1. Atomically unpublish this commit
-                if(commitTimeline.containsInstant(commitTime)) {
-                    commitTimeline.revertInstantToInflight(commitTime);
+                if(!inflights.contains(commitTime)) {
+                    // This is completed commit, first revert it to inflight to unpublish data
+                    activeTimeline.revertToInflight(
+                        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime));
                 }
                 // 2. Revert the index changes
                 logger.info("Clean out index changes at time: " + commitTime);
@@ -415,7 +422,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     });
                 // 4. Remove commit
                 logger.info("Clean out metadata files at time: " + commitTime);
-                commitTimeline.removeInflightFromTimeline(commitTime);
+                activeTimeline.deleteInflight(
+                    new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime));
 
                 if (context != null) {
                     long durationInMs = metrics.getDurationInMs(context.stop());
@@ -446,7 +454,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             final Timer.Context context = metrics.getCleanCtx();
             HoodieTableMetaClient metaClient =
                 new HoodieTableMetaClient(fs, config.getBasePath(), true);
-            HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
 
             List<String> partitionsToClean = FSUtils.getAllPartitionPaths(fs, metaClient.getBasePath());
             // shuffle to distribute cleaning work across partitions evenly
@@ -497,8 +504,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         logger.info("Generate a new commit time " + commitTime);
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
-        commitTimeline.saveInstantAsInflight(commitTime);
+        HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+        activeTimeline.createInflight(
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime));
     }
 
     public static SparkConf registerClasses(SparkConf conf) {
@@ -534,14 +542,17 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
     /**
      * Cleanup all inflight commits
+     *
      * @throws IOException
      */
     private void rollbackInflightCommits() {
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
+        HoodieTimeline inflightTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterInflights();
 
-        List<String> commits = commitTimeline.getInflightInstants().collect(Collectors.toList());
+        List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
         Collections.reverse(commits);
         for (String commit : commits) {
             rollback(commit);

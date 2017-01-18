@@ -21,6 +21,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.InvalidDatasetException;
@@ -95,7 +96,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             String tableName = metadata.getTableConfig().getTableName();
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
             TableFileSystemView fsView = new ReadOptimizedTableView(FSUtils.getFs(), metadata);
-            HoodieTimeline timeline = metadata.getActiveCommitTimeline();
+            HoodieTimeline timeline = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
             if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
                 // this is of the form commitTs_partition_sequenceNumber
                 String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(Job.getInstance(job), tableName);
@@ -103,10 +104,10 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                 Integer maxCommits = HoodieHiveUtil.readMaxCommits(Job.getInstance(job), tableName);
                 LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
                 List<String> commitsToReturn =
-                    timeline.findInstantsAfter(lastIncrementalTs, maxCommits)
-                        .collect(Collectors.toList());
+                    timeline.findInstantsAfter(lastIncrementalTs, maxCommits).getInstants()
+                        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
                 List<HoodieDataFile> filteredFiles =
-                    fsView.streamLatestVersionInRange(value, commitsToReturn)
+                    fsView.getLatestVersionInRange(value, commitsToReturn)
                         .collect(Collectors.toList());
                 for (HoodieDataFile filteredFile : filteredFiles) {
                     LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
@@ -116,7 +117,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                     "Total paths to process after hoodie incremental filter " + filteredFiles.size());
             } else {
                 // filter files on the latest commit found
-                List<HoodieDataFile> filteredFiles = fsView.streamLatestVersions(value).collect(Collectors.toList());
+                List<HoodieDataFile> filteredFiles = fsView.getLatestVersions(value).collect(Collectors.toList());
                 LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
                 for (HoodieDataFile filteredFile : filteredFiles) {
                     LOG.info("Processing latest hoodie file - " + filteredFile.getPath());

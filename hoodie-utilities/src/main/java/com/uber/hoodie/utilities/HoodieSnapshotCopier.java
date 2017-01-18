@@ -24,6 +24,7 @@ import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.common.util.FSUtils;
 import org.apache.hadoop.fs.FileStatus;
@@ -65,7 +66,8 @@ public class HoodieSnapshotCopier implements Serializable {
         final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
         final TableFileSystemView fsView = new ReadOptimizedTableView(fs, tableMetadata);
         // Get the latest commit
-        final Optional<String> latestCommit = tableMetadata.getActiveCommitTimeline().lastInstant();
+        final Optional<HoodieInstant>
+            latestCommit = tableMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
         if(!latestCommit.isPresent()) {
             logger.warn("No commits present. Nothing to snapshot");
         } else {
@@ -90,7 +92,7 @@ public class HoodieSnapshotCopier implements Serializable {
                     FileSystem fs = FSUtils.getFs();
                     List<Tuple2<String, String>> filePaths = new ArrayList<>();
                     for (HoodieDataFile hoodieDataFile : fsView
-                        .streamLatestVersionInPartition(partition, latestCommit.get())
+                        .getLatestVersionInPartition(partition, latestCommit.get().getTimestamp())
                         .collect(Collectors.toList())) {
                         filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath()));
                     }
@@ -123,8 +125,8 @@ public class HoodieSnapshotCopier implements Serializable {
                     } else {
                         String commitTime =
                             FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-                        return tableMetadata.getActiveCommitTimeline()
-                            .compareInstants(commitTime, latestCommit.get(), HoodieTimeline.GREATER);
+                        return tableMetadata.getActiveTimeline().getCommitTimeline()
+                            .compareTimestamps(commitTime, latestCommit.get().getTimestamp(), HoodieTimeline.GREATER);
                     }
                 }
             });
