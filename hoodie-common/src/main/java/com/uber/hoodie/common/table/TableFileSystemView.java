@@ -51,7 +51,7 @@ public interface TableFileSystemView {
      * @param maxCommitTime
      * @return
      */
-    Stream<HoodieDataFile> streamLatestVersionInPartition(String partitionPathStr,
+    Stream<HoodieDataFile> getLatestVersionInPartition(String partitionPathStr,
         String maxCommitTime);
 
     /**
@@ -60,7 +60,7 @@ public interface TableFileSystemView {
      * @param partitionPath
      * @return
      */
-    Stream<List<HoodieDataFile>> streamEveryVersionInPartition(String partitionPath);
+    Stream<List<HoodieDataFile>> getEveryVersionInPartition(String partitionPath);
 
     /**
      * Stream all the versions from the passed in fileStatus[] with commit times containing in commitsToReturn.
@@ -69,7 +69,7 @@ public interface TableFileSystemView {
      * @param commitsToReturn
      * @return
      */
-    Stream<HoodieDataFile> streamLatestVersionInRange(FileStatus[] fileStatuses,
+    Stream<HoodieDataFile> getLatestVersionInRange(FileStatus[] fileStatuses,
         List<String> commitsToReturn);
 
     /**
@@ -79,15 +79,15 @@ public interface TableFileSystemView {
      * @param maxCommitToReturn
      * @return
      */
-    Stream<HoodieDataFile> streamLatestVersionsBeforeOrOn(FileStatus[] fileStatuses,
+    Stream<HoodieDataFile> getLatestVersionsBeforeOrOn(FileStatus[] fileStatuses,
         String maxCommitToReturn);
 
     /**
      * Stream latest versions from the passed in FileStatus[].
-     * Similar to calling streamLatestVersionsBeforeOrOn(fileStatuses, currentTimeAsCommitTime)
+     * Similar to calling getLatestVersionsBeforeOrOn(fileStatuses, currentTimeAsCommitTime)
      *
      * @param fileStatuses
      * @return
      */
-    Stream<HoodieDataFile> streamLatestVersions(FileStatus[] fileStatuses);
+    Stream<HoodieDataFile> getLatestVersions(FileStatus[] fileStatuses);
 }

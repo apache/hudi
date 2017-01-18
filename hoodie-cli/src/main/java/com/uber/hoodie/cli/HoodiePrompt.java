@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.cli;
 
+import com.uber.hoodie.common.table.HoodieTableConfig;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.shell.plugin.support.DefaultPromptProvider;
@@ -27,17 +28,18 @@ public class HoodiePrompt extends DefaultPromptProvider {
 
     @Override
     public String getPrompt() {
+        String tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
         switch (HoodieCLI.state) {
             case INIT:
                 return "hoodie->";
             case DATASET:
-                return "hoodie:" + HoodieCLI.tableMetadata.getTableConfig().getTableName() + "->";
+                return "hoodie:" + tableName + "->";
             case SYNC:
-                return "hoodie:" + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " <==> "
+                return "hoodie:" + tableName + " <==> "
                     + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
         }
         if (HoodieCLI.tableMetadata != null)
-            return "hoodie:" + HoodieCLI.tableMetadata.getTableConfig().getTableName() + "->";
+            return "hoodie:" + tableName + "->";
         return "hoodie->";
     }
 

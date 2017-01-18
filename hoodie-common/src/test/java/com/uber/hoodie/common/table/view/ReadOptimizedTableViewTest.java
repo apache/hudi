@@ -23,6 +23,8 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -40,6 +42,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.Assert.*;
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class ReadOptimizedTableViewTest {
     private HoodieTableMetaClient metaClient;
     private String basePath;
@@ -77,8 +80,10 @@ public class ReadOptimizedTableViewTest {
             fsView.getLatestDataFilesForFileId(partitionPath, fileId).findFirst().isPresent());
 
         // Make this commit safe
-        HoodieTimeline commitTimeline = metaClient.getActiveCommitTimeline();
-        commitTimeline.saveInstantAsComplete(commitTime1, Optional.empty());
+        HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+        HoodieInstant instant1 =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime1);
+        commitTimeline.saveAsComplete(instant1, Optional.empty());
         refreshFsView();
         assertEquals("", fileName1,
             fsView.getLatestDataFilesForFileId(partitionPath, fileId).findFirst().get()
@@ -94,7 +99,9 @@ public class ReadOptimizedTableViewTest {
                 .getFileName());
 
         // Make it safe
-        commitTimeline.saveInstantAsComplete(commitTime2, Optional.empty());
+        HoodieInstant instant2 =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime2);
+        commitTimeline.saveAsComplete(instant2, Optional.empty());
         refreshFsView();
         assertEquals("", fileName2,
             fsView.getLatestDataFilesForFileId(partitionPath, fileId).findFirst().get()
@@ -140,7 +147,7 @@ public class ReadOptimizedTableViewTest {
 
         refreshFsView();
         List<HoodieDataFile> statuses1 =
-            fsView.streamLatestVersionInPartition("2016/05/01", commitTime4)
+            fsView.getLatestVersionInPartition("2016/05/01", commitTime4)
                 .collect(Collectors.toList());
         assertEquals(statuses1.size(), 3);
         Set<String> filenames = Sets.newHashSet();
@@ -153,7 +160,7 @@ public class ReadOptimizedTableViewTest {
 
         // Reset the max commit time
         List<HoodieDataFile> statuses2 =
-            fsView.streamLatestVersionInPartition("2016/05/01", commitTime3)
+            fsView.getLatestVersionInPartition("2016/05/01", commitTime3)
                 .collect(Collectors.toList());
         assertEquals(statuses2.size(), 3);
         filenames = Sets.newHashSet();
@@ -204,7 +211,7 @@ public class ReadOptimizedTableViewTest {
 
         refreshFsView();
         List<List<HoodieDataFile>> statuses1 =
-            fsView.streamEveryVersionInPartition("2016/05/01").collect(Collectors.toList());
+            fsView.getEveryVersionInPartition("2016/05/01").collect(Collectors.toList());
         assertEquals(statuses1.size(), 3);
 
         for (List<HoodieDataFile> status : statuses1) {
@@ -269,9 +276,9 @@ public class ReadOptimizedTableViewTest {
         assertEquals(statuses.length, 7);
 
         refreshFsView();
-        List<HoodieDataFile> statuses1 =
-            fsView.streamLatestVersionInRange(statuses, Lists.newArrayList(commitTime2, commitTime3))
-                .collect(Collectors.toList());
+        List<HoodieDataFile> statuses1 = fsView
+            .getLatestVersionInRange(statuses, Lists.newArrayList(commitTime2, commitTime3))
+            .collect(Collectors.toList());
         assertEquals(statuses1.size(), 2);
         Set<String> filenames = Sets.newHashSet();
         for (HoodieDataFile status : statuses1) {
@@ -320,7 +327,7 @@ public class ReadOptimizedTableViewTest {
 
         refreshFsView();
         List<HoodieDataFile> statuses1 =
-            fsView.streamLatestVersionsBeforeOrOn(statuses, commitTime2)
+            fsView.getLatestVersionsBeforeOrOn(statuses, commitTime2)
                 .collect(Collectors.toList());
         assertEquals(statuses1.size(), 2);
         Set<String> filenames = Sets.newHashSet();
@@ -371,8 +378,7 @@ public class ReadOptimizedTableViewTest {
 
         refreshFsView();
         List<HoodieDataFile> statuses1 =
-            fsView.streamLatestVersions(statuses)
-                .collect(Collectors.toList());
+            fsView.getLatestVersions(statuses).collect(Collectors.toList());
         assertEquals(statuses1.size(), 3);
         Set<String> filenames = Sets.newHashSet();
         for (HoodieDataFile status : statuses1) {

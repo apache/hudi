@@ -16,6 +16,10 @@
 
 package com.uber.hoodie.common.util;
 
+import com.google.common.base.Preconditions;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -24,6 +28,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -91,18 +96,27 @@ public class FSUtils {
     /**
      * Obtain all the partition paths, that are present in this table.
      */
-    public static List<String> getAllPartitionPaths(FileSystem fs, String basePath) throws IOException {
+    public static List<String> getAllPartitionPaths(FileSystem fs, String basePath)
+        throws IOException {
         List<String> partitionsToClean = new ArrayList<>();
         // TODO(vc): For now, assume partitions are two levels down from base path.
         FileStatus[] folders = fs.globStatus(new Path(basePath + "/*/*/*"));
         for (FileStatus status : folders) {
             Path path = status.getPath();
-            partitionsToClean.add(String.format("%s/%s/%s",
-                    path.getParent().getParent().getName(),
-                    path.getParent().getName(),
-                    path.getName()));
+            partitionsToClean.add(String.format("%s/%s/%s", path.getParent().getParent().getName(),
+                path.getParent().getName(), path.getName()));
         }
         return partitionsToClean;
     }
 
+    public static String getFileExtension(String fullName) {
+        Preconditions.checkNotNull(fullName);
+        String fileName = (new File(fullName)).getName();
+        int dotIndex = fileName.indexOf('.');
+        return dotIndex == -1 ? "" : fileName.substring(dotIndex);
+    }
+
+    public static String getInstantTime(String name) {
+        return name.replace(getFileExtension(name), "");
+    }
 }

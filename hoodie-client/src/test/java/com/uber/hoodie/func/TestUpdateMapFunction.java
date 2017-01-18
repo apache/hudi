@@ -17,6 +17,7 @@
 package com.uber.hoodie.func;
 
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.TestRawTripPayload;
@@ -79,7 +80,7 @@ public class TestUpdateMapFunction {
                 rowChange3));
         Iterator<List<WriteStatus>> insertResult = table.handleInsert(records.iterator());
         Path commitFile =
-            new Path(config.getBasePath() + "/.hoodie/" + HoodieTableMetaClient.makeCommitFileName("100"));
+            new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
         FSUtils.getFs().create(commitFile);
 
         // Now try an update with an evolved schema

@@ -22,6 +22,7 @@ import com.google.common.base.Optional;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
@@ -218,13 +219,13 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                 public Iterable<Tuple2<String, String>> call(String partitionPath) {
                     FileSystem fs = FSUtils.getFs();
                     TableFileSystemView view = new ReadOptimizedTableView(fs, metaClient);
-                    java.util.Optional<String> latestCommitTime =
-                        metaClient.getActiveCommitTimeline().lastInstant();
+                    java.util.Optional<HoodieInstant> latestCommitTime =
+                        metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
                     List<Tuple2<String, String>> list = new ArrayList<>();
                     if (latestCommitTime.isPresent()) {
                         List<HoodieDataFile> filteredFiles =
-                            view.streamLatestVersionInPartition(partitionPath,
-                                latestCommitTime.get()).collect(Collectors.toList());
+                            view.getLatestVersionInPartition(partitionPath,
+                                latestCommitTime.get().getTimestamp()).collect(Collectors.toList());
                         for (HoodieDataFile file : filteredFiles) {
                             list.add(new Tuple2<>(partitionPath, file.getFileName()));
                         }

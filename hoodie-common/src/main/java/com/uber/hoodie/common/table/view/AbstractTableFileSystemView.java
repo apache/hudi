@@ -20,6 +20,7 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
@@ -38,7 +39,7 @@ import java.util.stream.Stream;
 /**
  * Common abstract implementation for multiple TableFileSystemView Implementations.
  * 2 possible implementations are ReadOptimizedView and RealtimeView
- *
+ * <p>
  * Concrete implementations extending this abstract class, should only implement
  * listDataFilesInPartition which includes files to be included in the view
  *
@@ -54,24 +55,26 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
     public AbstractTableFileSystemView(FileSystem fs, HoodieTableMetaClient metaClient) {
         this.metaClient = metaClient;
         this.fs = fs;
-        this.activeCommitTimeline = metaClient.getActiveCommitTimeline();
+        // Get the active timeline and filter only completed commits
+        this.activeCommitTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
     }
 
     public Stream<HoodieDataFile> getLatestDataFilesForFileId(final String partitionPath,
         String fileId) {
-        Optional<String> lastInstant = activeCommitTimeline.lastInstant();
+        Optional<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
         if (lastInstant.isPresent()) {
-            return streamLatestVersionInPartition(partitionPath, lastInstant.get())
+            return getLatestVersionInPartition(partitionPath, lastInstant.get().getTimestamp())
                 .filter(hoodieDataFile -> hoodieDataFile.getFileId().equals(fileId));
         }
         return Stream.empty();
     }
 
     @Override
-    public Stream<HoodieDataFile> streamLatestVersionInPartition(String partitionPathStr,
+    public Stream<HoodieDataFile> getLatestVersionInPartition(String partitionPathStr,
         String maxCommitTime) {
         try {
-            return streamLatestVersionsBeforeOrOn(listDataFilesInPartition(partitionPathStr),
+            return getLatestVersionsBeforeOrOn(listDataFilesInPartition(partitionPathStr),
                 maxCommitTime);
         } catch (IOException e) {
             throw new HoodieIOException(
@@ -81,11 +84,11 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
 
 
     @Override
-    public Stream<List<HoodieDataFile>> streamEveryVersionInPartition(String partitionPath) {
+    public Stream<List<HoodieDataFile>> getEveryVersionInPartition(String partitionPath) {
         try {
-            if(activeCommitTimeline.lastInstant().isPresent()) {
-                return streamFilesByFileId(listDataFilesInPartition(partitionPath),
-                    activeCommitTimeline.lastInstant().get());
+            if (activeCommitTimeline.lastInstant().isPresent()) {
+                return getFilesByFileId(listDataFilesInPartition(partitionPath),
+                    activeCommitTimeline.lastInstant().get().getTimestamp());
             }
             return Stream.empty();
         } catch (IOException e) {
@@ -98,13 +101,14 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
         throws IOException;
 
     @Override
-    public Stream<HoodieDataFile> streamLatestVersionInRange(FileStatus[] fileStatuses,
+    public Stream<HoodieDataFile> getLatestVersionInRange(FileStatus[] fileStatuses,
         List<String> commitsToReturn) {
-        if (!activeCommitTimeline.hasInstants() || commitsToReturn.isEmpty()) {
+        if (activeCommitTimeline.empty() || commitsToReturn.isEmpty()) {
             return Stream.empty();
         }
         try {
-            return streamFilesByFileId(fileStatuses, activeCommitTimeline.lastInstant().get())
+            return getFilesByFileId(fileStatuses,
+                activeCommitTimeline.lastInstant().get().getTimestamp())
                 .map((Function<List<HoodieDataFile>, Optional<HoodieDataFile>>) fss -> {
                     for (HoodieDataFile fs : fss) {
                         if (commitsToReturn.contains(fs.getCommitTime())) {
@@ -120,17 +124,18 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
     }
 
     @Override
-    public Stream<HoodieDataFile> streamLatestVersionsBeforeOrOn(FileStatus[] fileStatuses,
+    public Stream<HoodieDataFile> getLatestVersionsBeforeOrOn(FileStatus[] fileStatuses,
         String maxCommitToReturn) {
         try {
-            if (!activeCommitTimeline.hasInstants()) {
+            if (activeCommitTimeline.empty()) {
                 return Stream.empty();
             }
-            return streamFilesByFileId(fileStatuses, activeCommitTimeline.lastInstant().get())
+            return getFilesByFileId(fileStatuses,
+                activeCommitTimeline.lastInstant().get().getTimestamp())
                 .map((Function<List<HoodieDataFile>, Optional<HoodieDataFile>>) fss -> {
                     for (HoodieDataFile fs1 : fss) {
                         if (activeCommitTimeline
-                            .compareInstants(fs1.getCommitTime(), maxCommitToReturn,
+                            .compareTimestamps(fs1.getCommitTime(), maxCommitToReturn,
                                 HoodieTimeline.LESSER_OR_EQUAL)) {
                             return Optional.of(fs1);
                         }
@@ -143,19 +148,20 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
     }
 
     @Override
-    public Stream<HoodieDataFile> streamLatestVersions(FileStatus[] fileStatuses) {
+    public Stream<HoodieDataFile> getLatestVersions(FileStatus[] fileStatuses) {
         try {
-            if (!activeCommitTimeline.hasInstants()) {
+            if (activeCommitTimeline.empty()) {
                 return Stream.empty();
             }
-            return streamFilesByFileId(fileStatuses, activeCommitTimeline.lastInstant().get())
+            return getFilesByFileId(fileStatuses,
+                activeCommitTimeline.lastInstant().get().getTimestamp())
                 .map(statuses -> statuses.get(0));
         } catch (IOException e) {
             throw new HoodieIOException("Could not filter files for latest version ", e);
         }
     }
 
-    protected Stream<List<HoodieDataFile>> streamFilesByFileId(FileStatus[] files,
+    protected Stream<List<HoodieDataFile>> getFilesByFileId(FileStatus[] files,
         String maxCommitTime) throws IOException {
         return groupFilesByFileId(files, maxCommitTime).values().stream();
     }
@@ -173,7 +179,7 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
         return Arrays.stream(files).flatMap(fileStatus -> {
             HoodieDataFile dataFile = new HoodieDataFile(fileStatus);
             if (activeCommitTimeline.containsOrBeforeTimelineStarts(dataFile.getCommitTime())
-                && activeCommitTimeline.compareInstants(dataFile.getCommitTime(), maxCommitTime,
+                && activeCommitTimeline.compareTimestamps(dataFile.getCommitTime(), maxCommitTime,
                 HoodieTimeline.LESSER_OR_EQUAL)) {
                 return Stream.of(Pair.of(dataFile.getFileId(), dataFile));
             }
