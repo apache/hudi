@@ -249,6 +249,7 @@
                             <exclude>**/*.txt</exclude>
                             <exclude>**/*.sh</exclude>
                             <exclude>**/test/resources/*.avro</exclude>
+                            <exclude>**/test/resources/*.data</exclude>
                             <exclude>**/test/resources/*.schema</exclude>
                             <exclude>**/test/resources/*.csv</exclude>
                         </excludes>
@@ -297,6 +298,12 @@
                 <groupId>org.apache.parquet</groupId>
                 <artifactId>parquet-hadoop</artifactId>
                 <version>${parquet.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-mapred</artifactId>
+                <version>1.7.7</version>
             </dependency>
 
             <!-- we have to stay at <= 16.0, due to issues with HBase client -->

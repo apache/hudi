@@ -17,21 +17,27 @@
 package com.uber.hoodie.common.util;
 
 import com.google.common.base.Preconditions;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.exception.HoodieIOException;
+import com.uber.hoodie.exception.InvalidHoodiePathException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Utility functions related to accessing the file storage
@@ -39,6 +45,9 @@ import java.util.List;
 public class FSUtils {
 
     private static final Logger LOG = LogManager.getLogger(FSUtils.class);
+    // Log files are of this pattern - b5068208-e1a4-11e6-bf01-fe55135034f3.avro.delta.1
+    private static final Pattern LOG_FILE_PATTERN = Pattern.compile("(.*)\\.(.*)\\.(.*)\\.([0-9]*)");
+    private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
 
     public static FileSystem getFs() {
         Configuration conf = new Configuration();
@@ -118,5 +127,164 @@ public class FSUtils {
 
     public static String getInstantTime(String name) {
         return name.replace(getFileExtension(name), "");
+    }
+
+
+    /**
+     * Get the file extension from the log file
+     * @param logPath
+     * @return
+     */
+    public static String getFileExtensionFromLog(Path logPath) {
+        Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+        if(!matcher.find()) {
+            throw new InvalidHoodiePathException(logPath, "LogFile");
+        }
+        return matcher.group(2) + "." + matcher.group(3);
+    }
+
+    /**
+     * Get the first part of the file name in the log file. That will be the fileId.
+     * Log file do not have commitTime in the file name.
+     *
+     * @param path
+     * @return
+     */
+    public static String getFileIdFromLogPath(Path path) {
+        Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+        if(!matcher.find()) {
+            throw new InvalidHoodiePathException(path, "LogFile");
+        }
+        return matcher.group(1);
+    }
+
+    /**
+     * Get the last part of the file name in the log file and convert to int.
+     *
+     * @param logPath
+     * @return
+     */
+    public static int getFileVersionFromLog(Path logPath) {
+        Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+        if(!matcher.find()) {
+            throw new InvalidHoodiePathException(logPath, "LogFile");
+        }
+        return Integer.parseInt(matcher.group(4));
+    }
+
+    public static String makeLogFileName(String fileId, String logFileExtension, int version) {
+        return String.format("%s%s.%d", fileId, logFileExtension, version);
+    }
+
+    /**
+     * Get the latest log file written from the list of log files passed in
+     *
+     * @param logFiles
+     * @return
+     */
+    public static Optional<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
+        return logFiles.sorted(Comparator
+            .comparing(s -> s.getLogVersion(),
+                Comparator.reverseOrder())).findFirst();
+    }
+
+    /**
+     * Get all the log files for the passed in FileId in the partition path
+     *
+     * @param fs
+     * @param partitionPath
+     * @param fileId
+     * @param logFileExtension
+     * @return
+     */
+    public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath,
+        final String fileId, final String logFileExtension) throws IOException {
+        return Arrays.stream(fs.listStatus(partitionPath,
+            path -> path.getName().startsWith(fileId) && path.getName()
+                .contains(logFileExtension))).map(HoodieLogFile::new);
+    }
+
+    /**
+     * Get the latest log version for the fileId in the partition path
+     *
+     * @param fs
+     * @param partitionPath
+     * @param fileId
+     * @param logFileExtension
+     * @return
+     * @throws IOException
+     */
+    public static Optional<Integer> getLatestLogVersion(FileSystem fs, Path partitionPath,
+        final String fileId, final String logFileExtension) throws IOException {
+        Optional<HoodieLogFile> latestLogFile =
+            getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension));
+        if (latestLogFile.isPresent()) {
+            return Optional.of(latestLogFile.get().getLogVersion());
+        }
+        return Optional.empty();
+    }
+
+    public static int getCurrentLogVersion(FileSystem fs, Path partitionPath,
+        final String fileId, final String logFileExtension) throws IOException {
+        Optional<Integer> currentVersion =
+            getLatestLogVersion(fs, partitionPath, fileId, logFileExtension);
+        // handle potential overflow
+        return (currentVersion.isPresent()) ? currentVersion.get() : 1;
+    }
+
+    /**
+     * computes the next log version for the specified fileId in the partition path
+     *
+     * @param fs
+     * @param partitionPath
+     * @param fileId
+     * @return
+     * @throws IOException
+     */
+    public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
+        final String logFileExtension) throws IOException {
+        Optional<Integer> currentVersion =
+            getLatestLogVersion(fs, partitionPath, fileId, logFileExtension);
+        // handle potential overflow
+        return (currentVersion.isPresent()) ? currentVersion.get() + 1 : 1;
+    }
+
+    public static int getDefaultBufferSize(final FileSystem fs) {
+        return fs.getConf().getInt("io.file.buffer.size", 4096);
+    }
+
+    public static Short getDefaultReplication(FileSystem fs, Path path) {
+        return fs.getDefaultReplication(path);
+    }
+
+    public static Long getDefaultBlockSize(FileSystem fs, Path path) {
+        return fs.getDefaultBlockSize(path);
+    }
+
+    /**
+     * When a file was opened and the task died without closing the stream, another task executor cannot open because the existing lease will be active.
+     * We will try to recover the lease, from HDFS. If a data node went down, it takes about 10 minutes for the lease to be rocovered.
+     * But if the client dies, this should be instant.
+     *
+     * @param dfs
+     * @param p
+     * @return
+     * @throws IOException
+     */
+    public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
+        throws IOException, InterruptedException {
+        LOG.info("Recover lease on dfs file " + p);
+        // initiate the recovery
+        boolean recovered = false;
+        for (int nbAttempt = 0; nbAttempt < MAX_ATTEMPTS_RECOVER_LEASE; nbAttempt++) {
+            LOG.info("Attempt " + nbAttempt + " to recover lease on dfs file " + p);
+            recovered = dfs.recoverLease(p);
+            if (recovered)
+                break;
+            // Sleep for 1 second before trying again. Typically it takes about 2-3 seconds to recover under default settings
+            Thread.sleep(1000);
+        }
+        return recovered;
+
     }
 }
