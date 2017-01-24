@@ -17,6 +17,8 @@
 package com.uber.hoodie.hive.util;
 
 import com.google.common.collect.Sets;
+import com.uber.hoodie.common.minicluster.HdfsTestService;
+import com.uber.hoodie.common.minicluster.ZookeeperTestService;
 import com.uber.hoodie.hive.HoodieHiveConfiguration;
 import com.uber.hoodie.hive.client.HoodieHiveClient;
 import com.uber.hoodie.hive.model.HoodieDatasetReference;
