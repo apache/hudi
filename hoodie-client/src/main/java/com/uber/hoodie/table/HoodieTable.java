@@ -84,6 +84,17 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
                                                                       Iterator<HoodieRecord<T>> recordIterator,
                                                                       Partitioner partitioner);
 
+    /**
+     * Perform the ultimate IO for a given inserted (RDD) partition
+     *
+     * @param partition
+     * @param recordIterator
+     * @param partitioner
+     */
+    public abstract Iterator<List<WriteStatus>> handleInsertPartition(Integer partition,
+                                                                      Iterator<HoodieRecord<T>> recordIterator,
+                                                                      Partitioner partitioner);
+
 
     public static HoodieTable getHoodieTable(HoodieTableType type,
                                              String commitTime,

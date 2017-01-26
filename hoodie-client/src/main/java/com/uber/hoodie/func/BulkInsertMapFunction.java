@@ -30,15 +30,15 @@ import java.util.List;
 /**
  * Map function that handles a sorted stream of HoodieRecords
  */
-public class InsertMapFunction<T extends HoodieRecordPayload>
+public class BulkInsertMapFunction<T extends HoodieRecordPayload>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
     private String commitTime;
     private HoodieWriteConfig config;
     private HoodieTableMetadata metadata;
 
-    public InsertMapFunction(String commitTime, HoodieWriteConfig config,
-        HoodieTableMetadata metadata) {
+    public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config,
+                                 HoodieTableMetadata metadata) {
         this.commitTime = commitTime;
         this.config = config;
         this.metadata = metadata;

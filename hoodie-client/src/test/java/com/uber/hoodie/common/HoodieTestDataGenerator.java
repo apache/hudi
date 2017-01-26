@@ -62,6 +62,9 @@ public class HoodieTestDataGenerator {
             + "{\"name\": \"end_lon\", \"type\": \"double\"},"
             + "{\"name\":\"fare\",\"type\": \"double\"}]}";
 
+    // based on examination of sample file, the schema produces the following per record size
+    public static final int SIZE_PER_RECORD = 50 * 1024;
+
 
     private List<KeyPartition> existingKeysList = new ArrayList<>();
     private static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
