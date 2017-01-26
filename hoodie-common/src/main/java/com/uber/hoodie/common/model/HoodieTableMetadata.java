@@ -110,11 +110,11 @@ public class HoodieTableMetadata implements Serializable {
                 throw new DatasetNotFoundException(this.basePath);
             }
 
-            // create .hoodie folder if it does not exist.
             this.metadataFolder = new Path(this.basePath, METAFOLDER_NAME);
             Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
             if (!fs.exists(propertyPath)) {
                 if (initOnMissing) {
+                    // create .hoodie folder if it does not exist.
                     createHoodieProperties(metadataFolder, tableName);
                 } else {
                     throw new InvalidDatasetException(this.basePath);
