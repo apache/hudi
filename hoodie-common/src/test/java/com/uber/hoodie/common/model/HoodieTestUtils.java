@@ -31,6 +31,7 @@ import java.util.UUID;
 public class HoodieTestUtils {
 
     public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
+    public static final int DEFAULT_TASK_PARTITIONID = 1;
 
     public static final void initializeHoodieDirectory(String basePath) throws IOException {
         new File(basePath + "/" + HoodieTableMetadata.METAFOLDER_NAME).mkdirs();
@@ -78,12 +79,16 @@ public class HoodieTestUtils {
     public static final String createDataFile(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
         String folderPath = basePath + "/" + partitionPath + "/";
         new File(folderPath).mkdirs();
-        new File(folderPath + FSUtils.makeDataFileName(commitTime, 1, fileID)).createNewFile();
+        new File(folderPath + FSUtils.makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileID)).createNewFile();
         return fileID;
     }
 
+    public static final String getDataFilePath(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
+        return basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileID);
+    }
+
     public static final boolean doesDataFileExist(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
-        return new File(basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(commitTime, 1, fileID)).exists();
+        return new File(getDataFilePath(basePath, partitionPath, commitTime, fileID)).exists();
     }
 
     public static final boolean doesCommitExist(String basePath, String commitTime) {
