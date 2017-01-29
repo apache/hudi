@@ -7,4 +7,9 @@ permalink: comparison.html
 
 Work In Progress
 
+## Kudu
+
+## Hive Transactions
+
+## HBase
 
