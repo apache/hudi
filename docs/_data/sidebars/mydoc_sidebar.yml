@@ -35,6 +35,10 @@ entries:
       url: /concepts.html
       output: web
 
+    - title: Implementation
+      url: /implementation.html
+      output: web
+
     - title: SQL Queries
       url: /sql_queries.html
       output: web
@@ -45,10 +49,6 @@ entries:
 
     - title: Admin Guide
       url: /admin_guide.html
-      output: web
-
-    - title: Performance
-      url: /performance.html
       output: web
 
     - title: Comparison
