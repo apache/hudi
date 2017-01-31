@@ -19,6 +19,7 @@ package com.uber.hoodie.common;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
@@ -63,7 +64,7 @@ public class HoodieTestDataGenerator {
 
 
     private List<KeyPartition> existingKeysList = new ArrayList<>();
-    private static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
+    public static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
     private static Random rand = new Random(46474747);
     private String[] partitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
 

@@ -29,19 +29,9 @@ import java.io.IOException;
  */
 public class ReadOptimizedTableView extends AbstractTableFileSystemView {
     public ReadOptimizedTableView(FileSystem fs, HoodieTableMetaClient metaClient) {
-        super(fs, metaClient);
+        // Get the active timeline and filter only completed commits
+        super(fs, metaClient,
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
     }
-
-    protected FileStatus[] listDataFilesInPartition(String partitionPathStr) {
-        Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
-        try {
-            return fs.listStatus(partitionPath, path -> path.getName()
-                .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension()));
-        } catch (IOException e) {
-            throw new HoodieIOException(
-                "Failed to list data files in partition " + partitionPathStr, e);
-        }
-    }
-
 
 }

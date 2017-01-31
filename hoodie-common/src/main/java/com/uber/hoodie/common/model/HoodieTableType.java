@@ -31,5 +31,5 @@ package com.uber.hoodie.common.model;
  * SIMPLE_LSM    - A simple 2 level LSM tree.
  */
 public enum HoodieTableType {
-    COPY_ON_WRITE
+    COPY_ON_WRITE, MERGE_ON_READ
 }

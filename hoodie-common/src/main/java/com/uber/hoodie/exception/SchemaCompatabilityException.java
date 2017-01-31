@@ -14,18 +14,18 @@
  *  limitations under the License.
  */
 
-package com.uber.hoodie.common.model;
+package com.uber.hoodie.exception;
 
-public enum HoodieFileFormat {
-    PARQUET(".parquet"), AVRO(".avro");
-
-    private final String extension;
-
-    HoodieFileFormat(String extension) {
-        this.extension = extension;
+public class SchemaCompatabilityException extends HoodieException {
+    public SchemaCompatabilityException(String message) {
+        super(message);
     }
 
-    public String getFileExtension() {
-        return extension;
+    public SchemaCompatabilityException(String message, Throwable t) {
+        super(message, t);
+    }
+
+    public SchemaCompatabilityException(Throwable t) {
+        super(t);
     }
 }
