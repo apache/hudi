@@ -43,10 +43,10 @@ import java.util.stream.Stream;
 public class CompositeAvroLogReader {
     private final Map<Integer, AvroLogReader> readers;
 
-    public CompositeAvroLogReader(Path partitionPath, String fileId, FileSystem fs,
+    public CompositeAvroLogReader(Path partitionPath, String fileId, String baseCommitTime, FileSystem fs,
         Schema readerSchema, String logFileExtension) throws IOException {
         Stream<HoodieLogFile> allLogFiles =
-            FSUtils.getAllLogFiles(fs, partitionPath, fileId, logFileExtension);
+            FSUtils.getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
         this.readers = allLogFiles.map(hoodieLogFile -> {
             try {
                 return new AvroLogReader(hoodieLogFile, fs, readerSchema);

@@ -14,18 +14,13 @@
  *  limitations under the License.
  */
 
-package com.uber.hoodie.common.model;
+package com.uber.hoodie.io.compact;
 
-public enum HoodieFileFormat {
-    PARQUET(".parquet"), AVRO(".avro");
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
 
-    private final String extension;
+/**
+ * Place holder for the compaction specific meta-data, uses all the details used in a normal HoodieCommitMetadata
+ */
+public class HoodieCompactionMetadata extends HoodieCommitMetadata {
 
-    HoodieFileFormat(String extension) {
-        this.extension = extension;
-    }
-
-    public String getFileExtension() {
-        return extension;
-    }
 }

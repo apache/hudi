@@ -18,6 +18,7 @@ package com.uber.hoodie.common.util;
 
 import com.uber.hoodie.common.model.HoodieRecord;
 
+import com.uber.hoodie.exception.SchemaCompatabilityException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.*;
 import org.apache.avro.io.BinaryEncoder;
@@ -124,14 +125,13 @@ public class HoodieAvroUtils {
     /**
      * Given a avro record with a given schema, rewrites it into the new schema
      */
-    public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema)
-            throws Exception {
+    public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
         GenericRecord newRecord = new GenericData.Record(newSchema);
         for (Schema.Field f : record.getSchema().getFields()) {
             newRecord.put(f.name(), record.get(f.name()));
         }
         if (!new GenericData().validate(newSchema, newRecord)) {
-            throw new Exception(
+            throw new SchemaCompatabilityException(
                     "Unable to validate the rewritten record " + record + " against schema "
                             + newSchema);
         }

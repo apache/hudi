@@ -82,6 +82,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
@@ -119,6 +120,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
@@ -139,6 +141,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
@@ -166,6 +169,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         long size1 = logAppender.getCurrentSize();
@@ -188,6 +192,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
@@ -233,6 +238,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         long size1 = logAppender.getCurrentSize();
@@ -272,6 +278,7 @@ public class AvroLogAppenderTest {
         HoodieLogAppendConfig logConfig =
             HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
                 .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+                .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withSizeThreshold(500).withFs(fs)
                 .build();
 
@@ -284,6 +291,7 @@ public class AvroLogAppenderTest {
         // Need to rebuild config to set the latest version as path
         logConfig = HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
             .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+            .withBaseCommitTime("100")
             .withSchema(SchemaTestUtil.getSimpleSchema()).withSizeThreshold(500).withFs(fs).build();
         logAppender = new RollingAvroLogAppender(logConfig);
         long size2 = logAppender.getCurrentSize();
@@ -293,18 +301,21 @@ public class AvroLogAppenderTest {
 
         logConfig = HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)
             .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+            .withBaseCommitTime("100")
             .withSchema(SchemaTestUtil.getSimpleSchema()).withSizeThreshold(500).withFs(fs).build();
         List<HoodieLogFile> allLogFiles = FSUtils
             .getAllLogFiles(fs, partitionPath, logConfig.getLogFile().getFileId(),
-                HoodieLogFile.DELTA_EXTENSION).collect(Collectors.toList());
+                HoodieLogFile.DELTA_EXTENSION, logConfig.getLogFile().getBaseCommitTime())
+            .collect(Collectors.toList());
         assertEquals("", 2, allLogFiles.size());
 
         SortedMap<Integer, List<Long>> offsets = Maps.newTreeMap();
         offsets.put(1, Lists.newArrayList(size1));
         offsets.put(2, Lists.newArrayList(size2));
         CompositeAvroLogReader reader =
-            new CompositeAvroLogReader(partitionPath, logConfig.getLogFile().getFileId(), fs,
-                logConfig.getSchema(), HoodieLogFile.DELTA_EXTENSION);
+            new CompositeAvroLogReader(partitionPath, logConfig.getLogFile().getFileId(),
+                logConfig.getLogFile().getBaseCommitTime(), fs, logConfig.getSchema(),
+                HoodieLogFile.DELTA_EXTENSION);
         Iterator<GenericRecord> results = reader.readBlocks(offsets);
         List<GenericRecord> totalBatch = IteratorUtils.toList(results);
         assertEquals("Stream collect should return all 200 records", 200, totalBatch.size());

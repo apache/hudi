@@ -117,6 +117,8 @@ public class HoodieLogAppendConfig {
         private Integer fileVersion;
         // Partition path for the log file
         private Path partitionPath;
+        // The base commit time for which the log files are accumulated
+        private String baseCommitTime;
 
         public Builder withBufferSize(int bufferSize) {
             this.bufferSize = bufferSize;
@@ -173,6 +175,11 @@ public class HoodieLogAppendConfig {
             return this;
         }
 
+        public Builder withBaseCommitTime(String commitTime) {
+            this.baseCommitTime = commitTime;
+            return this;
+        }
+
         public HoodieLogAppendConfig build() throws IOException {
             log.info("Building HoodieLogAppendConfig");
             if (schema == null) {
@@ -185,6 +192,9 @@ public class HoodieLogAppendConfig {
             if (fileId == null) {
                 throw new IllegalArgumentException("FileID is not specified");
             }
+            if (baseCommitTime == null) {
+                throw new IllegalArgumentException("BaseCommitTime is not specified");
+            }
             if (logFileExtension == null) {
                 throw new IllegalArgumentException("File extension is not specified");
             }
@@ -194,14 +204,14 @@ public class HoodieLogAppendConfig {
             if (fileVersion == null) {
                 log.info("Computing the next log version for " + fileId + " in " + partitionPath);
                 fileVersion =
-                    FSUtils.getCurrentLogVersion(fs, partitionPath, fileId, logFileExtension);
+                    FSUtils.getCurrentLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
                 log.info(
                     "Computed the next log version for " + fileId + " in " + partitionPath + " as "
                         + fileVersion);
             }
 
             Path logPath = new Path(partitionPath,
-                FSUtils.makeLogFileName(fileId, logFileExtension, fileVersion));
+                FSUtils.makeLogFileName(fileId, logFileExtension, baseCommitTime, fileVersion));
             log.info("LogConfig created on path " + logPath);
             HoodieLogFile logFile = new HoodieLogFile(logPath);
 

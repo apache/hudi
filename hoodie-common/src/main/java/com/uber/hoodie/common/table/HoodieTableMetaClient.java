@@ -138,6 +138,14 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     /**
+     * Get the FS implementation for this table
+     * @return
+     */
+    public FileSystem getFs() {
+        return fs;
+    }
+
+    /**
      * Get the active instants as a timeline
      *
      * @return Active instants timeline

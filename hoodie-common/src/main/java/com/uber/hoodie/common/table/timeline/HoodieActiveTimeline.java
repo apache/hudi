@@ -31,9 +31,11 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -50,6 +52,8 @@ import java.util.stream.Stream;
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
+    public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
+
     private final transient static Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
     private String metaPath;
     private transient FileSystem fs;
@@ -81,8 +85,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
     public HoodieActiveTimeline(FileSystem fs, String metaPath) {
         this(fs, metaPath,
-            new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
-                INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION});
+            new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, COMPACTION_EXTENSION,
+                INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, COMPACTION_EXTENSION});
     }
 
     /**
@@ -110,6 +114,27 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
      */
     public HoodieTimeline getCommitTimeline() {
         return new HoodieDefaultTimeline(filterInstantsByAction(COMMIT_ACTION),
+            (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+    }
+
+    /**
+     * Get only the commits (inflight and completed) in the compaction timeline
+     *
+     * @return
+     */
+    public HoodieTimeline getCompactionTimeline() {
+        return new HoodieDefaultTimeline(filterInstantsByAction(COMPACTION_ACTION),
+            (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+    }
+
+    /**
+     * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions
+     *
+     * @param actions actions allowed in the timeline
+     * @return
+     */
+    public HoodieTimeline getTimelineOfActions(Set<String> actions) {
+        return new HoodieDefaultTimeline(instants.stream().filter(s -> actions.contains(s.getAction())),
             (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
     }
 
