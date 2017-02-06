@@ -47,8 +47,12 @@ public class HoodieTableConfig implements Serializable {
     public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
     public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME =
         "hoodie.table.ro.file.format";
+    public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME =
+        "hoodie.table.rt.file.format";
+
     public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
     public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
+    public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.AVRO;
     private Properties props;
 
     public HoodieTableConfig(FileSystem fs, String metaPath) {
@@ -108,7 +112,7 @@ public class HoodieTableConfig implements Serializable {
      * @return
      */
     public HoodieTableType getTableType() {
-        if (props.contains(HOODIE_TABLE_TYPE_PROP_NAME)) {
+        if (props.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
             return HoodieTableType.valueOf(props.getProperty(HOODIE_TABLE_TYPE_PROP_NAME));
         }
         return DEFAULT_TABLE_TYPE;
@@ -129,9 +133,22 @@ public class HoodieTableConfig implements Serializable {
      * @return HoodieFileFormat for the Read Optimized Storage format
      */
     public HoodieFileFormat getROFileFormat() {
-        if (props.contains(HOODIE_RO_FILE_FORMAT_PROP_NAME)) {
+        if (props.containsKey(HOODIE_RO_FILE_FORMAT_PROP_NAME)) {
             return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RO_FILE_FORMAT_PROP_NAME));
         }
         return DEFAULT_RO_FILE_FORMAT;
     }
+
+    /**
+     * Get the Read Optimized Storage Format
+     *
+     * @return HoodieFileFormat for the Read Optimized Storage format
+     */
+    public HoodieFileFormat getRTFileFormat() {
+        if (props.containsKey(HOODIE_RT_FILE_FORMAT_PROP_NAME)) {
+            return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RT_FILE_FORMAT_PROP_NAME));
+        }
+        return DEFAULT_RT_FILE_FORMAT;
+    }
+
 }

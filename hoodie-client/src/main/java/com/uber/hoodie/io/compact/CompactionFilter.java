@@ -14,18 +14,21 @@
  *  limitations under the License.
  */
 
-package com.uber.hoodie.common.model;
+package com.uber.hoodie.io.compact;
 
-public enum HoodieFileFormat {
-    PARQUET(".parquet"), AVRO(".avro");
+import java.util.List;
 
-    private final String extension;
+/**
+ * Implementations of CompactionFilter allows prioritizing and filtering certain type of
+ * compactions over other compactions.
+ *
+ * e.g. Filter in-efficient compaction like compacting a very large old parquet file with a small avro file
+ */
+public interface CompactionFilter {
+    List<CompactionOperation> filter(List<CompactionOperation> input);
 
-    HoodieFileFormat(String extension) {
-        this.extension = extension;
-    }
-
-    public String getFileExtension() {
-        return extension;
+    // Default implementation - do not filter anything
+    static CompactionFilter allowAll() {
+        return s -> s;
     }
 }

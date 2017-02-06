@@ -16,6 +16,8 @@
 
 package com.uber.hoodie.exception;
 
+import java.io.Serializable;
+
 /**
  * <p>
  * Exception thrown for Hoodie failures. The root of
@@ -27,7 +29,7 @@ package com.uber.hoodie.exception;
  * </p>
  *
  */
-public class HoodieException extends RuntimeException {
+public class HoodieException extends RuntimeException implements Serializable {
     public HoodieException() {
         super();
     }

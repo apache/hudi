@@ -399,7 +399,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
 
 
-    public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr) throws Exception {
+    public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr)
+        throws IOException {
         // these are updates
         HoodieUpdateHandle upsertHandle =
                 new HoodieUpdateHandle<>(config, commitTime, metaClient, recordItr, fileLoc);
