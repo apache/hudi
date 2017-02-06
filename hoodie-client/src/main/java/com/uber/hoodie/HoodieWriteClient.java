@@ -64,7 +64,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
@@ -93,8 +92,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     private transient final HoodieIndex<T> index;
     private transient final HoodieCommitArchiveLog archiveLog;
     private transient Timer.Context writeContext = null;
-
-    private final SimpleDateFormat FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
     /**
      * @param jsc
@@ -331,7 +328,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             clean();
             if (writeContext != null) {
                 long durationInMs = metrics.getDurationInMs(writeContext.stop());
-                metrics.updateCommitMetrics(FORMATTER.parse(commitTime).getTime(), durationInMs,
+                metrics.updateCommitMetrics(
+                    HoodieActiveTimeline.COMMIT_FORMATTER.parse(commitTime).getTime(), durationInMs,
                     metadata);
                 writeContext = null;
             }
@@ -495,7 +493,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * Provides a new commit time for a write operation (insert/update)
      */
     public String startCommit() {
-        String commitTime = FORMATTER.format(new Date());
+        String commitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
         startCommitWithTime(commitTime);
         return commitTime;
     }

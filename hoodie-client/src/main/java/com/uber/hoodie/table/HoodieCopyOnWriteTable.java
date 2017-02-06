@@ -30,7 +30,6 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
 import com.uber.hoodie.io.HoodieUpdateHandle;
@@ -390,7 +389,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
     @Override
     public Partitioner getInsertPartitioner(WorkloadProfile profile) {
-        return getUpsertPartitioner(profile);
+        return null;
     }
 
     @Override
@@ -399,7 +398,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
 
-    public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr) throws Exception {
+
+    public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr)
+        throws IOException {
         // these are updates
         HoodieUpdateHandle upsertHandle =
                 new HoodieUpdateHandle<>(config, commitTime, metaClient, recordItr, fileLoc);
@@ -461,12 +462,5 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             logger.error(msg, t);
             throw new HoodieUpsertException(msg, t);
         }
-    }
-
-    @Override
-    public Iterator<List<WriteStatus>> handleInsertPartition(Integer partition,
-                                                             Iterator recordItr,
-                                                             Partitioner partitioner) {
-        return handleUpsertPartition(partition, recordItr, partitioner);
     }
 }

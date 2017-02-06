@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.io.Serializable;
+import java.util.Comparator;
 import java.util.Optional;
 
 /**
@@ -51,6 +51,10 @@ public class HoodieLogFile {
         return FSUtils.getFileIdFromLogPath(path);
     }
 
+    public String getBaseCommitTime() {
+        return FSUtils.getBaseCommitTimeFromLogPath(path);
+    }
+
     public int getLogVersion() {
         return FSUtils.getFileVersionFromLog(path);
     }
@@ -74,16 +78,26 @@ public class HoodieLogFile {
 
     public HoodieLogFile rollOver(FileSystem fs) throws IOException {
         String fileId = getFileId();
-        int newVersion =
-            FSUtils.computeNextLogVersion(fs, path.getParent(), fileId, DELTA_EXTENSION);
+        String baseCommitTime = getBaseCommitTime();
+        int newVersion = FSUtils
+            .computeNextLogVersion(fs, path.getParent(), fileId,
+                DELTA_EXTENSION, baseCommitTime);
         return new HoodieLogFile(new Path(path.getParent(),
-            FSUtils.makeLogFileName(fileId, DELTA_EXTENSION, newVersion)));
+            FSUtils.makeLogFileName(fileId, DELTA_EXTENSION, baseCommitTime, newVersion)));
     }
 
     public boolean shouldRollOver(HoodieLogAppender currentWriter, HoodieLogAppendConfig config)
         throws IOException {
         return currentWriter.getCurrentSize() > config.getSizeThreshold();
     }
+
+    public static Comparator<HoodieLogFile> getLogVersionComparator() {
+        return (o1, o2) -> {
+            // reverse the order
+            return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
+        };
+    }
+
 
     @Override
     public String toString() {
