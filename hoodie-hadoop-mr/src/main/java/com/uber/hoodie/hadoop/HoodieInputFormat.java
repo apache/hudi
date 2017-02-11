@@ -22,8 +22,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
-import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -95,8 +94,9 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             LOG.info("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
             String tableName = metadata.getTableConfig().getTableName();
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
-            TableFileSystemView fsView = new ReadOptimizedTableView(FSUtils.getFs(), metadata);
             HoodieTimeline timeline = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            TableFileSystemView fsView = new HoodieTableFileSystemView(metadata, timeline);
+
             if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
                 // this is of the form commitTs_partition_sequenceNumber
                 String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(Job.getInstance(job), tableName);

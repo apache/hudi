@@ -25,8 +25,9 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -64,7 +65,8 @@ public class HoodieSnapshotCopier implements Serializable {
     public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir) throws IOException {
         FileSystem fs = FSUtils.getFs();
         final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
-        final TableFileSystemView fsView = new ReadOptimizedTableView(fs, tableMetadata);
+        final TableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata,
+            tableMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
         // Get the latest commit
         final Optional<HoodieInstant>
             latestCommit = tableMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();

@@ -37,6 +37,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -99,8 +100,8 @@ public class AvroLogAppender implements HoodieLogAppender<IndexedRecord> {
         }
     }
 
-    public void append(List<IndexedRecord> records) throws IOException {
-        records.forEach(r -> {
+    public void append(Iterator<IndexedRecord> records) throws IOException {
+        records.forEachRemaining(r -> {
             try {
                 writer.append(r);
             } catch (IOException e) {

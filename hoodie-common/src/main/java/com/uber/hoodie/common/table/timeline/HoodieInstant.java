@@ -97,6 +97,10 @@ public class HoodieInstant implements Serializable {
             return isInflight ?
                 HoodieTimeline.makeInflightCompactionFileName(timestamp) :
                 HoodieTimeline.makeCompactionFileName(timestamp);
+        } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
+            return isInflight ?
+                HoodieTimeline.makeInflightDeltaFileName(timestamp) :
+                HoodieTimeline.makeDeltaFileName(timestamp);
         }
         throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
     }

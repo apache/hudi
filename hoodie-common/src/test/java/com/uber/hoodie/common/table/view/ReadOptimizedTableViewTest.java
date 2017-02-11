@@ -54,12 +54,14 @@ public class ReadOptimizedTableViewTest {
         folder.create();
         this.basePath = folder.getRoot().getAbsolutePath();
         metaClient = HoodieTestUtils.init(basePath);
-        fsView = new ReadOptimizedTableView(HoodieTestUtils.fs, metaClient);
+        fsView = new HoodieTableFileSystemView(metaClient,
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
     }
 
     private void refreshFsView() {
         metaClient = new HoodieTableMetaClient(HoodieTestUtils.fs, basePath, true);
-        fsView = new ReadOptimizedTableView(HoodieTestUtils.fs, metaClient);
+        fsView = new HoodieTableFileSystemView(metaClient,
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
     }
 
     @Test

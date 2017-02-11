@@ -20,6 +20,7 @@ import com.uber.hoodie.common.table.log.avro.AvroLogAppender;
 import com.uber.hoodie.common.table.log.avro.RollingAvroLogAppender;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -36,7 +37,7 @@ public interface HoodieLogAppender<R> {
      * @param records
      * @throws IOException
      */
-    void append(List<R> records) throws IOException, InterruptedException;
+    void append(Iterator<R> records) throws IOException, InterruptedException;
 
     /**
      * Syncs the log manually if auto-flush is not set in HoodieLogAppendConfig. If auto-flush is set

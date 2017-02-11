@@ -28,8 +28,6 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.RealtimeTableView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -41,6 +39,7 @@ import com.uber.hoodie.io.compact.CompactionFilter;
 import com.uber.hoodie.io.compact.HoodieCompactionMetadata;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -112,24 +111,27 @@ public class TestHoodieCompactor {
         HoodieTestUtils.initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
 
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
-        RealtimeTableView fsView = new RealtimeTableView(FSUtils.getFs(), metaClient);
-        compactor.compact(jsc, getConfig(), metaClient, fsView, CompactionFilter.allowAll());
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
     }
 
     @Test
     public void testCompactionEmpty() throws Exception {
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
-        RealtimeTableView fsView = new RealtimeTableView(FSUtils.getFs(), metaClient);
         HoodieWriteConfig config = getConfig();
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
         HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+
         String newCommitTime = writeClient.startCommit();
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
         JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
         writeClient.insert(recordsRDD, newCommitTime).collect();
 
         HoodieCompactionMetadata result =
-            compactor.compact(jsc, getConfig(), metaClient, fsView, CompactionFilter.allowAll());
-        assertTrue("If there is nothing to compact, result wull be null", result == null);
+            compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
+        assertTrue("If there is nothing to compact, result will be empty",
+            result.getFileIdAndFullPaths().isEmpty());
     }
 
     @Test
@@ -145,11 +147,13 @@ public class TestHoodieCompactor {
 
         // Update all the 100 records
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+
         newCommitTime = "101";
         List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
         JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
         HoodieIndex index = new HoodieBloomIndex<>(config, jsc);
-        updatedRecords = index.tagLocation(updatedRecordsRDD, metaClient).collect();
+        updatedRecords = index.tagLocation(updatedRecordsRDD, table).collect();
 
         // Write them to corresponding avro logfiles
         HoodieTestUtils
@@ -158,10 +162,10 @@ public class TestHoodieCompactor {
 
         // Verify that all data file has one log file
         metaClient = new HoodieTableMetaClient(fs, basePath);
-        RealtimeTableView fsView = new RealtimeTableView(fs, metaClient);
+        table = HoodieTable.getHoodieTable(metaClient, config);
         for (String partitionPath : dataGen.getPartitionPaths()) {
             Map<HoodieDataFile, List<HoodieLogFile>> groupedLogFiles =
-                fsView.groupLatestDataFileWithLogFiles(fs, partitionPath);
+                table.getFileSystemView().groupLatestDataFileWithLogFiles(partitionPath);
             for (List<HoodieLogFile> logFiles : groupedLogFiles.values()) {
                 assertEquals("There should be 1 log file written for every data file", 1,
                     logFiles.size());
@@ -170,13 +174,14 @@ public class TestHoodieCompactor {
 
         // Do a compaction
         metaClient = new HoodieTableMetaClient(fs, basePath);
-        fsView = new RealtimeTableView(fs, metaClient);
+        table = HoodieTable.getHoodieTable(metaClient, config);
+
         HoodieCompactionMetadata result =
-            compactor.compact(jsc, getConfig(), metaClient, fsView, CompactionFilter.allowAll());
+            compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
 
         // Verify that recently written compacted data file has no log file
         metaClient = new HoodieTableMetaClient(fs, basePath);
-        fsView = new RealtimeTableView(fs, metaClient);
+        table = HoodieTable.getHoodieTable(metaClient, config);
         HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
         assertTrue("Compaction commit should be > than last insert", timeline
@@ -185,7 +190,7 @@ public class TestHoodieCompactor {
 
         for (String partitionPath : dataGen.getPartitionPaths()) {
             Map<HoodieDataFile, List<HoodieLogFile>> groupedLogFiles =
-                fsView.groupLatestDataFileWithLogFiles(fs, partitionPath);
+                table.getFileSystemView().groupLatestDataFileWithLogFiles(partitionPath);
             for (List<HoodieLogFile> logFiles : groupedLogFiles.values()) {
                 assertTrue(
                     "After compaction there should be no log files visiable on a Realtime view",

@@ -24,13 +24,14 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.RealtimeTableView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
+import com.uber.hoodie.table.HoodieMergeOnReadTable;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.commons.collections.IteratorUtils;
 import org.apache.hadoop.fs.FileSystem;
@@ -61,11 +62,12 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
     @Override
     public HoodieCompactionMetadata compact(JavaSparkContext jsc, HoodieWriteConfig config,
-        HoodieTableMetaClient metaClient, RealtimeTableView fsView,
+        HoodieTable hoodieTable,
         CompactionFilter compactionFilter) throws Exception {
         // TODO - rollback any compactions in flight
 
-        String compactionCommit = startCompactionCommit(metaClient);
+        HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
+        String compactionCommit = startCompactionCommit(hoodieTable);
         log.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommit);
         List<String> partitionPaths =
             FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath());
@@ -74,9 +76,9 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         List<CompactionOperation> operations =
             jsc.parallelize(partitionPaths, partitionPaths.size())
                 .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> {
-                    FileSystem fileSystem = FSUtils.getFs();
-                    return fsView.groupLatestDataFileWithLogFiles(fileSystem, partitionPath)
-                        .entrySet().stream()
+                    return hoodieTable.getFileSystemView()
+                        .groupLatestDataFileWithLogFiles(partitionPath).entrySet()
+                        .stream()
                         .map(s -> new CompactionOperation(s.getKey(), partitionPath, s.getValue()))
                         .collect(Collectors.toList());
                 }).collect();
@@ -145,9 +147,15 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         List<HoodieRecord<HoodieAvroPayload>> readDeltaFilesInMemory =
             AvroUtils.loadFromFiles(fs, operation.getDeltaFilePaths(), schema);
 
+        if(readDeltaFilesInMemory.isEmpty()) {
+            return IteratorUtils.emptyIterator();
+        }
+
+        // Compacting is very similar to applying updates to existing file
         HoodieCopyOnWriteTable<HoodieAvroPayload> table =
-            new HoodieCopyOnWriteTable<>(commitTime, config, metaClient);
-        return table.handleUpdate(operation.getFileId(), readDeltaFilesInMemory.iterator());
+            new HoodieCopyOnWriteTable<>(config, metaClient);
+        return table
+            .handleUpdate(commitTime, operation.getFileId(), readDeltaFilesInMemory.iterator());
     }
 
     public boolean commitCompaction(String commitTime, HoodieTableMetaClient metaClient,

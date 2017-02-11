@@ -30,6 +30,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.exception.HoodieDependentSystemUnavailableException;
 import com.uber.hoodie.exception.HoodieIndexException;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
@@ -67,7 +68,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
     @Override
     public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-        JavaRDD<HoodieKey> hoodieKeys, HoodieTableMetaClient metaClient) {
+        JavaRDD<HoodieKey> hoodieKeys, HoodieTable<T> hoodieTable) {
         throw new UnsupportedOperationException("HBase index does not implement check exist yet");
     }
 
@@ -93,10 +94,10 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     class LocationTagFunction
             implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {
 
-        private final HoodieTableMetaClient metaClient;
+        private final HoodieTable<T> hoodieTable;
 
-        LocationTagFunction(HoodieTableMetaClient metaClient) {
-            this.metaClient = metaClient;
+        LocationTagFunction(HoodieTable<T> hoodieTable) {
+            this.hoodieTable = hoodieTable;
         }
 
         @Override
@@ -129,9 +130,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                         String fileId =
                                 Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
 
-                        HoodieTimeline commitTimeline =
-                            metaClient.getActiveTimeline().getCommitTimeline()
-                                .filterCompletedInstants();
+                        HoodieTimeline commitTimeline = hoodieTable.getCompletedCommitTimeline();
                         // if the last commit ts for this row is less than the system commit ts
                         if (!commitTimeline.empty() && commitTimeline.containsInstant(
                             new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))) {
@@ -160,9 +159,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     }
 
     @Override
-    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-                                             HoodieTableMetaClient metaClient) {
-        return recordRDD.mapPartitionsWithIndex(this.new LocationTagFunction(metaClient), true);
+    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, HoodieTable<T> hoodieTable) {
+        return recordRDD.mapPartitionsWithIndex(this.new LocationTagFunction(hoodieTable), true);
     }
 
     class UpdateLocationTask implements Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>> {
@@ -223,7 +221,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
     @Override
     public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-                                               HoodieTableMetaClient metaClient) {
+        HoodieTable<T> hoodieTable) {
         return writeStatusRDD.mapPartitionsWithIndex(new UpdateLocationTask(), true);
     }
 

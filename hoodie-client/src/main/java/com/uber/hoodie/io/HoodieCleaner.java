@@ -17,14 +17,12 @@
 package com.uber.hoodie.io;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.util.FSUtils;
-
+import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -58,18 +56,16 @@ public class HoodieCleaner {
 
     private final TableFileSystemView fileSystemView;
     private final HoodieTimeline commitTimeline;
-    private HoodieTableMetaClient metaClient;
+    private HoodieTable hoodieTable;
     private HoodieWriteConfig config;
     private FileSystem fs;
 
-    public HoodieCleaner(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-        FileSystem fs) {
-        this.metaClient = metaClient;
-        this.fileSystemView = new ReadOptimizedTableView(fs, metaClient);
-        this.commitTimeline =
-            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    public HoodieCleaner(HoodieTable hoodieTable, HoodieWriteConfig config) {
+        this.hoodieTable = hoodieTable;
+        this.fileSystemView = hoodieTable.getCompactedFileSystemView();
+        this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
         this.config = config;
-        this.fs = fs;
+        this.fs = hoodieTable.getFs();
     }
 
 
