@@ -426,6 +426,10 @@ public class HoodieTableMetadata implements Serializable {
         String maxCommitTime) throws IOException {
         HashMap<String, List<FileStatus>> fileIdtoVersions = new HashMap<>();
         for (FileStatus file : files) {
+            // filter out files starting with "."
+            if (file.getPath().getName().startsWith(".")) {
+                continue;
+            }
             String filename = file.getPath().getName();
             String fileId = FSUtils.getFileId(filename);
             String commitTime = FSUtils.getCommitTime(filename);
