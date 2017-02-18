@@ -72,19 +72,31 @@ the conventional alternatives for achieving these tasks.
 
 #### Upsert vs Bulk Loading
 
+Following shows the speed up obtained for NoSQL ingestion, by switching from bulk loads off HBase to Parquet to incrementally upserting
+on a Hoodie dataset, on 5 tables ranging from small to huge.
+
+{% include image.html file="hoodie_upsert_perf1.png" alt="hoodie_upsert_perf1.png" max-width="1000" %}
 
 
+Given Hoodie can build the dataset incrementally, it opens doors for also scheduling ingesting more frequently thus reducing latency, with
+significant savings on the overall compute cost.
 
 
-#### Incremental Scan vs Full Scan
+{% include image.html file="hoodie_upsert_perf2.png" alt="hoodie_upsert_perf2.png" max-width="1000" %}
 
+Hoodie upserts have been stress tested upto 4TB in a single commit across the t1 table.
 
-
-
-
-#### Scalability of Upserts
 
 
 #### Copy On Write Regular Query Performance
 
+The major design goal for copy-on-write storage was to achieve the latency reduction & efficiency gains in previous section,
+with zero impact on queries. Following charts compare the hoodie vs non-hoodie datasets across Hive/Presto/Spark queries.
 
+{% include image.html file="hoodie_query_perf_hive.png" alt="hoodie_query_perf_hive.png" max-width="800" %}
+
+
+{% include image.html file="hoodie_query_perf_spark.png" alt="hoodie_query_perf_spark.png" max-width="1000" %}
+
+
+{% include image.html file="hoodie_query_perf_presto.png" alt="hoodie_query_perf_presto.png" max-width="1000" %}
