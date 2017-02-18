@@ -91,12 +91,17 @@ Hoodie upserts have been stress tested upto 4TB in a single commit across the t1
 #### Copy On Write Regular Query Performance
 
 The major design goal for copy-on-write storage was to achieve the latency reduction & efficiency gains in previous section,
-with zero impact on queries. Following charts compare the hoodie vs non-hoodie datasets across Hive/Presto/Spark queries.
+with no impact on queries. Following charts compare the hoodie vs non-hoodie datasets across Hive/Presto/Spark queries.
+
+**Hive**
 
 {% include image.html file="hoodie_query_perf_hive.png" alt="hoodie_query_perf_hive.png" max-width="800" %}
 
+**Spark**
 
 {% include image.html file="hoodie_query_perf_spark.png" alt="hoodie_query_perf_spark.png" max-width="1000" %}
 
+**Presto**
 
 {% include image.html file="hoodie_query_perf_presto.png" alt="hoodie_query_perf_presto.png" max-width="1000" %}
+
