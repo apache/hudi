@@ -9,7 +9,7 @@ summary: In this page, we go over how to enable SQL queries on Hoodie built tabl
 
 Hoodie registers the dataset into the Hive metastore backed by `HoodieInputFormat`. This makes the data accessible to
 Hive & Spark & Presto automatically. To be able to perform normal SQL queries on such a dataset, we need to get the individual query engines
-to call `HoodieInputFormat.getSplits()`, during query planning.
+to call `HoodieInputFormat.getSplits()`, during query planning such that the right versions of files are exposed to it.
 
 
 In the following sections, we cover the configs needed across different query engines to achieve this.
