@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.2.13-SNAPSHOT</version>
+    <version>0.2.13</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
