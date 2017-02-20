@@ -40,7 +40,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * Class to be used in tests to keep generating test inserts & updates against a corpus.
+ * Class to be used in tests to keep generating test inserts and updates against a corpus.
  *
  * Test data uses a toy Uber trips, data model.
  */

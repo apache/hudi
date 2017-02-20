@@ -33,11 +33,11 @@ import java.util.HashSet;
 
 /**
  * Given a path is a part of
- * - Hoodie dataset => accepts ONLY the latest version of each path
- * - Non-Hoodie dataset => then always accept
+ * - Hoodie dataset = accepts ONLY the latest version of each path
+ * - Non-Hoodie dataset = then always accept
  *
- * We can set this filter, on a query engine's Hadoop Config & if it respects path filters, then
- * you should be able to query both hoodie & non-hoodie datasets as you would normally do.
+ * We can set this filter, on a query engine's Hadoop Config and if it respects path filters, then
+ * you should be able to query both hoodie and non-hoodie datasets as you would normally do.
  *
  * hadoopConf.setClass("mapreduce.input.pathFilter.class",
  *                      com.uber.hoodie.hadoop.HoodieROTablePathFilter.class,
@@ -50,7 +50,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
     /**
      * Its quite common, to have all files from a given partition path be passed into accept(),
-     * cache the check for hoodie metadata for known partition paths & the latest versions of files
+     * cache the check for hoodie metadata for known partition paths and the latest versions of files
      */
     private HashMap<String, HashSet<Path>> hoodiePathCache;
 

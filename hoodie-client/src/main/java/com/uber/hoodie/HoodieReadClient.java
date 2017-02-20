@@ -70,7 +70,7 @@ public class HoodieReadClient implements Serializable {
 
     private transient final FileSystem fs;
     /**
-     * TODO: We need to persist the index type into hoodie.properties & be able to access the index
+     * TODO: We need to persist the index type into hoodie.properties and be able to access the index
      * just with a simple basepath pointing to the dataset. Until, then just always assume a
      * BloomIndex
      */
