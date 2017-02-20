@@ -165,7 +165,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal
      * writes.
      *
-     * This implementation skips the index check & is able to leverage benefits such as
+     * This implementation skips the index check and is able to leverage benefits such as
      * small file handling/blocking alignment, as with upsert(), by profiling the workload
      *
      * @param records    HoodieRecords to insert
@@ -298,7 +298,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * loads into a Hoodie table for the very first time (e.g: converting an existing dataset to
      * Hoodie).
      *
-     * This implementation uses sortBy (which does range partitioning based on reservoir sampling) &
+     * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and
      * attempts to control the numbers of files with less memory compared to the {@link
      * HoodieWriteClient#insert(JavaRDD, String)}
      *
