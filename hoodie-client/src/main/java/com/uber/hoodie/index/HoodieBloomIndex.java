@@ -323,7 +323,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     /**
      * Find out <RowKey, filename> pair. All workload grouped by file-level.
      *
-     *         // Join PairRDD(PartitionPath, RecordKey) and PairRDD(PartitionPath, File) & then repartition such that
+     *         // Join PairRDD(PartitionPath, RecordKey) and PairRDD(PartitionPath, File) and then repartition such that
      // each RDD partition is a file, then for each file, we do (1) load bloom filter, (2) load rowKeys, (3) Tag rowKey
      // Make sure the parallelism is atleast the groupby parallelism for tagging location
      */
