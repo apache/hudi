@@ -283,9 +283,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     }
                 }, true).flatMap(new FlatMapFunction<List<WriteStatus>, WriteStatus>() {
             @Override
-            public Iterable<WriteStatus> call(List<WriteStatus> writeStatuses)
+            public Iterator<WriteStatus> call(List<WriteStatus> writeStatuses)
                     throws Exception {
-                return writeStatuses;
+                return writeStatuses.iterator();
             }
         });
 
@@ -332,9 +332,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, metadata),
                             true).flatMap(new FlatMapFunction<List<WriteStatus>, WriteStatus>() {
                         @Override
-                        public Iterable<WriteStatus> call(List<WriteStatus> writeStatuses)
+                        public Iterator<WriteStatus> call(List<WriteStatus> writeStatuses)
                                 throws Exception {
-                            return writeStatuses;
+                            return writeStatuses.iterator();
                         }
                     });
 

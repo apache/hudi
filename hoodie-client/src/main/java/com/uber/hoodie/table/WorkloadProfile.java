@@ -63,7 +63,7 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
 
     private void buildProfile() {
 
-        Map<Tuple2<String, Option<HoodieRecordLocation>>, Object> partitionLocationCounts =
+        Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts =
                 taggedRecords.mapToPair(new PairFunction<HoodieRecord<T>, Tuple2<String, Option<HoodieRecordLocation>>, HoodieRecord<T>>() {
             @Override
             public Tuple2<Tuple2<String, Option<HoodieRecordLocation>>, HoodieRecord<T>> call(HoodieRecord<T> record) throws Exception {
@@ -71,9 +71,9 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
             }
         }).countByKey();
 
-        for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Object> e: partitionLocationCounts.entrySet()) {
+        for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e: partitionLocationCounts.entrySet()) {
             String partitionPath = e.getKey()._1();
-            Long count = (Long) e.getValue();
+            Long count = e.getValue();
             Option<HoodieRecordLocation> locOption = e.getKey()._2();
 
             if (!partitionPathStatMap.containsKey(partitionPath)){

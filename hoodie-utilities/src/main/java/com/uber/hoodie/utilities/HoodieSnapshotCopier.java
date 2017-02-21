@@ -38,6 +38,7 @@ import scala.Tuple2;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -75,14 +76,14 @@ public class HoodieSnapshotCopier implements Serializable {
 
             jsc.parallelize(partitions, partitions.size()).flatMap(new FlatMapFunction<String, Tuple2<String, String>>() {
                 @Override
-                public Iterable<Tuple2<String, String>> call(String partition) throws Exception {
+                public Iterator<Tuple2<String, String>> call(String partition) throws Exception {
                     // Only take latest version files <= latestCommit.
                     FileSystem fs = FSUtils.getFs();
                     List<Tuple2<String, String>> filePaths = new ArrayList<>();
                     for (FileStatus fileStatus : tableMetadata.getLatestVersionInPartition(fs, partition, latestCommit)) {
                         filePaths.add(new Tuple2<>(partition, fileStatus.getPath().toString()));
                     }
-                    return filePaths;
+                    return filePaths.iterator();
                 }
             }).foreach(new VoidFunction<Tuple2<String, String>>() {
                 @Override
