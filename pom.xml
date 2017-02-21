@@ -89,7 +89,7 @@
         <maven-dependency-plugin.version>2.10</maven-dependency-plugin.version>
         <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
         <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
-        <parquet.version>1.7.0</parquet.version>
+        <parquet.version>1.8.1</parquet.version>
         <junit.version>4.11</junit.version>
         <mockito.version>1.9.5</mockito.version>
         <log4j.version>1.2.17</log4j.version>
@@ -97,7 +97,7 @@
         <hadoop.version>2.6.0</hadoop.version>
         <hive.version>1.1.0</hive.version>
         <metrics.version>3.1.1</metrics.version>
-        <spark.version>1.5.1</spark.version>
+        <spark.version>2.1.0</spark.version>
     </properties>
 
     <scm>
@@ -192,6 +192,7 @@
                             <exclude>**/.*</exclude>
                             <exclude>**/*.txt</exclude>
                             <exclude>**/*.sh</exclude>
+                            <exclude>**/dependency-reduced-pom.xml</exclude>
                             <exclude>**/test/resources/*.avro</exclude>
                             <exclude>**/test/resources/*.schema</exclude>
                             <exclude>**/test/resources/*.csv</exclude>
@@ -316,7 +317,7 @@
             <dependency>
                 <groupId>org.apache.parquet</groupId>
                 <artifactId>parquet-hive-bundle</artifactId>
-                <version>1.7.0</version>
+                <version>1.8.1</version>
             </dependency>
 
             <dependency>

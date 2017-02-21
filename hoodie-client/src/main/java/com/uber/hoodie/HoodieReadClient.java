@@ -40,7 +40,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFunction;
-import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.StructType;
@@ -122,7 +122,7 @@ public class HoodieReadClient implements Serializable {
      *
      * @return a dataframe
      */
-    public DataFrame read(JavaRDD<HoodieKey> hoodieKeys, int parallelism)
+    public Dataset<Row> read(JavaRDD<HoodieKey> hoodieKeys, int parallelism)
             throws Exception {
 
         assertSqlContext();
@@ -145,7 +145,7 @@ public class HoodieReadClient implements Serializable {
 
         // record locations might be same for multiple keys, so need a unique list
         Set<String> uniquePaths = new HashSet<>(paths);
-        DataFrame originalDF = sqlContextOpt.get().read()
+        Dataset<Row> originalDF = sqlContextOpt.get().read()
                 .parquet(uniquePaths.toArray(new String[uniquePaths.size()]));
         StructType schema = originalDF.schema();
         JavaPairRDD<HoodieKey, Row> keyRowRDD = originalDF.javaRDD()
@@ -174,7 +174,7 @@ public class HoodieReadClient implements Serializable {
     /**
      * Reads the paths under the a hoodie dataset out as a DataFrame
      */
-    public DataFrame read(String... paths) {
+    public Dataset<Row> read(String... paths) {
         assertSqlContext();
         List<String> filteredPaths = new ArrayList<>();
         try {
@@ -203,7 +203,7 @@ public class HoodieReadClient implements Serializable {
      * If you made a prior call to {@link HoodieReadClient#latestCommit()}, it gives you all data in
      * the time window (commitTimestamp, latestCommit)
      */
-    public DataFrame readSince(String lastCommitTimestamp) {
+    public Dataset<Row> readSince(String lastCommitTimestamp) {
 
         List<String> commitsToReturn = metadata.findCommitsAfter(lastCommitTimestamp, Integer.MAX_VALUE);
         //TODO: we can potentially trim this down to only affected partitions, using CommitMetadata
@@ -227,7 +227,7 @@ public class HoodieReadClient implements Serializable {
     /**
      * Obtain
      */
-    public DataFrame readCommit(String commitTime) {
+    public Dataset<Row> readCommit(String commitTime) {
         assertSqlContext();
         HoodieCommits commits = metadata.getAllCommits();
         if (!commits.contains(commitTime)) {
