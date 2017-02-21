@@ -16,15 +16,14 @@
 
 package com.uber.hoodie.io;
 
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
-import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
-import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,20 +38,19 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     protected final String commitTime;
     protected final HoodieWriteConfig config;
     protected final FileSystem fs;
-    protected final HoodieTableMetaClient metaClient;
-    protected final HoodieTimeline hoodieTimeline;
-    protected final TableFileSystemView fileSystemView;
+    protected final HoodieTable<T> hoodieTable;
+    protected HoodieTimeline hoodieTimeline;
+    protected TableFileSystemView fileSystemView;
     protected final Schema schema;
 
     public HoodieIOHandle(HoodieWriteConfig config, String commitTime,
-                          HoodieTableMetaClient metaClient) {
+                          HoodieTable<T> hoodieTable) {
         this.commitTime = commitTime;
         this.config = config;
         this.fs = FSUtils.getFs();
-        this.metaClient = metaClient;
-        this.hoodieTimeline =
-            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
-        this.fileSystemView = new ReadOptimizedTableView(fs, metaClient);
+        this.hoodieTable = hoodieTable;
+        this.hoodieTimeline = hoodieTable.getCompletedCommitTimeline();
+        this.fileSystemView = hoodieTable.getFileSystemView();
         this.schema =
             HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     }

@@ -57,7 +57,7 @@ public class TestUpdateMapFunction {
         // Create a bunch of records with a old version of schema
         HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
         HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
-        HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable("100", config, metadata);
+        HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
         String recordStr1 =
             "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -78,7 +78,7 @@ public class TestUpdateMapFunction {
         records.add(
             new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
                 rowChange3));
-        Iterator<List<WriteStatus>> insertResult = table.handleInsert(records.iterator());
+        Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
         Path commitFile =
             new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
         FSUtils.getFs().create(commitFile);
@@ -91,7 +91,7 @@ public class TestUpdateMapFunction {
         System.out.println(fileId);
 
 
-        table = new HoodieCopyOnWriteTable("101", config, metadata);
+        table = new HoodieCopyOnWriteTable(config, metadata);
         // New content with values for the newly added field
         recordStr1 =
             "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
@@ -104,7 +104,7 @@ public class TestUpdateMapFunction {
         records.add(record1);
 
         try {
-            table.handleUpdate(fileId, records.iterator());
+            table.handleUpdate("101", fileId, records.iterator());
         } catch (ClassCastException e) {
             fail(
                 "UpdateFunction could not read records written with exampleSchema.txt using the exampleEvolvedSchema.txt");

@@ -20,7 +20,7 @@ import java.util.stream.Collectors
 
 import com.uber.hoodie.common.model.{HoodieDataFile, HoodieRecord}
 import com.uber.hoodie.common.table.HoodieTableMetaClient
-import com.uber.hoodie.common.table.view.ReadOptimizedTableView
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView
 import com.uber.hoodie.common.util.FSUtils
 import com.uber.hoodie.exception.HoodieException
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
@@ -75,7 +75,7 @@ class DedupeSparkJob (basePath: String,
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 
     val metadata = new HoodieTableMetaClient(fs, basePath)
-    val fsView = new ReadOptimizedTableView(fs, metadata)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants())
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"${basePath}/${duplicatedPartitionPath}"))
     val latestFiles:java.util.List[HoodieDataFile] = fsView.getLatestVersions(allFiles).collect(Collectors.toList[HoodieDataFile]())
@@ -126,7 +126,7 @@ class DedupeSparkJob (basePath: String,
 
   def fixDuplicates(dryRun: Boolean = true) = {
     val metadata = new HoodieTableMetaClient(fs, basePath)
-    val fsView = new ReadOptimizedTableView(fs, metadata)
+    val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants())
 
     val allFiles = fs.listStatus(new Path(s"${basePath}/${duplicatedPartitionPath}"))
     val latestFiles:java.util.List[HoodieDataFile] = fsView.getLatestVersions(allFiles).collect(Collectors.toList[HoodieDataFile]())

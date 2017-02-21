@@ -18,9 +18,13 @@ package com.uber.hoodie.common.table;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.table.log.HoodieLogFile;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -29,6 +33,7 @@ import java.util.stream.Stream;
  * <p>
  * ReadOptimizedView - Lets queries run only on organized columnar data files at the expense of latency
  * WriteOptimizedView - Lets queries run on columnar data as well as delta files (sequential) at the expense of query execution time
+ *
  * @since 0.3.0
  */
 public interface TableFileSystemView {
@@ -90,4 +95,14 @@ public interface TableFileSystemView {
      * @return
      */
     Stream<HoodieDataFile> getLatestVersions(FileStatus[] fileStatuses);
+
+    /**
+     * Group data files with corresponding delta files
+     * @param fs
+     * @param partitionPath
+     * @return
+     * @throws IOException
+     */
+    Map<HoodieDataFile, List<HoodieLogFile>> groupLatestDataFileWithLogFiles(String partitionPath) throws IOException;
+
 }

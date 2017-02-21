@@ -24,6 +24,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 
 import com.uber.hoodie.io.HoodieIOHandle;
 import com.uber.hoodie.io.HoodieInsertHandle;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.spark.TaskContext;
 
 import java.util.ArrayList;
@@ -40,17 +41,17 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
 
     private final HoodieWriteConfig hoodieConfig;
     private final String commitTime;
-    private final HoodieTableMetaClient metaClient;
+    private final HoodieTable<T> hoodieTable;
     private Set<String> partitionsCleaned;
     private HoodieInsertHandle handle;
 
     public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
-        String commitTime, HoodieTableMetaClient metaClient) {
+        String commitTime, HoodieTable<T> hoodieTable) {
         super(sortedRecordItr);
         this.partitionsCleaned = new HashSet<>();
         this.hoodieConfig = config;
         this.commitTime = commitTime;
-        this.metaClient = metaClient;
+        this.hoodieTable = hoodieTable;
     }
 
     @Override protected void start() {
@@ -78,7 +79,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
             // lazily initialize the handle, for the first time
             if (handle == null) {
                 handle =
-                    new HoodieInsertHandle(hoodieConfig, commitTime, metaClient,
+                    new HoodieInsertHandle(hoodieConfig, commitTime, hoodieTable,
                         record.getPartitionPath());
             }
 
@@ -90,7 +91,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
                 statuses.add(handle.close());
                 // Need to handle the rejected record & open new handle
                 handle =
-                    new HoodieInsertHandle(hoodieConfig, commitTime, metaClient,
+                    new HoodieInsertHandle(hoodieConfig, commitTime, hoodieTable,
                         record.getPartitionPath());
                 handle.write(record); // we should be able to write 1 record.
                 break;

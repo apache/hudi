@@ -85,7 +85,7 @@ public class AvroLogAppenderTest {
                 .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100).iterator());
         long size1 = logAppender.getCurrentSize();
         assertTrue("", size1 > 0);
         assertEquals("", size1, fs.getFileStatus(logConfig.getLogFile().getPath()).getLen());
@@ -93,7 +93,7 @@ public class AvroLogAppenderTest {
 
         // Close and Open again and append 100 more records
         logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100).iterator());
         long size2 = logAppender.getCurrentSize();
         assertTrue("", size2 > size1);
         assertEquals("", size2, fs.getFileStatus(logConfig.getLogFile().getPath()).getLen());
@@ -101,7 +101,7 @@ public class AvroLogAppenderTest {
 
         // Close and Open again and append 100 more records
         logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(200, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(200, 100).iterator());
         long size3 = logAppender.getCurrentSize();
         assertTrue("", size3 > size2);
         assertEquals("", size3, fs.getFileStatus(logConfig.getLogFile().getPath()).getLen());
@@ -123,13 +123,13 @@ public class AvroLogAppenderTest {
                 .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100).iterator());
         // do not close this log appender
         // logAppender.close();
 
         // Try opening again and append 100 more records
         logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100).iterator());
         assertEquals("", logAppender.getCurrentSize(),
             fs.getFileStatus(logConfig.getLogFile().getPath()).getLen());
         logAppender.close();
@@ -144,7 +144,7 @@ public class AvroLogAppenderTest {
                 .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100).iterator());
         logAppender.close();
 
         // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
@@ -157,7 +157,7 @@ public class AvroLogAppenderTest {
         outputStream.close();
 
         logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100).iterator());
         logAppender.close();
     }
 
@@ -175,7 +175,7 @@ public class AvroLogAppenderTest {
         long size1 = logAppender.getCurrentSize();
 
         List<IndexedRecord> inputRecords = SchemaTestUtil.generateTestRecords(0, 100);
-        logAppender.append(inputRecords);
+        logAppender.append(inputRecords.iterator());
         logAppender.close();
 
         AvroLogReader logReader =
@@ -195,21 +195,21 @@ public class AvroLogAppenderTest {
                 .withBaseCommitTime("100")
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
-        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100).iterator());
         long size1 = logAppender.getCurrentSize();
         logAppender.close();
 
         // Close and Open again and append 100 more records
         logAppender = new RollingAvroLogAppender(logConfig);
         List<IndexedRecord> secondBatchInput = SchemaTestUtil.generateTestRecords(100, 100);
-        logAppender.append(secondBatchInput);
+        logAppender.append(secondBatchInput.iterator());
         long size2 = logAppender.getCurrentSize();
         logAppender.close();
 
         // Close and Open again and append 100 more records
         logAppender = new RollingAvroLogAppender(logConfig);
         List<IndexedRecord> lastBatchInput = SchemaTestUtil.generateTestRecords(200, 100);
-        logAppender.append(lastBatchInput);
+        logAppender.append(lastBatchInput.iterator());
         long size3 = logAppender.getCurrentSize();
         logAppender.close();
 
@@ -242,7 +242,7 @@ public class AvroLogAppenderTest {
                 .withSchema(SchemaTestUtil.getSimpleSchema()).withFs(fs).build();
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         long size1 = logAppender.getCurrentSize();
-        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(0, 100).iterator());
         logAppender.close();
 
         // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
@@ -256,7 +256,7 @@ public class AvroLogAppenderTest {
 
         logAppender = new RollingAvroLogAppender(logConfig);
         long size2 = logAppender.getCurrentSize();
-        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100));
+        logAppender.append(SchemaTestUtil.generateTestRecords(100, 100).iterator());
         logAppender.close();
 
         AvroLogReader logReader =
@@ -285,7 +285,7 @@ public class AvroLogAppenderTest {
         RollingAvroLogAppender logAppender = new RollingAvroLogAppender(logConfig);
         long size1 = logAppender.getCurrentSize();
         List<IndexedRecord> input1 = SchemaTestUtil.generateTestRecords(0, 100);
-        logAppender.append(input1);
+        logAppender.append(input1.iterator());
         logAppender.close();
 
         // Need to rebuild config to set the latest version as path
@@ -296,7 +296,7 @@ public class AvroLogAppenderTest {
         logAppender = new RollingAvroLogAppender(logConfig);
         long size2 = logAppender.getCurrentSize();
         List<IndexedRecord> input2 = SchemaTestUtil.generateTestRecords(100, 100);
-        logAppender.append(input2);
+        logAppender.append(input2.iterator());
         logAppender.close();
 
         logConfig = HoodieLogAppendConfig.newBuilder().onPartitionPath(partitionPath)

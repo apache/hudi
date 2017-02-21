@@ -19,9 +19,7 @@ package com.uber.hoodie.table;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.ReadOptimizedTableView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
@@ -70,6 +68,11 @@ import scala.Tuple2;
  *
  */
 public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieTable {
+    public HoodieCopyOnWriteTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+        super(config, metaClient);
+    }
+
+
 
     // seed for random number generator. No particular significance, just makes testing deterministic
     private static final long RANDOM_NUMBER_SEED = 356374L;
@@ -136,10 +139,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         }
     }
 
-
-    public HoodieCopyOnWriteTable(String commitTime, HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-        super(commitTime, config, metaClient);
-    }
 
     /**
      * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition)
@@ -291,13 +290,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             FileSystem fs = FSUtils.getFs();
             List<SmallFile> smallFileLocations = new ArrayList<>();
 
-            HoodieTimeline commitTimeline =
-                metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
-            TableFileSystemView fileSystemView = new ReadOptimizedTableView(fs, metaClient);
+            HoodieTimeline commitTimeline = getCompletedCommitTimeline();
 
             if (!commitTimeline.empty()) { // if we have some commits
                 HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-                List<HoodieDataFile> allFiles = fileSystemView
+                List<HoodieDataFile> allFiles = getFileSystemView()
                     .getLatestVersionInPartition(partitionPath, latestCommitTime.getTimestamp())
                     .collect(Collectors.toList());
 
@@ -399,11 +396,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
 
 
-    public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr)
+    public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileLoc, Iterator<HoodieRecord<T>> recordItr)
         throws IOException {
         // these are updates
-        HoodieUpdateHandle upsertHandle =
-                new HoodieUpdateHandle<>(config, commitTime, metaClient, recordItr, fileLoc);
+        HoodieUpdateHandle upsertHandle = getUpdateHandle(commitTime, fileLoc, recordItr);
         if (upsertHandle.getOldFilePath() == null) {
             throw new HoodieUpsertException("Error in finding the old file path at commit " +
                     commitTime +" at fileLoc: " + fileLoc);
@@ -437,23 +433,27 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         return Collections.singletonList(Collections.singletonList(upsertHandle.getWriteStatus())).iterator();
     }
 
-    public Iterator<List<WriteStatus>> handleInsert(Iterator<HoodieRecord<T>> recordItr) throws Exception {
-        return new LazyInsertIterable<>(recordItr, config, commitTime, metaClient);
+    protected HoodieUpdateHandle getUpdateHandle(String commitTime, String fileLoc, Iterator<HoodieRecord<T>> recordItr) {
+        return new HoodieUpdateHandle<>(config, commitTime, this, recordItr, fileLoc);
+    }
+
+    public Iterator<List<WriteStatus>> handleInsert(String commitTime, Iterator<HoodieRecord<T>> recordItr) throws Exception {
+        return new LazyInsertIterable<>(recordItr, config, commitTime, this);
     }
 
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Iterator<List<WriteStatus>> handleUpsertPartition(Integer partition,
-                                                             Iterator recordItr,
-                                                             Partitioner partitioner) {
+    public Iterator<List<WriteStatus>> handleUpsertPartition(String commitTime, Integer partition,
+        Iterator recordItr, Partitioner partitioner) {
         UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
         BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
         BucketType btype = binfo.bucketType;
         try {
             if (btype.equals(BucketType.INSERT)) {
-                return handleInsert(recordItr);
+                return handleInsert(commitTime, recordItr);
             } else if (btype.equals(BucketType.UPDATE)) {
-                return handleUpdate(binfo.fileLoc, recordItr);
+                return handleUpdate(commitTime, binfo.fileLoc, recordItr);
             } else {
                 throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
             }
