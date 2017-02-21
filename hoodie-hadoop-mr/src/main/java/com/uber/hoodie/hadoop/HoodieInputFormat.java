@@ -112,7 +112,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                 LOG.info("Total paths to process after hoodie filter " + filteredFiles.length);
                 for (FileStatus filteredFile : filteredFiles) {
                     if (LOG.isDebugEnabled()) {
-                        LOG.info("Processing latest hoodie file - " + filteredFile.getPath());
+                        LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
                     }
                     returns.add(filteredFile);
                 }
