@@ -125,7 +125,10 @@ public class HoodieTableMetadata implements Serializable {
             this.commits = new HoodieCommits(scanCommits(COMMIT_FILE_SUFFIX));
             this.inflightCommits = scanCommits(INFLIGHT_FILE_SUFFIX);
             this.properties = readHoodieProperties();
-            log.info("All commits :" + commits);
+            log.info("Found " + commits.getNumCommits() + " commits in total.");
+            if (log.isDebugEnabled()) {
+                log.debug("All commits :" + commits);
+            }
         } catch (IOException e) {
             throw new HoodieIOException("Could not load HoodieMetadata from path " + basePath, e);
         }
