@@ -88,11 +88,6 @@ public class FSUtils {
         return fs.listStatus(path)[0].getLen();
     }
 
-    public static String globAllFiles(String basePath) {
-        return String.format("%s/*/*/*/*", basePath);
-    }
-
-    // TODO (weiy): rename the function for better readability
     public static String getFileId(String fullFileName) {
         return fullFileName.split("_")[0];
     }
