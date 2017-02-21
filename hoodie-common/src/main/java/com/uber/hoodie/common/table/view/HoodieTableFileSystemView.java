@@ -16,12 +16,16 @@
 
 package com.uber.hoodie.common.table.view;
 
+import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
@@ -47,19 +51,18 @@ import java.util.stream.Stream;
  * listDataFilesInPartition which includes files to be included in the view
  *
  * @see TableFileSystemView
- * @see ReadOptimizedTableView
  * @since 0.3.0
  */
-public abstract class AbstractTableFileSystemView implements TableFileSystemView, Serializable {
+public class HoodieTableFileSystemView implements TableFileSystemView, Serializable {
     protected HoodieTableMetaClient metaClient;
     protected transient FileSystem fs;
     // This is the commits that will be visible for all views extending this view
     protected HoodieTimeline visibleActiveCommitTimeline;
 
-    public AbstractTableFileSystemView(FileSystem fs, HoodieTableMetaClient metaClient,
+    public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
         HoodieTimeline visibleActiveCommitTimeline) {
         this.metaClient = metaClient;
-        this.fs = fs;
+        this.fs = metaClient.getFs();
         this.visibleActiveCommitTimeline = visibleActiveCommitTimeline;
     }
 
@@ -182,6 +185,37 @@ public abstract class AbstractTableFileSystemView implements TableFileSystemView
             throw new HoodieIOException("Could not filter files for latest version ", e);
         }
     }
+
+    public Map<HoodieDataFile, List<HoodieLogFile>> groupLatestDataFileWithLogFiles(
+        String partitionPath) throws IOException {
+        if (metaClient.getTableType() != HoodieTableType.MERGE_ON_READ) {
+            throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
+        }
+
+        // All the files in the partition
+        FileStatus[] files = fs.listStatus(new Path(metaClient.getBasePath(), partitionPath));
+        // All the log files filtered from the above list, sorted by version numbers
+        List<HoodieLogFile> allLogFiles = Arrays.stream(files).filter(s -> s.getPath().getName()
+            .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
+            .map(HoodieLogFile::new).collect(Collectors.collectingAndThen(Collectors.toList(),
+                l -> l.stream().sorted(HoodieLogFile.getLogVersionComparator())
+                    .collect(Collectors.toList())));
+
+        // Filter the delta files by the commit time of the latest base fine and collect as a list
+        Optional<HoodieInstant> lastTimestamp = metaClient.getActiveTimeline().lastInstant();
+        if (!lastTimestamp.isPresent()) {
+            return Maps.newHashMap();
+        }
+
+        return getLatestVersionInPartition(partitionPath, lastTimestamp.get().getTimestamp()).map(
+            hoodieDataFile -> Pair.of(hoodieDataFile, allLogFiles.stream().filter(
+                s -> s.getFileId().equals(hoodieDataFile.getFileId()) && s.getBaseCommitTime()
+                    .equals(hoodieDataFile.getCommitTime())).collect(Collectors.toList()))).collect(
+            Collectors.toMap(
+                (Function<Pair<HoodieDataFile, List<HoodieLogFile>>, HoodieDataFile>) Pair::getKey,
+                (Function<Pair<HoodieDataFile, List<HoodieLogFile>>, List<HoodieLogFile>>) Pair::getRight));
+    }
+
 
     protected Stream<List<HoodieDataFile>> getFilesByFileId(FileStatus[] files,
         String maxCommitTime) throws IOException {

@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -64,8 +65,8 @@ public class RollingAvroLogAppender implements HoodieLogAppender<IndexedRecord> 
         return logWriter.getCurrentSize();
     }
 
-    public void append(List<IndexedRecord> records) throws IOException, InterruptedException {
-        LOG.info("Appending " + records.size() + " records to " + config.getLogFile());
+    public void append(Iterator<IndexedRecord> records) throws IOException, InterruptedException {
+        LOG.info("Appending records to " + config.getLogFile());
         rollOverIfNeeded();
         Preconditions.checkArgument(logWriter != null);
         logWriter.append(records);

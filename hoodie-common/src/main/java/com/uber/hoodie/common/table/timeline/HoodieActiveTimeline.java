@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.table.timeline;
 
+import com.google.common.collect.Sets;
 import com.google.common.io.Closeables;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -85,8 +86,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
     public HoodieActiveTimeline(FileSystem fs, String metaPath) {
         this(fs, metaPath,
-            new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, COMPACTION_EXTENSION,
-                INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, COMPACTION_EXTENSION});
+            new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
+                INFLIGHT_DELTA_COMMIT_EXTENSION, COMPACTION_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
+                CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, COMPACTION_EXTENSION});
     }
 
     /**
@@ -113,7 +115,16 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
      * @return
      */
     public HoodieTimeline getCommitTimeline() {
-        return new HoodieDefaultTimeline(filterInstantsByAction(COMMIT_ACTION),
+        return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, COMPACTION_ACTION));
+    }
+
+    /**
+     * Get only the commits (inflight and completed) in the active timeline
+     *
+     * @return
+     */
+    public HoodieTimeline getDeltaCommitTimeline() {
+        return new HoodieDefaultTimeline(filterInstantsByAction(DELTA_COMMIT_ACTION),
             (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
     }
 
@@ -137,6 +148,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         return new HoodieDefaultTimeline(instants.stream().filter(s -> actions.contains(s.getAction())),
             (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
     }
+
 
     /**
      * Get only the cleaner action (inflight and completed) in the active timeline
