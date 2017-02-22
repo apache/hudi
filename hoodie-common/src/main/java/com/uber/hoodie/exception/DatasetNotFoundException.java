@@ -46,7 +46,11 @@ public class DatasetNotFoundException extends HoodieException {
             if (!fs.exists(metaPathDir) || !fs.isDirectory(metaPathDir)) {
                 throw new DatasetNotFoundException(metaPathDir.toString());
             }
-        } catch (IOException e) {
+        } catch (IllegalArgumentException e) {
+            // if the base path is file:///, then we have a IllegalArgumentException
+            throw new DatasetNotFoundException(metaPathDir.toString());
+        }
+        catch (IOException e) {
             throw new HoodieIOException(
                 "Could not check if dataset " + basePathDir + " is valid dataset", e);
         }

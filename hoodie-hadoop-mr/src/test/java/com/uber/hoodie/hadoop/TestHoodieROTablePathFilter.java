@@ -52,11 +52,11 @@ public class TestHoodieROTablePathFilter {
         Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
         assertTrue("Directories should be accepted", pathFilter.accept(partitionPath));
 
-        assertTrue(pathFilter.accept(new Path("file://" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
-        assertFalse(pathFilter.accept(new Path("file://" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
-        assertTrue(pathFilter.accept(new Path("file://" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
-        assertTrue(pathFilter.accept(new Path("file://" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
-        assertFalse(pathFilter.accept(new Path("file://" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+        assertTrue(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
+        assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
+        assertTrue(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
+        assertTrue(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
+        assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
     }
 
     @Test
@@ -68,10 +68,10 @@ public class TestHoodieROTablePathFilter {
 
         String path = basePath + File.separator + "nonhoodiefolder";
         new File(path).mkdirs();
-        assertTrue(pathFilter.accept(new Path("file://" + path)));
+        assertTrue(pathFilter.accept(new Path("file:///" + path)));
 
         path = basePath + File.separator + "nonhoodiefolder/somefile";
         new File(path).createNewFile();
-        assertTrue(pathFilter.accept(new Path("file://" + path)));
+        assertTrue(pathFilter.accept(new Path("file:///" + path)));
     }
 }
