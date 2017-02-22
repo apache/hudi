@@ -15,7 +15,10 @@
  */
 package com.uber.hoodie.hadoop;
 
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
+import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 
@@ -30,6 +33,9 @@ import org.apache.hadoop.fs.PathFilter;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Given a path is a part of
@@ -114,16 +120,22 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
             Path baseDir = safeGetParentsParent(folder);
             if (baseDir != null) {
                 try {
-                    HoodieTableMetadata metadata = new HoodieTableMetadata(fs, baseDir.toString());
-                    FileStatus[] latestFiles = metadata.getLatestVersions(fs.listStatus(folder));
+                    HoodieTableMetaClient metaClient =
+                        new HoodieTableMetaClient(fs, baseDir.toString());
+                    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+                        metaClient.getActiveTimeline().getCommitTimeline()
+                            .filterCompletedInstants());
+                    List<HoodieDataFile>
+                        latestFiles = fsView.getLatestVersions(fs.listStatus(folder)).collect(
+                        Collectors.toList());
                     // populate the cache
                     if (!hoodiePathCache.containsKey(folder.toString())) {
                         hoodiePathCache.put(folder.toString(), new HashSet<Path>());
                     }
                     LOG.info("Based on hoodie metadata from base path: " + baseDir.toString() +
-                            ", caching " + latestFiles.length+" files under "+ folder);
-                    for (FileStatus lfile: latestFiles) {
-                        hoodiePathCache.get(folder.toString()).add(lfile.getPath());
+                            ", caching " + latestFiles.size() + " files under "+ folder);
+                    for (HoodieDataFile lfile: latestFiles) {
+                        hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
                     }
 
                     // accept the path, if its among the latest files.
@@ -133,7 +145,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
                                 hoodiePathCache.get(folder.toString()).contains(path)));
                     }
                     return hoodiePathCache.get(folder.toString()).contains(path);
-                } catch (InvalidDatasetException e) {
+                } catch (DatasetNotFoundException e) {
                    // Non-hoodie path, accept it.
                     if (LOG.isDebugEnabled()) {
                         LOG.debug(String.format("(1) Caching non-hoodie path under %s \n",

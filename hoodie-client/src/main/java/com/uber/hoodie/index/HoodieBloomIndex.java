@@ -42,6 +42,7 @@ import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -114,10 +115,10 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
             });
 
         return rowKeyHoodieKeyPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).mapToPair(
-            new PairFunction<Tuple2<String, Tuple2<HoodieKey, Optional<String>>>, HoodieKey, Optional<String>>() {
+        new PairFunction<Tuple2<String, Tuple2<HoodieKey, org.apache.spark.api.java.Optional<String>>>, HoodieKey, Optional<String>>() {
                 @Override
                 public Tuple2<HoodieKey, Optional<String>> call(
-                    Tuple2<String, Tuple2<HoodieKey, Optional<String>>> keyPathTuple)
+                    Tuple2<String, Tuple2<HoodieKey, org.apache.spark.api.java.Optional<String>>> keyPathTuple)
                     throws Exception {
                     Optional<String> recordLocationPath;
                     if (keyPathTuple._2._2.isPresent()) {
@@ -145,13 +146,13 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     private JavaPairRDD<String, String> lookupIndex(
         JavaPairRDD<String, String> partitionRecordKeyPairRDD, final HoodieTable<T> hoodieTable) {
         // Obtain records per partition, in the incoming records
-        Map<String, Object> recordsPerPartition = partitionRecordKeyPairRDD.countByKey();
+        Map<String, Long> recordsPerPartition = partitionRecordKeyPairRDD.countByKey();
         List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
         // Step 2: Load all involved files as <Partition, filename> pairs
         JavaPairRDD<String, String> partitionFilePairRDD =
             loadInvolvedFiles(affectedPartitionPathList, hoodieTable);
-        Map<String, Object> filesPerPartition = partitionFilePairRDD.countByKey();
+        Map<String, Long> filesPerPartition = partitionFilePairRDD.countByKey();
 
         // Compute total subpartitions, to split partitions into.
         Map<String, Long> subpartitionCountMap =
@@ -173,7 +174,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
      * @param filesPerPartition
      * @return
      */
-    private Map<String, Long> computeSubPartitions(Map<String, Object> recordsPerPartition, Map<String, Object> filesPerPartition) {
+    private Map<String, Long> computeSubPartitions(Map<String, Long> recordsPerPartition, Map<String, Long> filesPerPartition) {
         Map<String, Long> subpartitionCountMap = new HashMap<>();
         long totalRecords = 0;
         long totalFiles = 0;
@@ -214,7 +215,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         return jsc.parallelize(partitions, Math.max(partitions.size(), 1))
             .flatMapToPair(new PairFlatMapFunction<String, String, String>() {
                 @Override
-                public Iterable<Tuple2<String, String>> call(String partitionPath) {
+                public Iterator<Tuple2<String, String>> call(String partitionPath) {
                     java.util.Optional<HoodieInstant> latestCommitTime =
                         hoodieTable.getCommitTimeline().filterCompletedInstants().lastInstant();
                     List<Tuple2<String, String>> list = new ArrayList<>();
@@ -226,7 +227,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                             list.add(new Tuple2<>(partitionPath, file.getFileName()));
                         }
                     }
-                    return list;
+                    return list.iterator();
                 }
             });
     }
@@ -266,8 +267,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                 })
                 .flatMapToPair(new PairFlatMapFunction<List<Tuple2<String, String>>, String, String>() {
                     @Override
-                    public Iterable<Tuple2<String, String>> call(List<Tuple2<String, String>> exploded) throws Exception {
-                        return exploded;
+                    public Iterator<Tuple2<String, String>> call(List<Tuple2<String, String>> exploded) throws Exception {
+                        return exploded.iterator();
                     }
                 });
 
@@ -367,9 +368,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
             .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(config.getBasePath()), true)
             .flatMap(new FlatMapFunction<List<IndexLookupResult>, IndexLookupResult>() {
                 @Override
-                public Iterable<IndexLookupResult> call(List<IndexLookupResult> indexLookupResults)
+                public Iterator<IndexLookupResult> call(List<IndexLookupResult> indexLookupResults)
                     throws Exception {
-                    return indexLookupResults;
+                    return indexLookupResults.iterator();
                 }
             }).filter(new Function<IndexLookupResult, Boolean>() {
                 @Override
@@ -378,13 +379,13 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                 }
             }).flatMapToPair(new PairFlatMapFunction<IndexLookupResult, String, String>() {
                 @Override
-                public Iterable<Tuple2<String, String>> call(IndexLookupResult lookupResult)
+                public Iterator<Tuple2<String, String>> call(IndexLookupResult lookupResult)
                     throws Exception {
                     List<Tuple2<String, String>> vals = new ArrayList<>();
                     for (String recordKey : lookupResult.getMatchingRecordKeys()) {
                         vals.add(new Tuple2<>(recordKey, lookupResult.getFileName()));
                     }
-                    return vals;
+                    return vals.iterator();
                 }
             });
     }
@@ -404,9 +405,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
         // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
         return rowKeyRecordPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).values().map(
-                new Function<Tuple2<HoodieRecord<T>, Optional<String>>, HoodieRecord<T>>() {
+                new Function<Tuple2<HoodieRecord<T>, org.apache.spark.api.java.Optional<String>>, HoodieRecord<T>>() {
                     @Override
-                    public HoodieRecord<T> call(Tuple2<HoodieRecord<T>, Optional<String>> v1) throws Exception {
+                    public HoodieRecord<T> call(Tuple2<HoodieRecord<T>, org.apache.spark.api.java.Optional<String>> v1) throws Exception {
                         HoodieRecord<T> record = v1._1();
                         if (v1._2().isPresent()) {
                             String filename = v1._2().get();

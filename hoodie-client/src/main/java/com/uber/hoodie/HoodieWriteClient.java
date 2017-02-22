@@ -34,7 +34,7 @@ import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.exception.HoodieUpsertException;
-import com.uber.hoodie.func.InsertMapFunction;
+import com.uber.hoodie.func.BulkInsertMapFunction;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCleaner;
 import com.uber.hoodie.io.HoodieCommitArchiveLog;
@@ -158,59 +158,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
             // perform index loop up to get existing location of records
             JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, table);
-
-            // Cache the tagged records, so we don't end up computing both
-            taggedRecords.persist(StorageLevel.MEMORY_AND_DISK_SER());
-
-            WorkloadProfile profile = null;
-            if (table.isWorkloadProfileNeeded()) {
-                profile = new WorkloadProfile<>(taggedRecords);
-                logger.info("Workload profile :" + profile);
-            }
-
-            // obtain the upsert partitioner, and the run the tagger records through that & get a partitioned RDD.
-            final Partitioner upsertPartitioner = table.getUpsertPartitioner(profile);
-            JavaRDD<HoodieRecord<T>> partitionedRecords = taggedRecords.mapToPair(
-                new PairFunction<HoodieRecord<T>, Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>() {
-                    @Override
-                    public Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> call(
-                        HoodieRecord<T> record) throws Exception {
-                        return new Tuple2<>(new Tuple2<>(record.getKey(),
-                            Option.apply(record.getCurrentLocation())), record);
-                    }
-                }).partitionBy(upsertPartitioner).map(
-                new Function<Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>, HoodieRecord<T>>() {
-                    @Override
-                    public HoodieRecord<T> call(
-                        Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> tuple)
-                        throws Exception {
-                        return tuple._2();
-                    }
-                });
-
-
-            // Perform the actual writing.
-            JavaRDD<WriteStatus> upsertStatusRDD = partitionedRecords.mapPartitionsWithIndex(
-                new Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>>() {
-                    @Override
-                    public Iterator<List<WriteStatus>> call(Integer partition,
-                        Iterator<HoodieRecord<T>> recordItr) throws Exception {
-                        return table.handleUpsertPartition(commitTime, partition, recordItr,
-                            upsertPartitioner);
-                    }
-                }, true).flatMap(new FlatMapFunction<List<WriteStatus>, WriteStatus>() {
-                @Override
-                public Iterable<WriteStatus> call(List<WriteStatus> writeStatuses)
-                    throws Exception {
-                    return writeStatuses;
-                }
-            });
-
-            // Update the index back.
-            JavaRDD<WriteStatus> resultRDD = index.updateLocation(upsertStatusRDD, table);
-            resultRDD = resultRDD.persist(config.getWriteStatusStorageLevel());
-            commitOnAutoCommit(commitTime, resultRDD);
-            return resultRDD;
+            return upsertRecordsInternal(taggedRecords, commitTime, table, true);
         } catch (Throwable e) {
             if (e instanceof HoodieUpsertException) {
                 throw (HoodieUpsertException) e;
@@ -219,36 +167,51 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         }
     }
 
-    private void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD) {
-        if(config.shouldAutoCommit()) {
-            logger.info("Auto commit enabled: Committing " + commitTime);
-            boolean commitResult = commit(commitTime, resultRDD);
-            if (!commitResult) {
-                throw new HoodieCommitException("Failed to commit " + commitTime);
-            }
-        } else {
-            logger.info("Auto commit disabled for " + commitTime);
-        }
-    }
+    /**
+     * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal
+     * writes.
+     *
+     * This implementation skips the index check and is able to leverage benefits such as
+     * small file handling/blocking alignment, as with upsert(), by profiling the workload
+     *
+     * @param records    HoodieRecords to insert
+     * @param commitTime Commit Time handle
+     * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+     */
+    public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
+        writeContext = metrics.getCommitCtx();
+        // Create a Hoodie table which encapsulated the commits and files visible
+        HoodieTable<T> table = HoodieTable
+            .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        try {
+            // De-dupe/merge if needed
+            JavaRDD<HoodieRecord<T>> dedupedRecords =
+                combineOnCondition(config.shouldCombineBeforeInsert(), records,
+                    config.getInsertShuffleParallelism());
 
-    private JavaRDD<HoodieRecord<T>> combineOnCondition(boolean condition,
-        JavaRDD<HoodieRecord<T>> records, int parallelism) {
-        if(condition) {
-            return deduplicateRecords(records, parallelism);
+            return upsertRecordsInternal(dedupedRecords, commitTime, table, false);
+        } catch (Throwable e) {
+            if (e instanceof HoodieInsertException) {
+                throw e;
+            }
+            throw new HoodieInsertException("Failed to insert for commit time " + commitTime, e);
         }
-        return records;
     }
 
     /**
-     * Loads the given HoodieRecords, as inserts into the table.
-     * (This implementation uses sortBy and attempts to control the numbers of files with less memory)
+     * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk
+     * loads into a Hoodie table for the very first time (e.g: converting an existing dataset to
+     * Hoodie).
      *
-     * @param records HoodieRecords to insert
+     * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and
+     * attempts to control the numbers of files with less memory compared to the {@link
+     * HoodieWriteClient#insert(JavaRDD, String)}
+     *
+     * @param records    HoodieRecords to insert
      * @param commitTime Commit Time handle
      * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
-     *
      */
-    public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
+    public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
         writeContext = metrics.getCommitCtx();
         // Create a Hoodie table which encapsulated the commits and files visible
         HoodieTable<T> table = HoodieTable
@@ -273,26 +236,122 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     }
                 }, true, config.getInsertShuffleParallelism());
             JavaRDD<WriteStatus> writeStatusRDD = sortedRecords
-                .mapPartitionsWithIndex(new InsertMapFunction<T>(commitTime, config, table),
+                .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table),
                     true).flatMap(new FlatMapFunction<List<WriteStatus>, WriteStatus>() {
                     @Override
-                    public Iterable<WriteStatus> call(List<WriteStatus> writeStatuses)
+                    public Iterator<WriteStatus> call(List<WriteStatus> writeStatuses)
                         throws Exception {
-                        return writeStatuses;
+                        return writeStatuses.iterator();
                     }
                 });
-            // Update the index back
-            JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, table);
-            // Trigger the insert and collect statuses
-            statuses = statuses.persist(config.getWriteStatusStorageLevel());
-            commitOnAutoCommit(commitTime, statuses);
-            return statuses;
+
+            return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
         } catch (Throwable e) {
             if (e instanceof HoodieInsertException) {
                 throw e;
             }
-            throw new HoodieInsertException("Failed to insert for commit time " + commitTime, e);
+            throw new HoodieInsertException("Failed to bulk insert for commit time " + commitTime, e);
         }
+    }
+
+    private void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD) {
+        if(config.shouldAutoCommit()) {
+            logger.info("Auto commit enabled: Committing " + commitTime);
+            boolean commitResult = commit(commitTime, resultRDD);
+            if (!commitResult) {
+                throw new HoodieCommitException("Failed to commit " + commitTime);
+            }
+        } else {
+            logger.info("Auto commit disabled for " + commitTime);
+        }
+    }
+
+    private JavaRDD<HoodieRecord<T>> combineOnCondition(boolean condition,
+        JavaRDD<HoodieRecord<T>> records, int parallelism) {
+        if(condition) {
+            return deduplicateRecords(records, parallelism);
+        }
+        return records;
+    }
+
+    private JavaRDD<WriteStatus> upsertRecordsInternal(JavaRDD<HoodieRecord<T>> preppedRecords,
+        String commitTime,
+        HoodieTable<T> hoodieTable,
+        final boolean isUpsert) {
+
+        // Cache the tagged records, so we don't end up computing both
+        preppedRecords.persist(StorageLevel.MEMORY_AND_DISK_SER());
+
+        WorkloadProfile profile = null;
+        if (hoodieTable.isWorkloadProfileNeeded()) {
+            profile = new WorkloadProfile(preppedRecords);
+            logger.info("Workload profile :" + profile);
+        }
+
+        // partition using the insert partitioner
+        final Partitioner partitioner = getPartitioner(hoodieTable, isUpsert, profile);
+        JavaRDD<HoodieRecord<T>> partitionedRecords = partition(preppedRecords, partitioner);
+        JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords.mapPartitionsWithIndex(
+            new Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>>() {
+                @Override
+                public Iterator<List<WriteStatus>> call(Integer partition,
+                    Iterator<HoodieRecord<T>> recordItr) throws Exception {
+                    if (isUpsert) {
+                        return hoodieTable
+                            .handleUpsertPartition(commitTime, partition, recordItr, partitioner);
+                    } else {
+                        return hoodieTable
+                            .handleInsertPartition(commitTime, partition, recordItr, partitioner);
+                    }
+                }
+            }, true).flatMap(new FlatMapFunction<List<WriteStatus>, WriteStatus>() {
+            @Override
+            public Iterator<WriteStatus> call(List<WriteStatus> writeStatuses)
+                throws Exception {
+                return writeStatuses.iterator();
+            }
+        });
+
+        return updateIndexAndCommitIfNeeded(writeStatusRDD, hoodieTable, commitTime);
+    }
+
+    private Partitioner getPartitioner(HoodieTable table, boolean isUpsert, WorkloadProfile profile) {
+        if (isUpsert) {
+            return table.getUpsertPartitioner(profile);
+        } else {
+            return table.getInsertPartitioner(profile);
+        }
+    }
+
+    private JavaRDD<WriteStatus> updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD,
+        HoodieTable<T> table,
+        String commitTime) {
+        // Update the index back
+        JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, table);
+        // Trigger the insert and collect statuses
+        statuses = statuses.persist(config.getWriteStatusStorageLevel());
+        commitOnAutoCommit(commitTime, statuses);
+        return statuses;
+    }
+
+    private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+        return dedupedRecords.mapToPair(
+            new PairFunction<HoodieRecord<T>, Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>() {
+                @Override
+                public Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> call(
+                    HoodieRecord<T> record) throws Exception {
+                    return new Tuple2<>(new Tuple2<>(record.getKey(),
+                        Option.apply(record.getCurrentLocation())), record);
+                }
+            }).partitionBy(partitioner).map(
+            new Function<Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>, HoodieRecord<T>>() {
+                @Override
+                public HoodieRecord<T> call(
+                    Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> tuple)
+                    throws Exception {
+                    return tuple._2();
+                }
+            });
     }
 
     /**
