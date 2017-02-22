@@ -386,7 +386,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
     @Override
     public Partitioner getInsertPartitioner(WorkloadProfile profile) {
-        return null;
+        return getUpsertPartitioner(profile);
     }
 
     @Override
@@ -462,5 +462,12 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             logger.error(msg, t);
             throw new HoodieUpsertException(msg, t);
         }
+    }
+
+    @Override
+    public Iterator<List<WriteStatus>> handleInsertPartition(String commitTime, Integer partition,
+        Iterator recordItr,
+        Partitioner partitioner) {
+        return handleUpsertPartition(commitTime, partition, recordItr, partitioner);
     }
 }

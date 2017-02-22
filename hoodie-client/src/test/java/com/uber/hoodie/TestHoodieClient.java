@@ -42,6 +42,7 @@ import com.uber.hoodie.io.HoodieCleaner;
 
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
@@ -65,6 +66,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -743,15 +745,18 @@ public class TestHoodieClient implements Serializable {
 
 
         FileSystem fs = FSUtils.getFs();
-        HoodieTableMetadata metadata = new HoodieTableMetadata(fs, basePath);
-        FileStatus[] files = metadata.getLatestVersionInPartition(fs, TEST_PARTITION_PATH, commitTime3);
-        assertEquals("Total of 2 valid data files", 2, files.length);
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+        List<HoodieDataFile> files =
+            table.getFileSystemView().getLatestVersionInPartition(TEST_PARTITION_PATH, commitTime3)
+                .collect(Collectors.toList());
+        assertEquals("Total of 2 valid data files", 2, files.size());
 
 
         int totalInserts = 0;
-        for (FileStatus file:  files) {
-            assertEquals("All files must be at commit 3", commitTime3, FSUtils.getCommitTime(file.getPath().getName()));
-            records = ParquetUtils.readAvroRecords(file.getPath());
+        for (HoodieDataFile file:  files) {
+            assertEquals("All files must be at commit 3", commitTime3, file.getCommitTime());
+            records = ParquetUtils.readAvroRecords(new Path(file.getPath()));
             totalInserts += records.size();
         }
         assertEquals("Total number of records must add up", totalInserts, inserts1.size() + inserts2.size() + insert3.size());

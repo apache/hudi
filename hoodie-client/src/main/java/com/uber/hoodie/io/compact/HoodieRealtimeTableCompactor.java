@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static java.util.stream.Collectors.*;
+
 /**
  * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage.
  * Computes all possible compactions, passes it through a CompactionFilter and executes
@@ -75,13 +77,11 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
         List<CompactionOperation> operations =
             jsc.parallelize(partitionPaths, partitionPaths.size())
-                .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> {
-                    return hoodieTable.getFileSystemView()
-                        .groupLatestDataFileWithLogFiles(partitionPath).entrySet()
-                        .stream()
-                        .map(s -> new CompactionOperation(s.getKey(), partitionPath, s.getValue()))
-                        .collect(Collectors.toList());
-                }).collect();
+                .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> hoodieTable.getFileSystemView()
+                    .groupLatestDataFileWithLogFiles(partitionPath).entrySet()
+                    .stream()
+                    .map(s -> new CompactionOperation(s.getKey(), partitionPath, s.getValue()))
+                    .collect(toList()).iterator()).collect();
         log.info("Total of " + operations.size() + " compactions are retrieved");
 
         // Filter the compactions with the passed in filter. This lets us choose most effective compactions only
@@ -98,7 +98,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                     metaClient, config, compactionOperation, compactionCommit)).flatMap(
                 (FlatMapFunction<Iterator<List<WriteStatus>>, WriteStatus>) listIterator -> {
                     List<List<WriteStatus>> collected = IteratorUtils.toList(listIterator);
-                    return collected.stream().flatMap(List::stream).collect(Collectors.toList());
+                    return collected.stream().flatMap(List::stream).collect(toList()).iterator();
                 }).mapToPair(new PairFunction<WriteStatus, String, HoodieWriteStat>() {
                 @Override
                 public Tuple2<String, HoodieWriteStat> call(WriteStatus writeStatus)

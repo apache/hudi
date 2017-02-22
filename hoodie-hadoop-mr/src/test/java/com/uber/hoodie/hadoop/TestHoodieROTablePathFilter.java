@@ -17,6 +17,7 @@ package com.uber.hoodie.hadoop;
 
 import com.uber.hoodie.common.model.HoodieTestUtils;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -35,7 +36,8 @@ public class TestHoodieROTablePathFilter {
     @Test
     public void testHoodiePaths() throws IOException {
         // Create a temp folder as the base path
-        String basePath = HoodieTestUtils.initializeTempHoodieBasePath();
+        HoodieTableMetaClient metaClient = HoodieTestUtils.initOnTemp();
+        String basePath = metaClient.getBasePath();
 
         HoodieTestUtils.createCommitFiles(basePath, "001", "002");
         HoodieTestUtils.createInflightCommitFiles(basePath, "003");
