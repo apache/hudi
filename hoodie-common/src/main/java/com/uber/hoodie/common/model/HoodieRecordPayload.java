@@ -21,6 +21,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Optional;
 
 /**
  * Every Hoodie dataset has an implementation of the <code>HoodieRecordPayload</code>
@@ -46,12 +47,12 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
      * @param schema Schema used for record
      * @return new combined/merged value to be written back to storage
      */
-    IndexedRecord combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException;
+    Optional[IndexedRecord] combineAndGetUpdateValue(Optional[IndexedRecord] currentValue, Schema schema) throws IOException;
 
     /**
      * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage.
      * Called when writing a new value for the given HoodieKey, wherein there is no existing record in
      * storage to be combined against. (i.e insert)
      */
-    IndexedRecord getInsertValue(Schema schema) throws IOException;
+    Optional[IndexedRecord] getInsertValue(Schema schema) throws IOException;
 }
