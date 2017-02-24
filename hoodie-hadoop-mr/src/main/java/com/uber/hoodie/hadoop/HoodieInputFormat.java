@@ -91,7 +91,9 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             }
 
             FileStatus[] value = entry.getValue().toArray(new FileStatus[entry.getValue().size()]);
-            LOG.info("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
+            }
             String tableName = metadata.getTableConfig().getTableName();
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
             HoodieTimeline timeline = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
@@ -120,7 +122,9 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                 List<HoodieDataFile> filteredFiles = fsView.getLatestVersions(value).collect(Collectors.toList());
                 LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
                 for (HoodieDataFile filteredFile : filteredFiles) {
-                    LOG.info("Processing latest hoodie file - " + filteredFile.getPath());
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
+                    }
                     returns.add(filteredFile.getFileStatus());
                 }
             }
