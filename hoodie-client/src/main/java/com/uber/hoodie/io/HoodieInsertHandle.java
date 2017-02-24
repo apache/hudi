@@ -34,6 +34,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.UUID;
 
 public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
@@ -42,7 +43,8 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
     private final WriteStatus status;
     private final HoodieStorageWriter<IndexedRecord> storageWriter;
     private final Path path;
-    private int recordsWritten = 0;
+    private long recordsWritten = 0;
+    private long recordsDeleted = 0;
 
     public HoodieInsertHandle(HoodieWriteConfig config, String commitTime,
                               HoodieTable<T> hoodieTable, String partitionPath) {
@@ -82,13 +84,19 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
      */
     public void write(HoodieRecord record) {
         try {
-            IndexedRecord avroRecord = record.getData().getInsertValue(schema);
-            storageWriter.writeAvroWithMetadata(avroRecord, record);
-            status.markSuccess(record);
-            // update the new location of record, so we know where to find it next
-            record.setNewLocation(new HoodieRecordLocation(commitTime, status.getFileId()));
+            Optional<IndexedRecord> avroRecord = record.getData().getInsertValue(schema);
+
+            if(avroRecord.isPresent()) {
+                storageWriter.writeAvroWithMetadata(avroRecord.get(), record);
+                // update the new location of record, so we know where to find it next
+                record.setNewLocation(new HoodieRecordLocation(commitTime, status.getFileId()));
+                recordsWritten++;
+            } else {
+                recordsDeleted++;
+            }
+
             record.deflate();
-            recordsWritten++;
+            status.markSuccess(record);
         } catch (Throwable t) {
             // Not throwing exception from here, since we don't want to fail the entire job
             // for a single record
@@ -111,6 +119,7 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
             HoodieWriteStat stat = new HoodieWriteStat();
             stat.setNumWrites(recordsWritten);
+            stat.setNumDeletes(recordsDeleted);
             stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
             stat.setFileId(status.getFileId());
             stat.setFullPath(path.toString());

@@ -37,6 +37,7 @@ import org.apache.spark.TaskContext;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Optional;
 
 @SuppressWarnings("Duplicates")
 public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
@@ -48,6 +49,7 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
     private Path newFilePath;
     private Path oldFilePath;
     private long recordsWritten = 0;
+    private long recordsDeleted = 0;
     private long updatedRecordsWritten = 0;
     private String fileId;
 
@@ -118,13 +120,18 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
     }
 
 
-    private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, IndexedRecord indexedRecord) {
+    private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, Optional<IndexedRecord> indexedRecord) {
         try {
-            storageWriter.writeAvroWithMetadata(indexedRecord, hoodieRecord);
+            if(indexedRecord.isPresent()) {
+                storageWriter.writeAvroWithMetadata(indexedRecord.get(), hoodieRecord);
+                recordsWritten++;
+                updatedRecordsWritten++;
+            } else {
+                recordsDeleted++;
+            }
+
             hoodieRecord.deflate();
             writeStatus.markSuccess(hoodieRecord);
-            recordsWritten ++;
-            updatedRecordsWritten ++;
             return true;
         } catch (Exception e) {
             logger.error("Error writing record  "+ hoodieRecord, e);
@@ -142,8 +149,8 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
         boolean copyOldRecord = true;
         if (keyToNewRecords.containsKey(key)) {
             try {
-                IndexedRecord avroRecord = hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, schema);
-                if (writeUpdateRecord(hoodieRecord, avroRecord)) {
+                Optional<IndexedRecord> combinedAvroRecord = hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, schema);
+                if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
                     /* ONLY WHEN
                      * 1) we have an update for this key AND
                      * 2) We are able to successfully write the the combined new value
@@ -194,8 +201,10 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
             if (storageWriter != null) {
                 storageWriter.close();
             }
+
             writeStatus.getStat().setTotalWriteBytes(FSUtils.getFileSize(fs, newFilePath));
             writeStatus.getStat().setNumWrites(recordsWritten);
+            writeStatus.getStat().setNumDeletes(recordsDeleted);
             writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
             writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
         } catch (IOException e) {

@@ -45,14 +45,15 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
      *
      * @param currentValue Current value in storage, to merge/combine this payload with
      * @param schema Schema used for record
-     * @return new combined/merged value to be written back to storage
+     * @return new combined/merged value to be written back to storage. EMPTY to skip writing this record.
      */
-    Optional[IndexedRecord] combineAndGetUpdateValue(Optional[IndexedRecord] currentValue, Schema schema) throws IOException;
+    Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException;
 
     /**
      * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage.
      * Called when writing a new value for the given HoodieKey, wherein there is no existing record in
      * storage to be combined against. (i.e insert)
+     * Return EMPTY to skip writing this record.
      */
-    Optional[IndexedRecord] getInsertValue(Schema schema) throws IOException;
+    Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException;
 }
