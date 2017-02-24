@@ -19,9 +19,15 @@ package com.uber.hoodie.utilities;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 
-import com.uber.hoodie.common.model.HoodieCommits;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.table.HoodieTableConfig;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -40,6 +46,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
@@ -57,11 +65,17 @@ public class HoodieSnapshotCopier implements Serializable {
 
     public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir) throws IOException {
         FileSystem fs = FSUtils.getFs();
-        final HoodieTableMetadata tableMetadata = new HoodieTableMetadata(fs, baseDir);
-
+        final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
+        final TableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata,
+            tableMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
         // Get the latest commit
-        final String latestCommit = tableMetadata.getAllCommits().lastCommit();
-        logger.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.", latestCommit));
+        final Optional<HoodieInstant>
+            latestCommit = tableMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+        if(!latestCommit.isPresent()) {
+            logger.warn("No commits present. Nothing to snapshot");
+        } else {
+            logger.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.", latestCommit.get()));
+        }
 
         List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir);
         if (partitions.size() > 0) {
@@ -80,8 +94,10 @@ public class HoodieSnapshotCopier implements Serializable {
                     // Only take latest version files <= latestCommit.
                     FileSystem fs = FSUtils.getFs();
                     List<Tuple2<String, String>> filePaths = new ArrayList<>();
-                    for (FileStatus fileStatus : tableMetadata.getLatestVersionInPartition(fs, partition, latestCommit)) {
-                        filePaths.add(new Tuple2<>(partition, fileStatus.getPath().toString()));
+                    for (HoodieDataFile hoodieDataFile : fsView
+                        .getLatestVersionInPartition(partition, latestCommit.get().getTimestamp())
+                        .collect(Collectors.toList())) {
+                        filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath()));
                     }
                     return filePaths.iterator();
                 }
@@ -102,22 +118,25 @@ public class HoodieSnapshotCopier implements Serializable {
             });
 
             // Also copy the .commit files
-            logger.info(String.format("Copying .commit files which are no-late-than %s.", latestCommit));
+            logger.info(String.format("Copying .commit files which are no-late-than %s.", latestCommit.get()));
             FileStatus[] commitFilesToCopy = fs.listStatus(
-                    new Path(baseDir + "/" + HoodieTableMetadata.METAFOLDER_NAME), new PathFilter() {
+                    new Path(baseDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME), new PathFilter() {
                 @Override
                 public boolean accept(Path commitFilePath) {
-                    if (commitFilePath.getName().equals(HoodieTableMetadata.HOODIE_PROPERTIES_FILE)) {
+                    if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
                         return true;
                     } else {
-                        String commitTime = FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-                        return HoodieCommits.isCommit1BeforeOrOn(commitTime, latestCommit);
+                        String commitTime =
+                            FSUtils.getCommitFromCommitFile(commitFilePath.getName());
+                        return tableMetadata.getActiveTimeline().getCommitTimeline()
+                            .compareTimestamps(commitTime, latestCommit.get().getTimestamp(), HoodieTimeline.GREATER);
                     }
                 }
             });
             for (FileStatus commitStatus : commitFilesToCopy) {
-                Path targetFilePath =
-                        new Path(outputDir + "/" + HoodieTableMetadata.METAFOLDER_NAME + "/" + commitStatus.getPath().getName());
+                Path targetFilePath = new Path(
+                    outputDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitStatus
+                        .getPath().getName());
                 if (! fs.exists(targetFilePath.getParent())) {
                     fs.mkdirs(targetFilePath.getParent());
                 }

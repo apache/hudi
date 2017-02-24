@@ -18,18 +18,16 @@ package com.uber.hoodie.index;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
-
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
+import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -40,9 +38,14 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.api.java.function.PairFunction;
-
 import scala.Tuple2;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in
@@ -63,10 +66,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     }
 
     @Override
-    /**
-     *
-     */
-    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, final HoodieTableMetadata metadata) {
+    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, final HoodieTable<T> hoodieTable) {
 
         // Step 1: Extract out thinner JavaPairRDD of (partitionPath, recordKey)
         JavaPairRDD<String, String> partitionRecordKeyPairRDD = recordRDD
@@ -79,7 +79,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
         // Lookup indexes for all the partition/recordkey pair
         JavaPairRDD<String, String> rowKeyFilenamePairRDD =
-            lookupIndex(partitionRecordKeyPairRDD, metadata);
+            lookupIndex(partitionRecordKeyPairRDD, hoodieTable);
 
         // Cache the result, for subsequent stages.
         rowKeyFilenamePairRDD.cache();
@@ -93,7 +93,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     }
 
     public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-        JavaRDD<HoodieKey> hoodieKeys, final HoodieTableMetadata metadata) {
+        JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> hoodieTable) {
         JavaPairRDD<String, String> partitionRecordKeyPairRDD =
             hoodieKeys.mapToPair(new PairFunction<HoodieKey, String, String>() {
                 @Override
@@ -104,7 +104,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
         // Lookup indexes for all the partition/recordkey pair
         JavaPairRDD<String, String> rowKeyFilenamePairRDD =
-            lookupIndex(partitionRecordKeyPairRDD, metadata);
+            lookupIndex(partitionRecordKeyPairRDD, hoodieTable);
 
         JavaPairRDD<String, HoodieKey> rowKeyHoodieKeyPairRDD =
             hoodieKeys.mapToPair(new PairFunction<HoodieKey, String, HoodieKey>() {
@@ -115,7 +115,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
             });
 
         return rowKeyHoodieKeyPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).mapToPair(
-            new PairFunction<Tuple2<String, Tuple2<HoodieKey, org.apache.spark.api.java.Optional<String>>>, HoodieKey, Optional<String>>() {
+        new PairFunction<Tuple2<String, Tuple2<HoodieKey, org.apache.spark.api.java.Optional<String>>>, HoodieKey, Optional<String>>() {
                 @Override
                 public Tuple2<HoodieKey, Optional<String>> call(
                     Tuple2<String, Tuple2<HoodieKey, org.apache.spark.api.java.Optional<String>>> keyPathTuple)
@@ -124,9 +124,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                     if (keyPathTuple._2._2.isPresent()) {
                         String fileName = keyPathTuple._2._2.get();
                         String partitionPath = keyPathTuple._2._1.getPartitionPath();
-                        recordLocationPath = Optional
-                            .of(new Path(new Path(metadata.getBasePath(), partitionPath), fileName)
-                                .toUri().getPath());
+                        recordLocationPath = Optional.of(new Path(
+                            new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath),
+                            fileName).toUri().getPath());
                     } else {
                         recordLocationPath = Optional.absent();
                     }
@@ -140,18 +140,18 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
      * record keys already present and drop the record keys if not present
      *
      * @param partitionRecordKeyPairRDD
-     * @param metadata
+     * @param hoodieTable
      * @return
      */
     private JavaPairRDD<String, String> lookupIndex(
-        JavaPairRDD<String, String> partitionRecordKeyPairRDD, final HoodieTableMetadata metadata) {
+        JavaPairRDD<String, String> partitionRecordKeyPairRDD, final HoodieTable<T> hoodieTable) {
         // Obtain records per partition, in the incoming records
         Map<String, Long> recordsPerPartition = partitionRecordKeyPairRDD.countByKey();
         List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
         // Step 2: Load all involved files as <Partition, filename> pairs
         JavaPairRDD<String, String> partitionFilePairRDD =
-            loadInvolvedFiles(affectedPartitionPathList, metadata);
+            loadInvolvedFiles(affectedPartitionPathList, hoodieTable);
         Map<String, Long> filesPerPartition = partitionFilePairRDD.countByKey();
 
         // Compute total subpartitions, to split partitions into.
@@ -210,22 +210,28 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
      * Load all involved files as <Partition, filename> pair RDD.
      */
     @VisibleForTesting
-    JavaPairRDD<String, String> loadInvolvedFiles(List<String> partitions, final HoodieTableMetadata metadata) {
+    JavaPairRDD<String, String> loadInvolvedFiles(List<String> partitions,
+        final HoodieTable<T> hoodieTable) {
         return jsc.parallelize(partitions, Math.max(partitions.size(), 1))
-                .flatMapToPair(new PairFlatMapFunction<String, String, String>() {
-                    @Override
-                    public Iterator<Tuple2<String, String>> call(String partitionPath) {
-                        FileSystem fs = FSUtils.getFs();
-                        String latestCommitTime = metadata.getAllCommits().lastCommit();
-                        FileStatus[] filteredStatus = metadata.getLatestVersionInPartition(fs, partitionPath, latestCommitTime);
-                        List<Tuple2<String, String>> list = new ArrayList<>();
-                        for (FileStatus fileStatus : filteredStatus) {
-                            list.add(new Tuple2<>(partitionPath, fileStatus.getPath().getName()));
+            .flatMapToPair(new PairFlatMapFunction<String, String, String>() {
+                @Override
+                public Iterator<Tuple2<String, String>> call(String partitionPath) {
+                    java.util.Optional<HoodieInstant> latestCommitTime =
+                        hoodieTable.getCommitTimeline().filterCompletedInstants().lastInstant();
+                    List<Tuple2<String, String>> list = new ArrayList<>();
+                    if (latestCommitTime.isPresent()) {
+                        List<HoodieDataFile> filteredFiles =
+                            hoodieTable.getFileSystemView().getLatestVersionInPartition(partitionPath,
+                                latestCommitTime.get().getTimestamp()).collect(Collectors.toList());
+                        for (HoodieDataFile file : filteredFiles) {
+                            list.add(new Tuple2<>(partitionPath, file.getFileName()));
                         }
-                        return list.iterator();
                     }
-                });
+                    return list.iterator();
+                }
+            });
     }
+
 
     @Override
     public boolean rollbackCommit(String commitTime) {
@@ -323,7 +329,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     /**
      * Find out <RowKey, filename> pair. All workload grouped by file-level.
      *
-     *         // Join PairRDD(PartitionPath, RecordKey) and PairRDD(PartitionPath, File) and then repartition such that
+     *         // Join PairRDD(PartitionPath, RecordKey) and PairRDD(PartitionPath, File) & then repartition such that
      // each RDD partition is a file, then for each file, we do (1) load bloom filter, (2) load rowKeys, (3) Tag rowKey
      // Make sure the parallelism is atleast the groupby parallelism for tagging location
      */
@@ -399,7 +405,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
         // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
         return rowKeyRecordPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).values().map(
-        new Function<Tuple2<HoodieRecord<T>, org.apache.spark.api.java.Optional<String>>, HoodieRecord<T>>() {
+                new Function<Tuple2<HoodieRecord<T>, org.apache.spark.api.java.Optional<String>>, HoodieRecord<T>>() {
                     @Override
                     public HoodieRecord<T> call(Tuple2<HoodieRecord<T>, org.apache.spark.api.java.Optional<String>> v1) throws Exception {
                         HoodieRecord<T> record = v1._1();
@@ -416,7 +422,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     }
 
     @Override
-    public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, HoodieTableMetadata metadata) {
+    public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, HoodieTable<T> hoodieTable) {
         return writeStatusRDD;
     }
 }

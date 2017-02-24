@@ -18,7 +18,8 @@ package com.uber.hoodie.utilities;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullSQLException;
@@ -44,7 +45,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Optional;
 import java.util.Scanner;
+import java.util.stream.Collectors;
 
 /**
  * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary table.
@@ -263,9 +266,14 @@ public class HiveIncrementalPuller {
         if(!fs.exists(new Path(targetDataPath)) || !fs.exists(new Path(targetDataPath + "/.hoodie"))) {
             return "0";
         }
-        HoodieTableMetadata metadata = new HoodieTableMetadata(fs, targetDataPath);
-        String lastCommit = metadata.getAllCommits().lastCommit();
-        return lastCommit == null ? "0" : lastCommit;
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, targetDataPath);
+
+        Optional<HoodieInstant>
+            lastCommit = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+        if(lastCommit.isPresent()) {
+            return lastCommit.get().getTimestamp();
+        }
+        return "0";
     }
 
     private boolean ensureTempPathExists(FileSystem fs, String lastCommitTime)
@@ -295,12 +303,15 @@ public class HiveIncrementalPuller {
     }
 
     private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) throws IOException {
-        HoodieTableMetadata metadata = new HoodieTableMetadata(fs, sourceTableLocation);
-        List<String> commitsToSync =
-            metadata.getAllCommits().findCommitsAfter(config.fromCommitTime, config.maxCommits);
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, sourceTableLocation);
+        List<String> commitsToSync = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants()
+            .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants().map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
         if (commitsToSync.isEmpty()) {
             log.warn("Nothing to sync. All commits in " + config.sourceTable + " are " + metadata
-                .getAllCommits().getCommitList() + " and from commit time is " + config.fromCommitTime);
+                .getActiveTimeline().getCommitTimeline().filterCompletedInstants().getInstants()
+                .collect(Collectors.toList()) + " and from commit time is "
+                + config.fromCommitTime);
             return null;
         }
         log.info("Syncing commits " + commitsToSync);

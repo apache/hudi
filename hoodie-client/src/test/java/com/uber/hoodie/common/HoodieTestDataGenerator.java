@@ -19,7 +19,9 @@ package com.uber.hoodie.common;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.model.HoodieRecordLocation;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 
@@ -29,8 +31,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -67,7 +67,7 @@ public class HoodieTestDataGenerator {
 
 
     private List<KeyPartition> existingKeysList = new ArrayList<>();
-    private static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
+    public static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
     private static Random rand = new Random(46474747);
     private String[] partitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
@@ -144,7 +144,7 @@ public class HoodieTestDataGenerator {
 
     public static void createCommitFile(String basePath, String commitTime) throws IOException {
         Path commitFile =
-            new Path(basePath + "/" + HoodieTableMetadata.METAFOLDER_NAME + "/" + FSUtils.makeCommitFileName(commitTime));
+            new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime));
         FileSystem fs = FSUtils.getFs();
         FSDataOutputStream os = fs.create(commitFile, true);
         HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();

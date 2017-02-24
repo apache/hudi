@@ -15,6 +15,8 @@
  */
 
 import com.uber.hoodie.HoodieWriteClient;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -28,6 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic
@@ -55,6 +58,11 @@ public class HoodieClientExample {
                 .forTable("sample-table").withIndexConfig(
                 HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
                 .build();
+        Properties properties = new Properties();
+        properties.put(HoodieWriteConfig.TABLE_NAME, "sample-table");
+        HoodieTableMetaClient
+            .initializePathAsHoodieDataset(FSUtils.getFs(), "file:///tmp/hoodie/sample-table",
+                properties);
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
         /**

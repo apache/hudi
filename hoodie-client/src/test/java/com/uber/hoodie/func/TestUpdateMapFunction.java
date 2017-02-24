@@ -16,13 +16,14 @@
 
 package com.uber.hoodie.func;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
@@ -48,15 +49,15 @@ public class TestUpdateMapFunction {
         TemporaryFolder folder = new TemporaryFolder();
         folder.create();
         this.basePath = folder.getRoot().getAbsolutePath();
-        HoodieTestUtils.initializeHoodieDirectory(basePath);
+        HoodieTestUtils.init(basePath);
     }
 
     @Test
     public void testSchemaEvolutionOnUpdate() throws Exception {
         // Create a bunch of records with a old version of schema
         HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-        HoodieTableMetadata metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath);
-        HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable("100", config, metadata);
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
         String recordStr1 =
             "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -77,20 +78,20 @@ public class TestUpdateMapFunction {
         records.add(
             new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
                 rowChange3));
-        Iterator<List<WriteStatus>> insertResult = table.handleInsert(records.iterator());
+        Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
         Path commitFile =
-            new Path(config.getBasePath() + "/.hoodie/" + FSUtils.makeCommitFileName("100"));
+            new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
         FSUtils.getFs().create(commitFile);
 
         // Now try an update with an evolved schema
         // Evolved schema does not have guarantee on preserving the original field ordering
         config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath);
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
         String fileId = insertResult.next().get(0).getFileId();
         System.out.println(fileId);
 
 
-        table = new HoodieCopyOnWriteTable("101", config, metadata);
+        table = new HoodieCopyOnWriteTable(config, metadata);
         // New content with values for the newly added field
         recordStr1 =
             "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
@@ -103,7 +104,7 @@ public class TestUpdateMapFunction {
         records.add(record1);
 
         try {
-            table.handleUpdate(fileId, records.iterator());
+            table.handleUpdate("101", fileId, records.iterator());
         } catch (ClassCastException e) {
             fail(
                 "UpdateFunction could not read records written with exampleSchema.txt using the exampleEvolvedSchema.txt");

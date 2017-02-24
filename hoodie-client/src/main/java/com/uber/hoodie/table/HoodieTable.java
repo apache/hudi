@@ -16,14 +16,20 @@
 
 package com.uber.hoodie.table;
 
+import com.google.common.collect.Sets;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
-import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.Partitioner;
 
 import java.io.Serializable;
@@ -34,17 +40,12 @@ import java.util.List;
  * Abstract implementation of a HoodieTable
  */
 public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
-
-    protected final String commitTime;
-
     protected final HoodieWriteConfig config;
+    protected final HoodieTableMetaClient metaClient;
 
-    protected final HoodieTableMetadata metadata;
-
-    protected HoodieTable(String commitTime, HoodieWriteConfig config, HoodieTableMetadata metadata) {
-        this.commitTime = commitTime;
+    protected HoodieTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
         this.config = config;
-        this.metadata = metadata;
+        this.metaClient = metaClient;
     }
 
     /**
@@ -72,6 +73,124 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      */
     public abstract boolean isWorkloadProfileNeeded();
 
+    public HoodieWriteConfig getConfig() {
+        return config;
+    }
+
+    public HoodieTableMetaClient getMetaClient() {
+        return metaClient;
+    }
+
+    public FileSystem getFs() {
+        return metaClient.getFs();
+    }
+
+    /**
+     * Get the view of the file system for this table
+     *
+     * @return
+     */
+    public TableFileSystemView getFileSystemView() {
+        return new HoodieTableFileSystemView(metaClient, getCompletedCommitTimeline());
+    }
+
+    /**
+     * Get the view of the file system for this table
+     *
+     * @return
+     */
+    public TableFileSystemView getCompactedFileSystemView() {
+        return new HoodieTableFileSystemView(metaClient, getCompletedCompactionCommitTimeline());
+    }
+
+    /**
+     * Get only the completed (no-inflights) commit timeline
+     * @return
+     */
+    public HoodieTimeline getCompletedCommitTimeline() {
+        return getCommitTimeline().filterCompletedInstants();
+    }
+
+    public HoodieActiveTimeline getActiveTimeline() {
+        return metaClient.getActiveTimeline();
+    }
+
+    /**
+     * Get the commit timeline visible for this table
+     *
+     * @return
+     */
+    public HoodieTimeline getCommitTimeline() {
+        switch (metaClient.getTableType()) {
+            case COPY_ON_WRITE:
+                return getActiveTimeline().getCommitTimeline();
+            case MERGE_ON_READ:
+                // We need to include the parquet files written out in delta commits
+                return getActiveTimeline().getTimelineOfActions(
+                    Sets.newHashSet(HoodieActiveTimeline.COMPACTION_ACTION,
+                        HoodieActiveTimeline.DELTA_COMMIT_ACTION));
+            default:
+                throw new HoodieException("Unsupported table type :"+ metaClient.getTableType());
+        }
+    }
+
+    /**
+     * Get only the completed (no-inflights) compaction commit timeline
+     * @return
+     */
+    public HoodieTimeline getCompletedCompactionCommitTimeline() {
+        return getCompactionCommitTimeline().filterCompletedInstants();
+    }
+
+
+    /**
+     * Get the compacted commit timeline visible for this table
+     *
+     * @return
+     */
+    public HoodieTimeline getCompactionCommitTimeline() {
+        switch (metaClient.getTableType()) {
+            case COPY_ON_WRITE:
+                return getActiveTimeline().getCommitTimeline();
+            case MERGE_ON_READ:
+                // We need to include the parquet files written out in delta commits in tagging
+                return getActiveTimeline().getTimelineOfActions(
+                    Sets.newHashSet(HoodieActiveTimeline.COMPACTION_ACTION));
+            default:
+                throw new HoodieException("Unsupported table type :"+ metaClient.getTableType());
+        }
+    }
+
+    /**
+     * Gets the commit action type
+     * @return
+     */
+    public String getCommitActionType() {
+        switch (metaClient.getTableType()) {
+            case COPY_ON_WRITE:
+                return HoodieActiveTimeline.COMMIT_ACTION;
+            case MERGE_ON_READ:
+                return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
+        }
+        throw new HoodieCommitException(
+            "Could not commit on unknown storage type " + metaClient.getTableType());
+    }
+
+    /**
+     * Gets the action type for a compaction commit
+     * @return
+     */
+    public String getCompactedCommitActionType() {
+        switch (metaClient.getTableType()) {
+            case COPY_ON_WRITE:
+                return HoodieTimeline.COMMIT_ACTION;
+            case MERGE_ON_READ:
+                return HoodieTimeline.COMPACTION_ACTION;
+        }
+        throw new HoodieException("Unsupported table type :"+ metaClient.getTableType());
+    }
+
+
 
     /**
      * Perform the ultimate IO for a given upserted (RDD) partition
@@ -80,9 +199,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      * @param recordIterator
      * @param partitioner
      */
-    public abstract Iterator<List<WriteStatus>> handleUpsertPartition(Integer partition,
-                                                                      Iterator<HoodieRecord<T>> recordIterator,
-                                                                      Partitioner partitioner);
+    public abstract Iterator<List<WriteStatus>> handleUpsertPartition(String commitTime,
+        Integer partition, Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
     /**
      * Perform the ultimate IO for a given inserted (RDD) partition
@@ -91,19 +209,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      * @param recordIterator
      * @param partitioner
      */
-    public abstract Iterator<List<WriteStatus>> handleInsertPartition(Integer partition,
-                                                                      Iterator<HoodieRecord<T>> recordIterator,
-                                                                      Partitioner partitioner);
+    public abstract Iterator<List<WriteStatus>> handleInsertPartition(String commitTime,
+        Integer partition, Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
 
-    public static HoodieTable getHoodieTable(HoodieTableType type,
-                                             String commitTime,
-                                             HoodieWriteConfig config,
-                                             HoodieTableMetadata metadata) {
-        if (type == HoodieTableType.COPY_ON_WRITE) {
-            return new HoodieCopyOnWriteTable(commitTime, config, metadata);
-        } else {
-            throw new HoodieException("Unsupported table type :"+ type);
+    public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
+        HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+        switch (metaClient.getTableType()) {
+            case COPY_ON_WRITE:
+                return new HoodieCopyOnWriteTable<>(config, metaClient);
+            case MERGE_ON_READ:
+                return new HoodieMergeOnReadTable<>(config, metaClient);
+            default:
+                throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
         }
     }
 }

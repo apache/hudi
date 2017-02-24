@@ -16,10 +16,13 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.file.HoodieAppendLog;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.hadoop.fs.FileSystem;
@@ -30,73 +33,79 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Log to hold older historical commits, to bound the growth of .commit files
  */
 public class HoodieCommitArchiveLog {
     private static Logger log = LogManager.getLogger(HoodieCommitArchiveLog.class);
-    private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE = "commits.archived";
 
     private final Path archiveFilePath;
     private final FileSystem fs;
     private final HoodieWriteConfig config;
 
-    public HoodieCommitArchiveLog(HoodieWriteConfig config) {
-        this.archiveFilePath =
-            new Path(config.getBasePath(),
-                    HoodieTableMetadata.METAFOLDER_NAME + "/" +HOODIE_COMMIT_ARCHIVE_LOG_FILE);
-        this.fs = FSUtils.getFs();
+    public HoodieCommitArchiveLog(HoodieWriteConfig config, FileSystem fs) {
+        this.fs = fs;
         this.config = config;
+        this.archiveFilePath = HoodieArchivedTimeline
+            .getArchiveLogPath(config.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME);
     }
 
     /**
      * Check if commits need to be archived. If yes, archive commits.
      */
     public boolean archiveIfRequired() {
-        HoodieTableMetadata metadata = new HoodieTableMetadata(fs, config.getBasePath());
-        List<String> commitsToArchive = getCommitsToArchive(metadata);
-        if (!commitsToArchive.isEmpty()) {
+        List<HoodieInstant> commitsToArchive = getCommitsToArchive().collect(Collectors.toList());
+        if (commitsToArchive.iterator().hasNext()) {
             log.info("Archiving commits " + commitsToArchive);
-            archive(metadata, commitsToArchive);
-            return deleteCommits(metadata, commitsToArchive);
+            archive(commitsToArchive);
+            return deleteCommits(commitsToArchive);
         } else {
             log.info("No Commits to archive");
             return true;
         }
     }
 
-    private List<String> getCommitsToArchive(HoodieTableMetadata metadata) {
+    private Stream<HoodieInstant> getCommitsToArchive() {
         int maxCommitsToKeep = config.getMaxCommitsToKeep();
         int minCommitsToKeep = config.getMinCommitsToKeep();
 
-        List<String> commits = metadata.getAllCommits().getCommitList();
-        List<String> commitsToArchive = new ArrayList<String>();
-        if (commits.size() > maxCommitsToKeep) {
+        HoodieTableMetaClient metaClient =
+            new HoodieTableMetaClient(fs, config.getBasePath(), true);
+        HoodieTimeline commitTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+
+        if (!commitTimeline.empty() && commitTimeline.countInstants() > maxCommitsToKeep) {
             // Actually do the commits
-            commitsToArchive = commits.subList(0, commits.size() - minCommitsToKeep);
+            return commitTimeline.getInstants()
+                .limit(commitTimeline.countInstants() - minCommitsToKeep);
         }
-        return commitsToArchive;
+        return Stream.empty();
     }
 
-    private boolean deleteCommits(HoodieTableMetadata metadata, List<String> commitsToArchive) {
+    private boolean deleteCommits(List<HoodieInstant> commitsToArchive) {
         log.info("Deleting commits " + commitsToArchive);
+        HoodieTableMetaClient metaClient =
+            new HoodieTableMetaClient(fs, config.getBasePath(), true);
+        HoodieTimeline commitTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+
         boolean success = true;
-        for(String commitToArchive:commitsToArchive) {
+        for (HoodieInstant commitToArchive : commitsToArchive) {
             Path commitFile =
-                new Path(metadata.getBasePath() + "/" +
-                        HoodieTableMetadata.METAFOLDER_NAME + "/" +
-                        FSUtils.makeCommitFileName(commitToArchive));
+                new Path(metaClient.getMetaPath(), commitToArchive.getFileName());
             try {
                 if (fs.exists(commitFile)) {
                     success &= fs.delete(commitFile, false);
                     log.info("Archived and deleted commit file " + commitFile);
                 }
             } catch (IOException e) {
-                throw new HoodieIOException(
-                    "Failed to delete archived commit " + commitToArchive, e);
+                throw new HoodieIOException("Failed to delete archived commit " + commitToArchive,
+                    e);
             }
         }
         return success;
@@ -112,14 +121,20 @@ public class HoodieCommitArchiveLog {
                     .compression(HoodieAppendLog.CompressionType.RECORD, new BZip2Codec()));
     }
 
-    private void archive(HoodieTableMetadata metadata, List<String> commits)
-        throws HoodieCommitException {
+    private void archive(List<HoodieInstant> commits) throws HoodieCommitException {
+        HoodieTableMetaClient metaClient =
+            new HoodieTableMetaClient(fs, config.getBasePath(), true);
+        HoodieTimeline commitTimeline =
+            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+
         HoodieAppendLog.Writer writer = null;
         try {
             writer = openWriter();
-            for (String commitTime : commits) {
-                Text k = new Text(commitTime);
-                Text v = new Text(metadata.getCommitMetadata(commitTime).toJsonString());
+            for (HoodieInstant commitTime : commits) {
+                Text k = new Text(commitTime.getTimestamp());
+                HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                    .fromBytes(commitTimeline.getInstantDetails(commitTime).get());
+                Text v = new Text(commitMetadata.toJsonString());
                 writer.append(k, v);
                 log.info("Wrote " + k);
             }

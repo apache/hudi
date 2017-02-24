@@ -16,12 +16,13 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
 
 import com.uber.hoodie.config.HoodieCompactionConfig;
+import com.uber.hoodie.table.HoodieTable;
 import org.junit.Before;
 import org.junit.Test;
 import java.io.IOException;
@@ -34,10 +35,12 @@ public class TestHoodieCleaner {
 
     private String basePath = null;
     private String[] partitionPaths = {"2016/01/01", "2016/02/02"};
+    private HoodieTableMetaClient metaClient;
 
     @Before
     public void init() throws Exception {
-        this.basePath = HoodieTestUtils.initializeTempHoodieBasePath();
+        this.metaClient = HoodieTestUtils.initOnTemp();
+        this.basePath = metaClient.getBasePath();
     }
 
     @Test
@@ -53,8 +56,10 @@ public class TestHoodieCleaner {
         String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
         String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
 
-        HoodieTableMetadata metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        HoodieCleaner cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+
+        HoodieCleaner cleaner = new HoodieCleaner(table, config);
         assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
         assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
@@ -67,8 +72,10 @@ public class TestHoodieCleaner {
         String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "001", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[1], "001", file1P1C0); // update
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        table = HoodieTable.getHoodieTable(metadata, config);
+
+        cleaner = new HoodieCleaner(table, config);
         assertEquals("Must clean 1 file" , 1, cleaner.clean(partitionPaths[0]));
         assertEquals("Must clean 1 file" , 1, cleaner.clean(partitionPaths[1]));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
@@ -82,8 +89,10 @@ public class TestHoodieCleaner {
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
         String file3P0C2 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "002");
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        table = HoodieTable.getHoodieTable(metadata, config);
+
+        cleaner = new HoodieCleaner(table, config);
         assertEquals("Must clean two files" , 2, cleaner.clean(partitionPaths[0]));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
@@ -110,8 +119,10 @@ public class TestHoodieCleaner {
         String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
         String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
 
-        HoodieTableMetadata metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        HoodieCleaner cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+
+        HoodieCleaner cleaner = new HoodieCleaner(table, config);
         assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
         assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
@@ -124,8 +135,10 @@ public class TestHoodieCleaner {
         String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "001", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[1], "001", file1P1C0); // update
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        table = HoodieTable.getHoodieTable(metadata, config);
+
+        cleaner = new HoodieCleaner(table, config);
         assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
         assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
@@ -139,8 +152,10 @@ public class TestHoodieCleaner {
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
         String file3P0C2 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "002");
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        table = HoodieTable.getHoodieTable(metadata, config);
+
+        cleaner = new HoodieCleaner(table, config);
         assertEquals(
             "Must not clean any file. We have to keep 1 version before the latest commit time to keep",
             0, cleaner.clean(partitionPaths[0]));
@@ -153,8 +168,10 @@ public class TestHoodieCleaner {
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file2P0C1); // update
         String file4P0C3 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "003");
-        metadata = new HoodieTableMetadata(FSUtils.getFs(), basePath, "testTable");
-        cleaner = new HoodieCleaner(metadata, config, FSUtils.getFs());
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        table = HoodieTable.getHoodieTable(metadata, config);
+
+        cleaner = new HoodieCleaner(table, config);
         assertEquals(
             "Must not clean one old file", 1, cleaner.clean(partitionPaths[0]));
 

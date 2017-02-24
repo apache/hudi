@@ -16,17 +16,17 @@
 
 package com.uber.hoodie.io;
 
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.io.storage.HoodieStorageWriter;
 import com.uber.hoodie.io.storage.HoodieStorageWriterFactory;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -45,8 +45,8 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
     private int recordsWritten = 0;
 
     public HoodieInsertHandle(HoodieWriteConfig config, String commitTime,
-                              HoodieTableMetadata metadata, String partitionPath) {
-        super(config, commitTime, metadata);
+                              HoodieTable<T> hoodieTable, String partitionPath) {
+        super(config, commitTime, hoodieTable);
         this.status = new WriteStatus();
         status.setFileId(UUID.randomUUID().toString());
         status.setPartitionPath(partitionPath);
@@ -54,7 +54,7 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
         this.path = makeNewPath(partitionPath, TaskContext.getPartitionId(), status.getFileId());
         try {
             this.storageWriter =
-                HoodieStorageWriterFactory.getStorageWriter(commitTime, path, metadata, config, schema);
+                HoodieStorageWriterFactory.getStorageWriter(commitTime, path, hoodieTable, config, schema);
         } catch (IOException e) {
             throw new HoodieInsertException(
                 "Failed to initialize HoodieStorageWriter for path " + path, e);

@@ -23,6 +23,9 @@ import com.codahale.metrics.UniformReservoir;
 import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.HoodiePrintHelper;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.NumericUtils;
 
@@ -38,7 +41,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 public class StatsCommand implements CommandMarker {
@@ -52,22 +55,26 @@ public class StatsCommand implements CommandMarker {
         long totalRecordsUpserted = 0;
         long totalRecordsWritten = 0;
 
-        String[][] rows = new String[HoodieCLI.tableMetadata.getAllCommitMetadata().size() + 1][];
+        HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+        HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
+
+        String[][] rows = new String[new Long(timeline.countInstants()).intValue() + 1][];
         int i = 0;
         DecimalFormat df = new DecimalFormat("#.00");
-        for (Map.Entry<String, HoodieCommitMetadata> commit : HoodieCLI.tableMetadata
-            .getAllCommitMetadata().entrySet()) {
+        for (HoodieInstant commitTime : timeline.getInstants().collect(
+            Collectors.toList())) {
             String waf = "0";
-            if (commit.getValue().fetchTotalUpdateRecordsWritten() > 0) {
+            HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitTime).get());
+            if (commit.fetchTotalUpdateRecordsWritten() > 0) {
                 waf = df.format(
-                    (float) commit.getValue().fetchTotalRecordsWritten() / commit.getValue()
+                    (float) commit.fetchTotalRecordsWritten() / commit
                         .fetchTotalUpdateRecordsWritten());
             }
-            rows[i++] = new String[] {commit.getKey(),
-                String.valueOf(commit.getValue().fetchTotalUpdateRecordsWritten()),
-                String.valueOf(commit.getValue().fetchTotalRecordsWritten()), waf};
-            totalRecordsUpserted += commit.getValue().fetchTotalUpdateRecordsWritten();
-            totalRecordsWritten += commit.getValue().fetchTotalRecordsWritten();
+            rows[i++] = new String[] {commitTime.getTimestamp(),
+                String.valueOf(commit.fetchTotalUpdateRecordsWritten()),
+                String.valueOf(commit.fetchTotalRecordsWritten()), waf};
+            totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();
+            totalRecordsWritten += commit.fetchTotalRecordsWritten();
         }
         String waf = "0";
         if (totalRecordsUpserted > 0) {

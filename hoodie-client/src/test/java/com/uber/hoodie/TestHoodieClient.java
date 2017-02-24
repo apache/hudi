@@ -21,12 +21,15 @@ import com.google.common.collect.Iterables;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCommits;
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -37,6 +40,7 @@ import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCleaner;
 
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -58,10 +62,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -87,7 +92,7 @@ public class TestHoodieClient implements Serializable {
         TemporaryFolder folder = new TemporaryFolder();
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
-        HoodieTestUtils.initializeHoodieDirectory(basePath);
+        HoodieTestUtils.init(basePath);
 
         dataGen = new HoodieTestDataGenerator();
     }
@@ -200,7 +205,10 @@ public class TestHoodieClient implements Serializable {
         assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
         assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
         // Should have 100 records in table (check using Index), all in locations marked at commit
-        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), new HoodieTableMetadata(fs, basePath)).collect();
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
         checkTaggedRecords(taggedRecords, "001");
 
         /**
@@ -225,8 +233,11 @@ public class TestHoodieClient implements Serializable {
         assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
         assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
 
+        metaClient = new HoodieTableMetaClient(fs, basePath);
+        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
         // Index should be able to locate all updates in correct locations.
-        taggedRecords = index.tagLocation(jsc.parallelize(dedupedRecords, 1), new HoodieTableMetadata(fs, basePath)).collect();
+        taggedRecords = index.tagLocation(jsc.parallelize(dedupedRecords, 1), table).collect();
         checkTaggedRecords(taggedRecords, "004");
 
         // Check the entire dataset has 100 records still
@@ -273,7 +284,9 @@ public class TestHoodieClient implements Serializable {
 
         assertEquals("Expecting a single commit.", new HoodieReadClient(jsc, basePath).listCommitsSince("000").size(), 1);
         // Should have 100 records in table (check using Index), all in locations marked at commit
-        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), new HoodieTableMetadata(fs, basePath)).collect();
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
         checkTaggedRecords(taggedRecords, newCommitTime);
 
         // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
@@ -287,34 +300,40 @@ public class TestHoodieClient implements Serializable {
             // Verify there are no errors
             assertNoWriteErrors(statuses);
 
-            HoodieTableMetadata metadata = new HoodieTableMetadata(fs, basePath);
-            SortedMap<String, HoodieCommitMetadata> commitMetadata = metadata.getAllCommitMetadata();
+            HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+            table = HoodieTable.getHoodieTable(metadata, getConfig());
+            HoodieTimeline timeline = table.getCommitTimeline();
 
+            TableFileSystemView fsView = table.getFileSystemView();
             // Need to ensure the following
             for (String partitionPath : dataGen.getPartitionPaths()) {
                 // compute all the versions of all files, from time 0
                 HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
-                for (Map.Entry<String, HoodieCommitMetadata> entry : commitMetadata.entrySet()) {
-                    for (HoodieWriteStat wstat : entry.getValue().getWriteStats(partitionPath)) {
+                for (HoodieInstant entry : timeline.getInstants().collect(Collectors.toList())) {
+                    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(entry).get());
+
+                    for (HoodieWriteStat wstat : commitMetadata.getWriteStats(partitionPath)) {
                         if (!fileIdToVersions.containsKey(wstat.getFileId())) {
-                            fileIdToVersions.put(wstat.getFileId(), new TreeSet<String>());
+                            fileIdToVersions.put(wstat.getFileId(), new TreeSet<>());
                         }
-                        fileIdToVersions.get(wstat.getFileId()).add(entry.getKey());
+                        fileIdToVersions.get(wstat.getFileId()).add(FSUtils.getCommitTime(new Path(wstat.getFullPath()).getName()));
                     }
                 }
 
-                Map<String, List<FileStatus>> fileVersions = metadata.getAllVersionsInPartition(fs, partitionPath);
-                for (Map.Entry<String, List<FileStatus>> entry : fileVersions.entrySet()) {
-                    List<FileStatus> versions = entry.getValue();
+
+                List<List<HoodieDataFile>> fileVersions = fsView.getEveryVersionInPartition(partitionPath).collect(Collectors.toList());
+                for (List<HoodieDataFile> entry : fileVersions) {
                     // No file has no more than max versions
-                    assertTrue("fileId " + entry.getKey() + " has more than " + maxVersions + " versions",
-                            versions.size() <= maxVersions);
+                    String fileId = entry.iterator().next().getFileId();
+
+                    assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
+                        entry.size() <= maxVersions);
 
                     // Each file, has the latest N versions (i.e cleaning gets rid of older versions)
-                    List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(entry.getKey()));
-                    for (int i = 0; i < versions.size(); i++) {
-                        assertEquals("File " + entry.getKey() + " does not have latest versions" + versions + " on commits" + commitedVersions,
-                                FSUtils.getCommitTime(Iterables.get(versions, i).getPath().getName()),
+                    List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
+                    for (int i = 0; i < entry.size(); i++) {
+                        assertEquals("File " + fileId + " does not have latest versions on commits" + commitedVersions,
+                            Iterables.get(entry, i).getCommitTime(),
                                 commitedVersions.get(commitedVersions.size() - 1 - i));
                     }
                 }
@@ -349,7 +368,10 @@ public class TestHoodieClient implements Serializable {
         // verify that there is a commit
         assertEquals("Expecting a single commit.", new HoodieReadClient(jsc, basePath).listCommitsSince("000").size(), 1);
         // Should have 100 records in table (check using Index), all in locations marked at commit
-        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), new HoodieTableMetadata(fs, basePath)).collect();
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
         checkTaggedRecords(taggedRecords, newCommitTime);
 
         // Keep doing some writes and clean inline. Make sure we have expected number of files remaining.
@@ -362,25 +384,33 @@ public class TestHoodieClient implements Serializable {
             // Verify there are no errors
             assertNoWriteErrors(statuses);
 
-            HoodieTableMetadata metadata = new HoodieTableMetadata(fs, basePath);
-            HoodieCommits commits = metadata.getAllCommits();
-            String earliestRetainedCommit = commits.lastCommit(maxCommits - 1);
-            Set<String> acceptableCommits = new HashSet<>(commits.getCommitList());
-            if (earliestRetainedCommit != null) {
-                acceptableCommits.removeAll(commits.findCommitsInRange("000", earliestRetainedCommit));
-                acceptableCommits.add(earliestRetainedCommit);
+            HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+            HoodieTable table1 = HoodieTable.getHoodieTable(metadata, cfg);
+            HoodieTimeline activeTimeline = table1.getCompletedCommitTimeline();
+            Optional<HoodieInstant>
+                earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
+            Set<HoodieInstant> acceptableCommits =
+                activeTimeline.getInstants().collect(Collectors.toSet());
+            if (earliestRetainedCommit.isPresent()) {
+                acceptableCommits.removeAll(
+                    activeTimeline.findInstantsInRange("000", earliestRetainedCommit.get().getTimestamp()).getInstants()
+                        .collect(Collectors.toSet()));
+                acceptableCommits.add(earliestRetainedCommit.get());
             }
 
+            TableFileSystemView fsView = table1.getFileSystemView();
             // Need to ensure the following
             for (String partitionPath : dataGen.getPartitionPaths()) {
-                Map<String, List<FileStatus>> fileVersions = metadata.getAllVersionsInPartition(fs, partitionPath);
-                for (Map.Entry<String, List<FileStatus>> entry : fileVersions.entrySet()) {
-                    Set<String> commitTimes = new HashSet<>(entry.getValue().size());
-                    for(FileStatus value:entry.getValue()) {
-                        commitTimes.add(FSUtils.getCommitTime(value.getPath().getName()));
+                List<List<HoodieDataFile>> fileVersions = fsView.getEveryVersionInPartition(partitionPath).collect(Collectors.toList());
+                for (List<HoodieDataFile> entry : fileVersions) {
+                    Set<String> commitTimes = new HashSet<>();
+                    for(HoodieDataFile value:entry) {
+                        System.out.println("Data File - " + value);
+                        commitTimes.add(value.getCommitTime());
                     }
                     assertEquals("Only contain acceptable versions of file should be present",
-                        acceptableCommits, commitTimes);
+                        acceptableCommits.stream().map(HoodieInstant::getTimestamp)
+                            .collect(Collectors.toSet()), commitTimes);
                 }
             }
         }
@@ -620,13 +650,16 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         assertEquals("2 files needs to be committed.", 2, statuses.size());
-        HoodieTableMetadata metadata = new HoodieTableMetadata(fs, basePath);
-        FileStatus[] files = metadata.getLatestVersionInPartition(fs, TEST_PARTITION_PATH, commitTime3);
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+        TableFileSystemView fileSystemView = table.getFileSystemView();
+        List<HoodieDataFile> files = fileSystemView.getLatestVersionInPartition(TEST_PARTITION_PATH, commitTime3).collect(
+            Collectors.toList());
         int numTotalInsertsInCommit3 = 0;
-        for (FileStatus file:  files) {
-            if (file.getPath().getName().contains(file1)) {
-                assertEquals("Existing file should be expanded", commitTime3, FSUtils.getCommitTime(file.getPath().getName()));
-                records = ParquetUtils.readAvroRecords(file.getPath());
+        for (HoodieDataFile file:  files) {
+            if (file.getFileName().contains(file1)) {
+                assertEquals("Existing file should be expanded", commitTime3, file.getCommitTime());
+                records = ParquetUtils.readAvroRecords(new Path(file.getPath()));
                 for (GenericRecord record: records) {
                     String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
                     String recordCommitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
@@ -641,8 +674,8 @@ public class TestHoodieClient implements Serializable {
                 }
                 assertEquals("All keys added in commit 2 must be updated in commit3 correctly", 0, keys2.size());
             } else {
-                assertEquals("New file must be written for commit 3", commitTime3, FSUtils.getCommitTime(file.getPath().getName()));
-                records = ParquetUtils.readAvroRecords(file.getPath());
+                assertEquals("New file must be written for commit 3", commitTime3, file.getCommitTime());
+                records = ParquetUtils.readAvroRecords(new Path(file.getPath()));
                 for (GenericRecord record: records) {
                     String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
                     assertEquals("only expect commit3", commitTime3, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
@@ -712,15 +745,18 @@ public class TestHoodieClient implements Serializable {
 
 
         FileSystem fs = FSUtils.getFs();
-        HoodieTableMetadata metadata = new HoodieTableMetadata(fs, basePath);
-        FileStatus[] files = metadata.getLatestVersionInPartition(fs, TEST_PARTITION_PATH, commitTime3);
-        assertEquals("Total of 2 valid data files", 2, files.length);
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+        List<HoodieDataFile> files =
+            table.getFileSystemView().getLatestVersionInPartition(TEST_PARTITION_PATH, commitTime3)
+                .collect(Collectors.toList());
+        assertEquals("Total of 2 valid data files", 2, files.size());
 
 
         int totalInserts = 0;
-        for (FileStatus file:  files) {
-            assertEquals("All files must be at commit 3", commitTime3, FSUtils.getCommitTime(file.getPath().getName()));
-            records = ParquetUtils.readAvroRecords(file.getPath());
+        for (HoodieDataFile file:  files) {
+            assertEquals("All files must be at commit 3", commitTime3, file.getCommitTime());
+            records = ParquetUtils.readAvroRecords(new Path(file.getPath()));
             totalInserts += records.size();
         }
         assertEquals("Total number of records must add up", totalInserts, inserts1.size() + inserts2.size() + insert3.size());

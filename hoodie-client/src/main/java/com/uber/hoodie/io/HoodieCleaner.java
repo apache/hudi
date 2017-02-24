@@ -16,11 +16,13 @@
 
 package com.uber.hoodie.io;
 
-import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.common.model.HoodieCommits;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
-
+import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -31,20 +33,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path, such that
- *
+ * <p>
  * 1) It provides sufficient time for existing queries running on older versions, to finish
- *
+ * <p>
  * 2) It bounds the growth of the files in the file system
- *
+ * <p>
  * TODO: Should all cleaning be done based on {@link com.uber.hoodie.common.model.HoodieCommitMetadata}
- *
- *
  */
 public class HoodieCleaner {
+    private static Logger logger = LogManager.getLogger(HoodieCleaner.class);
+
 
     public enum CleaningPolicy {
         KEEP_LATEST_FILE_VERSIONS,
@@ -52,44 +54,42 @@ public class HoodieCleaner {
     }
 
 
-    private static Logger logger = LogManager.getLogger(HoodieCleaner.class);
-
-
-    private HoodieTableMetadata metadata;
-
+    private final TableFileSystemView fileSystemView;
+    private final HoodieTimeline commitTimeline;
+    private HoodieTable hoodieTable;
     private HoodieWriteConfig config;
-
     private FileSystem fs;
 
-    public HoodieCleaner(HoodieTableMetadata metadata,
-                         HoodieWriteConfig config,
-                         FileSystem fs) {
-        this.metadata = metadata;
+    public HoodieCleaner(HoodieTable hoodieTable, HoodieWriteConfig config) {
+        this.hoodieTable = hoodieTable;
+        this.fileSystemView = hoodieTable.getCompactedFileSystemView();
+        this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
         this.config = config;
-        this.fs = fs;
+        this.fs = hoodieTable.getFs();
     }
 
 
     /**
-     *
      * Selects the older versions of files for cleaning, such that it bounds the number of versions of each file.
      * This policy is useful, if you are simply interested in querying the table, and you don't want too many
      * versions for a single file (i.e run it with versionsRetained = 1)
-     *
      *
      * @param partitionPath
      * @return
      * @throws IOException
      */
-    private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath) throws IOException {
-        logger.info("Cleaning "+ partitionPath+", retaining latest "+ config.getCleanerFileVersionsRetained()+" file versions. ");
-        Map<String, List<FileStatus>> fileVersions = metadata.getAllVersionsInPartition(fs, partitionPath);
+    private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath)
+        throws IOException {
+        logger.info("Cleaning " + partitionPath + ", retaining latest " + config
+            .getCleanerFileVersionsRetained() + " file versions. ");
+        List<List<HoodieDataFile>> fileVersions =
+            fileSystemView.getEveryVersionInPartition(partitionPath)
+                .collect(Collectors.toList());
         List<String> deletePaths = new ArrayList<>();
 
-        for (String file : fileVersions.keySet()) {
-            List<FileStatus> commitList = fileVersions.get(file);
+        for (List<HoodieDataFile> versionsForFileId : fileVersions) {
             int keepVersions = config.getCleanerFileVersionsRetained();
-            Iterator<FileStatus> commitItr = commitList.iterator();
+            Iterator<HoodieDataFile> commitItr = versionsForFileId.iterator();
             while (commitItr.hasNext() && keepVersions > 0) {
                 // Skip this most recent version
                 commitItr.next();
@@ -97,10 +97,8 @@ public class HoodieCleaner {
             }
             // Delete the remaining files
             while (commitItr.hasNext()) {
-                deletePaths.add(String.format("%s/%s/%s",
-                        config.getBasePath(),
-                        partitionPath,
-                        commitItr.next().getPath().getName()));
+                deletePaths.add(String.format("%s/%s/%s", config.getBasePath(), partitionPath,
+                    commitItr.next().getFileName()));
             }
         }
         return deletePaths;
@@ -109,17 +107,17 @@ public class HoodieCleaner {
 
     /**
      * Selects the versions for file for cleaning, such that it
-     *
-     *  - Leaves the latest version of the file untouched
-     *  - For older versions,
-     *      - It leaves all the commits untouched which has occured in last <code>config.getCleanerCommitsRetained()</code> commits
-     *      - It leaves ONE commit before this window. We assume that the max(query execution time) == commit_batch_time *  config.getCleanerCommitsRetained(). This is 12 hours by default.
-     *        This is essential to leave the file used by the query thats running for the max time.
-     *
-     *  This provides the effect of having lookback into all changes that happened in the last X
-     *  commits. (eg: if you retain 24 commits, and commit batch time is 30 mins, then you have 12 hrs of lookback)
-     *
-     *  This policy is the default.
+     * <p>
+     * - Leaves the latest version of the file untouched
+     * - For older versions,
+     * - It leaves all the commits untouched which has occured in last <code>config.getCleanerCommitsRetained()</code> commits
+     * - It leaves ONE commit before this window. We assume that the max(query execution time) == commit_batch_time *  config.getCleanerCommitsRetained(). This is 12 hours by default.
+     * This is essential to leave the file used by the query thats running for the max time.
+     * <p>
+     * This provides the effect of having lookback into all changes that happened in the last X
+     * commits. (eg: if you retain 24 commits, and commit batch time is 30 mins, then you have 12 hrs of lookback)
+     * <p>
+     * This policy is the default.
      *
      * @param partitionPath
      * @return
@@ -133,22 +131,21 @@ public class HoodieCleaner {
         List<String> deletePaths = new ArrayList<>();
 
         // determine if we have enough commits, to start cleaning.
-        HoodieCommits commits = metadata.getAllCommits();
-        if (commits.getNumCommits() > commitsRetained) {
-            String earliestCommitToRetain =
-                commits.nthCommit(commits.getNumCommits() - commitsRetained);
-            Map<String, List<FileStatus>> fileVersions =
-                metadata.getAllVersionsInPartition(fs, partitionPath);
-            for (String file : fileVersions.keySet()) {
-                List<FileStatus> fileList = fileVersions.get(file);
-                String lastVersion = FSUtils.getCommitTime(fileList.get(0).getPath().getName());
+        if (commitTimeline.countInstants() > commitsRetained) {
+            HoodieInstant earliestCommitToRetain =
+                commitTimeline.nthInstant(commitTimeline.countInstants() - commitsRetained).get();
+            List<List<HoodieDataFile>> fileVersions =
+                fileSystemView.getEveryVersionInPartition(partitionPath)
+                    .collect(Collectors.toList());
+            for (List<HoodieDataFile> fileList : fileVersions) {
+                String lastVersion = FSUtils.getCommitTime(fileList.get(0).getFileName());
                 String lastVersionBeforeEarliestCommitToRetain =
                     getLatestVersionBeforeCommit(fileList, earliestCommitToRetain);
 
                 // Ensure there are more than 1 version of the file (we only clean old files from updates)
                 // i.e always spare the last commit.
-                for (FileStatus afile : fileList) {
-                    String fileCommitTime = FSUtils.getCommitTime(afile.getPath().getName());
+                for (HoodieDataFile afile : fileList) {
+                    String fileCommitTime = afile.getCommitTime();
                     // Dont delete the latest commit and also the last commit before the earliest commit we are retaining
                     // The window of commit retain == max query run time. So a query could be running which still
                     // uses this file.
@@ -160,11 +157,13 @@ public class HoodieCleaner {
                     }
 
                     // Always keep the last commit
-                    if (HoodieCommits.isCommit1After(earliestCommitToRetain, fileCommitTime)) {
+                    if (commitTimeline
+                        .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime,
+                            HoodieTimeline.GREATER)) {
                         // this is a commit, that should be cleaned.
                         deletePaths.add(String
-                            .format("%s/%s/%s", config.getBasePath(), partitionPath,
-                                FSUtils.maskWithoutTaskPartitionId(fileCommitTime, file)));
+                            .format("%s/%s/%s", config.getBasePath(), partitionPath, FSUtils
+                                .maskWithoutTaskPartitionId(fileCommitTime, afile.getFileId())));
                     }
                 }
             }
@@ -176,10 +175,12 @@ public class HoodieCleaner {
     /**
      * Gets the latest version < commitTime. This version file could still be used by queries.
      */
-    private String getLatestVersionBeforeCommit(List<FileStatus> fileList, String commitTime) {
-        for (FileStatus file : fileList) {
-            String fileCommitTime = FSUtils.getCommitTime(file.getPath().getName());
-            if (HoodieCommits.isCommit1After(commitTime, fileCommitTime)) {
+    private String getLatestVersionBeforeCommit(List<HoodieDataFile> fileList,
+        HoodieInstant commitTime) {
+        for (HoodieDataFile file : fileList) {
+            String fileCommitTime = FSUtils.getCommitTime(file.getFileName());
+            if (commitTimeline.compareTimestamps(commitTime.getTimestamp(), fileCommitTime,
+                HoodieTimeline.GREATER)) {
                 // fileList is sorted on the reverse, so the first commit we find <= commitTime is the one we want
                 return fileCommitTime;
             }

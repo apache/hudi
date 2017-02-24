@@ -16,6 +16,10 @@
 
 package com.uber.hoodie.table;
 
+import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
@@ -23,9 +27,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
 import com.uber.hoodie.io.HoodieUpdateHandle;
@@ -33,7 +35,6 @@ import com.uber.hoodie.io.HoodieUpdateHandle;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import scala.Option;
 import scala.Tuple2;
@@ -66,6 +68,11 @@ import scala.Tuple2;
  *
  */
 public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieTable {
+    public HoodieCopyOnWriteTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+        super(config, metaClient);
+    }
+
+
 
     // seed for random number generator. No particular significance, just makes testing deterministic
     private static final long RANDOM_NUMBER_SEED = 356374L;
@@ -132,10 +139,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         }
     }
 
-
-    public HoodieCopyOnWriteTable(String commitTime, HoodieWriteConfig config, HoodieTableMetadata metadata) {
-        super(commitTime, config, metadata);
-    }
 
     /**
      * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition)
@@ -287,21 +290,22 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             FileSystem fs = FSUtils.getFs();
             List<SmallFile> smallFileLocations = new ArrayList<>();
 
-            if (metadata.getAllCommits().getNumCommits() > 0) { // if we have some commits
-                String latestCommitTime = metadata.getAllCommits().lastCommit();
-                FileStatus[] allFiles = metadata.getLatestVersionInPartition(fs, partitionPath, latestCommitTime);
+            HoodieTimeline commitTimeline = getCompletedCommitTimeline();
 
-                if (allFiles != null && allFiles.length > 0) {
-                    for (FileStatus fileStatus : allFiles) {
-                        if (fileStatus.getLen() < config.getParquetSmallFileLimit()) {
-                            String filename = fileStatus.getPath().getName();
-                            SmallFile sf = new SmallFile();
-                            sf.location = new HoodieRecordLocation(
-                                    FSUtils.getCommitTime(filename),
-                                    FSUtils.getFileId(filename));
-                            sf.sizeBytes = fileStatus.getLen();
-                            smallFileLocations.add(sf);
-                        }
+            if (!commitTimeline.empty()) { // if we have some commits
+                HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
+                List<HoodieDataFile> allFiles = getFileSystemView()
+                    .getLatestVersionInPartition(partitionPath, latestCommitTime.getTimestamp())
+                    .collect(Collectors.toList());
+
+                for (HoodieDataFile file : allFiles) {
+                    if (file.getFileSize() < config.getParquetSmallFileLimit()) {
+                        String filename = file.getFileName();
+                        SmallFile sf = new SmallFile();
+                        sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename),
+                            FSUtils.getFileId(filename));
+                        sf.sizeBytes = file.getFileSize();
+                        smallFileLocations.add(sf);
                     }
                 }
             }
@@ -317,11 +321,16 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
          */
         private long averageBytesPerRecord() {
             long avgSize = 0L;
+            HoodieTimeline commitTimeline =
+                metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
             try {
-                if (metadata.getAllCommits().getNumCommits() > 0) {
-                    String latestCommitTime = metadata.getAllCommits().lastCommit();
-                    HoodieCommitMetadata commitMetadata = metadata.getCommitMetadata(latestCommitTime);
-                    avgSize =(long) Math.ceil((1.0 * commitMetadata.fetchTotalBytesWritten())/commitMetadata.fetchTotalRecordsWritten());
+                if (!commitTimeline.empty()) {
+                    HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
+                    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                        .fromBytes(commitTimeline.getInstantDetails(latestCommitTime).get());
+                    avgSize = (long) Math.ceil(
+                        (1.0 * commitMetadata.fetchTotalBytesWritten()) / commitMetadata
+                            .fetchTotalRecordsWritten());
                 }
             } catch (Throwable t) {
                 // make this fail safe.
@@ -386,10 +395,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
 
-    public Iterator<List<WriteStatus>> handleUpdate(String fileLoc, Iterator<HoodieRecord<T>> recordItr) throws Exception {
+
+    public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileLoc, Iterator<HoodieRecord<T>> recordItr)
+        throws IOException {
         // these are updates
-        HoodieUpdateHandle upsertHandle =
-                new HoodieUpdateHandle<>(config, commitTime, metadata, recordItr, fileLoc);
+        HoodieUpdateHandle upsertHandle = getUpdateHandle(commitTime, fileLoc, recordItr);
         if (upsertHandle.getOldFilePath() == null) {
             throw new HoodieUpsertException("Error in finding the old file path at commit " +
                     commitTime +" at fileLoc: " + fileLoc);
@@ -423,23 +433,27 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         return Collections.singletonList(Collections.singletonList(upsertHandle.getWriteStatus())).iterator();
     }
 
-    public Iterator<List<WriteStatus>> handleInsert(Iterator<HoodieRecord<T>> recordItr) throws Exception {
-        return new LazyInsertIterable<>(recordItr, config, commitTime, metadata);
+    protected HoodieUpdateHandle getUpdateHandle(String commitTime, String fileLoc, Iterator<HoodieRecord<T>> recordItr) {
+        return new HoodieUpdateHandle<>(config, commitTime, this, recordItr, fileLoc);
+    }
+
+    public Iterator<List<WriteStatus>> handleInsert(String commitTime, Iterator<HoodieRecord<T>> recordItr) throws Exception {
+        return new LazyInsertIterable<>(recordItr, config, commitTime, this);
     }
 
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Iterator<List<WriteStatus>> handleUpsertPartition(Integer partition,
-                                                             Iterator recordItr,
-                                                             Partitioner partitioner) {
+    public Iterator<List<WriteStatus>> handleUpsertPartition(String commitTime, Integer partition,
+        Iterator recordItr, Partitioner partitioner) {
         UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
         BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
         BucketType btype = binfo.bucketType;
         try {
             if (btype.equals(BucketType.INSERT)) {
-                return handleInsert(recordItr);
+                return handleInsert(commitTime, recordItr);
             } else if (btype.equals(BucketType.UPDATE)) {
-                return handleUpdate(binfo.fileLoc, recordItr);
+                return handleUpdate(commitTime, binfo.fileLoc, recordItr);
             } else {
                 throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
             }
@@ -451,9 +465,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     @Override
-    public Iterator<List<WriteStatus>> handleInsertPartition(Integer partition,
-                                                             Iterator recordItr,
-                                                             Partitioner partitioner) {
-        return handleUpsertPartition(partition, recordItr, partitioner);
+    public Iterator<List<WriteStatus>> handleInsertPartition(String commitTime, Integer partition,
+        Iterator recordItr,
+        Partitioner partitioner) {
+        return handleUpsertPartition(commitTime, partition, recordItr, partitioner);
     }
 }

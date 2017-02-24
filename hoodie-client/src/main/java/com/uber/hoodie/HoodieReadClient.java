@@ -19,17 +19,19 @@ package com.uber.hoodie;
 import com.google.common.base.Optional;
 
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCommits;
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
-import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.index.HoodieBloomIndex;
 
-import org.apache.hadoop.fs.FileStatus;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -53,6 +55,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -75,7 +78,8 @@ public class HoodieReadClient implements Serializable {
      * BloomIndex
      */
     private transient final HoodieBloomIndex index;
-    private HoodieTableMetadata metadata;
+    private final HoodieTimeline commitTimeline;
+    private HoodieTable hoodieTable;
     private transient Optional<SQLContext> sqlContextOpt;
 
 
@@ -85,8 +89,13 @@ public class HoodieReadClient implements Serializable {
     public HoodieReadClient(JavaSparkContext jsc, String basePath) {
         this.jsc = jsc;
         this.fs = FSUtils.getFs();
-        this.metadata = new HoodieTableMetadata(fs, basePath);
-        this.index = new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
+        // Create a Hoodie table which encapsulated the commits and files visible
+        this.hoodieTable = HoodieTable
+            .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
+        this.commitTimeline = hoodieTable.getCompletedCompactionCommitTimeline();
+
+        this.index =
+            new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
         this.sqlContextOpt = Optional.absent();
     }
 
@@ -127,7 +136,7 @@ public class HoodieReadClient implements Serializable {
 
         assertSqlContext();
         JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD =
-                index.fetchRecordLocation(hoodieKeys, metadata);
+                index.fetchRecordLocation(hoodieKeys, hoodieTable);
         List<String> paths = keyToFileRDD
                 .filter(new Function<Tuple2<HoodieKey, Optional<String>>, Boolean>() {
                     @Override
@@ -177,17 +186,20 @@ public class HoodieReadClient implements Serializable {
     public Dataset<Row> read(String... paths) {
         assertSqlContext();
         List<String> filteredPaths = new ArrayList<>();
+        TableFileSystemView fileSystemView = hoodieTable.getFileSystemView();
+
         try {
             for (String path : paths) {
-                if (!path.contains(metadata.getBasePath())) {
+                if (!path.contains(hoodieTable.getMetaClient().getBasePath())) {
                     throw new HoodieException("Path " + path
                             + " does not seem to be a part of a Hoodie dataset at base path "
-                            + metadata.getBasePath());
+                            + hoodieTable.getMetaClient().getBasePath());
                 }
 
-                FileStatus[] latestFiles = metadata.getLatestVersions(fs.globStatus(new Path(path)));
-                for (FileStatus file : latestFiles) {
-                    filteredPaths.add(file.getPath().toString());
+                List<HoodieDataFile> latestFiles = fileSystemView.getLatestVersions(fs.globStatus(new Path(path))).collect(
+                    Collectors.toList());
+                for (HoodieDataFile file : latestFiles) {
+                    filteredPaths.add(file.getPath());
                 }
             }
             return sqlContextOpt.get().read()
@@ -205,15 +217,19 @@ public class HoodieReadClient implements Serializable {
      */
     public Dataset<Row> readSince(String lastCommitTimestamp) {
 
-        List<String> commitsToReturn = metadata.findCommitsAfter(lastCommitTimestamp, Integer.MAX_VALUE);
+        List<HoodieInstant> commitsToReturn =
+            commitTimeline.findInstantsAfter(lastCommitTimestamp, Integer.MAX_VALUE)
+                .getInstants().collect(Collectors.toList());
         //TODO: we can potentially trim this down to only affected partitions, using CommitMetadata
         try {
 
             // Go over the commit metadata, and obtain the new files that need to be read.
             HashMap<String, String> fileIdToFullPath = new HashMap<>();
-            for (String commit: commitsToReturn) {
+            for (HoodieInstant commit: commitsToReturn) {
+                HoodieCommitMetadata metadata =
+                    HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get());
                 // get files from each commit, and replace any previous versions
-                fileIdToFullPath.putAll(metadata.getCommitMetadata(commit).getFileIdAndFullPaths());
+                fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths());
             }
 
             return sqlContextOpt.get().read()
@@ -229,13 +245,16 @@ public class HoodieReadClient implements Serializable {
      */
     public Dataset<Row> readCommit(String commitTime) {
         assertSqlContext();
-        HoodieCommits commits = metadata.getAllCommits();
-        if (!commits.contains(commitTime)) {
+        String actionType = hoodieTable.getCompactedCommitActionType();
+        HoodieInstant commitInstant =
+            new HoodieInstant(false, actionType, commitTime);
+        if (!commitTimeline.containsInstant(commitInstant)) {
             new HoodieException("No commit exists at " + commitTime);
         }
 
         try {
-            HoodieCommitMetadata commitMetdata = metadata.getCommitMetadata(commitTime);
+            HoodieCommitMetadata commitMetdata =
+                HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commitInstant).get());
             Collection<String> paths = commitMetdata.getFileIdAndFullPaths().values();
             return sqlContextOpt.get().read()
                     .parquet(paths.toArray(new String[paths.size()]))
@@ -245,6 +264,7 @@ public class HoodieReadClient implements Serializable {
         }
     }
 
+
     /**
      * Checks if the given [Keys] exists in the hoodie table and returns [Key,
      * Optional[FullFilePath]] If the optional FullFilePath value is not present, then the key is
@@ -253,7 +273,7 @@ public class HoodieReadClient implements Serializable {
      */
     public JavaPairRDD<HoodieKey, Optional<String>> checkExists(
             JavaRDD<HoodieKey> hoodieKeys) {
-        return index.fetchRecordLocation(hoodieKeys, metadata);
+        return index.fetchRecordLocation(hoodieKeys, hoodieTable);
     }
 
     /**
@@ -264,7 +284,7 @@ public class HoodieReadClient implements Serializable {
      * @return A subset of hoodieRecords RDD, with existing records filtered out.
      */
     public JavaRDD<HoodieRecord> filterExists(JavaRDD<HoodieRecord> hoodieRecords) {
-        JavaRDD<HoodieRecord> recordsWithLocation = index.tagLocation(hoodieRecords, metadata);
+        JavaRDD<HoodieRecord> recordsWithLocation = index.tagLocation(hoodieRecords, hoodieTable);
         return recordsWithLocation.filter(new Function<HoodieRecord, Boolean>() {
             @Override
             public Boolean call(HoodieRecord v1) throws Exception {
@@ -287,13 +307,14 @@ public class HoodieReadClient implements Serializable {
      * @return
      */
     public List<String> listCommitsSince(String commitTimestamp) {
-        return metadata.getAllCommits().findCommitsAfter(commitTimestamp, Integer.MAX_VALUE);
+        return commitTimeline.findInstantsAfter(commitTimestamp, Integer.MAX_VALUE).getInstants()
+            .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     }
 
     /**
      * Returns the last successful commit (a successful write operation) into a Hoodie table.
      */
     public String latestCommit() {
-        return metadata.getAllCommits().lastCommit();
+        return commitTimeline.lastInstant().get().getTimestamp();
     }
 }

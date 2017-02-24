@@ -36,7 +36,7 @@ import java.util.Properties;
 public class HoodieWriteConfig extends DefaultHoodieConfig {
     private static final String BASE_PATH_PROP = "hoodie.base.path";
     private static final String AVRO_SCHEMA = "hoodie.avro.schema";
-    private static final String TABLE_NAME = "hoodie.table.name";
+    public static final String TABLE_NAME = "hoodie.table.name";
     private static final String DEFAULT_PARALLELISM = "200";
     private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
     private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";

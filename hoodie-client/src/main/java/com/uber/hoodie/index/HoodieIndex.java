@@ -17,14 +17,16 @@
 package com.uber.hoodie.index;
 
 import com.google.common.base.Optional;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 
 import com.uber.hoodie.exception.HoodieIndexException;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -58,19 +60,18 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
      * value is present, it is the path component (without scheme) of the URI underlying file
      *
      * @param hoodieKeys
-     * @param metadata
+     * @param metaClient
      * @return
      */
     public abstract JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-        JavaRDD<HoodieKey> hoodieKeys, final HoodieTableMetadata metadata);
+        JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> metaClient);
 
     /**
      * Looks up the index and tags each incoming record with a location of a file that contains the
      * row (if it is actually present)
      */
     public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-                                                      HoodieTableMetadata metadata) throws
-        HoodieIndexException;
+        HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
     /**
      * Extracts the location of written records, and updates the index.
@@ -78,8 +79,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
      * TODO(vc): We may need to propagate the record as well in a WriteStatus class
      */
     public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-                                                        HoodieTableMetadata metadata) throws
-        HoodieIndexException;
+        HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
     /**
      * Rollback the efffects of the commit made at commitTime.

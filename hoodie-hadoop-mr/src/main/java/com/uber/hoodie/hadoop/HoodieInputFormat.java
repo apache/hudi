@@ -16,8 +16,13 @@
 
 package com.uber.hoodie.hadoop;
 
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -52,6 +57,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static parquet.filter2.predicate.FilterApi.and;
 import static parquet.filter2.predicate.FilterApi.binaryColumn;
@@ -73,11 +79,11 @@ public class HoodieInputFormat extends MapredParquetInputFormat
     public FileStatus[] listStatus(JobConf job) throws IOException {
         // Get all the file status from FileInputFormat and then do the filter
         FileStatus[] fileStatuses = super.listStatus(job);
-        Map<HoodieTableMetadata, List<FileStatus>> groupedFileStatus = groupFileStatus(fileStatuses);
+        Map<HoodieTableMetaClient, List<FileStatus>> groupedFileStatus = groupFileStatus(fileStatuses);
         LOG.info("Found a total of " + groupedFileStatus.size() + " groups");
         List<FileStatus> returns = new ArrayList<FileStatus>();
-        for(Map.Entry<HoodieTableMetadata, List<FileStatus>> entry:groupedFileStatus.entrySet()) {
-            HoodieTableMetadata metadata = entry.getKey();
+        for(Map.Entry<HoodieTableMetaClient, List<FileStatus>> entry:groupedFileStatus.entrySet()) {
+            HoodieTableMetaClient metadata = entry.getKey();
             if(metadata == null) {
                 // Add all the paths which are not hoodie specific
                 returns.addAll(entry.getValue());
@@ -88,33 +94,38 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
             }
-            String tableName = metadata.getTableName();
+            String tableName = metadata.getTableConfig().getTableName();
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
+            HoodieTimeline timeline = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            TableFileSystemView fsView = new HoodieTableFileSystemView(metadata, timeline);
+
             if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
                 // this is of the form commitTs_partition_sequenceNumber
                 String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(Job.getInstance(job), tableName);
                 // Total number of commits to return in this batch. Set this to -1 to get all the commits.
                 Integer maxCommits = HoodieHiveUtil.readMaxCommits(Job.getInstance(job), tableName);
                 LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
-                List<String>
-                    commitsToReturn = metadata.findCommitsAfter(lastIncrementalTs, maxCommits);
-                FileStatus[] filteredFiles =
-                    metadata.getLatestVersionInRange(value, commitsToReturn);
-                for (FileStatus filteredFile : filteredFiles) {
+                List<String> commitsToReturn =
+                    timeline.findInstantsAfter(lastIncrementalTs, maxCommits).getInstants()
+                        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+                List<HoodieDataFile> filteredFiles =
+                    fsView.getLatestVersionInRange(value, commitsToReturn)
+                        .collect(Collectors.toList());
+                for (HoodieDataFile filteredFile : filteredFiles) {
                     LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
-                    returns.add(filteredFile);
+                    returns.add(filteredFile.getFileStatus());
                 }
                 LOG.info(
-                    "Total paths to process after hoodie incremental filter " + filteredFiles.length);
+                    "Total paths to process after hoodie incremental filter " + filteredFiles.size());
             } else {
                 // filter files on the latest commit found
-                FileStatus[] filteredFiles = metadata.getLatestVersions(value);
-                LOG.info("Total paths to process after hoodie filter " + filteredFiles.length);
-                for (FileStatus filteredFile : filteredFiles) {
+                List<HoodieDataFile> filteredFiles = fsView.getLatestVersions(value).collect(Collectors.toList());
+                LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
+                for (HoodieDataFile filteredFile : filteredFiles) {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
                     }
-                    returns.add(filteredFile);
+                    returns.add(filteredFile.getFileStatus());
                 }
             }
         }
@@ -122,18 +133,18 @@ public class HoodieInputFormat extends MapredParquetInputFormat
 
     }
 
-    private Map<HoodieTableMetadata, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)
+    private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)
         throws IOException {
         // This assumes the paths for different tables are grouped together
-        Map<HoodieTableMetadata, List<FileStatus>> grouped = new HashMap<>();
-        HoodieTableMetadata metadata = null;
+        Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
+        HoodieTableMetaClient metadata = null;
         String nonHoodieBasePath = null;
         for(FileStatus status:fileStatuses) {
             if ((metadata == null && nonHoodieBasePath == null) || (metadata == null && !status.getPath().toString()
                 .contains(nonHoodieBasePath)) || (metadata != null && !status.getPath().toString()
                 .contains(metadata.getBasePath()))) {
                 try {
-                    metadata = getTableMetadata(status.getPath().getParent());
+                    metadata = getTableMetaClient(status.getPath().getParent());
                     nonHoodieBasePath = null;
                 } catch (InvalidDatasetException e) {
                     LOG.info("Handling a non-hoodie path " + status.getPath());
@@ -142,7 +153,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                         status.getPath().getParent().toString();
                 }
                 if(!grouped.containsKey(metadata)) {
-                    grouped.put(metadata, new ArrayList<FileStatus>());
+                    grouped.put(metadata, new ArrayList<>());
                 }
             }
             grouped.get(metadata).add(status);
@@ -246,12 +257,12 @@ public class HoodieInputFormat extends MapredParquetInputFormat
      * @return
      * @throws IOException
      */
-    private HoodieTableMetadata getTableMetadata(Path dataPath) throws IOException {
+    private HoodieTableMetaClient getTableMetaClient(Path dataPath) throws IOException {
         FileSystem fs = dataPath.getFileSystem(conf);
         // TODO - remove this hard-coding. Pass this in job conf, somehow. Or read the Table Location
         Path baseDir = dataPath.getParent().getParent().getParent();
         LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-        return new HoodieTableMetadata(fs, baseDir.toString());
+        return new HoodieTableMetaClient(fs, baseDir.toString());
 
     }
 }
