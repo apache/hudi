@@ -421,7 +421,7 @@ public class TestHoodieBloomIndex {
         int seqId = 1;
         String commitTime = FSUtils.getCommitTime(filename);
         for (HoodieRecord record : records) {
-            GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema);
+            GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
             HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, commitTime, "" + seqId++);
             HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), filename);
             writer.write(avroRecord);

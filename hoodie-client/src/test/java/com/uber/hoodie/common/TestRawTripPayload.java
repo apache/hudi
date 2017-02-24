@@ -27,6 +27,7 @@ import org.apache.commons.io.IOUtils;
 
 import java.io.*;
 import java.util.Map;
+import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -66,13 +67,13 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         return another;
     }
 
-    @Override public IndexedRecord combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
+    @Override public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
         return this.getInsertValue(schema);
     }
 
-    @Override public IndexedRecord getInsertValue(Schema schema) throws IOException {
+    @Override public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
         MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-        return jsonConverter.convert(getJsonData());
+        return Optional.of(jsonConverter.convert(getJsonData()));
     }
 
     public String getRowKey() {
