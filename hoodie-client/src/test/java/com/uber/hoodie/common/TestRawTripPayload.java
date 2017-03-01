@@ -42,12 +42,20 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     private String rowKey;
     private byte[] jsonDataCompressed;
     private int dataSize;
+    private boolean isDeleted;
 
     public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
         this.jsonDataCompressed = compressData(jsonData);
         this.dataSize = jsonData.length();
         this.rowKey = rowKey;
         this.partitionPath = partitionPath;
+        this.isDeleted = false;
+    }
+
+    public TestRawTripPayload(String rowKey, String partitionPath) throws IOException {
+        this.rowKey = rowKey;
+        this.partitionPath = partitionPath;
+        this.isDeleted = true;
     }
 
     public TestRawTripPayload(String jsonData) throws IOException {
@@ -56,6 +64,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         Map<String, Object> jsonRecordMap = mapper.readValue(jsonData, Map.class);
         this.rowKey = jsonRecordMap.get("_row_key").toString();
         this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
+        this.isDeleted = false;
     }
 
     public String getPartitionPath() {
@@ -72,15 +81,19 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
 
     @Override public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-        MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-        return Optional.of(jsonConverter.convert(getJsonData()));
+        if(isDeleted){
+            return Optional.empty();
+        } else {
+            MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
+            return Optional.of(jsonConverter.convert(getJsonData()));
+        }
     }
 
     public String getRowKey() {
         return rowKey;
     }
 
-    public String getJsonData() throws IOException {
+    private String getJsonData() throws IOException {
         return unCompressData(jsonDataCompressed);
     }
 

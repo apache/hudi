@@ -256,6 +256,78 @@ public class TestHoodieClient implements Serializable {
             readClient.readCommit(newCommitTime).count(),
             readClient.readSince("001").count());
     }
+
+    @Test
+    public void testDeletes() throws Exception {
+        HoodieWriteConfig cfg = getConfig();
+        HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+        HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
+        FileSystem fs = FSUtils.getFs();
+
+        /**
+         * Write 1 (only inserts)
+         */
+        String newCommitTime = "001";
+        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+        JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+        List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+        assertNoWriteErrors(statuses);
+
+        // verify that there is a commit
+        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
+        assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
+        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
+        // Should have 100 records in table (check using Index), all in locations marked at commit
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
+        checkTaggedRecords(taggedRecords, "001");
+
+        /**
+         * Write 2 (deletes+writes)
+         */
+        newCommitTime = "004";
+        List<HoodieRecord> fewRecordsForDelete = records.subList(0,50);
+        List<HoodieRecord> fewRecordsForUpdate = records.subList(50,100);
+        records = dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete);
+
+        records.addAll(fewRecordsForUpdate);
+
+        statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+        // Verify there are no errors
+        assertNoWriteErrors(statuses);
+
+        // verify there are now 2 commits
+        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
+        assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
+
+        metaClient = new HoodieTableMetaClient(fs, basePath);
+        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        // Check the entire dataset has 150 records(200-50) still
+        String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+        for (int i=0; i < fullPartitionPaths.length; i++) {
+            fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+        }
+        assertEquals("Must contain 150 records", readClient.read(fullPartitionPaths).count(), 150);
+
+
+        // Check that the incremental consumption from time 000
+        assertEquals("Incremental consumption from latest commit, should give 50 updated records",
+                readClient.readCommit(newCommitTime).count(),
+                50);
+        assertEquals("Incremental consumption from time 001, should give 50 updated records",
+                50,
+                readClient.readSince("001").count());
+        assertEquals("Incremental consumption from time 000, should give 150",
+                150,
+                readClient.readSince("000").count());
+    }
+
     @Test
     public void testInsertAndCleanByVersions() throws Exception {
         int maxVersions = 2; // keep upto 2 versions for each file

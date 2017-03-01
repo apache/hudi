@@ -100,6 +100,21 @@ public class HoodieTestDataGenerator {
         return inserts;
     }
 
+    public List<HoodieRecord> generateDeletesFromExistingRecords(List<HoodieRecord> existingRecords) throws IOException {
+        List<HoodieRecord> deletes = new ArrayList<>();
+        for (HoodieRecord existingRecord: existingRecords) {
+            HoodieRecord record = generateDeleteRecord(existingRecord);
+            deletes.add(record);
+
+        }
+        return deletes;
+    }
+
+    public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord) throws IOException  {
+        HoodieKey key = existingRecord.getKey();
+        TestRawTripPayload payload = new TestRawTripPayload(key.getRecordKey(), key.getPartitionPath());
+        return new HoodieRecord(key, payload);
+    }
 
     public List<HoodieRecord> generateUpdates(String commitTime, List<HoodieRecord> baseRecords) throws IOException {
         List<HoodieRecord> updates = new ArrayList<>();
