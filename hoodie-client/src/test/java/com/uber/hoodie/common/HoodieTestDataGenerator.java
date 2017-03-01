@@ -100,6 +100,11 @@ public class HoodieTestDataGenerator {
         return inserts;
     }
 
+    public List<HoodieRecord> generateDeletes(String commitTime, int n) throws IOException {
+        List<HoodieRecord> inserts = generateInserts(commitTime, n);
+        return generateDeletesFromExistingRecords(inserts);
+    }
+
     public List<HoodieRecord> generateDeletesFromExistingRecords(List<HoodieRecord> existingRecords) throws IOException {
         List<HoodieRecord> deletes = new ArrayList<>();
         for (HoodieRecord existingRecord: existingRecords) {

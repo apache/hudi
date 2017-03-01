@@ -266,10 +266,16 @@ public class TestHoodieClient implements Serializable {
         FileSystem fs = FSUtils.getFs();
 
         /**
-         * Write 1 (only inserts)
+         * Write 1 (inserts and deletes)
+         * Write actual 200 insert records and ignore 100 delete records
          */
         String newCommitTime = "001";
-        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+        List<HoodieRecord> fewRecordsForInsert = dataGen.generateInserts(newCommitTime, 200);
+        List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletes(newCommitTime, 100);
+
+        List<HoodieRecord> records = new ArrayList(fewRecordsForInsert);
+        records.addAll(fewRecordsForDelete);
+
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
         List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
@@ -279,19 +285,19 @@ public class TestHoodieClient implements Serializable {
         HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
         assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
         assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
-        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
+        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), fewRecordsForInsert.size());
         // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
-        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
+        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(fewRecordsForInsert, 1), table).collect();
         checkTaggedRecords(taggedRecords, "001");
 
         /**
          * Write 2 (deletes+writes)
          */
         newCommitTime = "004";
-        List<HoodieRecord> fewRecordsForDelete = records.subList(0,50);
+        fewRecordsForDelete = records.subList(0,50);
         List<HoodieRecord> fewRecordsForUpdate = records.subList(50,100);
         records = dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete);
 
