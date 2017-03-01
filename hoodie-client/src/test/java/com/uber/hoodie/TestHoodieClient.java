@@ -259,6 +259,7 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testDeletes() throws Exception {
+
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
