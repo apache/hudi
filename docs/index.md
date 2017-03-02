@@ -4,7 +4,7 @@ keywords: homepage
 tags: [getting_started]
 sidebar: mydoc_sidebar
 permalink: index.html
-summary: "Hoodie lowers data latency across the board, while simultaenously achieving orders of magnitude of efficiency over traditional batch processing."
+summary: "Hoodie lowers data latency across the board, while simultaneously achieving orders of magnitude of efficiency over traditional batch processing."
 ---
 
 
