@@ -45,11 +45,11 @@ e.g: `/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_in
 The following are the configuration options for HiveIncrementalPuller
 
 | **Config** | **Description** | **Default** |
-|hiveUrl| Hive Server 2 URL to connect to | jdbc:hive2://hadoophiveserver.com:10000/;transportMode=http;httpPath=hs2 |
+|hiveUrl| Hive Server 2 URL to connect to |  |
 |hiveUser| Hive Server 2 Username |  |
 |hivePass| Hive Server 2 Password |  |
 |queue| YARN Queue name |  |
-|tmp| Directory where the temporary delta data is stored in HDFS. The directory structure will follow conventions. Please see the below section.  | /app/incremental-hql/intermediate |
+|tmp| Directory where the temporary delta data is stored in HDFS. The directory structure will follow conventions. Please see the below section.  |  |
 |extractSQLFile| The SQL to execute on the source table to extract the data. The data extracted will be all the rows that changed since a particular point in time. |  |
 |sourceTable| Source Table Name. Needed to set hive environment properties. |  |
 |targetTable| Target Table Name. Needed for the intermediate storage directory structure.  |  |
