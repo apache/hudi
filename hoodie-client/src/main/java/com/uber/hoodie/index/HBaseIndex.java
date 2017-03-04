@@ -17,7 +17,6 @@
 package com.uber.hoodie.index;
 
 import com.google.common.base.Optional;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -180,21 +179,29 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                 while (statusIterator.hasNext()) {
                     WriteStatus writeStatus = statusIterator.next();
                     List<Put> puts = new ArrayList<>();
+                    List<Delete> deletes = new ArrayList<>();
                     try {
                         for (HoodieRecord rec : writeStatus.getWrittenRecords()) {
                             if (!writeStatus.isErrored(rec.getKey())) {
-                                Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
-                                HoodieRecordLocation loc = rec.getNewLocation();
-                                put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN,
-                                    Bytes.toBytes(loc.getCommitTime()));
-                                put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN,
-                                    Bytes.toBytes(loc.getFileId()));
-                                put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN,
-                                    Bytes.toBytes(rec.getPartitionPath()));
-                                puts.add(put);
+                                java.util.Optional<HoodieRecordLocation> loc = rec.getNewLocation();
+                                if(loc.isPresent()) {
+                                    Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
+                                    put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN,
+                                            Bytes.toBytes(loc.get().getCommitTime()));
+                                    put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN,
+                                            Bytes.toBytes(loc.get().getFileId()));
+                                    put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN,
+                                            Bytes.toBytes(rec.getPartitionPath()));
+                                    puts.add(put);
+                                } else {
+                                    //Delete existing index for a deleted record
+                                    Delete delete = new Delete(Bytes.toBytes(rec.getRecordKey()));
+                                    deletes.add(delete);
+                                }
                             }
                         }
                         hTable.put(puts);
+                        hTable.delete(deletes);
                         hTable.flushCommits();
                     } catch (Exception e) {
                         Exception we = new Exception("Error updating index for " + writeStatus, e);

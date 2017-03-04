@@ -44,18 +44,20 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     private int dataSize;
     private boolean isDeleted;
 
-    public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-        this.jsonDataCompressed = compressData(jsonData);
-        this.dataSize = jsonData.length();
+    public TestRawTripPayload(Optional<String> jsonData, String rowKey, String partitionPath,
+                              String schemaStr, Boolean isDeleted) throws IOException {
+        if(jsonData.isPresent()) {
+            this.jsonDataCompressed = compressData(jsonData.get());
+            this.dataSize = jsonData.get().length();
+        }
         this.rowKey = rowKey;
         this.partitionPath = partitionPath;
-        this.isDeleted = false;
+        this.isDeleted = isDeleted;
     }
 
-    public TestRawTripPayload(String rowKey, String partitionPath) throws IOException {
-        this.rowKey = rowKey;
-        this.partitionPath = partitionPath;
-        this.isDeleted = true;
+    public TestRawTripPayload(String jsonData, String rowKey, String partitionPath,
+                              String schemaStr)throws IOException {
+        this(Optional.of(jsonData), rowKey, partitionPath, schemaStr, false);
     }
 
     public TestRawTripPayload(String jsonData) throws IOException {

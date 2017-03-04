@@ -34,10 +34,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -117,7 +114,7 @@ public class HoodieTestDataGenerator {
 
     public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord) throws IOException  {
         HoodieKey key = existingRecord.getKey();
-        TestRawTripPayload payload = new TestRawTripPayload(key.getRecordKey(), key.getPartitionPath());
+        TestRawTripPayload payload = new TestRawTripPayload(Optional.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
         return new HoodieRecord(key, payload);
     }
 
