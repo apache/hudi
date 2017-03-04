@@ -27,6 +27,7 @@ import org.apache.commons.io.IOUtils;
 
 import java.io.*;
 import java.util.Map;
+import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -41,12 +42,22 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     private String rowKey;
     private byte[] jsonDataCompressed;
     private int dataSize;
+    private boolean isDeleted;
 
-    public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-        this.jsonDataCompressed = compressData(jsonData);
-        this.dataSize = jsonData.length();
+    public TestRawTripPayload(Optional<String> jsonData, String rowKey, String partitionPath,
+                              String schemaStr, Boolean isDeleted) throws IOException {
+        if(jsonData.isPresent()) {
+            this.jsonDataCompressed = compressData(jsonData.get());
+            this.dataSize = jsonData.get().length();
+        }
         this.rowKey = rowKey;
         this.partitionPath = partitionPath;
+        this.isDeleted = isDeleted;
+    }
+
+    public TestRawTripPayload(String jsonData, String rowKey, String partitionPath,
+                              String schemaStr)throws IOException {
+        this(Optional.of(jsonData), rowKey, partitionPath, schemaStr, false);
     }
 
     public TestRawTripPayload(String jsonData) throws IOException {
@@ -55,6 +66,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         Map<String, Object> jsonRecordMap = mapper.readValue(jsonData, Map.class);
         this.rowKey = jsonRecordMap.get("_row_key").toString();
         this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
+        this.isDeleted = false;
     }
 
     public String getPartitionPath() {
@@ -66,20 +78,24 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         return another;
     }
 
-    @Override public IndexedRecord combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
+    @Override public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
         return this.getInsertValue(schema);
     }
 
-    @Override public IndexedRecord getInsertValue(Schema schema) throws IOException {
-        MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-        return jsonConverter.convert(getJsonData());
+    @Override public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+        if(isDeleted){
+            return Optional.empty();
+        } else {
+            MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
+            return Optional.of(jsonConverter.convert(getJsonData()));
+        }
     }
 
     public String getRowKey() {
         return rowKey;
     }
 
-    public String getJsonData() throws IOException {
+    private String getJsonData() throws IOException {
         return unCompressData(jsonDataCompressed);
     }
 
