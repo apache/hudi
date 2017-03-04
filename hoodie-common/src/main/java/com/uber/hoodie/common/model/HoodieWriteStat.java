@@ -52,6 +52,11 @@ public class HoodieWriteStat implements Serializable {
     private long numWrites;
 
     /**
+     * Total number of records deleted.
+     */
+    private long numDeletes;
+
+    /**
      * Total number of records actually changed. (0 for inserts)
      */
     private long numUpdateWrites;
@@ -86,6 +91,10 @@ public class HoodieWriteStat implements Serializable {
         this.numWrites = numWrites;
     }
 
+    public void setNumDeletes(long numDeletes) {
+        this.numDeletes = numDeletes;
+    }
+
     public void setNumUpdateWrites(long numUpdateWrites) {
         this.numUpdateWrites = numUpdateWrites;
     }
@@ -110,6 +119,10 @@ public class HoodieWriteStat implements Serializable {
         return numWrites;
     }
 
+    public long getNumDeletes() {
+        return numDeletes;
+    }
+
     public long getNumUpdateWrites() {
         return numUpdateWrites;
     }
@@ -129,6 +142,7 @@ public class HoodieWriteStat implements Serializable {
                 .append("fullPath='" + fullPath + '\'')
                 .append(", prevCommit='" + prevCommit + '\'')
                 .append(", numWrites=" + numWrites)
+                .append(", numDeletes=" + numDeletes)
                 .append(", numUpdateWrites=" + numUpdateWrites)
                 .append(", numWriteBytes=" + totalWriteBytes)
                 .append('}')

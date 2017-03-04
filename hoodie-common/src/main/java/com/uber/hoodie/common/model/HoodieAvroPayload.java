@@ -17,6 +17,9 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+
+import java.util.Optional;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -28,9 +31,9 @@ import java.io.IOException;
  * Useful to create a HoodieRecord over existing GenericRecords in a hoodie datasets (useful in compactions)
  */
 public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload> {
-    private final GenericRecord record;
+    private final Optional<GenericRecord> record;
 
-    public HoodieAvroPayload(GenericRecord record) {
+    public HoodieAvroPayload(Optional<GenericRecord> record) {
         this.record = record;
     }
 
@@ -40,13 +43,13 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
     }
 
     @Override
-    public IndexedRecord combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
-        throws IOException {
+    public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+            throws IOException {
         return getInsertValue(schema);
     }
 
     @Override
-    public IndexedRecord getInsertValue(Schema schema) throws IOException {
-        return HoodieAvroUtils.rewriteRecord(record, schema);
+    public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+        return record.map(r -> HoodieAvroUtils.rewriteRecord(r, schema));
     }
 }

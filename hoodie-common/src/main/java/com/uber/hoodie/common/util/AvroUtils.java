@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 public class AvroUtils {
 
@@ -58,7 +59,7 @@ public class AvroUtils {
                     String partitionPath =
                         deltaRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
                     loadedRecords.add(new HoodieRecord<>(new HoodieKey(key, partitionPath),
-                        new HoodieAvroPayload(deltaRecord)));
+                        new HoodieAvroPayload(Optional.of(deltaRecord))));
                 }
                 fileReader.close(); // also closes underlying FsInput
             } catch (IOException e) {

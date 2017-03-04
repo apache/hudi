@@ -34,10 +34,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -100,6 +97,26 @@ public class HoodieTestDataGenerator {
         return inserts;
     }
 
+    public List<HoodieRecord> generateDeletes(String commitTime, int n) throws IOException {
+        List<HoodieRecord> inserts = generateInserts(commitTime, n);
+        return generateDeletesFromExistingRecords(inserts);
+    }
+
+    public List<HoodieRecord> generateDeletesFromExistingRecords(List<HoodieRecord> existingRecords) throws IOException {
+        List<HoodieRecord> deletes = new ArrayList<>();
+        for (HoodieRecord existingRecord: existingRecords) {
+            HoodieRecord record = generateDeleteRecord(existingRecord);
+            deletes.add(record);
+
+        }
+        return deletes;
+    }
+
+    public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord) throws IOException  {
+        HoodieKey key = existingRecord.getKey();
+        TestRawTripPayload payload = new TestRawTripPayload(Optional.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
+        return new HoodieRecord(key, payload);
+    }
 
     public List<HoodieRecord> generateUpdates(String commitTime, List<HoodieRecord> baseRecords) throws IOException {
         List<HoodieRecord> updates = new ArrayList<>();

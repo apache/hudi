@@ -193,7 +193,7 @@ public class HoodieTestUtils {
                 AvroLogAppender log = new AvroLogAppender(logConfig);
                 log.append(s.getValue().stream().map(r -> {
                     try {
-                        GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema);
+                        GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
                         HoodieAvroUtils.addHoodieKeyToRecord(val,
                             r.getRecordKey(),
                             r.getPartitionPath(),

@@ -30,6 +30,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -47,13 +48,13 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
         return this;
     }
 
-    @Override public IndexedRecord combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
+    @Override public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
         return getInsertValue(schema);
     }
 
-    @Override public IndexedRecord getInsertValue(Schema schema) throws IOException {
+    @Override public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
         MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-        return jsonConverter.convert(getJsonData());
+        return Optional.of(jsonConverter.convert(getJsonData()));
     }
 
     private String getJsonData() throws IOException {

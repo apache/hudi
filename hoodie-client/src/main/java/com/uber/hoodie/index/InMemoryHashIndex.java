@@ -41,9 +41,8 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * Hoodie Index implementation backed by an in-memory Hash map.
- *
+ * <p>
  * ONLY USE FOR LOCAL TESTING
- *
  */
 public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
@@ -56,7 +55,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
     @Override
     public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-        JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> hoodieTable) {
+            JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> hoodieTable) {
         throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
     }
 
@@ -67,7 +66,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
             implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {
         @Override
         public Iterator<HoodieRecord<T>> call(Integer partitionNum,
-                                           Iterator<HoodieRecord<T>> hoodieRecordIterator) {
+                                              Iterator<HoodieRecord<T>> hoodieRecordIterator) {
             List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
             while (hoodieRecordIterator.hasNext()) {
                 HoodieRecord<T> rec = hoodieRecordIterator.next();
@@ -82,7 +81,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
     @Override
     public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-                                             HoodieTable<T> hoodieTable) {
+                                                HoodieTable<T> hoodieTable) {
         return recordRDD.mapPartitionsWithIndex(this.new LocationTagFunction(), true);
     }
 
@@ -94,7 +93,14 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
             public WriteStatus call(WriteStatus writeStatus) {
                 for (HoodieRecord record : writeStatus.getWrittenRecords()) {
                     if (!writeStatus.isErrored(record.getKey())) {
-                        recordLocationMap.put(record.getKey(), record.getNewLocation());
+                        HoodieKey key = record.getKey();
+                        java.util.Optional<HoodieRecordLocation> newLocation = record.getNewLocation();
+                        if (newLocation.isPresent()) {
+                            recordLocationMap.put(key, newLocation.get());
+                        } else {
+                            //Delete existing index for a deleted record
+                            recordLocationMap.remove(key);
+                        }
                     }
                 }
                 return writeStatus;
