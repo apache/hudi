@@ -21,6 +21,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
@@ -35,6 +36,7 @@ import org.apache.spark.Partitioner;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Abstract implementation of a HoodieTable
@@ -109,6 +111,36 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      */
     public HoodieTimeline getCompletedCommitTimeline() {
         return getCommitTimeline().filterCompletedInstants();
+    }
+
+    /**
+     * Get only the inflights (no-completed) commit timeline
+     * @return
+     */
+    public HoodieTimeline getInflightCommitTimeline() {
+        return getCommitTimeline().filterInflights();
+    }
+
+
+    /**
+     * Get only the completed (no-inflights) clean timeline
+     * @return
+     */
+    public HoodieTimeline getCompletedCleanTimeline() {
+        return getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
+    }
+
+    /**
+     * Get only the completed (no-inflights) savepoint timeline
+     * @return
+     */
+    public HoodieTimeline getCompletedSavepointTimeline() {
+        return getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
+    }
+
+    public List<String> getSavepoints() {
+        return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp)
+            .collect(Collectors.toList());
     }
 
     public HoodieActiveTimeline getActiveTimeline() {

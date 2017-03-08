@@ -16,7 +16,9 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
@@ -26,6 +28,10 @@ import com.uber.hoodie.table.HoodieTable;
 import org.junit.Before;
 import org.junit.Test;
 import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import static org.junit.Assert.*;
 
 /**
@@ -47,7 +53,7 @@ public class TestHoodieCleaner {
     public void testKeepLatestFileVersions() throws IOException {
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaner.CleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
                 .retainFileVersions(1).build()).build();
 
         // make 1 commit, with 1 file per partition
@@ -60,8 +66,8 @@ public class TestHoodieCleaner {
         HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
 
         HoodieCleaner cleaner = new HoodieCleaner(table, config);
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]));
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
 
@@ -76,8 +82,8 @@ public class TestHoodieCleaner {
         table = HoodieTable.getHoodieTable(metadata, config);
 
         cleaner = new HoodieCleaner(table, config);
-        assertEquals("Must clean 1 file" , 1, cleaner.clean(partitionPaths[0]));
-        assertEquals("Must clean 1 file" , 1, cleaner.clean(partitionPaths[1]));
+        assertEquals("Must clean 1 file" , 1, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must clean 1 file" , 1, cleaner.clean(partitionPaths[1]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
@@ -93,14 +99,14 @@ public class TestHoodieCleaner {
         table = HoodieTable.getHoodieTable(metadata, config);
 
         cleaner = new HoodieCleaner(table, config);
-        assertEquals("Must clean two files" , 2, cleaner.clean(partitionPaths[0]));
+        assertEquals("Must clean two files" , 2, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
 
         // No cleaning on partially written file, with no commit.
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file3P0C2); // update
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
     }
 
@@ -109,7 +115,7 @@ public class TestHoodieCleaner {
     public void testKeepLatestCommits() throws IOException {
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaner.CleaningPolicy.KEEP_LATEST_COMMITS)
+                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
                 .retainCommits(2).build()).build();
 
 
@@ -123,8 +129,8 @@ public class TestHoodieCleaner {
         HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
 
         HoodieCleaner cleaner = new HoodieCleaner(table, config);
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]));
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
 
@@ -139,8 +145,8 @@ public class TestHoodieCleaner {
         table = HoodieTable.getHoodieTable(metadata, config);
 
         cleaner = new HoodieCleaner(table, config);
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]));
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[1]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
@@ -158,7 +164,7 @@ public class TestHoodieCleaner {
         cleaner = new HoodieCleaner(table, config);
         assertEquals(
             "Must not clean any file. We have to keep 1 version before the latest commit time to keep",
-            0, cleaner.clean(partitionPaths[0]));
+            0, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
 
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
 
@@ -173,7 +179,7 @@ public class TestHoodieCleaner {
 
         cleaner = new HoodieCleaner(table, config);
         assertEquals(
-            "Must not clean one old file", 1, cleaner.clean(partitionPaths[0]));
+            "Must not clean one old file", 1, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
 
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
@@ -185,7 +191,7 @@ public class TestHoodieCleaner {
 
         // No cleaning on partially written file, with no commit.
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "004", file3P0C2); // update
-        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]));
+        assertEquals("Must not clean any files" , 0, cleaner.clean(partitionPaths[0]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
     }

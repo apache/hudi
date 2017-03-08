@@ -18,6 +18,7 @@ package com.uber.hoodie.config;
 
 
 import com.google.common.base.Preconditions;
+import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCleaner;
 import com.uber.hoodie.metrics.MetricsReporterType;
@@ -97,8 +98,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     /**
      * compaction properties
      **/
-    public HoodieCleaner.CleaningPolicy getCleanerPolicy() {
-        return HoodieCleaner.CleaningPolicy
+    public HoodieCleaningPolicy getCleanerPolicy() {
+        return HoodieCleaningPolicy
             .valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_POLICY_PROP));
     }
 

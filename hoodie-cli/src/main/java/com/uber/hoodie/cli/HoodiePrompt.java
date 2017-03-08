@@ -28,18 +28,19 @@ public class HoodiePrompt extends DefaultPromptProvider {
 
     @Override
     public String getPrompt() {
-        String tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
-        switch (HoodieCLI.state) {
-            case INIT:
-                return "hoodie->";
-            case DATASET:
-                return "hoodie:" + tableName + "->";
-            case SYNC:
-                return "hoodie:" + tableName + " <==> "
-                    + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
-        }
-        if (HoodieCLI.tableMetadata != null)
+        if (HoodieCLI.tableMetadata != null) {
+            String tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
+            switch (HoodieCLI.state) {
+                case INIT:
+                    return "hoodie->";
+                case DATASET:
+                    return "hoodie:" + tableName + "->";
+                case SYNC:
+                    return "hoodie:" + tableName + " <==> "
+                        + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
+            }
             return "hoodie:" + tableName + "->";
+        }
         return "hoodie->";
     }
 

@@ -1,0 +1,9 @@
+{"namespace": "com.uber.hoodie.avro.model",
+ "type": "record",
+ "name": "HoodieSavepointMetadata",
+ "fields": [
+     {"name": "savepointedBy", "type": "string"},
+     {"name": "savepointedAt", "type": "string"},
+     {"name": "comments", "type": "string"}
+ ]
+}

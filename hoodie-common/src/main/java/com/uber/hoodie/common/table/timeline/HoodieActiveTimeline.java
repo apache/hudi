@@ -87,8 +87,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     public HoodieActiveTimeline(FileSystem fs, String metaPath) {
         this(fs, metaPath,
             new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
-                INFLIGHT_DELTA_COMMIT_EXTENSION, COMPACTION_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
-                CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, COMPACTION_EXTENSION});
+                INFLIGHT_DELTA_COMMIT_EXTENSION, COMPACTION_EXTENSION,
+                INFLIGHT_COMPACTION_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
+                CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION});
     }
 
     /**
@@ -157,6 +158,16 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
      */
     public HoodieTimeline getCleanerTimeline() {
         return new HoodieDefaultTimeline(filterInstantsByAction(CLEAN_ACTION),
+            (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+    }
+
+    /**
+     * Get only the rollback action (inflight and completed) in the active timeline
+     *
+     * @return
+     */
+    public HoodieTimeline getRollbackTimeline() {
+        return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
             (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
     }
 

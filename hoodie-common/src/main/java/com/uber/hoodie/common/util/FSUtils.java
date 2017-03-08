@@ -19,6 +19,7 @@ package com.uber.hoodie.common.util;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidHoodiePathException;
 import org.apache.hadoop.conf.Configuration;
@@ -49,6 +50,8 @@ public class FSUtils {
     // Log files are of this pattern - b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.avro.delta.1
     private static final Pattern LOG_FILE_PATTERN = Pattern.compile("(.*)_(.*)\\.(.*)\\.(.*)\\.([0-9]*)");
     private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
+    private static final long MIN_CLEAN_TO_KEEP = 10;
+    private static final long MIN_ROLLBACK_TO_KEEP = 10;
 
     public static FileSystem getFs() {
         Configuration conf = new Configuration();
@@ -305,4 +308,31 @@ public class FSUtils {
 
     }
 
+    public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath,
+        Stream<HoodieInstant> instants) {
+        //TODO - this should be archived when archival is made general for all meta-data
+        // skip MIN_CLEAN_TO_KEEP and delete rest
+        instants.skip(MIN_CLEAN_TO_KEEP).map(s -> {
+            try {
+                return fs.delete(new Path(metaPath, s.getFileName()), false);
+            } catch (IOException e) {
+                throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(),
+                    e);
+            }
+        });
+    }
+
+    public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath,
+        Stream<HoodieInstant> instants) {
+        //TODO - this should be archived when archival is made general for all meta-data
+        // skip MIN_ROLLBACK_TO_KEEP and delete rest
+        instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
+            try {
+                return fs.delete(new Path(metaPath, s.getFileName()), false);
+            } catch (IOException e) {
+                throw new HoodieIOException(
+                    "Could not delete rollback meta files " + s.getFileName(), e);
+            }
+        });
+    }
 }
