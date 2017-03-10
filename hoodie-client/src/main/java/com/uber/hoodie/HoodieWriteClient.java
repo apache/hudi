@@ -37,12 +37,10 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
-import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.exception.HoodieRollbackException;
@@ -55,44 +53,31 @@ import com.uber.hoodie.io.HoodieCommitArchiveLog;
 import com.uber.hoodie.metrics.HoodieMetrics;
 import com.uber.hoodie.table.HoodieTable;
 import com.uber.hoodie.table.WorkloadProfile;
-
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.Accumulator;
-import org.apache.spark.Partitioner;
-import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction;
-import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.api.java.function.PairFunction;
-import org.apache.spark.api.java.function.VoidFunction;
-import org.apache.spark.storage.StorageLevel;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.util.Arrays;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
-
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import org.apache.spark.util.AccumulatorV2;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
+import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.util.LongAccumulator;
 import scala.Option;
 import scala.Tuple2;
@@ -115,6 +100,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     private transient final HoodieIndex<T> index;
     private transient final HoodieCommitArchiveLog archiveLog;
     private transient Timer.Context writeContext = null;
+    public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
     /**
      * @param jsc
@@ -776,7 +762,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * Provides a new commit time for a write operation (insert/update)
      */
     public String startCommit() {
-        String commitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+        String commitTime = HoodieActiveTimeline.getNewCommitTime();
         startCommitWithTime(commitTime);
         return commitTime;
     }

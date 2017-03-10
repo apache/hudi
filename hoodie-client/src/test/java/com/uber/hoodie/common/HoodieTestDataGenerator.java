@@ -50,6 +50,7 @@ public class HoodieTestDataGenerator {
     public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\","
             + "\"name\": \"triprec\","
             + "\"fields\": [ "
+            + "{\"name\": \"timestamp\",\"type\": \"double\"},"
             + "{\"name\": \"_row_key\", \"type\": \"string\"},"
             + "{\"name\": \"rider\", \"type\": \"string\"},"
             + "{\"name\": \"driver\", \"type\": \"string\"},"
@@ -146,17 +147,25 @@ public class HoodieTestDataGenerator {
      * provided.
      */
     public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
+        GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime,
+            "driver-" + commitTime, 0.0);
+        HoodieAvroUtils.addCommitMetadataToRecord(rec, commitTime, "-1");
+        return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+    }
+
+    public static GenericRecord generateGenericRecord(String rowKey, String riderName,
+        String driverName, double timestamp) {
         GenericRecord rec = new GenericData.Record(avroSchema);
-        rec.put("_row_key", key.getRecordKey());
-        rec.put("rider", "rider-" + commitTime);
-        rec.put("driver", "driver-" + commitTime);
+        rec.put("_row_key", rowKey);
+        rec.put("timestamp", timestamp);
+        rec.put("rider", riderName);
+        rec.put("driver", driverName);
         rec.put("begin_lat", rand.nextDouble());
         rec.put("begin_lon", rand.nextDouble());
         rec.put("end_lat", rand.nextDouble());
         rec.put("end_lon", rand.nextDouble());
         rec.put("fare", rand.nextDouble() * 100);
-        HoodieAvroUtils.addCommitMetadataToRecord(rec, commitTime, "-1");
-        return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+        return rec;
     }
 
     public static void createCommitFile(String basePath, String commitTime) throws IOException {

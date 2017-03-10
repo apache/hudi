@@ -23,6 +23,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
+import java.util.Date;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -56,10 +57,19 @@ import java.util.stream.Stream;
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
+
     private final transient static Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
     private String metaPath;
     private transient FileSystem fs;
 
+
+    /**
+     * Returns next commit time in the {@link #COMMIT_FORMATTER} format.
+     * @return
+     */
+    public static String getNewCommitTime() {
+        return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+    }
 
     protected HoodieActiveTimeline(FileSystem fs, String metaPath, String[] includedExtensions) {
         // Filter all the filter in the metapath and include only the extensions passed and
