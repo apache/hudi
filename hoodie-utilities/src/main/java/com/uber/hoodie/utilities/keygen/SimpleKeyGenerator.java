@@ -32,9 +32,9 @@ import java.util.Arrays;
  */
 public class SimpleKeyGenerator extends KeyGenerator {
 
-    private final String recordKeyField;
+    protected final String recordKeyField;
 
-    private final String partitionPathField;
+    protected final String partitionPathField;
 
     /**
      * Supported configs
