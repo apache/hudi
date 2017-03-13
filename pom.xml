@@ -252,11 +252,13 @@
                             <exclude>**/.*</exclude>
                             <exclude>**/*.txt</exclude>
                             <exclude>**/*.sh</exclude>
+                            <exclude>**/*.log</exclude>
                             <exclude>**/dependency-reduced-pom.xml</exclude>
                             <exclude>**/test/resources/*.avro</exclude>
                             <exclude>**/test/resources/*.data</exclude>
                             <exclude>**/test/resources/*.schema</exclude>
                             <exclude>**/test/resources/*.csv</exclude>
+                            <exclude>**/main/avro/*.avsc</exclude>
                         </excludes>
                     </configuration>
                     <executions>
@@ -265,6 +267,24 @@
                             <goals>
                                 <goal>check</goal>
                             </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.avro</groupId>
+                    <artifactId>avro-maven-plugin</artifactId>
+                    <version>1.7.6</version>
+                    <executions>
+                        <execution>
+                            <phase>generate-sources</phase>
+                            <goals>
+                                <goal>schema</goal>
+                            </goals>
+                            <configuration>
+                                <sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
+                                <outputDirectory>${project.build.directory}/generated-sources/src/main/java/</outputDirectory>
+                                <stringType>String</stringType>
+                            </configuration>
                         </execution>
                     </executions>
                 </plugin>

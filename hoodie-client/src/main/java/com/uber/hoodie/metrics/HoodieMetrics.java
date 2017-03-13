@@ -98,7 +98,7 @@ public class HoodieMetrics {
         }
     }
 
-    public void updateRollbackMetrics(long durationInMs, int numFilesDeleted) {
+    public void updateRollbackMetrics(long durationInMs, long numFilesDeleted) {
         if (config.isMetricsOn()) {
             logger.info(String.format("Sending rollback metrics (duration=%d, numFilesDeleted=$d)",
                     durationInMs, numFilesDeleted));

@@ -41,6 +41,7 @@ public interface HoodieTimeline extends Serializable {
     String COMMIT_ACTION = "commit";
     String DELTA_COMMIT_ACTION = "deltacommit";
     String CLEAN_ACTION = "clean";
+    String ROLLBACK_ACTION = "rollback";
     String SAVEPOINT_ACTION = "savepoint";
     String COMPACTION_ACTION = "compaction";
     String INFLIGHT_EXTENSION = ".inflight";
@@ -48,12 +49,14 @@ public interface HoodieTimeline extends Serializable {
     String COMMIT_EXTENSION = "." + COMMIT_ACTION;
     String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
     String CLEAN_EXTENSION = "." + CLEAN_ACTION;
+    String ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION;
     String SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION;
     String COMPACTION_EXTENSION = "." + COMPACTION_ACTION;
     //this is to preserve backwards compatibility on commit in-flight filenames
     String INFLIGHT_COMMIT_EXTENSION = INFLIGHT_EXTENSION;
     String INFLIGHT_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + INFLIGHT_EXTENSION;
     String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
+    String INFLIGHT_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + INFLIGHT_EXTENSION;
     String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
     String INFLIGHT_COMPACTION_EXTENSION = "." + COMPACTION_ACTION + INFLIGHT_EXTENSION;
 
@@ -189,6 +192,14 @@ public interface HoodieTimeline extends Serializable {
 
     static String makeInflightCleanerFileName(String instant) {
         return instant + HoodieTimeline.INFLIGHT_CLEAN_EXTENSION;
+    }
+
+    static String makeRollbackFileName(String instant) {
+        return instant + HoodieTimeline.ROLLBACK_EXTENSION;
+    }
+
+    static String makeInflightRollbackFileName(String instant) {
+        return instant + HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION;
     }
 
     static String makeInflightSavePointFileName(String commitTime) {

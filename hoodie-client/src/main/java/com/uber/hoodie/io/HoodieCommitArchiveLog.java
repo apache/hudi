@@ -25,6 +25,7 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.file.HoodieAppendLog;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieIOException;
+import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -71,17 +72,17 @@ public class HoodieCommitArchiveLog {
     }
 
     private Stream<HoodieInstant> getCommitsToArchive() {
+
         int maxCommitsToKeep = config.getMaxCommitsToKeep();
         int minCommitsToKeep = config.getMinCommitsToKeep();
 
-        HoodieTableMetaClient metaClient =
-            new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline commitTimeline =
-            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+        HoodieTable table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
+        List<String> savepoints = table.getSavepoints();
 
         if (!commitTimeline.empty() && commitTimeline.countInstants() > maxCommitsToKeep) {
             // Actually do the commits
-            return commitTimeline.getInstants()
+            return commitTimeline.getInstants().filter(s -> !savepoints.contains(s.getTimestamp()))
                 .limit(commitTimeline.countInstants() - minCommitsToKeep);
         }
         return Stream.empty();

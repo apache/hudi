@@ -28,6 +28,8 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
+import java.util.Date;
+
 public class SparkMain {
 
     protected final static Logger LOG = Logger.getLogger(SparkMain.class);
@@ -38,7 +40,8 @@ public class SparkMain {
      */
     enum SparkCommand {
         ROLLBACK,
-        DEDUPLICATE
+        DEDUPLICATE,
+        ROLLBACK_TO_SAVEPOINT, SAVEPOINT
     }
 
     public static void main(String[] args) throws Exception {
@@ -55,6 +58,9 @@ public class SparkMain {
         } else if(SparkCommand.DEDUPLICATE.equals(cmd)) {
             assert (args.length == 4);
             returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3]);
+        } else if(SparkCommand.ROLLBACK_TO_SAVEPOINT.equals(cmd)) {
+            assert (args.length == 3);
+            returnCode = rollbackToSavepoint(jsc, args[1], args[2]);
         }
 
         System.exit(returnCode);
@@ -76,11 +82,23 @@ public class SparkMain {
         HoodieWriteClient client = createHoodieClient(jsc, basePath);
         if (client.rollback(commitTime)) {
             LOG.info(String.format("The commit \"%s\" rolled back.", commitTime));
-            return -1;
+            return 0;
         } else {
             LOG.info(String.format("The commit \"%s\" failed to roll back.", commitTime));
+            return -1;
         }
-        return 0;
+    }
+
+    private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath)
+        throws Exception {
+        HoodieWriteClient client = createHoodieClient(jsc, basePath);
+        if (client.rollbackToSavepoint(savepointTime)) {
+            LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
+            return 0;
+        } else {
+            LOG.info(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+            return -1;
+        }
     }
 
     private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath)

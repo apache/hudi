@@ -17,7 +17,7 @@
 package com.uber.hoodie.config;
 
 import com.google.common.base.Preconditions;
-import com.uber.hoodie.io.HoodieCleaner;
+import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 
 import javax.annotation.concurrent.Immutable;
 import java.io.File;
@@ -32,7 +32,7 @@ import java.util.Properties;
 public class HoodieCompactionConfig extends DefaultHoodieConfig {
     public static final String CLEANER_POLICY_PROP = "hoodie.cleaner.policy";
     private static final String DEFAULT_CLEANER_POLICY =
-        HoodieCleaner.CleaningPolicy.KEEP_LATEST_COMMITS.name();
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
 
     public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP =
         "hoodie.cleaner.fileversions.retained";
@@ -94,7 +94,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             }
         }
 
-        public Builder withCleanerPolicy(HoodieCleaner.CleaningPolicy policy) {
+        public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
             props.setProperty(CLEANER_POLICY_PROP, policy.name());
             return this;
         }
@@ -164,7 +164,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             setDefaultOnCondition(props, !props.containsKey(CLEANER_PARALLELISM),
                 CLEANER_PARALLELISM, DEFAULT_CLEANER_PARALLELISM);
 
-            HoodieCleaner.CleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
+            HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
             Preconditions.checkArgument(
                 Integer.parseInt(props.getProperty(MAX_COMMITS_TO_KEEP)) > Integer
                     .parseInt(props.getProperty(MIN_COMMITS_TO_KEEP)));
