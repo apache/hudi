@@ -16,6 +16,8 @@
 
 package com.uber.hoodie.common.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.annotate.JsonAutoDetect;
@@ -33,19 +35,27 @@ import java.util.Map;
 /**
  * All the metadata that gets stored along with a commit.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
     private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
     private HashMap<String, List<HoodieWriteStat>> partitionToWriteStats;
 
+    private HashMap<String, String> extraMetadataMap;
+
     public HoodieCommitMetadata() {
+        extraMetadataMap = new HashMap<>();
         partitionToWriteStats = new HashMap<>();
     }
 
     public void addWriteStat(String partitionPath, HoodieWriteStat stat) {
         if (!partitionToWriteStats.containsKey(partitionPath)) {
-            partitionToWriteStats.put(partitionPath, new ArrayList<HoodieWriteStat>());
+            partitionToWriteStats.put(partitionPath, new ArrayList<>());
         }
         partitionToWriteStats.get(partitionPath).add(stat);
+    }
+
+    public void addMetadata(String metaKey, String value) {
+        extraMetadataMap.put(metaKey, value);
     }
 
     public List<HoodieWriteStat> getWriteStats(String partitionPath) {
@@ -54,6 +64,10 @@ public class HoodieCommitMetadata implements Serializable {
 
     public HashMap<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
         return partitionToWriteStats;
+    }
+
+    public String getMetadata(String metaKey) {
+        return extraMetadataMap.get(metaKey);
     }
 
     public HashMap<String, String> getFileIdAndFullPaths() {

@@ -16,16 +16,14 @@
  *
  */
 
-package com.uber.hoodie.utilities.exception;
+package com.uber.hoodie.utilities.sources;
 
-import java.sql.SQLException;
-
-public class HoodieIncrementalPullSQLException extends HoodieIncrementalPullException {
-    public HoodieIncrementalPullSQLException(String msg, SQLException e) {
-        super(msg, e);
-    }
-
-    public HoodieIncrementalPullSQLException(String msg) {
-        super(msg);
-    }
+/**
+ * Format of the data within source.
+ */
+public enum SourceDataFormat {
+    AVRO, // No conversion needed explicitly to avro
+    JSON, // we will try to convert to avro
+    ROW, // Will be added later, so we can plug/play with spark sources.
+    CUSTOM // the source is responsible for conversion to avro.
 }

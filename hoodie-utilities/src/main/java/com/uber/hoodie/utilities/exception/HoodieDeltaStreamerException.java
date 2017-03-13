@@ -18,14 +18,14 @@
 
 package com.uber.hoodie.utilities.exception;
 
-import java.sql.SQLException;
+import com.uber.hoodie.exception.HoodieException;
 
-public class HoodieIncrementalPullSQLException extends HoodieIncrementalPullException {
-    public HoodieIncrementalPullSQLException(String msg, SQLException e) {
+public class HoodieDeltaStreamerException extends HoodieException {
+    public HoodieDeltaStreamerException(String msg, Throwable e) {
         super(msg, e);
     }
 
-    public HoodieIncrementalPullSQLException(String msg) {
+    public HoodieDeltaStreamerException(String msg) {
         super(msg);
     }
 }

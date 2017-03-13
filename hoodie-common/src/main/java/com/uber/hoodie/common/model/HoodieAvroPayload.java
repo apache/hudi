@@ -29,6 +29,7 @@ import java.io.IOException;
 /**
  * This is a payload to wrap a existing Hoodie Avro Record.
  * Useful to create a HoodieRecord over existing GenericRecords in a hoodie datasets (useful in compactions)
+ *
  */
 public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload> {
     private final Optional<GenericRecord> record;

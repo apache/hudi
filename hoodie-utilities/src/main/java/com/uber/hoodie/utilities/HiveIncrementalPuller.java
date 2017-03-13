@@ -1,17 +1,19 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *           http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ *
  */
 
 package com.uber.hoodie.utilities;
@@ -78,7 +80,7 @@ public class HiveIncrementalPuller {
         @Parameter(names = {"--fromCommitTime"}) public String fromCommitTime;
         @Parameter(names = {"--maxCommits"}) public int maxCommits = 3;
         @Parameter(names = {"--help", "-h"}, help = true) public Boolean help = false;
-        @Parameter(names = {"--storageFormat"}) public String tempTableStorageFormat = "PARQUET";
+        @Parameter(names = {"--storageFormat"}) public String tempTableStorageFormat = "AVRO";
     }
 
     static {
@@ -169,11 +171,11 @@ public class HiveIncrementalPuller {
             throw new HoodieIncrementalPullSQLException(
                 "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
         }
-        if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
+        if (!incrementalSQL.contains("`_hoodie_commit_time` > '%targetBasePath'")) {
             log.info("Incremental SQL : " + incrementalSQL
-                + " does not contain `_hoodie_commit_time` > '%s'. Please add this clause for incremental to work properly.");
+                + " does not contain `_hoodie_commit_time` > '%targetBasePath'. Please add this clause for incremental to work properly.");
             throw new HoodieIncrementalPullSQLException(
-                "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which means its not pulling incrementally");
+                "Incremental SQL does not have clause `_hoodie_commit_time` > '%targetBasePath', which means its not pulling incrementally");
         }
 
         incrementalPullSQLtemplate

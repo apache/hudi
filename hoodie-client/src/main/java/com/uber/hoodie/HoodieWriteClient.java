@@ -64,6 +64,8 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.Collections;
 import java.util.Date;
+
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -317,6 +319,16 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * Commit changes performed at the given commitTime marker
      */
     public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
+        return commit(commitTime, writeStatuses, Optional.empty());
+    }
+
+    /**
+     * Commit changes performed at the given commitTime marker
+     */
+    public boolean commit(String commitTime,
+                          JavaRDD<WriteStatus> writeStatuses,
+                          Optional<HashMap<String, String>> extraMetadata) {
+
         logger.info("Comitting " + commitTime);
         // Create a Hoodie table which encapsulated the commits and files visible
         HoodieTable<T> table = HoodieTable
@@ -332,6 +344,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         HoodieCommitMetadata metadata = new HoodieCommitMetadata();
         for (Tuple2<String, HoodieWriteStat> stat : stats) {
             metadata.addWriteStat(stat._1(), stat._2());
+        }
+        // add in extra metadata
+        if (extraMetadata.isPresent()) {
+            extraMetadata.get().forEach((k, v) -> metadata.addMetadata(k, v));
         }
 
         try {
