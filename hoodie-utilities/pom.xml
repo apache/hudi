@@ -25,11 +25,20 @@
 
     <artifactId>hoodie-utilities</artifactId>
     <packaging>jar</packaging>
+
     <build>
         <plugins>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -41,7 +50,7 @@
                     </descriptors>
                     <archive>
                         <manifest>
-                            <mainClass>com.uber.hoodie.utilities.HoodieDeltaStreamer</mainClass>
+                            <mainClass>com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer</mainClass>
                         </manifest>
                     </archive>
 
@@ -57,7 +66,6 @@
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
 
         <resources>
@@ -220,6 +228,19 @@
             </exclusions>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-streaming_2.10</artifactId>
+            <version>${spark.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-streaming-kafka-0-8_2.10</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
         <!-- Used for SQL templating -->
         <dependency>
             <groupId>org.antlr</groupId>
@@ -238,7 +259,27 @@
             <version>1.10.19</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro-mapred</artifactId>
+            <version>1.7.6-cdh5.7.2</version>
+        </dependency>
 
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-hadoop</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.twitter</groupId>
+            <artifactId>bijection-avro_2.10</artifactId>
+            <version>0.9.2</version>
+        </dependency>
 
     </dependencies>
 

@@ -16,16 +16,24 @@
  *
  */
 
-package com.uber.hoodie.utilities.exception;
+package com.uber.hoodie.utilities.schema;
 
-import java.sql.SQLException;
+import org.apache.avro.Schema;
+import org.apache.commons.configuration.PropertiesConfiguration;
+import java.io.Serializable;
 
-public class HoodieIncrementalPullSQLException extends HoodieIncrementalPullException {
-    public HoodieIncrementalPullSQLException(String msg, SQLException e) {
-        super(msg, e);
+/**
+ * Class to provide schema for reading data and also writing into a Hoodie table
+ */
+public abstract class SchemaProvider implements Serializable {
+
+    protected PropertiesConfiguration config;
+
+    protected SchemaProvider(PropertiesConfiguration config) {
+        this.config = config;
     }
 
-    public HoodieIncrementalPullSQLException(String msg) {
-        super(msg);
-    }
+    public abstract Schema getSourceSchema();
+
+    public abstract Schema getTargetSchema();
 }

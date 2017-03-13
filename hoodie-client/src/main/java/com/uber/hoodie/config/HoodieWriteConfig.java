@@ -27,6 +27,7 @@ import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 /**
@@ -227,6 +228,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
                 return this;
             } finally {
                 reader.close();
+            }
+        }
+
+        public Builder fromInputStream(InputStream inputStream) throws IOException {
+            try {
+                this.props.load(inputStream);
+                return this;
+            } finally {
+                inputStream.close();
             }
         }
 
