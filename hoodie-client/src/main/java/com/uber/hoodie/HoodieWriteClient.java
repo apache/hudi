@@ -100,7 +100,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     private transient final HoodieIndex<T> index;
     private transient final HoodieCommitArchiveLog archiveLog;
     private transient Timer.Context writeContext = null;
-    public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
     /**
      * @param jsc
@@ -762,7 +761,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * Provides a new commit time for a write operation (insert/update)
      */
     public String startCommit() {
-        String commitTime = HoodieActiveTimeline.getNewCommitTime();
+        String commitTime = HoodieActiveTimeline.createNewCommitTime();
         startCommitWithTime(commitTime);
         return commitTime;
     }

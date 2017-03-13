@@ -20,6 +20,7 @@ import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.commands.SparkMain.SparkCommand;
 import com.uber.hoodie.cli.utils.InputStreamConsumer;
 import com.uber.hoodie.cli.utils.SparkUtil;
+import com.uber.hoodie.utilities.HoodieDataImporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -52,9 +53,15 @@ public class DataImportCommand implements CommandMarker {
         final String parallelism,
         @CliOption(key = "schemaFilePath", mandatory = true, help = "Path for Avro schema file")
         final String schemaFilePath,
+        @CliOption(key = "format", mandatory = true, help = "Format for the input data")
+        final String format,
         @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory")
-        final String sparkMemory)
+        final String sparkMemory,
+        @CliOption(key = "retry", mandatory = true, help = "Number of retries")
+        final String retry)
         throws Exception {
+
+        validate(format);
 
         boolean initialized = HoodieCLI.initConf();
         HoodieCLI.initFS(initialized);
@@ -64,7 +71,8 @@ public class DataImportCommand implements CommandMarker {
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
         sparkLauncher.addAppArgs(SparkCommand.IMPORT.toString(), srcPath, targetPath, tableName,
-            tableType, rowKeyField, partitionPathField, parallelism, schemaFilePath, sparkMemory);
+            tableType, rowKeyField, partitionPathField, parallelism, schemaFilePath, sparkMemory,
+            retry);
         Process process = sparkLauncher.launch();
         InputStreamConsumer.captureOutput(process);
         int exitCode = process.waitFor();
@@ -72,5 +80,9 @@ public class DataImportCommand implements CommandMarker {
             return "Failed to import dataset to hoodie format";
         }
         return "Dataset imported to hoodie format";
+    }
+
+    private void validate(String format) {
+        (new HoodieDataImporter.FormatValidator()).validate("format", format);
     }
 }

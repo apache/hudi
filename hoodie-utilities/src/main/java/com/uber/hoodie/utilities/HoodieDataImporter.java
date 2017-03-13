@@ -16,8 +16,11 @@
 
 package com.uber.hoodie.utilities;
 
+import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
+import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
@@ -25,18 +28,21 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.utilities.exception.HoodieDataImporterException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -54,17 +60,31 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.VoidFunction;
-import org.apache.spark.sql.SQLContext;
 
 public class HoodieDataImporter implements Serializable{
 
     private static volatile Logger logger = LogManager.getLogger(HoodieDataImporter.class);
     private final Config cfg;
-    //private final FileSystem fs;
+    private final transient FileSystem fs;
+    public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
     public HoodieDataImporter(
         Config cfg) throws IOException {
         this.cfg = cfg;
+        fs = FSUtils.getFs();
+    }
+
+    public static class FormatValidator implements IValueValidator<String> {
+        List<String> validFormats = Arrays.asList("parquet");
+
+        @Override
+        public void validate(String name, String value) throws ParameterException {
+            if (value == null || !validFormats.contains(value)) {
+                throw new ParameterException(String
+                    .format("Invalid format type: value:%s: supported formats:%s", value,
+                        validFormats));
+            }
+        }
     }
 
     public static class Config implements Serializable {
@@ -83,7 +103,7 @@ public class HoodieDataImporter implements Serializable{
             "-rk"}, description = "Row key field name", required = true)
         public String rowKey = null;
         @Parameter(names = {"--partition-key-field",
-            "-rk"}, description = "Partition key field name", required = true)
+            "-pk"}, description = "Partition key field name", required = true)
         public String partitionKey = null;
         @Parameter(names = {"--parallelism",
             "-pl"}, description = "Parallelism for hoodie insert", required = true)
@@ -91,12 +111,19 @@ public class HoodieDataImporter implements Serializable{
         @Parameter(names = {"--schema-file",
             "-sf"}, description = "path for Avro schema file", required = true)
         public String schemaFile = null;
+        @Parameter(names = {"--format",
+            "-f"}, description = "Format for the input data.", required = false,
+            validateValueWith = FormatValidator.class)
+        public String format = null;
         @Parameter(names = {"--spark-master",
-            "-sf"}, description = "Spark master", required = false)
+            "-ms"}, description = "Spark master", required = false)
         public String sparkMaster = null;
         @Parameter(names = {"--spark-memory",
-            "-sf"}, description = "spark memory to use", required = true)
+            "-sm"}, description = "spark memory to use", required = true)
         public String sparkMemory = null;
+        @Parameter(names = {"--retry",
+            "-rt"}, description = "number of retries", required = false)
+        public int retry = 0;
         @Parameter(names = {"--help", "-h"}, help = true)
         public Boolean help = false;
     }
@@ -109,7 +136,7 @@ public class HoodieDataImporter implements Serializable{
             System.exit(1);
         }
         HoodieDataImporter dataImporter = new HoodieDataImporter(cfg);
-        dataImporter.dataImport(dataImporter.getSparkContext());
+        dataImporter.dataImport(dataImporter.getSparkContext(), cfg.retry);
     }
 
     private JavaSparkContext getSparkContext() {
@@ -136,7 +163,7 @@ public class HoodieDataImporter implements Serializable{
         return new JavaSparkContext(sparkConf);
     }
 
-    private String getSchema(FileSystem fs) throws Exception {
+    private String getSchema() throws Exception {
         // Read schema file.
         Path p = new Path(cfg.schemaFile);
         if (!fs.exists(p)) {
@@ -145,19 +172,45 @@ public class HoodieDataImporter implements Serializable{
         }
         long len = fs.getFileStatus(p).getLen();
         ByteBuffer buf = ByteBuffer.allocate((int) len);
-        FSDataInputStream inputStream = fs.open(p);
-        inputStream.readFully(0, buf.array(), 0, buf.array().length);
+        FSDataInputStream inputStream = null;
+        try {
+            inputStream = fs.open(p);
+            inputStream.readFully(0, buf.array(), 0, buf.array().length);
+        }
+        finally {
+            if (inputStream != null)
+                inputStream.close();
+        }
         return new String(buf.array());
     }
 
-    public int dataImport(JavaSparkContext jsc) throws Exception {
+    public int dataImport(JavaSparkContext jsc, int retry) throws Exception {
+        int ret = -1;
         try {
-            // Get commit time.
-            String commitTime = HoodieActiveTimeline.getNewCommitTime();
+            // Verify that targetPath is not present.
+            if (fs.exists(new Path(cfg.targetPath))) {
+                throw new HoodieIOException(
+                    String.format("Make sure %s is not present.", cfg.targetPath));
+            }
+            do {
+                ret = dataImport(jsc);
+            } while (ret != 0 && retry-- > 0);
+        } catch (Throwable t) {
+            logger.error(t);
+        }
+        return ret;
+    }
+
+    @VisibleForTesting
+    protected int dataImport(JavaSparkContext jsc) throws IOException {
+        try {
+            if (fs.exists(new Path(cfg.targetPath))) {
+                // cleanup target directory.
+                fs.delete(new Path(cfg.targetPath), true);
+            }
 
             //Get schema.
-            FileSystem fs = FSUtils.getFs();
-            String schemaStr = getSchema(fs);
+            String schemaStr = getSchema();
 
             // Initialize target hoodie table.
             Properties properties = new Properties();
@@ -169,11 +222,11 @@ public class HoodieDataImporter implements Serializable{
             Path folderPath = new Path(cfg.srcPath);
             RemoteIterator<LocatedFileStatus> locatedFileStatusRemoteIterator = fs
                 .listFiles(folderPath, true);
-            SQLContext sqlContext = new SQLContext(jsc);
-            JavaRDD<WriteStatus> writeStatuses = jsc.emptyRDD();
             HoodieWriteClient client = createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism);
 
             Job job = Job.getInstance(jsc.hadoopConfiguration());
+            AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(),
+                (new Schema.Parser().parse(schemaStr)));
             ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
             JavaRDD<GenericRecord> genericRecords = jsc
@@ -187,23 +240,25 @@ public class HoodieDataImporter implements Serializable{
 
                         Object partitionField = genericRecord.get(cfg.partitionKey);
                         if (partitionField == null) {
-                            throw new HoodieDataImporterException(
+                            throw new HoodieIOException(
                                 "partition key is missing. :" + cfg.partitionKey);
                         }
                         Object rowField = genericRecord.get(cfg.rowKey);
                         if (rowField == null) {
-                            throw new HoodieDataImporterException(
+                            throw new HoodieIOException(
                                 "row field is missing. :" + cfg.rowKey);
                         }
                         long ts = (long) ((Double) partitionField* 1000l);
-                        String partitionPath = HoodieWriteClient.PARTITION_FORMATTER
-                            .format(new Date(ts));
+                        String partitionPath = PARTITION_FORMATTER.format(new Date(ts));
                         return new HoodieRecord<HoodieAvroPayload>(
                             new HoodieKey((String)rowField, partitionPath),
                             new HoodieAvroPayload(Optional.of(genericRecord)));
                     }
                 }
             );
+            // Get commit time.
+            String commitTime = client.startCommit();
+
             JavaRDD<WriteStatus> writeResponse = client.bulkInsert(hoodieRecords, commitTime);
             Accumulator<Integer> errors = jsc.accumulator(0);
             writeResponse.foreach(new VoidFunction<WriteStatus>() {
@@ -216,12 +271,17 @@ public class HoodieDataImporter implements Serializable{
                     }
                 }
             });
-            logger.info(String.format("Import completed with %d errors.", errors.value()));
-            return errors.value() > 0 ? -1 : 0;
+            if (errors.value() == 0) {
+                logger.info(String
+                    .format("Dataset imported into hoodie dataset with %s commit time.",
+                        commitTime));
+                return 0;
+            }
+            logger.error(String.format("Import failed with %d errors.", errors.value()));
         } catch (Throwable t) {
             logger.error("Error occurred.", t);
-            return -1;
         }
+        return -1;
     }
 
     private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,

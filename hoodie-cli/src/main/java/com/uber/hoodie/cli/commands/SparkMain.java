@@ -70,7 +70,8 @@ public class SparkMain {
             case IMPORT:
                 assert (args.length == 11);
                 returnCode = dataImport(jsc, args[1], args[2], args[3], args[4], args[5], args[6],
-                        Integer.parseInt(args[7]), args[8], "yarn-client", args[9]);
+                    Integer.parseInt(args[7]), args[8], SparkUtil.DEFUALT_SPARK_MASTER, args[9],
+                    Integer.parseInt(args[10]));
                 break;
         }
 
@@ -79,7 +80,7 @@ public class SparkMain {
 
     private static int dataImport(JavaSparkContext jsc, String srcPath, String targetPath,
         String tableName, String tableType, String rowKey, String partitionKey, int parallelism,
-        String schemaFile, String sparkMaster, String sparkMemory) throws Exception {
+        String schemaFile, String sparkMaster, String sparkMemory, int retry) throws Exception {
         HoodieDataImporter.Config cfg = new HoodieDataImporter.Config();
         cfg.srcPath = srcPath;
         cfg.targetPath = targetPath;
@@ -90,7 +91,7 @@ public class SparkMain {
         cfg.parallelism = parallelism;
         cfg.schemaFile = schemaFile;
         jsc.getConf().set("spark.executor.memory", sparkMemory);
-        return new HoodieDataImporter(cfg).dataImport(jsc);
+        return new HoodieDataImporter(cfg).dataImport(jsc, retry);
     }
 
     private static int deduplicatePartitionPath(JavaSparkContext jsc,

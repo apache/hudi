@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -59,6 +60,7 @@ public class TestHoodieDataImporter implements Serializable {
     private static MiniDFSCluster dfsCluster;
     private static DistributedFileSystem dfs;
 
+
     @BeforeClass
     public static void initClass() throws Exception {
         hdfsTestService = new HdfsTestService();
@@ -80,10 +82,10 @@ public class TestHoodieDataImporter implements Serializable {
     }
 
     /**
-     * Test successful data import.
+     * Test successful data import with retries.
      */
     @Test
-    public void testDatasetImport() throws Exception {
+    public void testDatasetImportWithRetries() throws Exception {
         JavaSparkContext jsc = null;
         try {
             jsc = getJavaSparkContext();
@@ -97,7 +99,6 @@ public class TestHoodieDataImporter implements Serializable {
 
             // Create schema file.
             String schemaFile = new Path(basePath, "file.schema").toString();
-            createSchemaFile(schemaFile);
 
 
             //Create generic records.
@@ -107,8 +108,24 @@ public class TestHoodieDataImporter implements Serializable {
             HoodieDataImporter.Config cfg = getHoodieDataImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
                 "testTable", "COPY_ON_WRITE", "_row_key", "timestamp",
                 1, schemaFile);
-            HoodieDataImporter dataImporter = new HoodieDataImporter(cfg);
-            assertEquals(0, dataImporter.dataImport(jsc));
+            AtomicInteger retry = new AtomicInteger(3);
+            AtomicInteger fileCreated = new AtomicInteger(0);
+            HoodieDataImporter dataImporter = new HoodieDataImporter(cfg) {
+                @Override
+                protected int dataImport(JavaSparkContext jsc) throws IOException {
+                    int ret = super.dataImport(jsc);
+                    if (retry.decrementAndGet() == 0) {
+                        fileCreated.incrementAndGet();
+                        createSchemaFile(schemaFile);
+                    }
+
+                    return ret;
+                }
+            };
+            // Schema file is not created so this operation should fail.
+            assertEquals(0, dataImporter.dataImport(jsc, retry.get()));
+            assertEquals(retry.get(), -1);
+            assertEquals(fileCreated.get(), 1);
 
             // Check if
             // 1. .commit file is present
@@ -190,11 +207,11 @@ public class TestHoodieDataImporter implements Serializable {
                 1, schemaFile.toString());
             HoodieDataImporter dataImporter = new HoodieDataImporter(cfg);
             // Should fail - return : -1.
-            assertEquals(-1, dataImporter.dataImport(jsc));
+            assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
             dfs.create(schemaFile).write("Random invalid schema data".getBytes());
             // Should fail - return : -1.
-            assertEquals(-1, dataImporter.dataImport(jsc));
+            assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
         } finally {
             if (jsc != null) {
@@ -234,14 +251,14 @@ public class TestHoodieDataImporter implements Serializable {
                 "testTable", "COPY_ON_WRITE", "invalidRowKey", "timestamp",
                 1, schemaFile.toString());
             dataImporter = new HoodieDataImporter(cfg);
-            assertEquals(-1, dataImporter.dataImport(jsc));
+            assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
             // Check for invalid partition key.
             cfg = getHoodieDataImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
                 "testTable", "COPY_ON_WRITE", "_row_key", "invalidTimeStamp",
                 1, schemaFile.toString());
             dataImporter = new HoodieDataImporter(cfg);
-            assertEquals(-1, dataImporter.dataImport(jsc));
+            assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
         } finally {
             if (jsc != null) {

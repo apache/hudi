@@ -67,7 +67,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
      * Returns next commit time in the {@link #COMMIT_FORMATTER} format.
      * @return
      */
-    public static String getNewCommitTime() {
+    public static String createNewCommitTime() {
         return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
     }
 

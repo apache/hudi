@@ -55,6 +55,9 @@ public class FSUtils {
     private static final long MIN_ROLLBACK_TO_KEEP = 10;
     private static FileSystem fs;
 
+    /**
+     * Only to be used for testing.
+     */
     @VisibleForTesting
     public static void setFs(FileSystem fs) {
         FSUtils.fs = fs;
