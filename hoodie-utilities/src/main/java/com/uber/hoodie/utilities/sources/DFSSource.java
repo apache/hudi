@@ -69,6 +69,33 @@ public class DFSSource extends Source {
         UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
     }
 
+
+    public static JavaRDD<GenericRecord> fromAvroFiles(final AvroConvertor convertor, String pathStr, JavaSparkContext sparkContext) {
+        JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
+                AvroKeyInputFormat.class,
+                AvroKey.class,
+                NullWritable.class,
+                sparkContext.hadoopConfiguration());
+        return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
+    }
+
+    public static JavaRDD<GenericRecord> fromJsonFiles(final AvroConvertor convertor, String pathStr, JavaSparkContext sparkContext) {
+        return sparkContext.textFile(pathStr).map((String j) -> {
+            return convertor.fromJson(j);
+        });
+    }
+
+    public static JavaRDD<GenericRecord> fromFiles(SourceDataFormat dataFormat, final AvroConvertor convertor, String pathStr, JavaSparkContext sparkContext) {
+        if (dataFormat == SourceDataFormat.AVRO) {
+            return DFSSource.fromAvroFiles(convertor, pathStr, sparkContext);
+        } else if (dataFormat == SourceDataFormat.JSON) {
+            return DFSSource.fromJsonFiles(convertor, pathStr, sparkContext);
+        } else {
+            throw new HoodieNotSupportedException("Unsupported data format :" + dataFormat);
+        }
+    }
+
+
     @Override
     public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(Optional<String> lastCheckpointStr, long maxInputBytes) {
 
@@ -91,7 +118,7 @@ public class DFSSource extends Source {
             long currentBytes = 0;
             long maxModificationTime = Long.MIN_VALUE;
             List<FileStatus> filteredFiles = new ArrayList<>();
-            for (FileStatus f: eligibleFiles) {
+            for (FileStatus f : eligibleFiles) {
                 if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get())) {
                     // skip processed files
                     continue;
@@ -116,22 +143,8 @@ public class DFSSource extends Source {
             String schemaStr = schemaProvider.getSourceSchema().toString();
             final AvroConvertor avroConvertor = new AvroConvertor(schemaStr);
 
-            JavaRDD<GenericRecord> newDataRDD;
-            if (dataFormat == SourceDataFormat.AVRO) {
-                JavaPairRDD<AvroKey,NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
-                        AvroKeyInputFormat.class,
-                        AvroKey.class,
-                        NullWritable.class,
-                        sparkContext.hadoopConfiguration());
-                newDataRDD = avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
-            } else if (dataFormat == SourceDataFormat.JSON) {
-                newDataRDD = sparkContext.textFile(pathStr).map((String j) -> {
-                    return avroConvertor.fromJson(j);
-                });
-            } else {
-                throw new HoodieNotSupportedException("Unsupported data format :" + dataFormat);
-            }
-            return new ImmutablePair<>(Optional.of(newDataRDD), String.valueOf(maxModificationTime));
+            return new ImmutablePair<>(Optional.of(DFSSource.fromFiles(dataFormat, avroConvertor, pathStr, sparkContext)),
+                    String.valueOf(maxModificationTime));
         } catch (IOException ioe) {
             throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
         }
