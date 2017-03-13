@@ -154,7 +154,7 @@ public class HoodieSnapshotCopier implements Serializable {
         // Create the _SUCCESS tag
         Path successTagPath = new Path(outputDir + "/_SUCCESS");
         if (!fs.exists(successTagPath)) {
-            logger.info(String.format("Creating _SUCCESS under %targetBasePath.", outputDir));
+            logger.info("Creating _SUCCESS under targetBasePath: " + outputDir);
             fs.createNewFile(successTagPath);
         }
     }

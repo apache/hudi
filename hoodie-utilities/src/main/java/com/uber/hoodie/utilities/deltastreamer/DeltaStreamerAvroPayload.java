@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Optional;
 
 /**
  * Default payload used for delta streamer.
@@ -54,13 +55,13 @@ public class DeltaStreamerAvroPayload extends DeltaStreamerPayload implements Ho
     }
 
     @Override
-    public IndexedRecord combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+    public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
         // combining strategy here trivially ignores currentValue on disk and writes this record
         return getInsertValue(schema);
     }
 
     @Override
-    public IndexedRecord getInsertValue(Schema schema) throws IOException {
-        return HoodieAvroUtils.rewriteRecord(record, schema);
+    public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+        return Optional.of(HoodieAvroUtils.rewriteRecord(record, schema));
     }
 }
