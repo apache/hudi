@@ -17,12 +17,15 @@
 package com.uber.hoodie.table;
 
 import com.google.common.collect.Sets;
+import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
+import com.uber.hoodie.avro.model.HoodieSavepointPartitionMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
+import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -30,13 +33,17 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 
+import com.uber.hoodie.exception.HoodieSavepointException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.Partitioner;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Abstract implementation of a HoodieTable
@@ -138,9 +145,39 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         return getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
     }
 
+    /**
+     * Get the list of savepoints in this table
+     * @return
+     */
     public List<String> getSavepoints() {
         return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Get the list of data file names savepointed
+     *
+     * @param savepointTime
+     * @return
+     * @throws IOException
+     */
+    public Stream<String> getSavepointedDataFiles(String savepointTime) {
+        if (!getSavepoints().contains(savepointTime)) {
+            throw new HoodieSavepointException(
+                "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
+        }
+        HoodieInstant instant =
+            new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+        HoodieSavepointMetadata metadata = null;
+        try {
+            metadata = AvroUtils.deserializeHoodieSavepointMetadata(
+                getActiveTimeline().getInstantDetails(instant).get());
+        } catch (IOException e) {
+            throw new HoodieSavepointException(
+                "Could not get savepointed data files for savepoint " + savepointTime, e);
+        }
+        return metadata.getPartitionMetadata().values().stream()
+            .flatMap(s -> s.getSavepointDataFile().stream());
     }
 
     public HoodieActiveTimeline getActiveTimeline() {

@@ -366,8 +366,7 @@ public class TestHoodieClient implements Serializable {
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
-        client.savepoint(new HoodieSavepointMetadata("hoodie-unit-test",
-            HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date()), "test"));
+        client.savepoint("hoodie-unit-test", "test");
         try {
             client.rollback(newCommitTime);
             fail("Rollback of a savepoint was allowed " + newCommitTime);
@@ -454,8 +453,7 @@ public class TestHoodieClient implements Serializable {
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
-        client.savepoint(new HoodieSavepointMetadata("hoodie-unit-test",
-            HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date()), "test"));
+        client.savepoint("hoodie-unit-test", "test");
 
         /**
          * Write 3 (updates)

@@ -97,9 +97,7 @@ public class SavepointsCommand implements CommandMarker {
         }
 
         HoodieWriteClient client = createHoodieClient(null, HoodieCLI.tableMetadata.getBasePath());
-        HoodieSavepointMetadata metadata = new HoodieSavepointMetadata(user,
-            HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date()), comments);
-        if (client.savepoint(commitTime, metadata)) {
+        if (client.savepoint(commitTime, user, comments)) {
             // Refresh the current
             refreshMetaClient();
             return String.format("The commit \"%s\" has been savepointed.", commitTime);
