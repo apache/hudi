@@ -53,6 +53,10 @@ public class HoodieWrapperFileSystem extends FileSystem {
         SUPPORT_SCHEMES.add("file");
         SUPPORT_SCHEMES.add("hdfs");
         SUPPORT_SCHEMES.add("s3");
+
+        // Hoodie currently relies on underlying object store being fully
+        // consistent so only regional buckets should be used.
+        SUPPORT_SCHEMES.add("gs");
     }
 
     private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams =
