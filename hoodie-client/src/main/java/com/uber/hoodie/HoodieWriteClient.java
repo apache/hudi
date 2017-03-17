@@ -488,7 +488,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 AvroUtils.convertSavepointMetadata(user, comment, latestFilesMap);
             // Nothing to save in the savepoint
             table.getActiveTimeline().saveAsComplete(
-                new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, commitTime),
+                new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime),
                 AvroUtils.serializeSavepointMetadata(metadata));
             logger.info("Savepoint " + commitTime + " created");
             return true;
@@ -687,7 +687,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             HoodieRollbackMetadata rollbackMetadata =
                 AvroUtils.convertRollbackMetadata(startRollbackTime, durationInMs, commits, stats);
             table.getActiveTimeline().saveAsComplete(
-                new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
+                new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
                 AvroUtils.serializeRollbackMetadata(rollbackMetadata));
             logger.info("Commits " + commits + " rollback is complete");
 
@@ -757,7 +757,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 metadata.getTotalFilesDeleted());
 
             table.getActiveTimeline().saveAsComplete(
-                new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, startCleanTime),
+                new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, startCleanTime),
                 AvroUtils.serializeCleanMetadata(metadata));
             logger.info("Marked clean started on " + startCleanTime + " as complete");
 

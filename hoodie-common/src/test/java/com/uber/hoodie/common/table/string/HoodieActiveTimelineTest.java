@@ -53,13 +53,22 @@ public class HoodieActiveTimelineTest {
     @Test
     public void testLoadingInstantsFromFiles() throws IOException {
         HoodieInstant instant1 =
-            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
         HoodieInstant instant2 =
-            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "3");
         HoodieInstant instant3 =
-            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "5");
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "5");
         HoodieInstant instant4 =
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "8");
+        HoodieInstant instant1_complete =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
+        HoodieInstant instant2_complete =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
+        HoodieInstant instant3_complete =
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "5");
+        HoodieInstant instant4_complete =
             new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "8");
+
         HoodieInstant instant5 =
             new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "9");
 
@@ -72,13 +81,14 @@ public class HoodieActiveTimelineTest {
         timeline = timeline.reload();
 
         assertEquals("Total instants should be 5", 5, timeline.countInstants());
+        HoodieTestUtils.assertStreamEquals("Check the instants stream", Stream
+            .of(instant1_complete, instant2_complete, instant3_complete, instant4_complete,
+                instant5), timeline.getInstants());
+        HoodieTestUtils.assertStreamEquals("Check the instants stream", Stream
+            .of(instant1_complete, instant2_complete, instant3_complete, instant4_complete,
+                instant5), timeline.getCommitTimeline().getInstants());
         HoodieTestUtils.assertStreamEquals("Check the instants stream",
-            Stream.of(instant1, instant2, instant3, instant4, instant5), timeline.getInstants());
-        HoodieTestUtils.assertStreamEquals("Check the instants stream",
-            Stream.of(instant1, instant2, instant3, instant4, instant5),
-            timeline.getCommitTimeline().getInstants());
-        HoodieTestUtils.assertStreamEquals("Check the instants stream",
-            Stream.of(instant1, instant2, instant3, instant4),
+            Stream.of(instant1_complete, instant2_complete, instant3_complete, instant4_complete),
             timeline.getCommitTimeline().filterCompletedInstants().getInstants());
         HoodieTestUtils.assertStreamEquals("Check the instants stream", Stream.of(instant5),
             timeline.getCommitTimeline().filterInflights().getInstants());
