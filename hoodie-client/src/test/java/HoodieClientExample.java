@@ -42,6 +42,7 @@ public class HoodieClientExample {
     private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
 
     public static void main(String[] args) throws Exception {
+        String tablePath = args.length == 1 ? args[0] : "file:///tmp/hoodie/sample-table";
 
         HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
@@ -53,7 +54,7 @@ public class HoodieClientExample {
 
         // generate some records to be loaded in.
         HoodieWriteConfig cfg =
-            HoodieWriteConfig.newBuilder().withPath("file:///tmp/hoodie/sample-table")
+            HoodieWriteConfig.newBuilder().withPath(tablePath)
                 .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
                 .forTable("sample-table").withIndexConfig(
                 HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
@@ -61,7 +62,7 @@ public class HoodieClientExample {
         Properties properties = new Properties();
         properties.put(HoodieWriteConfig.TABLE_NAME, "sample-table");
         HoodieTableMetaClient
-            .initializePathAsHoodieDataset(FSUtils.getFs(), "file:///tmp/hoodie/sample-table",
+            .initializePathAsHoodieDataset(FSUtils.getFs(), tablePath,
                 properties);
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
