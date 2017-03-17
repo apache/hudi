@@ -151,7 +151,13 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         for (String partitionPath : recordsPerPartition.keySet()) {
             long numRecords = recordsPerPartition.get(partitionPath);
             long numFiles = filesPerPartition.containsKey(partitionPath) ? filesPerPartition.get(partitionPath) : 1L;
-            subpartitionCountMap.put(partitionPath, ((numFiles * numRecords) / MAX_ITEMS_PER_JOIN_PARTITION) + 1);
+            // minimum number of sub partitions we need to avoid a single sub partition reading more than config.getMaxIndexFileLookup()
+            long minPartitionsForMaxFileRead = (numFiles / config.getMaxIndexFileLookup()) + 1;
+            // minimum number of sub partition we need to have to avoid hitting the 2GB limit
+            long minSafeNumberOfPartitions = ((numFiles * numRecords) / MAX_ITEMS_PER_JOIN_PARTITION) + 1;
+            // total number of sub partitions to satisfy the above 2 conditions
+            long subPartitionCount = Math.max(minPartitionsForMaxFileRead, minSafeNumberOfPartitions);
+            subpartitionCountMap.put(partitionPath, subPartitionCount);
 
             totalFiles += filesPerPartition.containsKey(partitionPath) ? filesPerPartition.get(partitionPath) : 0L;
             totalRecords += numRecords;
