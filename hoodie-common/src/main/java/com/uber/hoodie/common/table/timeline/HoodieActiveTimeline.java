@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.table.timeline;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.common.io.Closeables;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -194,6 +195,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
     public void saveAsComplete(HoodieInstant instant, Optional<byte[]> data) {
         log.info("Marking instant complete " + instant);
+        Preconditions.checkArgument(instant.isInflight(),
+            "Could not mark an already completed instant as complete again " + instant);
         moveInflightToComplete(instant, HoodieTimeline.getCompletedInstant(instant), data);
         log.info("Completed " + instant);
     }

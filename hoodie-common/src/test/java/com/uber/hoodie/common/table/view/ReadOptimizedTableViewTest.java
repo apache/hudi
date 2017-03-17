@@ -84,7 +84,7 @@ public class ReadOptimizedTableViewTest {
         // Make this commit safe
         HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
         HoodieInstant instant1 =
-            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime1);
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
         commitTimeline.saveAsComplete(instant1, Optional.empty());
         refreshFsView();
         assertEquals("", fileName1,
@@ -102,7 +102,7 @@ public class ReadOptimizedTableViewTest {
 
         // Make it safe
         HoodieInstant instant2 =
-            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime2);
+            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime2);
         commitTimeline.saveAsComplete(instant2, Optional.empty());
         refreshFsView();
         assertEquals("", fileName2,
