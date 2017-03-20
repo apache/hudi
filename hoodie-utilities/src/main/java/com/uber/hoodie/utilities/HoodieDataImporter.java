@@ -23,7 +23,7 @@ import com.beust.jcommander.ParameterException;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
-import com.uber.hoodie.common.model.HoodieAvroPayload;
+import com.uber.hoodie.common.HoodieJsonPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableConfig;
@@ -40,26 +40,26 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.VoidFunction;
+import scala.Tuple2;
 
 public class HoodieDataImporter implements Serializable{
 
@@ -87,11 +87,28 @@ public class HoodieDataImporter implements Serializable{
         }
     }
 
+    public static class SourceTypeValidator implements IValueValidator<String> {
+        List<String> validSourceTypes = Arrays.asList("hdfs");
+
+        @Override
+        public void validate(String name, String value) throws ParameterException {
+            if (value == null || !validSourceTypes.contains(value)) {
+                throw new ParameterException(String
+                    .format("Invalid source type: value:%s: supported source types:%s", value,
+                        validSourceTypes));
+            }
+        }
+    }
+
     public static class Config implements Serializable {
 
         @Parameter(names = {"--src-path",
             "-sp"}, description = "Base path for the input dataset", required = true)
         public String srcPath = null;
+        @Parameter(names = {"--src-type",
+            "-st"}, description = "Source type for the input dataset", required = true,
+            validateValueWith = SourceTypeValidator.class)
+        public String srcType = null;
         @Parameter(names = {"--target-path",
             "-tp"}, description = "Base path for the target hoodie dataset", required = true)
         public String targetPath = null;
@@ -216,46 +233,46 @@ public class HoodieDataImporter implements Serializable{
             Properties properties = new Properties();
             properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
             properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
-
             HoodieTableMetaClient.initializePathAsHoodieDataset(fs, cfg.targetPath, properties);
 
-            Path folderPath = new Path(cfg.srcPath);
-            RemoteIterator<LocatedFileStatus> locatedFileStatusRemoteIterator = fs
-                .listFiles(folderPath, true);
-            HoodieWriteClient client = createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism);
+            HoodieWriteClient client = createHoodieClient(jsc, cfg.targetPath, schemaStr,
+                cfg.parallelism);
 
             Job job = Job.getInstance(jsc.hadoopConfiguration());
+            // To parallelize reading file status.
+            job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
             AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(),
                 (new Schema.Parser().parse(schemaStr)));
             ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-            JavaRDD<GenericRecord> genericRecords = jsc
+            JavaRDD<HoodieRecord<HoodieJsonPayload>> hoodieRecords = jsc
                 .newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class,
-                    GenericRecord.class, job.getConfiguration()).values();
-            JavaRDD<HoodieRecord<HoodieAvroPayload>> hoodieRecords = genericRecords.map(
-                new Function<GenericRecord, HoodieRecord<HoodieAvroPayload>>() {
-                    @Override
-                    public HoodieRecord<HoodieAvroPayload> call(GenericRecord genericRecord)
-                        throws Exception {
-
-                        Object partitionField = genericRecord.get(cfg.partitionKey);
-                        if (partitionField == null) {
-                            throw new HoodieIOException(
-                                "partition key is missing. :" + cfg.partitionKey);
-                        }
-                        Object rowField = genericRecord.get(cfg.rowKey);
-                        if (rowField == null) {
-                            throw new HoodieIOException(
-                                "row field is missing. :" + cfg.rowKey);
-                        }
-                        long ts = (long) ((Double) partitionField* 1000l);
-                        String partitionPath = PARTITION_FORMATTER.format(new Date(ts));
-                        return new HoodieRecord<HoodieAvroPayload>(
-                            new HoodieKey((String)rowField, partitionPath),
-                            new HoodieAvroPayload(Optional.of(genericRecord)));
-                    }
-                }
-            );
+                    GenericRecord.class, job.getConfiguration())
+                // To reduce large number of tasks.
+                .coalesce(16 * cfg.parallelism)
+                .map(new Function<Tuple2<Void, GenericRecord>, HoodieRecord<HoodieJsonPayload>>() {
+                         @Override
+                         public HoodieRecord<HoodieJsonPayload> call(Tuple2<Void, GenericRecord> entry)
+                             throws Exception {
+                             GenericRecord genericRecord = entry._2();
+                             Object partitionField = genericRecord.get(cfg.partitionKey);
+                             if (partitionField == null) {
+                                 throw new HoodieIOException(
+                                     "partition key is missing. :" + cfg.partitionKey);
+                             }
+                             Object rowField = genericRecord.get(cfg.rowKey);
+                             if (rowField == null) {
+                                 throw new HoodieIOException(
+                                     "row field is missing. :" + cfg.rowKey);
+                             }
+                             long ts = (long) ((Double) partitionField * 1000l);
+                             String partitionPath = PARTITION_FORMATTER.format(new Date(ts));
+                             return new HoodieRecord<HoodieJsonPayload>(
+                                 new HoodieKey((String) rowField, partitionPath),
+                                 new HoodieJsonPayload(genericRecord.toString()));
+                         }
+                     }
+                );
             // Get commit time.
             String commitTime = client.startCommit();
 

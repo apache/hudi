@@ -39,6 +39,8 @@ public class DataImportCommand implements CommandMarker {
     public String convert(
         @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset")
         final String srcPath,
+        @CliOption(key = "srcType", mandatory = true, help = "Source type for the input dataset")
+        final String srcType,
         @CliOption(key = "targetPath", mandatory = true, help = "Base path for the target hoodie dataset")
         final String targetPath,
         @CliOption(key = "tableName", mandatory = true, help = "Table name")
@@ -61,7 +63,7 @@ public class DataImportCommand implements CommandMarker {
         final String retry)
         throws Exception {
 
-        validate(format);
+        validate(format, srcType);
 
         boolean initialized = HoodieCLI.initConf();
         HoodieCLI.initFS(initialized);
@@ -82,7 +84,8 @@ public class DataImportCommand implements CommandMarker {
         return "Dataset imported to hoodie format";
     }
 
-    private void validate(String format) {
+    private void validate(String format, String srcType) {
         (new HoodieDataImporter.FormatValidator()).validate("format", format);
+        (new HoodieDataImporter.SourceTypeValidator()).validate("srcType", srcType);
     }
 }
