@@ -54,7 +54,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-public class TestHoodieDataImporter implements Serializable {
+public class TestHDFSParquetImporter implements Serializable {
     private static String dfsBasePath;
     private static HdfsTestService hdfsTestService;
     private static MiniDFSCluster dfsCluster;
@@ -105,12 +105,12 @@ public class TestHoodieDataImporter implements Serializable {
             Path srcFolder = new Path(basePath, "testSrc");
             createRecords(srcFolder);
 
-            HoodieDataImporter.Config cfg = getHoodieDataImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+            HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
                 "testTable", "COPY_ON_WRITE", "_row_key", "timestamp",
                 1, schemaFile);
             AtomicInteger retry = new AtomicInteger(3);
             AtomicInteger fileCreated = new AtomicInteger(0);
-            HoodieDataImporter dataImporter = new HoodieDataImporter(cfg) {
+            HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg) {
                 @Override
                 protected int dataImport(JavaSparkContext jsc) throws IOException {
                     int ret = super.dataImport(jsc);
@@ -202,10 +202,10 @@ public class TestHoodieDataImporter implements Serializable {
             Path hoodieFolder = new Path(basePath, "testTarget");
             Path srcFolder = new Path(basePath.toString(), "srcTest");
             Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
-            HoodieDataImporter.Config cfg = getHoodieDataImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+            HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
                 "testTable", "COPY_ON_WRITE", "_row_key", "timestamp",
                 1, schemaFile.toString());
-            HoodieDataImporter dataImporter = new HoodieDataImporter(cfg);
+            HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
             // Should fail - return : -1.
             assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
@@ -243,21 +243,21 @@ public class TestHoodieDataImporter implements Serializable {
             Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
             createSchemaFile(schemaFile.toString());
 
-            HoodieDataImporter dataImporter;
-            HoodieDataImporter.Config cfg;
+            HDFSParquetImporter dataImporter;
+            HDFSParquetImporter.Config cfg;
 
             // Check for invalid row key.
-            cfg = getHoodieDataImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+            cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
                 "testTable", "COPY_ON_WRITE", "invalidRowKey", "timestamp",
                 1, schemaFile.toString());
-            dataImporter = new HoodieDataImporter(cfg);
+            dataImporter = new HDFSParquetImporter(cfg);
             assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
             // Check for invalid partition key.
-            cfg = getHoodieDataImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+            cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
                 "testTable", "COPY_ON_WRITE", "_row_key", "invalidTimeStamp",
                 1, schemaFile.toString());
-            dataImporter = new HoodieDataImporter(cfg);
+            dataImporter = new HDFSParquetImporter(cfg);
             assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
         } finally {
@@ -267,10 +267,10 @@ public class TestHoodieDataImporter implements Serializable {
         }
     }
 
-    private HoodieDataImporter.Config getHoodieDataImporterConfig(String srcPath, String targetPath,
+    private HDFSParquetImporter.Config getHDFSParquetImporterConfig(String srcPath, String targetPath,
         String tableName, String tableType, String rowKey, String partitionKey, int parallelism,
         String schemaFile) {
-        HoodieDataImporter.Config cfg = new HoodieDataImporter.Config();
+        HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
         cfg.srcPath = srcPath;
         cfg.targetPath = targetPath;
         cfg.tableName = tableName;

@@ -23,12 +23,10 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.utilities.HoodieDataImporter;
+import com.uber.hoodie.utilities.HDFSParquetImporter;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
-
-import java.util.Date;
 
 public class SparkMain {
 
@@ -81,7 +79,7 @@ public class SparkMain {
     private static int dataImport(JavaSparkContext jsc, String srcPath, String targetPath,
         String tableName, String tableType, String rowKey, String partitionKey, int parallelism,
         String schemaFile, String sparkMaster, String sparkMemory, int retry) throws Exception {
-        HoodieDataImporter.Config cfg = new HoodieDataImporter.Config();
+        HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
         cfg.srcPath = srcPath;
         cfg.targetPath = targetPath;
         cfg.tableName = tableName;
@@ -91,7 +89,7 @@ public class SparkMain {
         cfg.parallelism = parallelism;
         cfg.schemaFile = schemaFile;
         jsc.getConf().set("spark.executor.memory", sparkMemory);
-        return new HoodieDataImporter(cfg).dataImport(jsc, retry);
+        return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
     }
 
     private static int deduplicatePartitionPath(JavaSparkContext jsc,

@@ -20,7 +20,7 @@ import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.commands.SparkMain.SparkCommand;
 import com.uber.hoodie.cli.utils.InputStreamConsumer;
 import com.uber.hoodie.cli.utils.SparkUtil;
-import com.uber.hoodie.utilities.HoodieDataImporter;
+import com.uber.hoodie.utilities.HDFSParquetImporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -31,11 +31,11 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 @Component
-public class DataImportCommand implements CommandMarker {
+public class HDFSParquetImportCommand implements CommandMarker {
 
-    private static Logger log = LogManager.getLogger(DataImportCommand.class);
+    private static Logger log = LogManager.getLogger(HDFSParquetImportCommand.class);
 
-    @CliCommand(value = "import", help = "Imports given dataset to a hoodie dataset")
+    @CliCommand(value = "hdfsparquetimport", help = "Imports hdfs dataset to a hoodie dataset")
     public String convert(
         @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset")
         final String srcPath,
@@ -85,7 +85,7 @@ public class DataImportCommand implements CommandMarker {
     }
 
     private void validate(String format, String srcType) {
-        (new HoodieDataImporter.FormatValidator()).validate("format", format);
-        (new HoodieDataImporter.SourceTypeValidator()).validate("srcType", srcType);
+        (new HDFSParquetImporter.FormatValidator()).validate("format", format);
+        (new HDFSParquetImporter.SourceTypeValidator()).validate("srcType", srcType);
     }
 }

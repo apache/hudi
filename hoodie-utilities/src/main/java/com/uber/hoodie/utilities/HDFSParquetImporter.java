@@ -54,21 +54,20 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.VoidFunction;
 import scala.Tuple2;
 
-public class HoodieDataImporter implements Serializable{
+public class HDFSParquetImporter implements Serializable{
 
-    private static volatile Logger logger = LogManager.getLogger(HoodieDataImporter.class);
+    private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
     private final Config cfg;
     private final transient FileSystem fs;
     public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
-    public HoodieDataImporter(
+    public HDFSParquetImporter(
         Config cfg) throws IOException {
         this.cfg = cfg;
         fs = FSUtils.getFs();
@@ -146,13 +145,13 @@ public class HoodieDataImporter implements Serializable{
     }
 
     public static void main(String args[]) throws Exception {
-        final HoodieDataImporter.Config cfg = new HoodieDataImporter.Config();
+        final HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
         JCommander cmd = new JCommander(cfg, args);
         if (cfg.help || args.length == 0) {
             cmd.usage();
             System.exit(1);
         }
-        HoodieDataImporter dataImporter = new HoodieDataImporter(cfg);
+        HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
         dataImporter.dataImport(dataImporter.getSparkContext(), cfg.retry);
     }
 
