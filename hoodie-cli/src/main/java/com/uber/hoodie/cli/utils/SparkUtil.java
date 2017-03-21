@@ -30,6 +30,7 @@ import java.net.URISyntaxException;
 public class SparkUtil {
 
     public static Logger logger = Logger.getLogger(SparkUtil.class);
+    public static final String DEFUALT_SPARK_MASTER = "yarn-client";
 
     /**
      *
@@ -55,7 +56,7 @@ public class SparkUtil {
 
     public static JavaSparkContext initJavaSparkConf(String name) {
         SparkConf sparkConf = new SparkConf().setAppName(name);
-        sparkConf.setMaster("yarn-client");
+        sparkConf.setMaster(DEFUALT_SPARK_MASTER);
         sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
         sparkConf.set("spark.driver.maxResultSize", "2g");
         sparkConf.set("spark.eventLog.overwrite", "true");

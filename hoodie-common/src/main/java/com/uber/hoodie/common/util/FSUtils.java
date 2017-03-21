@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.util;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
@@ -52,8 +53,21 @@ public class FSUtils {
     private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
     private static final long MIN_CLEAN_TO_KEEP = 10;
     private static final long MIN_ROLLBACK_TO_KEEP = 10;
+    private static FileSystem fs;
+
+    /**
+     * Only to be used for testing.
+     */
+    @VisibleForTesting
+    public static void setFs(FileSystem fs) {
+        FSUtils.fs = fs;
+    }
+
 
     public static FileSystem getFs() {
+        if (fs != null) {
+            return fs;
+        }
         Configuration conf = new Configuration();
         conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
         conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
@@ -66,6 +80,7 @@ public class FSUtils {
         }
         LOG.info(String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
                 conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
+
         return fs;
     }
 
