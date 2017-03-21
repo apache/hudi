@@ -382,8 +382,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             // Save was a success
             // We cannot have unbounded commit files. Archive commits if we have to archive
             archiveLog.archiveIfRequired();
-            // Call clean to cleanup if there is anything to cleanup after the commit,
-            clean(commitTime);
+            if(config.isAutoClean()) {
+                // Call clean to cleanup if there is anything to cleanup after the commit,
+                logger.info("Auto cleaning is enabled. Running cleaner now");
+                clean(commitTime);
+            } else {
+                logger.info("Auto cleaning is not enabled. Not running cleaner now");
+            }
             if (writeContext != null) {
                 long durationInMs = metrics.getDurationInMs(writeContext.stop());
                 metrics.updateCommitMetrics(
@@ -712,7 +717,17 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
 
     /**
-     * Clean up any stale/old files/data lying around (either on file storage or index storage)
+     * Clean up any stale/old files/data lying around (either on file storage or index storage) that is past
+     * the typical query timeout. Default is 12 hours.
+     */
+    public void clean() throws HoodieIOException {
+        String startCleanTime = startCommit();
+        clean(startCleanTime);
+    }
+
+    /**
+     * Clean up any stale/old files/data lying around (either on file storage or index storage) that is past
+     * the typical query timeout. Default is 12 hours.
      */
     private void clean(String startCleanTime) throws HoodieIOException  {
         try {
