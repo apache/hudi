@@ -312,8 +312,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         for (long subparts : subpartitionCountMap.values()) {
             totalSubparts += (int) subparts;
         }
-        int joinParallelism = Math.max(totalSubparts, inputParallelism);
+        // If bloom index parallelism is set, use it to to check against the input parallelism and take the max
+        int indexParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
+        int joinParallelism = Math.max(totalSubparts, indexParallelism);
         logger.info("InputParallelism: ${" + inputParallelism + "}, " +
+                "IndexParallelism: ${" + config.getBloomIndexParallelism() + "}, " +
                 "TotalSubParts: ${" + totalSubparts + "}, " +
                 "Join Parallelism set to : " + joinParallelism);
         return joinParallelism;

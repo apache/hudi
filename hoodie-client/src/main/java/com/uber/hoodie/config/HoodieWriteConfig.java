@@ -142,6 +142,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         return Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_PARALLELISM));
     }
 
+    public boolean isAutoClean() {
+        return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.AUTO_CLEAN_PROP));
+    }
+
     /**
      * index properties
      **/
@@ -168,6 +172,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public String getHbaseTableName() {
         return props.getProperty(HoodieIndexConfig.HBASE_TABLENAME_PROP);
     }
+
+    public int getBloomIndexParallelism() {
+        return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM_PROP));
+    }
+
 
     /**
      * storage properties
