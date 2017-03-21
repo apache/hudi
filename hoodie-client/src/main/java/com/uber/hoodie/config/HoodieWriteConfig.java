@@ -172,6 +172,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     }
 
     /**
+     * Max number of index files to lookup in a single task.
+     */
+    public int getMaxIndexFileLookup() {
+        return Integer
+            .parseInt(props.getProperty(HoodieIndexConfig.BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP));
+    }
+
+
+    /**
      * storage properties
      **/
     public int getParquetMaxFileSize() {

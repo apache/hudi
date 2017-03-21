@@ -39,6 +39,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
     public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
     public final static String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
     public final static String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
+    public static final String BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP = "hoodie.max.index.file.lookup.limit";
+    public static final String DEFAULT_BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP = "5";
 
     private HoodieIndexConfig(Properties props) {
         super(props);
@@ -91,6 +93,18 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        /**
+         * Max number of index files to lookup in a single task. Set this property to a low number
+         * if you see skew in index.tagLocation
+         *
+         * @param numFiles
+         * @return
+         */
+        public Builder withMaxIndexFileLookupLimit(int numFiles) {
+            props.setProperty(BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP, String.valueOf(numFiles));
+            return this;
+        }
+
         public HoodieIndexConfig build() {
             HoodieIndexConfig config = new HoodieIndexConfig(props);
             setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP),
@@ -99,6 +113,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
                 BLOOM_FILTER_NUM_ENTRIES, DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
             setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP),
                 BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
+            setDefaultOnCondition(props, !props.containsKey(BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP),
+                BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP,
+                DEFAULT_BLOOM_MAX_INDEX_FILE_LOOKUP_LIMIT_PROP);
             // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
             HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
             return config;
