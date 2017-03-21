@@ -38,6 +38,9 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
         "hoodie.cleaner.fileversions.retained";
     private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
 
+    public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
+    private static final String DEFAULT_AUTO_CLEAN = "true";
+
     public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
     private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "24";
 
@@ -94,6 +97,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             }
         }
 
+        public Builder withAutoClean(Boolean autoClean) {
+            props.setProperty(AUTO_CLEAN_PROP, String.valueOf(Boolean.TRUE));
+            return this;
+        }
+
         public Builder withCleanerPolicy(HoodieCleaner.CleaningPolicy policy) {
             props.setProperty(CLEANER_POLICY_PROP, policy.name());
             return this;
@@ -143,6 +151,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
         public HoodieCompactionConfig build() {
             HoodieCompactionConfig config = new HoodieCompactionConfig(props);
+            setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP),
+                    AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
             setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP),
                 CLEANER_POLICY_PROP, DEFAULT_CLEANER_POLICY);
             setDefaultOnCondition(props, !props.containsKey(CLEANER_FILE_VERSIONS_RETAINED_PROP),
