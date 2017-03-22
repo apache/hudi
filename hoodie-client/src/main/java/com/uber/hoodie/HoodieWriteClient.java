@@ -717,8 +717,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
 
     /**
-     * Clean up any stale/old files/data lying around (either on file storage or index storage) that is past
-     * the typical query timeout. Default is 12 hours.
+     * Clean up any stale/old files/data lying around (either on file storage or index storage)
+     * based on the configurations and CleaningPolicy used. (typically files that no longer can be used
+     * by a running query can be cleaned)
      */
     public void clean() throws HoodieIOException {
         String startCleanTime = startCommit();
@@ -726,8 +727,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
 
     /**
-     * Clean up any stale/old files/data lying around (either on file storage or index storage) that is past
-     * the typical query timeout. Default is 12 hours.
+     * Clean up any stale/old files/data lying around (either on file storage or index storage)
+     * based on the configurations and CleaningPolicy used. (typically files that no longer can be used
+     * by a running query can be cleaned)
      */
     private void clean(String startCleanTime) throws HoodieIOException  {
         try {
