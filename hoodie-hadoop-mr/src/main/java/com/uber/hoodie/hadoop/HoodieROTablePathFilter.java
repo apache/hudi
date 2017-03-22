@@ -16,6 +16,7 @@
 package com.uber.hoodie.hadoop;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.exception.DatasetNotFoundException;
@@ -117,7 +118,15 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
             }
 
             // Perform actual checking.
-            Path baseDir = safeGetParentsParent(folder);
+            Path baseDir;
+            if (HoodiePartitionMetadata.hasPartitionMetadata(fs, folder)) {
+                HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, folder);
+                metadata.readFromFS();
+                baseDir = HoodieHiveUtil.getNthParent(folder, metadata.getPartitionDepth());
+            } else {
+                baseDir = safeGetParentsParent(folder);
+            }
+
             if (baseDir != null) {
                 try {
                     HoodieTableMetaClient metaClient =

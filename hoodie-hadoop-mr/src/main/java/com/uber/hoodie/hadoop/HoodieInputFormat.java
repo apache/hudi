@@ -17,6 +17,7 @@
 package com.uber.hoodie.hadoop;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -259,8 +260,13 @@ public class HoodieInputFormat extends MapredParquetInputFormat
      */
     private HoodieTableMetaClient getTableMetaClient(Path dataPath) throws IOException {
         FileSystem fs = dataPath.getFileSystem(conf);
-        // TODO - remove this hard-coding. Pass this in job conf, somehow. Or read the Table Location
-        Path baseDir = dataPath.getParent().getParent().getParent();
+        int levels = HoodieHiveUtil.DEFAULT_LEVELS_TO_BASEPATH;
+        if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
+            HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
+            metadata.readFromFS();
+            levels = metadata.getPartitionDepth();
+        }
+        Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
         LOG.info("Reading hoodie metadata from path " + baseDir.toString());
         return new HoodieTableMetaClient(fs, baseDir.toString());
 

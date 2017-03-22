@@ -233,7 +233,10 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
      */
     private Map<String, List<HoodieDataFile>> groupFilesByFileId(FileStatus[] files,
         String maxCommitTime) throws IOException {
-        return Arrays.stream(files).flatMap(fileStatus -> {
+        return Arrays.stream(files)
+                // filter out files starting with "."
+                .filter(file -> !file.getPath().getName().startsWith("."))
+                .flatMap(fileStatus -> {
             HoodieDataFile dataFile = new HoodieDataFile(fileStatus);
             if (visibleActiveCommitTimeline.containsOrBeforeTimelineStarts(dataFile.getCommitTime())
                 && visibleActiveCommitTimeline

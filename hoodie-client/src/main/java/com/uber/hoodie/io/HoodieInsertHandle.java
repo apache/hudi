@@ -17,6 +17,7 @@
 package com.uber.hoodie.io;
 
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -55,6 +56,11 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
         this.path = makeNewPath(partitionPath, TaskContext.getPartitionId(), status.getFileId());
         try {
+            HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
+                                       commitTime,
+                                       new Path(config.getBasePath()),
+                                       new Path(config.getBasePath(), partitionPath));
+            partitionMetadata.trySave(TaskContext.getPartitionId());
             this.storageWriter =
                 HoodieStorageWriterFactory.getStorageWriter(commitTime, path, hoodieTable, config, schema);
         } catch (IOException e) {
