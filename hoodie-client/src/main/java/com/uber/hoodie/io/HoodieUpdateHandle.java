@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -82,6 +83,13 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
                         .getLatestDataFilesForFileId(record.getPartitionPath(), fileId).findFirst()
                         .get().getFileName();
                     writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
+
+                    HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
+                                                       commitTime,
+                                                       new Path(config.getBasePath()),
+                                                       new Path(config.getBasePath(), record.getPartitionPath()));
+                                      partitionMetadata.trySave(TaskContext.getPartitionId());
+
                     oldFilePath = new Path(
                         config.getBasePath() + "/" + record.getPartitionPath() + "/"
                             + latestValidFilePath);
