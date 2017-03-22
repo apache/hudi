@@ -39,6 +39,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
     public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
     public final static String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
     public final static String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
+    public static final String BLOOM_INDEX_PARALLELISM_PROP = "hoodie.bloom.index.parallelism";
+    // Disable explicit bloom index parallelism setting by default - hoodie auto computes
+    public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = "0";
 
     private HoodieIndexConfig(Properties props) {
         super(props);
@@ -91,6 +94,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder bloomIndexParallelism(int parallelism) {
+            props.setProperty(BLOOM_INDEX_PARALLELISM_PROP, String.valueOf(parallelism));
+            return this;
+        }
+
         public HoodieIndexConfig build() {
             HoodieIndexConfig config = new HoodieIndexConfig(props);
             setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP),
@@ -99,6 +107,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
                 BLOOM_FILTER_NUM_ENTRIES, DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
             setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP),
                 BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
+            setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PARALLELISM_PROP),
+                    BLOOM_INDEX_PARALLELISM_PROP, DEFAULT_BLOOM_INDEX_PARALLELISM);
             // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
             HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
             return config;
