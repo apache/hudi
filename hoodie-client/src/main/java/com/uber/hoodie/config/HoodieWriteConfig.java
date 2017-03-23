@@ -277,8 +277,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             return this;
         }
 
-        public Builder withWriteStatusStorageLevel(StorageLevel level) {
-            props.setProperty(WRITE_STATUS_STORAGE_LEVEL, level.toString());
+        public Builder withWriteStatusStorageLevel(String level) {
+            props.setProperty(WRITE_STATUS_STORAGE_LEVEL, level);
             return this;
         }
 
