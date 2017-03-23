@@ -130,9 +130,10 @@ select count(*) from hive.default.hoodie_test
 Let's now perform a query, to obtain the __ONLY__ changed rows since a commit in the past.
 
 ```
-hive> set hoodie.scan.mode=INCREMENTAL;
-hive> set hoodie.last.commitTs=001;
-hive> select `_hoodie_commit_time`, rider, driver from hoodie_test limit 10;
+hive> set hoodie.hoodie_test.consume.mode=INCREMENTAL;
+hive> set hoodie.hoodie_test.consume.start.timestamp=001;
+hive> set hoodie.hoodie_test.consume.max.commits=10;
+hive> select `_hoodie_commit_time`, rider, driver from hoodie_test where `_hoodie_commit_time` > '001' limit 10;
 OK
 All commits :[001, 002]
 002	rider-001	driver-001
