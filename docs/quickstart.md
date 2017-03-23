@@ -32,7 +32,9 @@ hdfs dfs -mkdir -p /tmp/hoodie/sample-table
 ```
 
 You can run the __HoodieClientExample__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS at /tmp/hoodie/sample-table
-
+```
+hdfs dfs -copyFromLocal /tmp/hoodie/sample-table/* /tmp/hoodie/sample-table
+```
 
 ## Register Dataset to Hive Metastore
 
@@ -65,13 +67,15 @@ ROW FORMAT SERDE
 STORED AS INPUTFORMAT
    'com.uber.hoodie.hadoop.HoodieInputFormat'
 OUTPUTFORMAT
-   'com.uber.hoodie.hadoop.HoodieOutputFormat'
+   'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
 LOCATION
    'hdfs:///tmp/hoodie/sample-table';
 
 ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'hdfs:///tmp/hoodie/sample-table/2016/03/15';
 ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/16';
 ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'hdfs:///tmp/hoodie/sample-table/2015/03/17';
+
+set mapreduce.framework.name=yarn;
 ```
 
 ## Querying The Dataset
@@ -100,7 +104,7 @@ $ cd $SPARK_INSTALL
 $ export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
 $ spark-shell --jars /tmp/hoodie-hadoop-mr-0.2.7.jar --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false
 
-
+scala> val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 scala> sqlContext.sql("show tables").show(10000)
 scala> sqlContext.sql("describe hoodie_test").show(10000)
 scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
