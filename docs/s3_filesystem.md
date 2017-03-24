@@ -8,10 +8,6 @@ summary: In this page, we go over how to configure hoodie with S3 filesystem.
 ---
 Hoodie works with HDFS by default. There is an experimental work going on Hoodie-S3 compatibility.
 
-In the following sections, we cover the configs needed across different query engines to achieve this.
-
-{% include callout.html content="Get involved to improve this integration [here](https://github.com/uber/hoodie/issues/110) " type="info" %}
-
 ## S3 configs
 
 Add the required configs in your core-site.xml from where Hoodie can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hoodie should be able to read/write from the bucket. 
