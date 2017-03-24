@@ -15,14 +15,20 @@
  */
 
 import com.uber.hoodie.HoodieWriteClient;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
-
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.BasicParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -41,8 +47,34 @@ public class HoodieClientExample {
 
     private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
 
+    private static final String DEFAULT_TABLE_PATH =  "file:///tmp/hoodie/sample-table";
+    private static final String DEFAULT_TABLE_NAME =  "sample-table";
+
     public static void main(String[] args) throws Exception {
-        String tablePath = args.length == 1 ? args[0] : "file:///tmp/hoodie/sample-table";
+        Options options = new Options();
+        Option path = new Option("p", "table-path", true, "input table path");
+        path.setRequired(false);
+        options.addOption(path);
+
+        Option name = new Option("n", "table-name", true, "input table name");
+        name.setRequired(false);
+        options.addOption(name);
+
+        CommandLineParser parser = new BasicParser();
+        HelpFormatter formatter = new HelpFormatter();
+        CommandLine cmd;
+
+        try {
+            cmd = parser.parse(options, args);
+        } catch (ParseException e) {
+            System.out.println(e.getMessage());
+            formatter.printHelp("HoodieClientExample", options);
+            System.exit(1);
+            return;
+        }
+
+        String inputTablePath = cmd.getOptionValue("table-path", DEFAULT_TABLE_PATH);
+        String inputTableName = cmd.getOptionValue("table-name", DEFAULT_TABLE_NAME);
 
         HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
@@ -54,16 +86,15 @@ public class HoodieClientExample {
 
         // generate some records to be loaded in.
         HoodieWriteConfig cfg =
-            HoodieWriteConfig.newBuilder().withPath(tablePath)
+            HoodieWriteConfig.newBuilder().withPath(inputTablePath)
                 .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-                .forTable("sample-table").withIndexConfig(
+                .forTable(DEFAULT_TABLE_NAME).withIndexConfig(
                 HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
                 .build();
         Properties properties = new Properties();
-        properties.put(HoodieWriteConfig.TABLE_NAME, "sample-table");
+        properties.put(HoodieWriteConfig.TABLE_NAME, inputTableName);
         HoodieTableMetaClient
-            .initializePathAsHoodieDataset(FSUtils.getFs(), tablePath,
-                properties);
+                .initializePathAsHoodieDataset(FSUtils.getFs(), inputTablePath, properties);
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
         /**

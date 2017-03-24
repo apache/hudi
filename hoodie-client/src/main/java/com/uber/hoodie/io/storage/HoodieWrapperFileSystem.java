@@ -49,9 +49,10 @@ public class HoodieWrapperFileSystem extends FileSystem {
     public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
     static {
-        SUPPORT_SCHEMES = new HashSet<>(2);
+        SUPPORT_SCHEMES = new HashSet<>();
         SUPPORT_SCHEMES.add("file");
         SUPPORT_SCHEMES.add("hdfs");
+        SUPPORT_SCHEMES.add("s3");
     }
 
     private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams =
