@@ -327,6 +327,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withAssumeDatePartitioning(boolean assumeDatePartitioning) {
+            props.setProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP, String.valueOf(assumeDatePartitioning));
+            return this;
+        }
+
         public HoodieWriteConfig build() {
             HoodieWriteConfig config = new HoodieWriteConfig(props);
             // Check for mandatory properties
