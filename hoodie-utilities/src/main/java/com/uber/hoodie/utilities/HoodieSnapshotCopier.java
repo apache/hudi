@@ -65,9 +65,12 @@ public class HoodieSnapshotCopier implements Serializable {
 
         @Parameter(names = {"--output-path", "-op"}, description = "The snapshot output path", required = true)
         String outputPath = null;
+
+        @Parameter(names = {"--date-partitioned", "-dp"}, description = "Can we assume date partitioning?")
+        boolean shouldAssumeDatePartitioning = false;
     }
 
-    public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir) throws IOException {
+    public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir, final boolean shouldAssumeDatePartitioning) throws IOException {
         FileSystem fs = FSUtils.getFs();
         final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
         final TableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata,
@@ -82,7 +85,7 @@ public class HoodieSnapshotCopier implements Serializable {
         final String latestCommitTimestamp = latestCommit.get().getTimestamp();
         logger.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.", latestCommitTimestamp));
 
-        List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir);
+        List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir, shouldAssumeDatePartitioning);
         if (partitions.size() > 0) {
             logger.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
@@ -172,7 +175,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
         // Copy
         HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-        copier.snapshot(jsc, cfg.basePath, cfg.outputPath);
+        copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning);
 
         // Stop the job
         jsc.stop();

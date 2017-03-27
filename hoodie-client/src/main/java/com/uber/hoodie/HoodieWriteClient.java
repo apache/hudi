@@ -476,7 +476,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     + lastCommitRetained);
 
             Map<String, List<String>> latestFilesMap = jsc.parallelize(
-                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath()))
+                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning()))
                 .mapToPair((PairFunction<String, String, List<String>>) partitionPath -> {
                     // Scan all partitions files with this commit time
                     logger.info("Collecting latest files in partition path " + partitionPath);
@@ -650,7 +650,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             logger.info("Clean out all parquet files generated for commits: " + commits);
             final LongAccumulator numFilesDeletedCounter = jsc.sc().longAccumulator();
             List<HoodieRollbackStat> stats = jsc.parallelize(
-                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath()))
+                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning()))
                 .map((Function<String, HoodieRollbackStat>) partitionPath -> {
                     // Scan all partitions files with this commit time
                     logger.info("Cleaning path " + partitionPath);
@@ -739,7 +739,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
 
             List<String> partitionsToClean =
-                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath());
+                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
             // shuffle to distribute cleaning work across partitions evenly
             Collections.shuffle(partitionsToClean);
             logger.info("Partitions to clean up : " + partitionsToClean + ", with policy " + config
