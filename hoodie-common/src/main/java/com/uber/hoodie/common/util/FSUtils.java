@@ -350,4 +350,10 @@ public class FSUtils {
             }
         });
     }
+
+    public static void createPathIfNotExists(FileSystem fs, Path partitionPath) throws IOException {
+        if(!fs.exists(partitionPath)) {
+            fs.mkdirs(partitionPath);
+        }
+    }
 }

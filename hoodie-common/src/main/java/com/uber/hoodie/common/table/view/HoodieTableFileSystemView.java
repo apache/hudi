@@ -117,6 +117,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
     protected FileStatus[] listDataFilesInPartition(String partitionPathStr) {
         Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
         try {
+            // Create the path if it does not exist already
+            FSUtils.createPathIfNotExists(fs, partitionPath);
             return fs.listStatus(partitionPath, path -> path.getName()
                 .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension()));
         } catch (IOException e) {
