@@ -76,4 +76,7 @@ summary: "Here we list all possible configurations and what they mean"
         - [usePrefix](#usePrefix) () <br/>
         <span style="color:grey">Standard prefix for all metrics</span>
 
+    - [S3Configs](s3_hoodie.html) (Hoodie S3 Configs) <br/>
+    <span style="color:grey">Configurations required for S3 and Hoodie co-operability.</span>
+
 {% include callout.html content="Hoodie is a young project. A lot of pluggable interfaces and configurations to support diverse workloads need to be created. Get involved [here](https://github.com/uber/hoodie)" type="info" %}
