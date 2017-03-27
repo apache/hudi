@@ -18,6 +18,7 @@ package com.uber.hoodie.common;
 
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -63,11 +64,19 @@ public class HoodieTestDataGenerator {
     // based on examination of sample file, the schema produces the following per record size
     public static final int SIZE_PER_RECORD = 50 * 1024;
 
+    public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
+
+
+    public static void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
+        for (String partitionPath: partitionPaths) {
+            new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
+        }
+    }
 
     private List<KeyPartition> existingKeysList = new ArrayList<>();
     public static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
     private static Random rand = new Random(46474747);
-    private String[] partitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
+    private String[] partitionPaths = DEFAULT_PARTITION_PATHS;
 
     public HoodieTestDataGenerator(String[] partitionPaths) {
         this.partitionPaths = partitionPaths;

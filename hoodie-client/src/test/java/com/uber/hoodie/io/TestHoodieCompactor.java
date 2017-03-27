@@ -60,7 +60,6 @@ import static org.junit.Assert.assertTrue;
 
 public class TestHoodieCompactor {
     private transient JavaSparkContext jsc = null;
-    private transient SQLContext sqlContext;
     private String basePath = null;
     private HoodieCompactor compactor;
     private transient HoodieTestDataGenerator dataGen = null;

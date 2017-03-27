@@ -18,14 +18,19 @@ package com.uber.hoodie.common.util;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidHoodiePathException;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -75,7 +80,7 @@ public class FSUtils {
             fs = FileSystem.get(conf);
         } catch (IOException e) {
             throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(),
-                e);
+                    e);
         }
         LOG.info(String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
                 conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
@@ -111,25 +116,43 @@ public class FSUtils {
         return fs.listStatus(path)[0].getLen();
     }
 
-    // TODO (weiy): rename the function for better readability
     public static String getFileId(String fullFileName) {
         return fullFileName.split("_")[0];
     }
 
+
     /**
-     * Obtain all the partition paths, that are present in this table.
+     * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
      */
-    public static List<String> getAllPartitionPaths(FileSystem fs, String basePath)
-        throws IOException {
-        List<String> partitionsToClean = new ArrayList<>();
-        // TODO(vc): For now, assume partitions are two levels down from base path.
+    public static List<String> getAllFoldersThreeLevelsDown(FileSystem fs, String basePath) throws IOException {
+        List<String> datePartitions = new ArrayList<>();
         FileStatus[] folders = fs.globStatus(new Path(basePath + "/*/*/*"));
         for (FileStatus status : folders) {
             Path path = status.getPath();
-            partitionsToClean.add(String.format("%s/%s/%s", path.getParent().getParent().getName(),
-                path.getParent().getName(), path.getName()));
+            datePartitions.add(String.format("%s/%s/%s", path.getParent().getParent().getName(),
+                    path.getParent().getName(), path.getName()));
         }
-        return partitionsToClean;
+        return datePartitions;
+    }
+
+    /**
+     * Obtain all the partition paths, that are present in this table, denoted by presence of {@link
+     * com.uber.hoodie.common.model.HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
+     */
+    public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr)
+            throws IOException {
+        List<String> partitions = new ArrayList<>();
+        Path basePath = new Path(basePathStr);
+        RemoteIterator<LocatedFileStatus> allFiles = fs.listFiles(new Path(basePathStr), true);
+        while (allFiles.hasNext()) {
+            Path filePath = allFiles.next().getPath();
+            if (filePath.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+                String partitionFullPath = filePath.getParent().toString();
+                int partitionStartIndex = partitionFullPath.lastIndexOf(basePath.getName()) ;
+                partitions.add(partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1));
+            }
+        }
+        return partitions;
     }
 
     public static String getFileExtension(String fullName) {
@@ -146,42 +169,34 @@ public class FSUtils {
 
     /**
      * Get the file extension from the log file
-     * @param logPath
-     * @return
      */
     public static String getFileExtensionFromLog(Path logPath) {
         Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-        if(!matcher.find()) {
+        if (!matcher.find()) {
             throw new InvalidHoodiePathException(logPath, "LogFile");
         }
         return matcher.group(3) + "." + matcher.group(4);
     }
 
     /**
-     * Get the first part of the file name in the log file. That will be the fileId.
-     * Log file do not have commitTime in the file name.
-     *
-     * @param path
-     * @return
+     * Get the first part of the file name in the log file. That will be the fileId. Log file do not
+     * have commitTime in the file name.
      */
     public static String getFileIdFromLogPath(Path path) {
         Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-        if(!matcher.find()) {
+        if (!matcher.find()) {
             throw new InvalidHoodiePathException(path, "LogFile");
         }
         return matcher.group(1);
     }
 
     /**
-     * Get the first part of the file name in the log file. That will be the fileId.
-     * Log file do not have commitTime in the file name.
-     *
-     * @param path
-     * @return
+     * Get the first part of the file name in the log file. That will be the fileId. Log file do not
+     * have commitTime in the file name.
      */
     public static String getBaseCommitTimeFromLogPath(Path path) {
         Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-        if(!matcher.find()) {
+        if (!matcher.find()) {
             throw new InvalidHoodiePathException(path, "LogFile");
         }
         return matcher.group(2);
@@ -189,20 +204,17 @@ public class FSUtils {
 
     /**
      * Get the last part of the file name in the log file and convert to int.
-     *
-     * @param logPath
-     * @return
      */
     public static int getFileVersionFromLog(Path logPath) {
         Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-        if(!matcher.find()) {
+        if (!matcher.find()) {
             throw new InvalidHoodiePathException(logPath, "LogFile");
         }
         return Integer.parseInt(matcher.group(5));
     }
 
     public static String makeLogFileName(String fileId, String logFileExtension,
-        String baseCommitTime, int version) {
+                                         String baseCommitTime, int version) {
         return String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
     }
 
@@ -213,46 +225,30 @@ public class FSUtils {
 
     /**
      * Get the latest log file written from the list of log files passed in
-     *
-     * @param logFiles
-     * @return
      */
     public static Optional<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
         return logFiles.sorted(Comparator
-            .comparing(s -> s.getLogVersion(),
-                Comparator.reverseOrder())).findFirst();
+                .comparing(s -> s.getLogVersion(),
+                        Comparator.reverseOrder())).findFirst();
     }
 
     /**
      * Get all the log files for the passed in FileId in the partition path
-     *
-     * @param fs
-     * @param partitionPath
-     * @param fileId
-     * @param logFileExtension
-     * @return
      */
     public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath,
-        final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
+                                                       final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
         return Arrays.stream(fs.listStatus(partitionPath,
-            path -> path.getName().startsWith(fileId) && path.getName().contains(logFileExtension)))
-            .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+                path -> path.getName().startsWith(fileId) && path.getName().contains(logFileExtension)))
+                .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
     }
 
     /**
      * Get the latest log version for the fileId in the partition path
-     *
-     * @param fs
-     * @param partitionPath
-     * @param fileId
-     * @param logFileExtension
-     * @return
-     * @throws IOException
      */
     public static Optional<Integer> getLatestLogVersion(FileSystem fs, Path partitionPath,
-        final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
+                                                        final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
         Optional<HoodieLogFile> latestLogFile =
-            getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
+                getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
         if (latestLogFile.isPresent()) {
             return Optional.of(latestLogFile.get().getLogVersion());
         }
@@ -260,26 +256,20 @@ public class FSUtils {
     }
 
     public static int getCurrentLogVersion(FileSystem fs, Path partitionPath,
-        final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
+                                           final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
         Optional<Integer> currentVersion =
-            getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
+                getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
         // handle potential overflow
         return (currentVersion.isPresent()) ? currentVersion.get() : 1;
     }
 
     /**
      * computes the next log version for the specified fileId in the partition path
-     *
-     * @param fs
-     * @param partitionPath
-     * @param fileId
-     * @return
-     * @throws IOException
      */
     public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
-        final String logFileExtension, final String baseCommitTime) throws IOException {
+                                            final String logFileExtension, final String baseCommitTime) throws IOException {
         Optional<Integer> currentVersion =
-            getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
+                getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
         // handle potential overflow
         return (currentVersion.isPresent()) ? currentVersion.get() + 1 : 1;
     }
@@ -297,17 +287,13 @@ public class FSUtils {
     }
 
     /**
-     * When a file was opened and the task died without closing the stream, another task executor cannot open because the existing lease will be active.
-     * We will try to recover the lease, from HDFS. If a data node went down, it takes about 10 minutes for the lease to be rocovered.
-     * But if the client dies, this should be instant.
-     *
-     * @param dfs
-     * @param p
-     * @return
-     * @throws IOException
+     * When a file was opened and the task died without closing the stream, another task executor
+     * cannot open because the existing lease will be active. We will try to recover the lease, from
+     * HDFS. If a data node went down, it takes about 10 minutes for the lease to be rocovered. But
+     * if the client dies, this should be instant.
      */
     public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
-        throws IOException, InterruptedException {
+            throws IOException, InterruptedException {
         LOG.info("Recover lease on dfs file " + p);
         // initiate the recovery
         boolean recovered = false;
@@ -324,7 +310,7 @@ public class FSUtils {
     }
 
     public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath,
-        Stream<HoodieInstant> instants) {
+                                                 Stream<HoodieInstant> instants) {
         //TODO - this should be archived when archival is made general for all meta-data
         // skip MIN_CLEAN_TO_KEEP and delete rest
         instants.skip(MIN_CLEAN_TO_KEEP).map(s -> {
@@ -332,13 +318,13 @@ public class FSUtils {
                 return fs.delete(new Path(metaPath, s.getFileName()), false);
             } catch (IOException e) {
                 throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(),
-                    e);
+                        e);
             }
         });
     }
 
     public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath,
-        Stream<HoodieInstant> instants) {
+                                                    Stream<HoodieInstant> instants) {
         //TODO - this should be archived when archival is made general for all meta-data
         // skip MIN_ROLLBACK_TO_KEEP and delete rest
         instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
@@ -346,7 +332,7 @@ public class FSUtils {
                 return fs.delete(new Path(metaPath, s.getFileName()), false);
             } catch (IOException e) {
                 throw new HoodieIOException(
-                    "Could not delete rollback meta files " + s.getFileName(), e);
+                        "Could not delete rollback meta files " + s.getFileName(), e);
             }
         });
     }
