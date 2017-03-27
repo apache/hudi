@@ -71,7 +71,7 @@ public class HoodiePartitionMetadata {
     }
 
     public int getPartitionDepth() {
-        if (!props.contains(PARTITION_DEPTH_KEY)) {
+        if (!props.containsKey(PARTITION_DEPTH_KEY)) {
             throw new HoodieException("Could not find partitionDepth in partition metafile");
         }
         return Integer.parseInt(props.getProperty(PARTITION_DEPTH_KEY));

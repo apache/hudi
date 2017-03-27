@@ -80,7 +80,7 @@ public class RepairsCommand implements CommandMarker {
             final boolean dryRun) throws IOException {
 
         String latestCommit  = HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
-        List<String> partitionPaths = FSUtils.getAllPartitionPaths(HoodieCLI.fs,
+        List<String> partitionPaths = FSUtils.getAllFoldersThreeLevelsDown(HoodieCLI.fs,
                 HoodieCLI.tableMetadata.getBasePath());
         Path basePath = new Path(HoodieCLI.tableMetadata.getBasePath());
         String[][] rows = new String[partitionPaths.size() + 1][];
