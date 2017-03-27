@@ -8,11 +8,14 @@ summary: In this page, we go over how to configure hoodie with S3 filesystem.
 ---
 Hoodie works with HDFS by default. There is an experimental work going on Hoodie-S3 compatibility.
 
-## S3 configs
+## AWS configs
 
 There are two configurations required for Hoodie-S3 compatibility:
+
 - Adding AWS Credentials for Hoodie
 - Adding required Jars to classpath
+
+### AWS Credentials
 
 Add the required configs in your core-site.xml from where Hoodie can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hoodie should be able to read/write from the bucket. 
 
@@ -48,7 +51,10 @@ Add the required configs in your core-site.xml from where Hoodie can fetch them.
   </property>
 ```
 
-AWS hadoop libraries to add to your classpath -
+### AWS Libs
+
+AWS hadoop libraries to add to our classpath
+
  - com.amazonaws:aws-java-sdk:1.10.34
  - org.apache.hadoop:hadoop-aws:2.7.3
 
