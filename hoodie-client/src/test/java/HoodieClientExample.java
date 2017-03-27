@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -22,13 +25,6 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.BasicParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -44,38 +40,23 @@ import java.util.Properties;
  */
 public class HoodieClientExample {
 
+    @Parameter(names={"--table-path", "-p"}, description = "path for Hoodie sample table")
+    private String inputTablePath = "file:///tmp/hoodie/sample-table";
+
+    @Parameter(names={"--table-name", "-n"}, description = "table name for Hoodie sample table")
+    private String inputTableName =  "sample-table";
 
     private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
 
-    private static final String DEFAULT_TABLE_PATH =  "file:///tmp/hoodie/sample-table";
-    private static final String DEFAULT_TABLE_NAME =  "sample-table";
 
     public static void main(String[] args) throws Exception {
-        Options options = new Options();
-        Option path = new Option("p", "table-path", true, "input table path");
-        path.setRequired(false);
-        options.addOption(path);
+        HoodieClientExample cli = new HoodieClientExample();
+        new JCommander(cli, args);
+        cli.run();
+    }
 
-        Option name = new Option("n", "table-name", true, "input table name");
-        name.setRequired(false);
-        options.addOption(name);
 
-        CommandLineParser parser = new BasicParser();
-        HelpFormatter formatter = new HelpFormatter();
-        CommandLine cmd;
-
-        try {
-            cmd = parser.parse(options, args);
-        } catch (ParseException e) {
-            System.out.println(e.getMessage());
-            formatter.printHelp("HoodieClientExample", options);
-            System.exit(1);
-            return;
-        }
-
-        String inputTablePath = cmd.getOptionValue("table-path", DEFAULT_TABLE_PATH);
-        String inputTableName = cmd.getOptionValue("table-name", DEFAULT_TABLE_NAME);
-
+    public void run() throws Exception {
         HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
         SparkConf sparkConf = new SparkConf().setAppName("hoodie-client-example");
