@@ -139,7 +139,7 @@ public class FSUtils {
      * Obtain all the partition paths, that are present in this table, denoted by presence of {@link
      * com.uber.hoodie.common.model.HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
      */
-    public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr)
+    public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr)
             throws IOException {
         List<String> partitions = new ArrayList<>();
         Path basePath = new Path(basePathStr);
@@ -153,6 +153,15 @@ public class FSUtils {
             }
         }
         return partitions;
+    }
+
+    public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr, boolean assumeDatePartitioning)
+            throws IOException {
+       if (assumeDatePartitioning) {
+           return getAllFoldersThreeLevelsDown(fs, basePathStr);
+       } else {
+           return getAllFoldersWithPartitionMetaFile(fs, basePathStr);
+       }
     }
 
     public static String getFileExtension(String fullName) {

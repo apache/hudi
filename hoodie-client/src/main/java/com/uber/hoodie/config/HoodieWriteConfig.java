@@ -51,6 +51,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
     private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
     private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
+    private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
+    private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
 
 
     private HoodieWriteConfig(Properties props) {
@@ -74,6 +76,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Boolean shouldAutoCommit() {
         return Boolean.parseBoolean(props.getProperty(HOODIE_AUTO_COMMIT_PROP));
+    }
+
+    public Boolean shouldAssumeDatePartitioning() {
+        return Boolean.parseBoolean(props.getProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP));
     }
 
     public int getInsertShuffleParallelism() {
@@ -337,6 +343,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
                 WRITE_STATUS_STORAGE_LEVEL, DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
             setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP),
                 HOODIE_AUTO_COMMIT_PROP, DEFAULT_HOODIE_AUTO_COMMIT);
+            setDefaultOnCondition(props, !props.containsKey(HOODIE_ASSUME_DATE_PARTITIONING_PROP),
+                    HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
 
 
             setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().build());

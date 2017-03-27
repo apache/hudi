@@ -63,7 +63,7 @@ public class TestHoodieSnapshotCopier {
 
         // Do the snapshot
         HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-        copier.snapshot(jsc, basePath, outputPath);
+        copier.snapshot(jsc, basePath, outputPath, true);
 
         // Nothing changed; we just bail out
         assertEquals(fs.listStatus(new Path(basePath)).length, 1);
@@ -117,7 +117,7 @@ public class TestHoodieSnapshotCopier {
 
         // Do a snapshot copy
         HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-        copier.snapshot(jsc, basePath, outputPath);
+        copier.snapshot(jsc, basePath, outputPath, false);
 
         // Check results
         assertTrue(fs.exists(new Path(outputPath + "/2016/05/01/" + file11.getName())));

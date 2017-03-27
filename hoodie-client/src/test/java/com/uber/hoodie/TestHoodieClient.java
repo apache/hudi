@@ -403,7 +403,7 @@ public class TestHoodieClient implements Serializable {
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
-        List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath());
+        List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
         final TableFileSystemView view = table.getFileSystemView();
@@ -475,7 +475,7 @@ public class TestHoodieClient implements Serializable {
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
-        List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath());
+        List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
         final TableFileSystemView view1 = table.getFileSystemView();

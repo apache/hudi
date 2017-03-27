@@ -77,7 +77,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     String compactionCommit = startCompactionCommit(hoodieTable);
     log.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommit);
     List<String> partitionPaths =
-        FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath());
+        FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), config.shouldAssumeDatePartitioning());
 
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<CompactionOperation> operations =
