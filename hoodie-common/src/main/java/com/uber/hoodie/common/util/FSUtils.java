@@ -210,6 +210,11 @@ public class FSUtils {
         return String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
     }
 
+    public static String maskWithoutLogVersion(String commitTime, String fileId, String logFileExtension) {
+        return String.format("%s_%s%s*", fileId, commitTime, logFileExtension);
+    }
+
+
     /**
      * Get the latest log file written from the list of log files passed in
      *

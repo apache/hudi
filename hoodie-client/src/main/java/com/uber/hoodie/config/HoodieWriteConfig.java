@@ -19,6 +19,7 @@ package com.uber.hoodie.config;
 
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
+import com.uber.hoodie.config.HoodieCompactionConfig.Builder;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCleaner;
 import com.uber.hoodie.metrics.MetricsReporterType;
@@ -146,6 +147,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public boolean isAutoClean() {
         return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.AUTO_CLEAN_PROP));
+    }
+
+    public boolean isInlineCompaction() {
+        return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
+    }
+
+    public int getInlineCompactDeltaCommitMax() {
+        return Integer.parseInt(
+            props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
     }
 
     /**

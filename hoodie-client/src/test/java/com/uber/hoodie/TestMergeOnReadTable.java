@@ -189,7 +189,8 @@ public class TestMergeOnReadTable {
         return HoodieWriteConfig.newBuilder().withPath(basePath)
             .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
             .withCompactionConfig(
-                HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
+                HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
+                    .withInlineCompaction(false).build())
             .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
 
             .forTable("test-trip-table").withIndexConfig(

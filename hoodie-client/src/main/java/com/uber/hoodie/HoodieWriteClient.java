@@ -26,6 +26,7 @@ import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -39,6 +40,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -57,7 +59,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -365,6 +366,18 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 new HoodieInstant(true, actionType, commitTime),
                 Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
             // Save was a success
+            // Do a inline compaction if enabled
+            if (config.isInlineCompaction()) {
+                Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc);
+                if (compactionMetadata.isPresent()) {
+                    logger.info("Compacted successfully on commit " + commitTime);
+                    metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
+                } else {
+                    logger.info("Compaction did not run for commit " + commitTime);
+                    metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
+                }
+            }
+
             // We cannot have unbounded commit files. Archive commits if we have to archive
             archiveLog.archiveIfRequired();
             if(config.isAutoClean()) {
@@ -785,11 +798,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
     public void startCommitWithTime(String commitTime) {
         logger.info("Generate a new commit time " + commitTime);
-        HoodieTableMetaClient metaClient =
-            new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+        HoodieTable<T> table = HoodieTable
+            .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+        String commitActionType = table.getCommitActionType();
         activeTimeline.createInflight(
-            new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime));
+            new HoodieInstant(true, commitActionType, commitTime));
     }
 
     public static SparkConf registerClasses(SparkConf conf) {
@@ -829,11 +843,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * @throws IOException
      */
     private void rollbackInflightCommits() {
-        HoodieTableMetaClient metaClient =
-            new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline inflightTimeline =
-            metaClient.getActiveTimeline().getCommitTimeline().filterInflights();
-
+        HoodieTable<T> table = HoodieTable
+            .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        HoodieTimeline inflightTimeline = table.getCommitTimeline().filterInflights();
         List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
             .collect(Collectors.toList());
         Collections.reverse(commits);

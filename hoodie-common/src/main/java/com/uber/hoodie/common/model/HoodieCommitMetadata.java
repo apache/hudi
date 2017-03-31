@@ -18,10 +18,12 @@ package com.uber.hoodie.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.annotate.JsonAutoDetect;
 import org.codehaus.jackson.annotate.JsonMethod;
+import org.codehaus.jackson.map.DeserializationConfig.Feature;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.IOException;
@@ -38,7 +40,7 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
     private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
-    private HashMap<String, List<HoodieWriteStat>> partitionToWriteStats;
+    protected HashMap<String, List<HoodieWriteStat>> partitionToWriteStats;
 
     private HashMap<String, String> extraMetadataMap;
 
@@ -98,6 +100,7 @@ public class HoodieCommitMetadata implements Serializable {
             return new HoodieCommitMetadata();
         }
         ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(Feature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.setVisibility(JsonMethod.FIELD, JsonAutoDetect.Visibility.ANY);
         return mapper.readValue(jsonStr, HoodieCommitMetadata.class);
     }

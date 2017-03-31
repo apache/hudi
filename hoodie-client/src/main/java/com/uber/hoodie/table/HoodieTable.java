@@ -18,7 +18,7 @@ package com.uber.hoodie.table;
 
 import com.google.common.collect.Sets;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
-import com.uber.hoodie.avro.model.HoodieSavepointPartitionMetadata;
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -34,6 +34,7 @@ import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 
 import com.uber.hoodie.exception.HoodieSavepointException;
+import java.util.Optional;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.Partitioner;
 
@@ -41,9 +42,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * Abstract implementation of a HoodieTable
@@ -195,8 +196,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
                 return getActiveTimeline().getCommitTimeline();
             case MERGE_ON_READ:
                 // We need to include the parquet files written out in delta commits
+                // Include commit action to be able to start doing a MOR over a COW dataset - no migration required
                 return getActiveTimeline().getTimelineOfActions(
-                    Sets.newHashSet(HoodieActiveTimeline.COMPACTION_ACTION,
+                    Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION,
                         HoodieActiveTimeline.DELTA_COMMIT_ACTION));
             default:
                 throw new HoodieException("Unsupported table type :"+ metaClient.getTableType());
@@ -293,4 +295,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
                 throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
         }
     }
+
+    /**
+     * Run Compaction on the table.
+     * Compaction arranges the data so that it is optimized for data access
+     */
+    public abstract Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc);
 }

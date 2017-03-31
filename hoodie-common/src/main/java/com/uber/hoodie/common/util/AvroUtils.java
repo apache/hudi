@@ -47,6 +47,7 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.mapred.FsInput;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
@@ -67,33 +68,39 @@ public class AvroUtils {
 
     public static List<HoodieRecord<HoodieAvroPayload>> loadFromFiles(FileSystem fs,
         List<String> deltaFilePaths, Schema expectedSchema) {
-
         List<HoodieRecord<HoodieAvroPayload>> loadedRecords = Lists.newArrayList();
         deltaFilePaths.forEach(s -> {
-            Path path = new Path(s);
-            try {
-                SeekableInput input =
-                    new AvroFSInput(FileContext.getFileContext(fs.getConf()), path);
-                GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>();
-                // Set the expected schema to be the current schema to account for schema evolution
-                reader.setExpected(expectedSchema);
-
-                FileReader<GenericRecord> fileReader = DataFileReader.openReader(input, reader);
-                for (GenericRecord deltaRecord : fileReader) {
-                    String key = deltaRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-                    String partitionPath =
-                        deltaRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-                    loadedRecords.add(new HoodieRecord<>(new HoodieKey(key, partitionPath),
-                        new HoodieAvroPayload(Optional.of(deltaRecord))));
-                }
-                fileReader.close(); // also closes underlying FsInput
-            } catch (IOException e) {
-                throw new HoodieIOException("Could not read avro records from path " + s, e);
-            }
+            List<HoodieRecord<HoodieAvroPayload>> records = loadFromFile(fs, s, expectedSchema);
+            loadedRecords.addAll(records);
         });
         return loadedRecords;
     }
 
+    public static List<HoodieRecord<HoodieAvroPayload>> loadFromFile(FileSystem fs,
+        String deltaFilePath, Schema expectedSchema) {
+        List<HoodieRecord<HoodieAvroPayload>> loadedRecords = Lists.newArrayList();
+        Path path = new Path(deltaFilePath);
+        try {
+            SeekableInput input = new FsInput(path, fs.getConf());
+            GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>();
+            // Set the expected schema to be the current schema to account for schema evolution
+            reader.setExpected(expectedSchema);
+
+            FileReader<GenericRecord> fileReader = DataFileReader.openReader(input, reader);
+            for (GenericRecord deltaRecord : fileReader) {
+                String key = deltaRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+                String partitionPath =
+                    deltaRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+                loadedRecords.add(new HoodieRecord<>(new HoodieKey(key, partitionPath),
+                    new HoodieAvroPayload(Optional.of(deltaRecord))));
+            }
+            fileReader.close(); // also closes underlying FsInput
+        } catch (IOException e) {
+            throw new HoodieIOException("Could not read avro records from path " + deltaFilePath,
+                e);
+        }
+        return loadedRecords;
+    }
 
     public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
         Optional<Long> durationInMs, List<HoodieCleanStat> cleanStats) {

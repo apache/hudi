@@ -314,7 +314,8 @@
             <dependency>
                 <groupId>org.apache.hadoop</groupId>
                 <artifactId>hadoop-client</artifactId>
-                <version>${hadoop.version}</version>
+                <version>${hadoop.version}-cdh${cdh.version}</version>
+                <scope>provided</scope>
             </dependency>
 
             <dependency>

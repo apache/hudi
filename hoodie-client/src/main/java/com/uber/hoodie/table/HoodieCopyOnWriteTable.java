@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.table;
 
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -32,6 +33,7 @@ import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
 import com.uber.hoodie.io.HoodieUpdateHandle;
 
+import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -55,6 +57,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.spark.api.java.JavaSparkContext;
 import scala.Option;
 import scala.Tuple2;
 
@@ -469,5 +472,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         Iterator recordItr,
         Partitioner partitioner) {
         return handleUpsertPartition(commitTime, partition, recordItr, partitioner);
+    }
+
+    @Override
+    public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc) {
+        logger.info("Nothing to compact in COW storage format");
+        return Optional.empty();
     }
 }
