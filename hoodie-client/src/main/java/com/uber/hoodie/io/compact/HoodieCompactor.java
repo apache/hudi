@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.io.compact;
 
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;

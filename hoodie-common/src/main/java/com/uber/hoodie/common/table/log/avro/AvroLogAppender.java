@@ -25,6 +25,7 @@ import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.mapred.FsInput;
 import org.apache.hadoop.fs.AvroFSInput;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileContext;
@@ -67,7 +68,7 @@ public class AvroLogAppender implements HoodieLogAppender<IndexedRecord> {
             //TODO - check for log corruption and roll over if needed
             log.info(config.getLogFile() + " exists. Appending to existing file");
             // this log path exists, we will append to it
-            fs = FileSystem.get(fs.getConf());
+            // fs = FileSystem.get(fs.getConf());
             try {
                 this.output = fs.append(path, config.getBufferSize());
             } catch (RemoteException e) {
@@ -85,8 +86,9 @@ public class AvroLogAppender implements HoodieLogAppender<IndexedRecord> {
                     }
                 }
             }
+
             this.writer
-                .appendTo(new AvroFSInput(FileContext.getFileContext(fs.getConf()), path), output);
+                .appendTo(new FsInput(path, fs.getConf()), output);
             // we always want to flush to disk everytime a avro block is written
             this.writer.setFlushOnEveryBlock(true);
         } else {

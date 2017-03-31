@@ -37,6 +37,14 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
     private static final String DEFAULT_AUTO_CLEAN = "true";
 
+    // Turn on inline compaction - after fw delta commits a inline compaction will be run
+    public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
+    private static final String DEFAULT_INLINE_COMPACT = "true";
+
+    // Run a compaction every N delta commits
+    public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
+    private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "4";
+
     public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP =
         "hoodie.cleaner.fileversions.retained";
     private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
@@ -102,6 +110,16 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withInlineCompaction(Boolean inlineCompaction) {
+            props.setProperty(INLINE_COMPACT_PROP, String.valueOf(inlineCompaction));
+            return this;
+        }
+
+        public Builder inlineCompactionEvery(int deltaCommits) {
+            props.setProperty(INLINE_COMPACT_PROP, String.valueOf(deltaCommits));
+            return this;
+        }
+
         public Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
             props.setProperty(CLEANER_POLICY_PROP, policy.name());
             return this;
@@ -153,6 +171,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             HoodieCompactionConfig config = new HoodieCompactionConfig(props);
             setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP),
                     AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
+            setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_PROP),
+                INLINE_COMPACT_PROP, DEFAULT_INLINE_COMPACT);
+            setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP),
+                INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS);
             setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP),
                 CLEANER_POLICY_PROP, DEFAULT_CLEANER_POLICY);
             setDefaultOnCondition(props, !props.containsKey(CLEANER_FILE_VERSIONS_RETAINED_PROP),

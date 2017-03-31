@@ -101,7 +101,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
                     throw new HoodieUpsertException(
                         "Failed to initialize HoodieUpdateHandle for FileId: " + fileId
                             + " on commit " + commitTime + " on HDFS path " + hoodieTable
-                            .getMetaClient().getBasePath());
+                            .getMetaClient().getBasePath() + partitionPath, e);
                 }
                 writeStatus.getStat().setFullPath(currentLogFile.getPath().toString());
             }

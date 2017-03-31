@@ -20,6 +20,7 @@ import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
@@ -36,7 +37,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieBloomIndex;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.CompactionFilter;
-import com.uber.hoodie.io.compact.HoodieCompactionMetadata;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import com.uber.hoodie.table.HoodieTable;
@@ -100,7 +100,8 @@ public class TestHoodieCompactor {
         return HoodieWriteConfig.newBuilder().withPath(basePath)
             .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
             .withCompactionConfig(
-                HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
+                HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
+                    .withInlineCompaction(false).build())
             .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
             .forTable("test-trip-table").withIndexConfig(
                 HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
@@ -196,7 +197,7 @@ public class TestHoodieCompactor {
                     "After compaction there should be no log files visiable on a Realtime view",
                     logFiles.isEmpty());
             }
-            assertTrue(result.getPartitionToWriteStats().containsKey(partitionPath));
+            assertTrue(result.getPartitionToCompactionWriteStats().containsKey(partitionPath));
         }
     }
 

@@ -16,7 +16,10 @@
 
 package com.uber.hoodie.common.table.view;
 
+import static java.util.stream.Collectors.toList;
+
 import com.google.common.collect.Maps;
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -27,6 +30,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
+import java.util.function.BinaryOperator;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -199,23 +203,18 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
         // All the log files filtered from the above list, sorted by version numbers
         List<HoodieLogFile> allLogFiles = Arrays.stream(files).filter(s -> s.getPath().getName()
             .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
-            .map(HoodieLogFile::new).collect(Collectors.collectingAndThen(Collectors.toList(),
+            .map(HoodieLogFile::new).collect(Collectors.collectingAndThen(toList(),
                 l -> l.stream().sorted(HoodieLogFile.getLogVersionComparator())
-                    .collect(Collectors.toList())));
+                    .collect(toList())));
 
         // Filter the delta files by the commit time of the latest base fine and collect as a list
         Optional<HoodieInstant> lastTimestamp = metaClient.getActiveTimeline().lastInstant();
-        if (!lastTimestamp.isPresent()) {
-            return Maps.newHashMap();
-        }
-
-        return getLatestVersionInPartition(partitionPath, lastTimestamp.get().getTimestamp()).map(
+        return lastTimestamp.map(hoodieInstant -> getLatestVersionInPartition(partitionPath,
+            hoodieInstant.getTimestamp()).map(
             hoodieDataFile -> Pair.of(hoodieDataFile, allLogFiles.stream().filter(
                 s -> s.getFileId().equals(hoodieDataFile.getFileId()) && s.getBaseCommitTime()
                     .equals(hoodieDataFile.getCommitTime())).collect(Collectors.toList()))).collect(
-            Collectors.toMap(
-                (Function<Pair<HoodieDataFile, List<HoodieLogFile>>, HoodieDataFile>) Pair::getKey,
-                (Function<Pair<HoodieDataFile, List<HoodieLogFile>>, List<HoodieLogFile>>) Pair::getRight));
+            Collectors.toMap(Pair::getKey, Pair::getRight))).orElseGet(Maps::newHashMap);
     }
 
 
@@ -248,9 +247,9 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
     }
 
     private Collector<HoodieDataFile, ?, List<HoodieDataFile>> toSortedFileStatus() {
-        return Collectors.collectingAndThen(Collectors.toList(),
+        return Collectors.collectingAndThen(toList(),
             l -> l.stream().sorted(HoodieDataFile.getCommitTimeComparator())
-                .collect(Collectors.toList()));
+                .collect(toList()));
     }
 
 

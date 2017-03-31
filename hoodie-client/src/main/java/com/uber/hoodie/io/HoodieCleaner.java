@@ -22,8 +22,10 @@ import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -107,8 +109,18 @@ public class HoodieCleaner<T extends HoodieRecordPayload<T>> {
             }
             // Delete the remaining files
             while (commitItr.hasNext()) {
+                HoodieDataFile nextRecord = commitItr.next();
                 deletePaths.add(String.format("%s/%s/%s", config.getBasePath(), partitionPath,
-                    commitItr.next().getFileName()));
+                    nextRecord.getFileName()));
+                if (hoodieTable.getMetaClient().getTableType()
+                    == HoodieTableType.MERGE_ON_READ) {
+                    // If merge on read, then clean the log files for the commits as well
+                    deletePaths.add(String
+                        .format("%s/%s/%s", config.getBasePath(), partitionPath,
+                            FSUtils.maskWithoutLogVersion(nextRecord.getCommitTime(),
+                                nextRecord.getFileId(),
+                                HoodieLogFile.DELTA_EXTENSION)));
+                }
             }
         }
         return deletePaths;
@@ -182,6 +194,14 @@ public class HoodieCleaner<T extends HoodieRecordPayload<T>> {
                         deletePaths.add(String
                             .format("%s/%s/%s", config.getBasePath(), partitionPath, FSUtils
                                 .maskWithoutTaskPartitionId(fileCommitTime, afile.getFileId())));
+                        if (hoodieTable.getMetaClient().getTableType()
+                            == HoodieTableType.MERGE_ON_READ) {
+                            // If merge on read, then clean the log files for the commits as well
+                            deletePaths.add(String
+                                .format("%s/%s/%s", config.getBasePath(), partitionPath,
+                                    FSUtils.maskWithoutLogVersion(fileCommitTime, afile.getFileId(),
+                                        HoodieLogFile.DELTA_EXTENSION)));
+                        }
                     }
                 }
             }
