@@ -7,8 +7,6 @@ permalink: quickstart.html
 ---
 
 
-
-
 ## Download Hoodie
 
 Check out code and pull it into Intellij as a normal maven project.
@@ -38,6 +36,39 @@ hdfs dfs -copyFromLocal /tmp/hoodie/sample-table/* /tmp/hoodie/sample-table
 
 ## Register Dataset to Hive Metastore
 
+Now, lets see how we can publish this data into Hive.
+
+#### Starting up Hive locally
+
+```
+hdfs namenode # start name node
+hdfs datanode # start data node
+
+bin/hive --service metastore -p 10000 # start metastore
+bin/hiveserver2 \
+  --hiveconf hive.server2.thrift.port=10010 \
+  --hiveconf hive.root.logger=INFO,console \
+  --hiveconf hive.aux.jars.path=hoodie/hoodie-hadoop-mr/target/hoodie-hadoop-mr-0.3.6-SNAPSHOT.jar
+
+```
+
+
+#### Hive Sync Tool
+
+Once Hive is up and running, the sync tool can be used to sync commits done above to a Hive table, as follows.
+
+```
+java -cp target/hoodie-hive-0.3.1-SNAPSHOT-jar-with-dependencies.jar:target/jars/* com.uber.hoodie.hive.HiveSyncTool \
+  --base-path file:///tmp/hoodie/sample-table/ \
+  --database default \
+  --table hoodie_test \
+  --user hive \
+  --pass hive \
+  --jdbc-url jdbc:hive2://localhost:10010/
+
+```
+
+#### Manually via Beeline
 Add in the hoodie-hadoop-mr jar so, Hive can read the Hoodie dataset and answer the query.
 
 ```
