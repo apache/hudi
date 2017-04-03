@@ -25,6 +25,7 @@ import com.uber.hoodie.hive.model.StoragePartition;
 import com.uber.hoodie.hive.model.TablePartition;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -151,11 +152,11 @@ public class HoodieHiveDatasetSyncTask {
                     .withFSClient(fsClient).build();
 
             List<StoragePartition> storagePartitions = Lists.newArrayList();
-            FileStatus[] storagePartitionPaths = schemaSyncTask.getPartitionStrategy()
+            List<String> storagePartitionPaths = schemaSyncTask.getPartitionStrategy()
                 .scanAllPartitions(schemaSyncTask.getReference(), schemaSyncTask.getFsClient());
-            for (FileStatus fileStatus : storagePartitionPaths) {
+            for (String path : storagePartitionPaths) {
                 storagePartitions.add(new StoragePartition(schemaSyncTask.getReference(),
-                    schemaSyncTask.getPartitionStrategy(), fileStatus));
+                    schemaSyncTask.getPartitionStrategy(), path));
             }
             LOG.info("Storage partitions scan complete. Found " + storagePartitions.size());
 

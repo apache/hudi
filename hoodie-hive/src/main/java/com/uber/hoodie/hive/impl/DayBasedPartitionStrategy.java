@@ -16,6 +16,8 @@
 
 package com.uber.hoodie.hive.impl;
 
+import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.hive.HoodieHiveDatasetException;
 import com.uber.hoodie.hive.PartitionStrategy;
 import com.uber.hoodie.hive.client.HoodieFSClient;
 import com.uber.hoodie.hive.model.HoodieDatasetReference;
@@ -26,6 +28,9 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Simple day based partitions.
@@ -42,8 +47,13 @@ public class DayBasedPartitionStrategy implements PartitionStrategy {
         this.dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
     }
 
-    @Override public FileStatus[] scanAllPartitions(HoodieDatasetReference ref, HoodieFSClient fsClient) {
-        return fsClient.getDirectoriesMatchingPattern(ref, "/*/*/*");
+    @Override public List<String> scanAllPartitions(HoodieDatasetReference ref, HoodieFSClient fsClient) {
+        try {
+            return FSUtils.getAllPartitionPaths(fsClient.getFs(), ref.getBaseDatasetPath());
+        } catch (IOException ioe) {
+            throw new HoodieHiveDatasetException(
+                    "IOException when listing partitions under dataset " + ref , ioe);
+        }
     }
 
     @Override public String[] getHivePartitionFieldNames() {
@@ -51,28 +61,18 @@ public class DayBasedPartitionStrategy implements PartitionStrategy {
     }
 
     @Override
-    public String[] convertPartitionToValues(HoodieDatasetReference metadata, Path partition) {
+    public String[] convertPartitionToValues(HoodieDatasetReference metadata, String partitionPath) {
         //yyyy/mm/dd
-        String basePath = metadata.getBaseDatasetPath();
-        String partitionPath = partition.toUri().getPath();
-        if (!partitionPath.contains(basePath)) {
+        String[] splits = partitionPath.split("/");
+        if (splits.length != 3) {
             throw new IllegalArgumentException(
-                "Partition path " + partitionPath + " is not part of the dataset " + metadata);
+                    "Partition path " + partitionPath + " is not in the form yyyy/mm/dd ");
         }
         // Get the partition part and remove the / as well at the end
-        String partitionPart = partitionPath.substring(basePath.length() + 1);
-        LOG.info("Extracting parts from " + partitionPart);
-        int year = extractPart(partitionPart, 0);
-        int mm = extractPart(partitionPart, 1);
-        int dd = extractPart(partitionPart, 2);
+        int year = Integer.parseInt(splits[0]);
+        int mm = Integer.parseInt(splits[1]);
+        int dd = Integer.parseInt(splits[2]);
         DateTime dateTime = new DateTime(year, mm, dd, 0, 0);
         return new String[] {dtfOut.print(dateTime)};
     }
-
-    private int extractPart(String pathString, int index) {
-        String[] parts = pathString.split("/");
-        String part = parts[index];
-        return Integer.parseInt(part);
-    }
-
 }
