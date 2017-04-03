@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.io;
+package com.uber.hoodie.common.table.log.avro;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
@@ -26,7 +25,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Spliterator;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
