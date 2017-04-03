@@ -26,13 +26,12 @@ import org.slf4j.LoggerFactory;
 public class StoragePartition {
     private static Logger LOG = LoggerFactory.getLogger(StoragePartition.class);
     private final PartitionStrategy partitionStrategy;
-    private final Path partitionPath;
+    private final String partitionPath;
     private final HoodieDatasetReference metadata;
 
-    public StoragePartition(HoodieDatasetReference metadata, PartitionStrategy partitionStrategy,
-        FileStatus input) {
+    public StoragePartition(HoodieDatasetReference metadata, PartitionStrategy partitionStrategy, String partitionPath) {
         this.metadata = metadata;
-        this.partitionPath = Path.getPathWithoutSchemeAndAuthority(input.getPath());
+        this.partitionPath = partitionPath;
         this.partitionStrategy = partitionStrategy;
     }
 
@@ -41,7 +40,8 @@ public class StoragePartition {
     }
 
     public Path getPartitionPath() {
-        return partitionPath;
+        return new Path(metadata.getBaseDatasetPath(), partitionPath);
+        //return Path.getPathWithoutSchemeAndAuthority(new Path(metadata.getBaseDatasetPath(), partitionPath));
     }
 
     @Override public String toString() {

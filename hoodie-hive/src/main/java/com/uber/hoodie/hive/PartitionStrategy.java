@@ -21,6 +21,8 @@ import com.uber.hoodie.hive.model.HoodieDatasetReference;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
+import java.util.List;
+
 /**
  * Abstraction to define HDFS partition strategies.
  * Strategy provides hookups to map partitions on to physical layout
@@ -29,13 +31,14 @@ import org.apache.hadoop.fs.Path;
  */
 public interface PartitionStrategy {
     /**
-     * Scans the file system for all partitions and returns FileStatus[] which are the available partitions
+     * Scans the file system for all partitions and returns String[] which are the available partitions, relative to
+     * the base path
      *
      * @param basePath
      * @param fsClient
      * @return
      */
-    FileStatus[] scanAllPartitions(HoodieDatasetReference basePath, HoodieFSClient fsClient);
+    List<String> scanAllPartitions(HoodieDatasetReference basePath, HoodieFSClient fsClient);
 
     /**
      * Get the list of hive field names the dataset will be partitioned on.
@@ -47,10 +50,10 @@ public interface PartitionStrategy {
 
     /**
      * Convert a Partition path (returned in scanAllPartitions) to values for column names returned in getHivePartitionFieldNames
-     * e.g. /data/topic/2016/12/12/ will return [2016, 12, 12]
+     * e.g. 2016/12/12/ will return [2016, 12, 12]
      *
-     * @param partition storage path
+     * @param partitionPath storage path
      * @return List of partitions field values
      */
-    String[] convertPartitionToValues(HoodieDatasetReference metadata, Path partition);
+    String[] convertPartitionToValues(HoodieDatasetReference metadata, String partitionPath);
 }

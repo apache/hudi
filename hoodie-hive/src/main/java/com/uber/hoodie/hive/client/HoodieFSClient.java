@@ -50,6 +50,7 @@ public class HoodieFSClient {
     final public static String PARQUET_EXTENSION_ZIPPED = ".parquet.gz";
     private final static Logger LOG = LoggerFactory.getLogger(HoodieFSClient.class);
     private final HoodieHiveConfiguration conf;
+
     private final FileSystem fs;
 
     public HoodieFSClient(HoodieHiveConfiguration configuration) {
@@ -124,32 +125,6 @@ public class HoodieFSClient {
     }
 
     /**
-     * Finds all the files/directories that match the pattern under the {@link HoodieDatasetReference} basePath
-     *
-     * @param metadata
-     * @param pattern
-     * @return
-     */
-    public FileStatus[] getDirectoriesMatchingPattern(HoodieDatasetReference metadata, String pattern) {
-        try {
-            Path path = new Path(metadata.getBaseDatasetPath() + pattern);
-            FileStatus[] status = fs.globStatus(path);
-            List<FileStatus> returns = Lists.newArrayList();
-            for(FileStatus st:status) {
-                if(!st.getPath().toString().contains(".distcp")) {
-                    // Ignore temporary directories created by distcp
-                    returns.add(st);
-                }
-            }
-            return returns.toArray(new FileStatus[returns.size()]);
-        } catch (IOException e) {
-            throw new HoodieHiveDatasetException(
-                "IOException when reading directories under dataset " + metadata + " with pattern "
-                    + pattern, e);
-        }
-    }
-
-    /**
      * Get the list of storage partitions which does not have its equivalent hive partitions
      *
      * @param tablePartitions
@@ -205,4 +180,7 @@ public class HoodieFSClient {
         return Objects.hashCode(paths);
     }
 
+    public FileSystem getFs() {
+        return fs;
+    }
 }
