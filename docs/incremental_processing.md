@@ -17,15 +17,131 @@ discusses a few tools that can be used to achieve these on different contexts.
 ## Upserts
 
 Upserts can be used to apply a delta or an incremental change to a Hoodie dataset. For e.g, the incremental changes could be from a Kafka topic or files uploaded to HDFS or
-even changes pulled from another Hoodie dataset. The `HoodieDeltaStreamer` utility provides the way to achieve all of these, by using the capabilities of `HoodieWriteClient`.
+even changes pulled from another Hoodie dataset.
 
-{% include callout.html content="Get involved in rewriting this tool [here](https://github.com/uber/hoodie/issues/20)" type="info" %}
+
+#### DeltaStreamer
+
+The `HoodieDeltaStreamer` utility provides the way to achieve all of these, by using the capabilities of `HoodieWriteClient`.
 
 The tool is a spark job (part of hoodie-utilities), that provides the following functionality
 
  - Ability to consume new events from Kafka, incremental imports from Sqoop or output of `HiveIncrementalPuller` or files under a folder on HDFS
  - Support json, avro or a custom payload types for the incoming data
  - New data is written to a Hoodie dataset, with support for checkpointing & schemas and registered onto Hive
+
+ To understand more
+
+```
+
+[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer hoodie-utilities/target/hoodie-utilities-0.3.6-SNAPSHOT-bin.jar --help
+Usage: <main class> [options]
+  Options:
+    --help, -h
+       Default: false
+    --hoodie-client-config
+       path to properties file on localfs or dfs, with hoodie client config.
+       Sane defaultsare used, but recommend use to provide basic things like metrics
+       endpoints, hive configs etc
+    --key-generator-class
+       Subclass of com.uber.hoodie.utilities.common.KeyExtractor to generatea
+       HoodieKey from the given avro record. Built in: SimpleKeyGenerator (Uses provided
+       field names as recordkey & partitionpath. Nested fields specified via dot
+       notation, e.g: a.b.c)
+       Default: com.uber.hoodie.utilities.keygen.SimpleKeyGenerator
+    --key-generator-config
+       Path to properties file on localfs or dfs, with KeyGenerator configs. For
+       list of acceptable properites, refer the KeyGenerator class
+    --max-input-bytes
+       Maximum number of bytes to read from source. Default: 1TB
+       Default: 1099511627776
+    --op
+       Takes one of these values : UPSERT (default), INSERT (use when input is
+       purely new data/inserts to gain speed)
+       Default: UPSERT
+       Possible Values: [UPSERT, INSERT]
+    --payload-class
+       subclass of HoodieRecordPayload, that works off a GenericRecord. Default:
+       SourceWrapperPayload. Implement your own, if you want to do something other than overwriting
+       existing value
+       Default: com.uber.hoodie.utilities.deltastreamer.DeltaStreamerAvroPayload
+    --schemaprovider-class
+       subclass of com.uber.hoodie.utilities.schema.SchemaProvider to attach
+       schemas to input & target table data, built in options: FilebasedSchemaProvider
+       Default: com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+    --schemaprovider-config
+       path to properties file on localfs or dfs, with schema configs. For list
+       of acceptable properties, refer the schema provider class
+    --source-class
+       subclass of com.uber.hoodie.utilities.sources.Source to use to read data.
+       built-in options: com.uber.hoodie.utilities.common.{DFSSource (default),
+       KafkaSource, HiveIncrPullSource}
+       Default: com.uber.hoodie.utilities.sources.DFSSource
+     --source-config
+       path to properties file on localfs or dfs, with source configs. For list
+       of acceptable properties, refer the source class
+    --source-format
+       Format of data in source, JSON (default), Avro. All source data is
+       converted to Avro using the provided schema in any case
+       Default: JSON
+       Possible Values: [AVRO, JSON, ROW, CUSTOM]
+    --source-ordering-field
+       Field within source record to decide how to break ties between  records
+       with same key in input data. Default: 'ts' holding unix timestamp of record
+       Default: ts
+    --target-base-path
+       base path for the target hoodie dataset
+    --target-table
+       name of the target table in Hive
+
+
+```
+
+For e.g, followings ingests data from Kafka (avro records as the client example)
+
+
+```
+[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer hoodie-utilities/target/hoodie-utilities-0.3.6-SNAPSHOT-bin.jar \
+     --hoodie-client-config hoodie-utilities/src/main/resources/delta-streamer-config/hoodie-client.properties \
+     --key-generator-config hoodie-utilities/src/main/resources/delta-streamer-config/key-generator.properties \
+      --schemaprovider-config hoodie-utilities/src/main/resources/delta-streamer-config/schema-provider.properties \
+      --source-class com.uber.hoodie.utilities.sources.KafkaSource \
+      --source-config hoodie-utilities/src/main/resources/delta-streamer-config/source.properties \
+      --source-ordering-field rider \
+      --target-base-path file:///tmp/hoodie-deltastreamer-op \
+      --target-table uber.trips
+```
+
+
+#### Syncing to Hive
+
+Once new data is written to a Hoodie dataset, via tools like above, we need the ability to sync with Hive and reflect the table schema such that queries can pick up new columns and partitions. To do this, Hoodie provides a `HiveSyncTool`, which can be
+invoked as below, once you have built the hoodie-hive module.
+
+```
+ [hoodie-hive]$ java -cp target/hoodie-hive-0.3.6-SNAPSHOT-jar-with-dependencies.jar:target/jars/* com.uber.hoodie.hive.HiveSyncTool --help
+Usage: <main class> [options]
+  Options:
+  * --base-path
+       Basepath of hoodie dataset to sync
+  * --database
+       name of the target database in Hive
+    --help, -h
+
+       Default: false
+  * --jdbc-url
+       Hive jdbc connect url
+  * --pass
+       Hive password
+  * --table
+       name of the target table in Hive
+  * --user
+       Hive username
+
+
+```
+
+{% include callout.html content="Note that for now, due to jar mismatches between Spark & Hive, its recommended to run this as a separate Java task in your workflow manager/cron. This is getting fix [here](https://github.com/uber/hoodie/issues/123)" type="info" %}
 
 
 ## Incremental Pull
