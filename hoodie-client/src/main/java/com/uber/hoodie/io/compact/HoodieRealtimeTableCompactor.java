@@ -64,7 +64,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
   @Override
   public HoodieCompactionMetadata compact(JavaSparkContext jsc, HoodieWriteConfig config,
-      HoodieTable hoodieTable, CompactionFilter compactionFilter) throws IOException {
+      HoodieTable hoodieTable) throws IOException {
     Preconditions.checkArgument(
         hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "HoodieRealtimeTableCompactor can only compact table of type "
@@ -86,12 +86,12 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                 .getFileSystemView()
                 .groupLatestDataFileWithLogFiles(partitionPath).entrySet()
                 .stream()
-                .map(s -> new CompactionOperation(s.getKey(), partitionPath, s.getValue()))
+                .map(s -> new CompactionOperation(s.getKey(), partitionPath, s.getValue(), config))
                 .collect(toList()).iterator()).collect();
     log.info("Total of " + operations.size() + " compactions are retrieved");
 
     // Filter the compactions with the passed in filter. This lets us choose most effective compactions only
-    operations = compactionFilter.filter(operations);
+    operations = config.getCompactionStrategy().orderAndFilter(config, operations);
     if (operations.isEmpty()) {
       log.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
       return null;

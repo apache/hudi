@@ -19,9 +19,9 @@ package com.uber.hoodie.config;
 
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
-import com.uber.hoodie.config.HoodieCompactionConfig.Builder;
+import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.io.HoodieCleaner;
+import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.metrics.MetricsReporterType;
 import org.apache.spark.storage.StorageLevel;
 
@@ -164,6 +164,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
     }
 
+    public CompactionStrategy getCompactionStrategy() {
+        return ReflectionUtils.loadClass(props.getProperty(HoodieCompactionConfig.COMPACTION_STRATEGY_PROP));
+    }
+
+    public Long getTargetIOPerCompactionInMB() {
+        return Long.parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB_PROP));
+    }
+
     /**
      * index properties
      **/
@@ -238,7 +246,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         return new Builder();
     }
 
-    public static class Builder {
+
+
+  public static class Builder {
         private final Properties props = new Properties();
         private boolean isIndexConfigSet = false;
         private boolean isStorageConfigSet = false;

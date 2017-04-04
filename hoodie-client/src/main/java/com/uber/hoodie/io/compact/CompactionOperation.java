@@ -19,61 +19,72 @@ package com.uber.hoodie.io.compact;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
 
+import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * Encapsulates all the needed information about a compaction
  * and make a decision whether this compaction is effective or not
  *
- * @see CompactionFilter
+ * @see CompactionStrategy
  */
 public class CompactionOperation implements Serializable {
-    private String dataFileCommitTime;
-    private long dataFileSize;
-    private List<String> deltaFilePaths;
-    private String dataFilePath;
-    private String fileId;
-    private String partitionPath;
 
-    //Only for serialization/de-serialization
-    @Deprecated
-    public CompactionOperation() {
-    }
+  private String dataFileCommitTime;
+  private long dataFileSize;
+  private List<String> deltaFilePaths;
+  private String dataFilePath;
+  private String fileId;
+  private String partitionPath;
+  private Map<String, Object> metrics;
 
-    public CompactionOperation(HoodieDataFile dataFile, String partitionPath,
-        List<HoodieLogFile> value) {
-        this.dataFilePath = dataFile.getPath();
-        this.fileId = dataFile.getFileId();
-        this.partitionPath = partitionPath;
-        this.dataFileCommitTime = dataFile.getCommitTime();
-        this.dataFileSize = dataFile.getFileStatus().getLen();
-        this.deltaFilePaths = value.stream().map(s -> s.getPath().toString()).collect(
-            Collectors.toList());
-    }
+  //Only for serialization/de-serialization
+  @Deprecated
+  public CompactionOperation() {
+  }
 
-    public String getDataFileCommitTime() {
-        return dataFileCommitTime;
-    }
+  public CompactionOperation(HoodieDataFile dataFile, String partitionPath,
+      List<HoodieLogFile> logFiles, HoodieWriteConfig writeConfig) {
+    this.dataFilePath = dataFile.getPath();
+    this.fileId = dataFile.getFileId();
+    this.partitionPath = partitionPath;
+    this.dataFileCommitTime = dataFile.getCommitTime();
+    this.dataFileSize = dataFile.getFileSize();
+    this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString()).collect(
+        Collectors.toList());
+    this.metrics = writeConfig.getCompactionStrategy()
+        .captureMetrics(dataFile, partitionPath, logFiles);
+  }
 
-    public long getDataFileSize() {
-        return dataFileSize;
-    }
+  public String getDataFileCommitTime() {
+    return dataFileCommitTime;
+  }
 
-    public List<String> getDeltaFilePaths() {
-        return deltaFilePaths;
-    }
+  public long getDataFileSize() {
+    return dataFileSize;
+  }
 
-    public String getDataFilePath() {
-        return dataFilePath;
-    }
+  public List<String> getDeltaFilePaths() {
+    return deltaFilePaths;
+  }
 
-    public String getFileId() {
-        return fileId;
-    }
+  public String getDataFilePath() {
+    return dataFilePath;
+  }
 
-    public String getPartitionPath() {
-        return partitionPath;
-    }
+  public String getFileId() {
+    return fileId;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public Map<String, Object> getMetrics() {
+    return metrics;
+  }
 }
