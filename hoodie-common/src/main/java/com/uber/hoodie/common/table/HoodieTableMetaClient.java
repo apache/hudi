@@ -173,6 +173,23 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     /**
+     * Helper method to initialize a given path, as a given storage type and table name
+     *
+     * @param fs
+     * @param basePath
+     * @param tableType
+     * @param tableName
+     * @return
+     * @throws IOException
+     */
+    public static HoodieTableMetaClient initTableType(FileSystem fs, String basePath, HoodieTableType tableType, String tableName) throws IOException {
+        Properties properties = new Properties();
+        properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
+        properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+        return HoodieTableMetaClient.initializePathAsHoodieDataset(fs, basePath, properties);
+    }
+
+    /**
      * Helper method to initialize a given path as a hoodie dataset with configs passed in as as Properties
      *
      * @param fs
