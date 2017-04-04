@@ -36,7 +36,7 @@ public interface HoodieCompactor extends Serializable {
      * @throws Exception
      */
     HoodieCompactionMetadata compact(JavaSparkContext jsc, final HoodieWriteConfig config,
-        HoodieTable hoodieTable, CompactionFilter compactionFilter) throws Exception;
+        HoodieTable hoodieTable) throws Exception;
 
 
     // Helper methods

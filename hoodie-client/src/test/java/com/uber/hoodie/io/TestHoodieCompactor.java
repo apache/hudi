@@ -36,7 +36,6 @@ import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieBloomIndex;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.io.compact.CompactionFilter;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import com.uber.hoodie.table.HoodieTable;
@@ -114,7 +113,7 @@ public class TestHoodieCompactor {
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
-        compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
+        compactor.compact(jsc, getConfig(), table);
     }
 
     @Test
@@ -130,7 +129,7 @@ public class TestHoodieCompactor {
         writeClient.insert(recordsRDD, newCommitTime).collect();
 
         HoodieCompactionMetadata result =
-            compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
+            compactor.compact(jsc, getConfig(), table);
         assertTrue("If there is nothing to compact, result will be empty",
             result.getFileIdAndFullPaths().isEmpty());
     }
@@ -178,7 +177,7 @@ public class TestHoodieCompactor {
         table = HoodieTable.getHoodieTable(metaClient, config);
 
         HoodieCompactionMetadata result =
-            compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
+            compactor.compact(jsc, getConfig(), table);
 
         // Verify that recently written compacted data file has no log file
         metaClient = new HoodieTableMetaClient(fs, basePath);

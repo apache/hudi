@@ -19,6 +19,8 @@ package com.uber.hoodie.config;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 
+import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
+import com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
@@ -83,6 +85,13 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     public static final String CLEANER_PARALLELISM = "hoodie.cleaner.parallelism";
     public static final String DEFAULT_CLEANER_PARALLELISM = String.valueOf(200);
 
+    public static final String TARGET_IO_PER_COMPACTION_IN_MB_PROP = "hoodie.compaction.target.io";
+    // 500GB of target IO per compaction (both read and write)
+    public static final String DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB = String.valueOf(500 * 1024);
+
+    public static final String COMPACTION_STRATEGY_PROP = "hoodie.compaction.strategy";
+    // 200GB of target IO per compaction
+    public static final String DEFAULT_COMPACTION_STRATEGY = LogFileSizeBasedCompactionStrategy.class.getName();
 
     private HoodieCompactionConfig(Properties props) {
         super(props);
@@ -167,6 +176,16 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withCompactionStrategy(CompactionStrategy compactionStrategy) {
+            props.setProperty(COMPACTION_STRATEGY_PROP, compactionStrategy.getClass().getName());
+            return this;
+        }
+
+        public Builder withTargetIOPerCompactionInMB(long targetIOPerCompactionInMB) {
+            props.setProperty(TARGET_IO_PER_COMPACTION_IN_MB_PROP, String.valueOf(targetIOPerCompactionInMB));
+            return this;
+        }
+
         public HoodieCompactionConfig build() {
             HoodieCompactionConfig config = new HoodieCompactionConfig(props);
             setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP),
@@ -195,6 +214,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
                 COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE, DEFAULT_COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE);
             setDefaultOnCondition(props, !props.containsKey(CLEANER_PARALLELISM),
                 CLEANER_PARALLELISM, DEFAULT_CLEANER_PARALLELISM);
+            setDefaultOnCondition(props, !props.containsKey(COMPACTION_STRATEGY_PROP),
+                COMPACTION_STRATEGY_PROP, DEFAULT_COMPACTION_STRATEGY);
+            setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_COMPACTION_IN_MB_PROP),
+                TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
 
             HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
             Preconditions.checkArgument(

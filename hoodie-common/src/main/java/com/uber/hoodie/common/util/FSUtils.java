@@ -360,4 +360,8 @@ public class FSUtils {
             fs.mkdirs(partitionPath);
         }
     }
+
+    public static Long getSizeInMB(long sizeInBytes) {
+        return sizeInBytes / (1024 * 1024);
+    }
 }

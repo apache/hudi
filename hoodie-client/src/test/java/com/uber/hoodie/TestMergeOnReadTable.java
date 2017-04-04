@@ -32,7 +32,6 @@ import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.io.compact.CompactionFilter;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import com.uber.hoodie.table.HoodieTable;
@@ -165,7 +164,7 @@ public class TestMergeOnReadTable {
         HoodieCompactor compactor = new HoodieRealtimeTableCompactor();
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
-        compactor.compact(jsc, getConfig(), table, CompactionFilter.allowAll());
+        compactor.compact(jsc, getConfig(), table);
 
         metaClient = new HoodieTableMetaClient(fs, cfg.getBasePath());
         allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());

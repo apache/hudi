@@ -25,7 +25,6 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.io.HoodieAppendHandle;
-import com.uber.hoodie.io.compact.CompactionFilter;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import java.util.Optional;
 import org.apache.log4j.LogManager;
@@ -89,7 +88,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
         logger.info("Compacting merge on read table " + config.getBasePath());
         HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
         try {
-            return Optional.of(compactor.compact(jsc, config, this, CompactionFilter.allowAll()));
+            return Optional.of(compactor.compact(jsc, config, this));
         } catch (IOException e) {
             throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
         }
