@@ -88,7 +88,7 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
                                                        commitTime,
                                                        new Path(config.getBasePath()),
                                                        new Path(config.getBasePath(), record.getPartitionPath()));
-                                      partitionMetadata.trySave(TaskContext.getPartitionId());
+                    partitionMetadata.trySave(TaskContext.getPartitionId());
 
                     oldFilePath = new Path(
                         config.getBasePath() + "/" + record.getPartitionPath() + "/"

@@ -78,7 +78,9 @@ public class HoodiePartitionMetadata {
     }
 
     /**
-     * Write the metadata safely into partition
+     * Write the metadata safely into partition atomically.
+     *
+     * @param taskPartitionId
      */
     public void trySave(int taskPartitionId) {
         Path tmpMetaPath = new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE + "_" + taskPartitionId);
