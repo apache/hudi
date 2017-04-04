@@ -50,11 +50,11 @@ public class RepairsCommand implements CommandMarker {
     @CliCommand(value = "repair deduplicate", help = "De-duplicate a partition path contains duplicates & produce repaired files to replace with")
     public String deduplicate(
             @CliOption(key = {
-                    "duplicatedPartitionPath"}, help = "Partition Path containing the duplicates")
+                    "duplicatedPartitionPath"}, help = "Partition Path containing the duplicates", mandatory = true)
             final String duplicatedPartitionPath,
-            @CliOption(key = {"repairedOutputPath"}, help = "Location to place the repaired files")
+            @CliOption(key = {"repairedOutputPath"}, help = "Location to place the repaired files", mandatory = true)
             final String repairedOutputPath,
-            @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path")
+            @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path", mandatory = true)
             final String sparkPropertiesPath) throws Exception {
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
         sparkLauncher
