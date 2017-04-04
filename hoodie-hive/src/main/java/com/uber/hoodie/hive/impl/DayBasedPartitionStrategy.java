@@ -21,8 +21,6 @@ import com.uber.hoodie.hive.HoodieHiveDatasetException;
 import com.uber.hoodie.hive.PartitionStrategy;
 import com.uber.hoodie.hive.client.HoodieFSClient;
 import com.uber.hoodie.hive.model.HoodieDatasetReference;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -49,7 +47,7 @@ public class DayBasedPartitionStrategy implements PartitionStrategy {
 
     @Override public List<String> scanAllPartitions(HoodieDatasetReference ref, HoodieFSClient fsClient) {
         try {
-            return FSUtils.getAllPartitionPaths(fsClient.getFs(), ref.getBaseDatasetPath());
+            return FSUtils.getAllPartitionPaths(fsClient.getFs(), ref.getBaseDatasetPath(), true);
         } catch (IOException ioe) {
             throw new HoodieHiveDatasetException(
                     "IOException when listing partitions under dataset " + ref , ioe);
