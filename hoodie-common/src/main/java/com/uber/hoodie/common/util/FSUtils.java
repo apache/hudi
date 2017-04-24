@@ -135,6 +135,12 @@ public class FSUtils {
         return datePartitions;
     }
 
+    public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
+        String partitionFullPath = partitionPath.toString();
+        int partitionStartIndex = partitionFullPath.lastIndexOf(basePath.getName());
+        return partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);
+    }
+
     /**
      * Obtain all the partition paths, that are present in this table, denoted by presence of {@link
      * com.uber.hoodie.common.model.HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
@@ -147,9 +153,7 @@ public class FSUtils {
         while (allFiles.hasNext()) {
             Path filePath = allFiles.next().getPath();
             if (filePath.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
-                String partitionFullPath = filePath.getParent().toString();
-                int partitionStartIndex = partitionFullPath.lastIndexOf(basePath.getName()) ;
-                partitions.add(partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1));
+                partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
             }
         }
         return partitions;
