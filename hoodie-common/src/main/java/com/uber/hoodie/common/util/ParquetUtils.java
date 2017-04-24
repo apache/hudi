@@ -31,6 +31,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -80,17 +81,48 @@ public class ParquetUtils {
         return rowKeys;
     }
 
+
+    /**
+     *
+     * Read the metadata from a parquet file
+     *
+     * @param parquetFilePath
+     * @return
+     */
+    public static ParquetMetadata readMetadata(Path parquetFilePath) {
+        return readMetadata(new Configuration(), parquetFilePath);
+    }
+
+    public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
+        ParquetMetadata footer;
+        try {
+            // TODO(vc): Should we use the parallel reading version here?
+            footer = ParquetFileReader.readFooter(conf, parquetFilePath);
+        } catch (IOException e) {
+            throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
+                    e);
+        }
+        return footer;
+    }
+
+
+    /**
+     * Get the schema of the given parquet file.
+     *
+     * @param parquetFilePath
+     * @return
+     */
+    public static MessageType readSchema(Path parquetFilePath) {
+        return readMetadata(parquetFilePath).getFileMetaData().getSchema();
+    }
+
+
+
     /**
      * Read out the bloom filter from the parquet file meta data.
      */
     public static BloomFilter readBloomFilterFromParquetMetadata(Path parquetFilePath) {
-        ParquetMetadata footer;
-        try {
-            footer = ParquetFileReader.readFooter(new Configuration(), parquetFilePath);
-        } catch (IOException e) {
-            throw new HoodieIndexException("Failed to read footer for parquet " + parquetFilePath,
-                e);
-        }
+        ParquetMetadata footer = readMetadata(parquetFilePath);
         Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
         if (metadata.containsKey(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY)) {
             return new BloomFilter(metadata.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY));

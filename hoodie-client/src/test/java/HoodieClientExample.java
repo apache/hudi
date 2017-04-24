@@ -21,6 +21,7 @@ import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -36,6 +37,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic
@@ -47,13 +49,12 @@ public class HoodieClientExample {
     private String tablePath = "file:///tmp/hoodie/sample-table";
 
     @Parameter(names={"--table-name", "-n"}, description = "table name for Hoodie sample table")
-    private String tableName =  "sample-table";
+    private String tableName =  "hoodie_rt";
 
-    @Parameter(names={"--table-type", "-t"}, description = "table type")
+    @Parameter(names={"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
     private String tableType =  HoodieTableType.COPY_ON_WRITE.name();
 
     private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
-
 
     public static void main(String[] args) throws Exception {
         HoodieClientExample cli = new HoodieClientExample();
@@ -81,8 +82,7 @@ public class HoodieClientExample {
         }
 
         // Create the write client to write some records in
-        HoodieWriteConfig cfg =
-                HoodieWriteConfig.newBuilder().withPath(tablePath)
+        HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
                         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
                         .forTable(tableName).withIndexConfig(
                         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())

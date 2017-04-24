@@ -131,7 +131,11 @@ public class HoodiePartitionMetadata {
     }
 
     // methods related to partition meta data
-    public static boolean hasPartitionMetadata(FileSystem fs, Path partitionPath) throws IOException {
-        return fs.exists(new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
+    public static boolean hasPartitionMetadata(FileSystem fs, Path partitionPath) {
+        try {
+            return fs.exists(new Path(partitionPath, HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
+        } catch (IOException ioe) {
+            throw new HoodieException("Error checking Hoodie partition metadata for " + partitionPath, ioe);
+        }
     }
 }

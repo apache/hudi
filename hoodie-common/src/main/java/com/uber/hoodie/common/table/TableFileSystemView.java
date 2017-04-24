@@ -98,7 +98,7 @@ public interface TableFileSystemView {
 
     /**
      * Group data files with corresponding delta files
-     * @param fs
+     *
      * @param partitionPath
      * @return
      * @throws IOException

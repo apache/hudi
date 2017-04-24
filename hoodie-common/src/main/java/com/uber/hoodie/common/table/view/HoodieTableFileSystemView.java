@@ -207,7 +207,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 l -> l.stream().sorted(HoodieLogFile.getLogVersionComparator())
                     .collect(toList())));
 
-        // Filter the delta files by the commit time of the latest base fine and collect as a list
+        // Filter the delta files by the commit time of the latest base file and collect as a list
         Optional<HoodieInstant> lastTimestamp = metaClient.getActiveTimeline().lastInstant();
         return lastTimestamp.map(hoodieInstant -> getLatestVersionInPartition(partitionPath,
             hoodieInstant.getTimestamp()).map(
