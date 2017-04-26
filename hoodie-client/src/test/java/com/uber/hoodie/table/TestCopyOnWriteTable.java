@@ -186,9 +186,8 @@ public class TestCopyOnWriteTable {
         for (File file : new File(basePath + "/2016/01/31").listFiles()) {
             if (file.getName().endsWith(".parquet")) {
                 if (FSUtils.getFileId(file.getName())
-                    .equals(FSUtils.getFileId(parquetFile.getName())) && metadata
-                    .getActiveTimeline().getCommitTimeline()
-                    .compareTimestamps(FSUtils.getCommitTime(file.getName()),
+                    .equals(FSUtils.getFileId(parquetFile.getName())) &&
+                        HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(file.getName()),
                         FSUtils.getCommitTime(parquetFile.getName()), HoodieTimeline.GREATER)) {
                     updatedParquetFile = file;
                     break;

@@ -175,7 +175,7 @@ public class TestMergeOnReadTable {
         HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
         assertEquals("Expecting a single commit.", 1, readClient.listCommitsSince("000").size());
         String latestCompactionCommitTime = readClient.latestCommit();
-        assertTrue(metaClient.getActiveTimeline()
+        assertTrue(HoodieTimeline
             .compareTimestamps("000", latestCompactionCommitTime, HoodieTimeline.LESSER));
         assertEquals("Must contain 200 records", 200, readClient.readSince("000").count());
     }

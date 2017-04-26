@@ -35,9 +35,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-
 import java.util.List;
-import java.util.Properties;
 
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic
