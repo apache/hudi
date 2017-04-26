@@ -61,9 +61,9 @@ public class HoodieSyncCommand implements CommandMarker {
             "hivePass"}, mandatory = true, unspecifiedDefaultValue = "", help = "hive password to connect to")
         final String hivePass) throws Exception {
         HoodieTableMetaClient target = HoodieCLI.syncTableMetadata;
-        HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitTimeline();
+        HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsAndCompactionsTimeline();
         HoodieTableMetaClient source = HoodieCLI.tableMetadata;
-        HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitTimeline();
+        HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsAndCompactionsTimeline();
         long sourceCount = 0;
         long targetCount = 0;
         if ("complete".equals(mode)) {

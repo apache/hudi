@@ -484,7 +484,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     List<String> latestFiles =
                         view.getLatestVersionInPartition(partitionPath, commitTime)
                             .map(HoodieDataFile::getFileName).collect(Collectors.toList());
-                    return new Tuple2<String, List<String>>(partitionPath, latestFiles);
+                    return new Tuple2<>(partitionPath, latestFiles);
                 }).collectAsMap();
 
             HoodieSavepointMetadata metadata =
@@ -558,7 +558,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
         // Make sure the rollback was successful
         Optional<HoodieInstant> lastInstant =
-            activeTimeline.reload().getCommitTimeline().filterCompletedInstants().lastInstant();
+            activeTimeline.reload().getCommitsAndCompactionsTimeline().filterCompletedInstants().lastInstant();
         Preconditions.checkArgument(lastInstant.isPresent());
         Preconditions.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
             savepointTime + "is not the last commit after rolling back " + commitsToRollback

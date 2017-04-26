@@ -30,27 +30,23 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.table.HoodieTable;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction;
-import org.apache.spark.api.java.function.VoidFunction;
+
 import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -74,10 +70,10 @@ public class HoodieSnapshotCopier implements Serializable {
         FileSystem fs = FSUtils.getFs();
         final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
         final TableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata,
-            tableMetadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+            tableMetadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants());
         // Get the latest commit
         Optional<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline()
-                .getCommitTimeline().filterCompletedInstants().lastInstant();
+                .getCommitsAndCompactionsTimeline().filterCompletedInstants().lastInstant();
         if(!latestCommit.isPresent()) {
             logger.warn("No commits present. Nothing to snapshot");
             return;

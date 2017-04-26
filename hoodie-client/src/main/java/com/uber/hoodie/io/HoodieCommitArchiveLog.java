@@ -35,7 +35,6 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -92,8 +91,6 @@ public class HoodieCommitArchiveLog {
         log.info("Deleting commits " + commitsToArchive);
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(fs, config.getBasePath(), true);
-        HoodieTimeline commitTimeline =
-            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
 
         boolean success = true;
         for (HoodieInstant commitToArchive : commitsToArchive) {
@@ -126,7 +123,7 @@ public class HoodieCommitArchiveLog {
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(fs, config.getBasePath(), true);
         HoodieTimeline commitTimeline =
-            metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            metaClient.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
 
         HoodieAppendLog.Writer writer = null;
         try {

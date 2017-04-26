@@ -166,7 +166,6 @@ public class TestMergeOnReadTable {
 
         compactor.compact(jsc, getConfig(), table);
 
-        metaClient = new HoodieTableMetaClient(fs, cfg.getBasePath());
         allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());
         dataFilesToRead = fsView.getLatestVersions(allFiles);
         assertTrue(dataFilesToRead.findAny().isPresent());

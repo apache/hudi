@@ -263,6 +263,7 @@
                             <exclude>**/test/resources/*.schema</exclude>
                             <exclude>**/test/resources/*.csv</exclude>
                             <exclude>**/main/avro/*.avsc</exclude>
+                            <exclude>**/target/*</exclude>
                         </excludes>
                     </configuration>
                     <executions>

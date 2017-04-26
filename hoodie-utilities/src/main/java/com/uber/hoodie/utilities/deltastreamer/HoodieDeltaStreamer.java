@@ -119,7 +119,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
         if (fs.exists(new Path(cfg.targetBasePath))) {
             HoodieTableMetaClient meta = new HoodieTableMetaClient(fs, cfg.targetBasePath);
-            this.commitTimelineOpt = Optional.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+            this.commitTimelineOpt = Optional.of(meta.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants());
         } else {
             this.commitTimelineOpt = Optional.empty();
         }
