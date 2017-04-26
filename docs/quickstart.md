@@ -24,15 +24,30 @@ $ mvn clean install -DskipTests
 
 ## Generate a Hoodie Dataset
 
-Create the output folder on your local HDFS
-```
-hdfs dfs -mkdir -p /tmp/hoodie/sample-table
+
+You can run the __hoodie-client/src/test/java/HoodieClientExample.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS/local filesystem
 ```
 
-You can run the __HoodieClientExample__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS at /tmp/hoodie/sample-table
+Usage: <main class> [options]
+  Options:
+    --help, -h
+
+       Default: false
+    --table-name, -n
+       table name for Hoodie sample table
+       Default: hoodie_rt
+    --table-path, -p
+       path for Hoodie sample table
+       Default: file:///tmp/hoodie/sample-table
+    --table-type, -t
+       One of COPY_ON_WRITE or MERGE_ON_READ
+       Default: COPY_ON_WRITE
+
+
 ```
-hdfs dfs -copyFromLocal /tmp/hoodie/sample-table/* /tmp/hoodie/sample-table
-```
+
+The class lets you choose table names, output paths and one of the storage types.
+
 
 ## Register Dataset to Hive Metastore
 
@@ -68,6 +83,10 @@ java -cp target/hoodie-hive-0.3.1-SNAPSHOT-jar-with-dependencies.jar:target/jars
 
 ```
 
+{% include callout.html content="Hive sync tools does not yet support Merge-On-Read tables." type="info" %}
+
+
+
 #### Manually via Beeline
 Add in the hoodie-hadoop-mr jar so, Hive can read the Hoodie dataset and answer the query.
 
@@ -77,7 +96,7 @@ Added [file:///tmp/hoodie-hadoop-mr-0.2.7.jar] to class path
 Added resources: [file:///tmp/hoodie-hadoop-mr-0.2.7.jar]
 ```
 
-Then, you need to create a ReadOptimized table as below (only type supported as of now)and register the sample partitions
+Then, you need to create a __ReadOptimized__ Hive table as below (only type supported as of now)and register the sample partitions
 
 
 ```
@@ -109,6 +128,43 @@ ALTER TABLE `hoodie_test` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOC
 set mapreduce.framework.name=yarn;
 ```
 
+And you can generate a __Realtime__ Hive table, as below
+
+```
+DROP TABLE hoodie_rt;
+CREATE EXTERNAL TABLE hoodie_rt(
+`_hoodie_commit_time` string,
+`_hoodie_commit_seqno` string,
+`_hoodie_record_key` string,
+`_hoodie_partition_path` string,
+`_hoodie_file_name` string,
+ timestamp double,
+ `_row_key` string,
+ rider string,
+ driver string,
+ begin_lat double,
+ begin_lon double,
+ end_lat double,
+ end_lon double,
+ fare double)
+PARTITIONED BY (`datestr` string)
+ROW FORMAT SERDE
+   'com.uber.hoodie.hadoop.realtime.HoodieParquetSerde'
+STORED AS INPUTFORMAT
+   'com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat'
+OUTPUTFORMAT
+   'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION
+   'file:///tmp/hoodie/sample-table';
+
+ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2016-03-15') LOCATION 'file:///tmp/hoodie/sample-table/2016/03/15';
+ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-16') LOCATION 'file:///tmp/hoodie/sample-table/2015/03/16';
+ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCATION 'file:///tmp/hoodie/sample-table/2015/03/17';
+
+```
+
+
+
 ## Querying The Dataset
 
 Now, we can proceed to query the dataset, as we would normally do across all the three query engines supported.
@@ -138,15 +194,17 @@ $ spark-shell --jars /tmp/hoodie-hadoop-mr-0.2.7.jar --driver-class-path $HADOOP
 scala> val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 scala> sqlContext.sql("show tables").show(10000)
 scala> sqlContext.sql("describe hoodie_test").show(10000)
+scala> sqlContext.sql("describe hoodie_rt").show(10000)
 scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
 ```
 
+You can also use the sample queries in __hoodie-utilities/src/test/java/HoodieSparkSQLExample.java__ for running on `hoodie_rt`
 
 ### Presto
 
 Checkout the 'master' branch on OSS Presto, build it, and place your installation somewhere.
 
-* Copy the hoodie-hadoop-mr-0.2.7 jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
+* Copy the hoodie-hadoop-mr-* jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
 * Startup your server and you should be able to query the same Hive table via Presto
 
 ```
@@ -183,6 +241,7 @@ hive>
 ```
 
 
+{% include note.html content="This is only supported for Read-optimized tables for now." %}
 
 
 

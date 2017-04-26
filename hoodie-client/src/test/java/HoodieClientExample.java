@@ -52,11 +52,19 @@ public class HoodieClientExample {
     @Parameter(names={"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
     private String tableType =  HoodieTableType.COPY_ON_WRITE.name();
 
+    @Parameter(names = {"--help", "-h"}, help = true)
+    public Boolean help = false;
+
     private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
 
     public static void main(String[] args) throws Exception {
         HoodieClientExample cli = new HoodieClientExample();
-        new JCommander(cli, args);
+        JCommander cmd = new JCommander(cli, args);
+
+        if (cli.help || args.length == 0) {
+            cmd.usage();
+            System.exit(1);
+        }
         cli.run();
     }
 
