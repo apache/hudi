@@ -122,16 +122,25 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
 
     /**
-     * Get only the commits (inflight and completed) in the active timeline
+     * Get all instants (commits, delta commits, compactions) that produce new data, in the active timeline
+     **
+     * @return
+     */
+    public HoodieTimeline getCommitsAndCompactionsTimeline() {
+        return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION));
+    }
+
+    /**
+     * Get only pure commits (inflight and completed) in the active timeline
      *
      * @return
      */
     public HoodieTimeline getCommitTimeline() {
-        return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, COMPACTION_ACTION));
+        return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
     }
 
     /**
-     * Get only the commits (inflight and completed) in the active timeline
+     * Get only the delta commits (inflight and completed) in the active timeline
      *
      * @return
      */

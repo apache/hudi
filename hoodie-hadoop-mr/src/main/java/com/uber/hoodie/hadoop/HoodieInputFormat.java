@@ -99,8 +99,8 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             }
             String tableName = metadata.getTableConfig().getTableName();
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
-            // FIXME(VC): This is incorrect and needs to change to include commits, delta commits, compactions, as all of them produce a base parquet file today
-            HoodieTimeline timeline = metadata.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
+            // Get all commits, delta commits, compactions, as all of them produce a base parquet file today
+            HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
             TableFileSystemView fsView = new HoodieTableFileSystemView(metadata, timeline);
 
             if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {

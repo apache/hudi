@@ -16,7 +16,6 @@
 package com.uber.hoodie.cli.commands;
 
 import com.uber.hoodie.HoodieWriteClient;
-import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.HoodiePrintHelper;
 import com.uber.hoodie.cli.utils.InputStreamConsumer;
@@ -38,7 +37,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
