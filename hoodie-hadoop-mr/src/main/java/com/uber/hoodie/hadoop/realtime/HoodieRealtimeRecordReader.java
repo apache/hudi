@@ -106,9 +106,6 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
         // TODO(vc): In the future, the reader schema should be updated based on log files & be able to null out fields not present before
         Schema readerSchema = generateProjectionSchema(writerSchema, projectionFields);
 
-        // FIXME(vc): This is ugly.. Need to fix the usage everywhere
-        HoodieTimeline defTimeline = new HoodieDefaultTimeline();
-
         LOG.info(String.format("About to read logs %s for base split %s, projecting cols %s",
                 split.getDeltaFilePaths(), split.getPath(), projectionFields));
         for (String logFilePath: split.getDeltaFilePaths()) {
@@ -119,7 +116,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
                 GenericRecord rec = reader.next();
                 String key = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
                 String commitTime = rec.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
-                if (defTimeline.compareTimestamps(commitTime, split.getMaxCommitTime(), HoodieTimeline.GREATER)) {
+                if (HoodieTimeline.compareTimestamps(commitTime, split.getMaxCommitTime(), HoodieTimeline.GREATER)) {
                     // stop reading this log file. we hit a record later than max known commit time.
                     break;
                 }

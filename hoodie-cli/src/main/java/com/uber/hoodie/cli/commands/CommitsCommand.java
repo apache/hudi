@@ -228,8 +228,8 @@ public class CommitsCommand implements CommandMarker {
         String sourceLatestCommit =
             sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get().getTimestamp();
 
-        if (sourceLatestCommit != null && sourceTimeline
-            .compareTimestamps(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
+        if (sourceLatestCommit != null &&
+                HoodieTimeline.compareTimestamps(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
             // source is behind the target
             List<String> commitsToCatchup =
                 targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)

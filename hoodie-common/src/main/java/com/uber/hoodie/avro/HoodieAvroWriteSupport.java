@@ -23,7 +23,6 @@ import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
 
-import java.io.*;
 import java.util.HashMap;
 
 /**

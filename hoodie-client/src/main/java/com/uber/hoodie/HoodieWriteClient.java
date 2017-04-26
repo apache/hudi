@@ -470,7 +470,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             }
 
             // Cannot allow savepoint time on a commit that could have been cleaned
-            Preconditions.checkArgument(table.getActiveTimeline()
+            Preconditions.checkArgument(HoodieTimeline
                     .compareTimestamps(commitTime, lastCommitRetained, HoodieTimeline.GREATER_OR_EQUAL),
                 "Could not savepoint commit " + commitTime + " as this is beyond the lookup window "
                     + lastCommitRetained);

@@ -165,7 +165,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 visibleActiveCommitTimeline.lastInstant().get().getTimestamp())
                 .map((Function<List<HoodieDataFile>, Optional<HoodieDataFile>>) fss -> {
                     for (HoodieDataFile fs1 : fss) {
-                        if (visibleActiveCommitTimeline
+                        if (HoodieTimeline
                             .compareTimestamps(fs1.getCommitTime(), maxCommitToReturn,
                                 HoodieTimeline.LESSER_OR_EQUAL)) {
                             return Optional.of(fs1);
@@ -248,7 +248,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 .flatMap(fileStatus -> {
             HoodieDataFile dataFile = new HoodieDataFile(fileStatus);
             if (visibleActiveCommitTimeline.containsOrBeforeTimelineStarts(dataFile.getCommitTime())
-                && visibleActiveCommitTimeline
+                && HoodieTimeline
                 .compareTimestamps(dataFile.getCommitTime(), maxCommitTime,
                 HoodieTimeline.LESSER_OR_EQUAL)) {
                 return Stream.of(Pair.of(dataFile.getFileId(), dataFile));

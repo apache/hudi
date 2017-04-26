@@ -79,7 +79,7 @@ public class HoodieSyncCommand implements CommandMarker {
         String sourceLatestCommit =
             sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get().getTimestamp();
 
-        if (sourceLatestCommit != null && sourceTimeline
+        if (sourceLatestCommit != null && HoodieTimeline
             .compareTimestamps(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
             // source is behind the target
             List<HoodieInstant> commitsToCatchup =

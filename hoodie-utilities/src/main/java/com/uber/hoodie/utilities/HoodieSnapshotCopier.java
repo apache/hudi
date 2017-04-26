@@ -133,8 +133,7 @@ public class HoodieSnapshotCopier implements Serializable {
                         } else {
                             String commitTime =
                                     FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-                            return tableMetadata.getActiveTimeline().getCommitTimeline()
-                                    .compareTimestamps(commitTime, latestCommitTimestamp, HoodieTimeline.LESSER_OR_EQUAL);
+                            return HoodieTimeline.compareTimestamps(commitTime, latestCommitTimestamp, HoodieTimeline.LESSER_OR_EQUAL);
                         }
                     });
             for (FileStatus commitStatus : commitFilesToCopy) {

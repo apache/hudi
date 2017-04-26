@@ -183,8 +183,8 @@ public class TestHoodieCompactor {
         table = HoodieTable.getHoodieTable(metaClient, config);
         HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
-        assertTrue("Compaction commit should be > than last insert", timeline
-            .compareTimestamps(timeline.lastInstant().get().getTimestamp(), newCommitTime,
+        assertTrue("Compaction commit should be > than last insert",
+                HoodieTimeline.compareTimestamps(timeline.lastInstant().get().getTimestamp(), newCommitTime,
                 HoodieTimeline.GREATER));
 
         for (String partitionPath : dataGen.getPartitionPaths()) {
