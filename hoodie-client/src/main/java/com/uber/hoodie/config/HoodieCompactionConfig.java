@@ -114,6 +114,12 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             }
         }
 
+        public Builder fromProperties(Properties props) {
+            this.props.putAll(props);
+            return this;
+        }
+
+
         public Builder withAutoClean(Boolean autoClean) {
             props.setProperty(AUTO_CLEAN_PROP, String.valueOf(autoClean));
             return this;

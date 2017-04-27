@@ -64,6 +64,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
             }
         }
 
+        public Builder fromProperties(Properties props) {
+            this.props.putAll(props);
+            return this;
+        }
+
         public Builder withIndexType(HoodieIndex.IndexType indexType) {
             props.setProperty(INDEX_TYPE_PROP, indexType.name());
             return this;
