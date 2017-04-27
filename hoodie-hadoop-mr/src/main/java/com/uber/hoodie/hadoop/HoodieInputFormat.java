@@ -114,6 +114,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                         .collect(Collectors.toList());
                 for (HoodieDataFile filteredFile : filteredFiles) {
                     LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
+                    filteredFile = checkFileStatus(fsView, filteredFile);
                     returns.add(filteredFile.getFileStatus());
                 }
                 LOG.info(
@@ -126,12 +127,31 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
                     }
+                    filteredFile = checkFileStatus(fsView, filteredFile);
                     returns.add(filteredFile.getFileStatus());
                 }
             }
         }
         return returns.toArray(new FileStatus[returns.size()]);
 
+    }
+
+    /**
+     * Checks the file status for a race condition which can set the file size to 0.
+     * 1. HiveInputFormat does super.listStatus() and gets back a FileStatus[]
+     * 2. Then it creates the HoodieTableMetaClient for the paths listed.
+     * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
+     *
+     * @param fsView
+     * @param fileStatus
+     * @return
+     */
+    private HoodieDataFile checkFileStatus(TableFileSystemView fsView, HoodieDataFile fileStatus) {
+        if(fileStatus.getFileSize() == 0) {
+            LOG.info("Refreshing file status " + fileStatus.getPath());
+            return new HoodieDataFile(fsView.getFileStatus(fileStatus.getPath()));
+        }
+        return fileStatus;
     }
 
     private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)

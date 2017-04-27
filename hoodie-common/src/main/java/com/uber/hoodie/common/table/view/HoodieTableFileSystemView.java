@@ -217,6 +217,15 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
             Collectors.toMap(Pair::getKey, Pair::getRight))).orElseGet(Maps::newHashMap);
     }
 
+    @Override
+    public FileStatus getFileStatus(String path) {
+        try {
+            return fs.getFileStatus(new Path(path));
+        } catch (IOException e) {
+            throw new HoodieIOException("Could not get FileStatus on path " + path);
+        }
+    }
+
 
     protected Stream<List<HoodieDataFile>> getFilesByFileId(FileStatus[] files,
         String maxCommitTime) throws IOException {

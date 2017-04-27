@@ -361,14 +361,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             setDefaultOnCondition(props, !props.containsKey(HOODIE_ASSUME_DATE_PARTITIONING_PROP),
                     HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
 
-
-            setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().build());
+            // Make sure the props is propagated
+            setDefaultOnCondition(props, !isIndexConfigSet,
+                HoodieIndexConfig.newBuilder().fromProperties(props).build());
             setDefaultOnCondition(props, !isStorageConfigSet,
-                HoodieStorageConfig.newBuilder().build());
+                HoodieStorageConfig.newBuilder().fromProperties(props).build());
             setDefaultOnCondition(props, !isCompactionConfigSet,
-                HoodieCompactionConfig.newBuilder().build());
+                HoodieCompactionConfig.newBuilder().fromProperties(props).build());
             setDefaultOnCondition(props, !isMetricsConfigSet,
-                HoodieMetricsConfig.newBuilder().build());
+                HoodieMetricsConfig.newBuilder().fromProperties(props).build());
             return config;
         }
     }

@@ -55,6 +55,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
             }
         }
 
+        public Builder fromProperties(Properties props) {
+            this.props.putAll(props);
+            return this;
+        }
+
         public Builder limitFileSize(int maxFileSize) {
             props.setProperty(PARQUET_FILE_MAX_BYTES, String.valueOf(maxFileSize));
             return this;

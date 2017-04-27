@@ -105,4 +105,11 @@ public interface TableFileSystemView {
      */
     Map<HoodieDataFile, List<HoodieLogFile>> groupLatestDataFileWithLogFiles(String partitionPath) throws IOException;
 
+    /**
+     * Get the file Status for the path specified
+     *
+     * @param path
+     * @return
+     */
+    FileStatus getFileStatus(String path);
 }
