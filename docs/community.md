@@ -15,3 +15,6 @@ Also, be sure to write unit tests for your bug fix or feature to show that it wo
 If you want to participate in day-day conversations, please join our [slack group](https://hoodielib.slack.com/x-147852474016-157730502112/signup).
 If you are from select pre-listed email domains, you can self signup. Others, please add your email onto this [issue](https://github.com/uber/hoodie/issues/143)
 
+## Becoming a Committer 
+
+Hoodie has adopted guidelines set forth in [Google Chromium project](https://www.chromium.org/getting-involved/become-a-committer), to determine committership proposals. However, given this is a much smaller project, we would have the contribution bar to be 7-10 non-trivial patches instead. 
