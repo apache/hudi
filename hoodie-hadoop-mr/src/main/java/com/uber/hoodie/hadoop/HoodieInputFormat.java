@@ -18,6 +18,7 @@ package com.uber.hoodie.hadoop;
 
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableMetadata;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -100,6 +101,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                     metadata.getLatestVersionInRange(value, commitsToReturn);
                 for (FileStatus filteredFile : filteredFiles) {
                     LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
+                    filteredFile = checkFileStatus(filteredFile);
                     returns.add(filteredFile);
                 }
                 LOG.info(
@@ -110,12 +112,33 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                 LOG.info("Total paths to process after hoodie filter " + filteredFiles.length);
                 for (FileStatus filteredFile : filteredFiles) {
                     LOG.info("Processing latest hoodie file - " + filteredFile.getPath());
+                    filteredFile = checkFileStatus(filteredFile);
                     returns.add(filteredFile);
                 }
             }
         }
         return returns.toArray(new FileStatus[returns.size()]);
 
+    }
+
+    /**
+     * Checks the file status for a race condition which can set the file size to 0.
+     * 1. HiveInputFormat does super.listStatus() and gets back a FileStatus[]
+     * 2. Then it creates the HoodieTableMetaClient for the paths listed.
+     * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
+     */
+    private FileStatus checkFileStatus(FileStatus fileStatus) {
+        if (fileStatus.getLen() == 0) {
+            LOG.info("Refreshing file status " + fileStatus.getPath());
+            try {
+                return fileStatus.getPath().getFileSystem(conf).getFileStatus(fileStatus.getPath());
+            } catch (IOException e) {
+                throw new HoodieIOException(
+                    "Could not get FileStatus for path " + fileStatus.getPath()
+                        + " when refreshing the FileStatus", e);
+            }
+        }
+        return fileStatus;
     }
 
     private Map<HoodieTableMetadata, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)
