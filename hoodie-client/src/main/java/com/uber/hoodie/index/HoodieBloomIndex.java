@@ -85,13 +85,13 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     }
 
     public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-            JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> hoodieTable) {
+            JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> table) {
         JavaPairRDD<String, String> partitionRecordKeyPairRDD =
                 hoodieKeys.mapToPair(key -> new Tuple2<>(key.getPartitionPath(), key.getRecordKey()));
 
         // Lookup indexes for all the partition/recordkey pair
         JavaPairRDD<String, String> rowKeyFilenamePairRDD =
-                lookupIndex(partitionRecordKeyPairRDD, hoodieTable);
+                lookupIndex(partitionRecordKeyPairRDD, table);
 
         JavaPairRDD<String, HoodieKey> rowKeyHoodieKeyPairRDD =
                 hoodieKeys.mapToPair(key -> new Tuple2<>(key.getRecordKey(), key));
@@ -103,7 +103,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                         String fileName = keyPathTuple._2._2.get();
                         String partitionPath = keyPathTuple._2._1.getPartitionPath();
                         recordLocationPath = Optional.of(new Path(
-                                new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath),
+                                new Path(table.getMetaClient().getBasePath(), partitionPath),
                                 fileName).toUri().getPath());
                     } else {
                         recordLocationPath = Optional.absent();

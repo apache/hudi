@@ -260,7 +260,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
 
     private JavaRDD<HoodieRecord<T>> combineOnCondition(boolean condition,
-        JavaRDD<HoodieRecord<T>> records, int parallelism) {
+                                                        JavaRDD<HoodieRecord<T>> records,
+                                                        int parallelism) {
         if(condition) {
             return deduplicateRecords(records, parallelism);
         }
@@ -268,9 +269,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
 
     private JavaRDD<WriteStatus> upsertRecordsInternal(JavaRDD<HoodieRecord<T>> preppedRecords,
-        String commitTime,
-        HoodieTable<T> hoodieTable,
-        final boolean isUpsert) {
+                                                       String commitTime,
+                                                       HoodieTable<T> hoodieTable,
+                                                       final boolean isUpsert) {
 
         // Cache the tagged records, so we don't end up computing both
         preppedRecords.persist(StorageLevel.MEMORY_AND_DISK_SER());
@@ -318,10 +319,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
     private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
         return dedupedRecords
-                .mapToPair((PairFunction<HoodieRecord<T>, Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>) record ->
+                .mapToPair(record ->
                         new Tuple2<>(new Tuple2<>(record.getKey(), Option.apply(record.getCurrentLocation())), record))
                 .partitionBy(partitioner)
-                .map((Function<Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>, HoodieRecord<T>>) tuple -> tuple._2());
+                .map(tuple -> tuple._2());
     }
 
     /**
@@ -347,7 +348,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
         List<Tuple2<String, HoodieWriteStat>> stats = writeStatuses
                     .mapToPair((PairFunction<WriteStatus, String, HoodieWriteStat>) writeStatus ->
-                            new Tuple2<String, HoodieWriteStat>(writeStatus.getPartitionPath(), writeStatus.getStat()))
+                            new Tuple2<>(writeStatus.getPartitionPath(), writeStatus.getStat()))
                     .collect();
 
         HoodieCommitMetadata metadata = new HoodieCommitMetadata();

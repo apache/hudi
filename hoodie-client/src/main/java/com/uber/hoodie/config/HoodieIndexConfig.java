@@ -30,18 +30,26 @@ import java.util.Properties;
  */
 @Immutable
 public class HoodieIndexConfig extends DefaultHoodieConfig {
+
     public static final String INDEX_TYPE_PROP = "hoodie.index.type";
     public static final String DEFAULT_INDEX_TYPE = HoodieIndex.IndexType.BLOOM.name();
+
+    // *****  Bloom Index configs *****
     public static final String BLOOM_FILTER_NUM_ENTRIES = "hoodie.index.bloom.num_entries";
     public static final String DEFAULT_BLOOM_FILTER_NUM_ENTRIES = "60000";
     public static final String BLOOM_FILTER_FPP = "hoodie.index.bloom.fpp";
     public static final String DEFAULT_BLOOM_FILTER_FPP = "0.000000001";
-    public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
-    public final static String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
-    public final static String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
     public static final String BLOOM_INDEX_PARALLELISM_PROP = "hoodie.bloom.index.parallelism";
     // Disable explicit bloom index parallelism setting by default - hoodie auto computes
     public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = "0";
+
+    // ***** HBase Index Configs *****
+    public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
+    public final static String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
+    public final static String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
+
+    // ***** Bucketed Index Configs *****
+    public final static String BUCKETED_INDEX_NUM_BUCKETS_PROP = "hoodie.index.bucketed.numbuckets";
 
     private HoodieIndexConfig(Properties props) {
         super(props);
@@ -101,6 +109,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
         public Builder bloomIndexParallelism(int parallelism) {
             props.setProperty(BLOOM_INDEX_PARALLELISM_PROP, String.valueOf(parallelism));
+            return this;
+        }
+
+        public Builder numBucketsPerPartition(int numBuckets) {
+            props.setProperty(BUCKETED_INDEX_NUM_BUCKETS_PROP, String.valueOf(numBuckets));
             return this;
         }
 
