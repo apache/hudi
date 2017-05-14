@@ -36,7 +36,6 @@ import java.io.Serializable;
 /**
  * Base class for different types of indexes to determine the mapping from uuid
  *
- * TODO(vc): need methods for recovery and rollback
  */
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
     protected transient JavaSparkContext jsc = null;
@@ -44,7 +43,8 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     public enum IndexType {
         HBASE,
         INMEMORY,
-        BLOOM
+        BLOOM,
+        BUCKETED
     }
 
     protected final HoodieWriteConfig config;
@@ -60,11 +60,11 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
      * value is present, it is the path component (without scheme) of the URI underlying file
      *
      * @param hoodieKeys
-     * @param metaClient
+     * @param table
      * @return
      */
     public abstract JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-        JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> metaClient);
+        JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> table);
 
     /**
      * Looks up the index and tags each incoming record with a location of a file that contains the
@@ -95,6 +95,8 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
                 return new InMemoryHashIndex<>(config, jsc);
             case BLOOM:
                 return new HoodieBloomIndex<>(config, jsc);
+            case BUCKETED:
+                return new BucketedIndex<>(config, jsc);
         }
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }

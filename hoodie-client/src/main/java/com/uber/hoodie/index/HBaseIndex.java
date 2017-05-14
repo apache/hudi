@@ -67,7 +67,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
     @Override
     public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-        JavaRDD<HoodieKey> hoodieKeys, HoodieTable<T> hoodieTable) {
+        JavaRDD<HoodieKey> hoodieKeys, HoodieTable<T> table) {
         throw new UnsupportedOperationException("HBase index does not implement check exist yet");
     }
 
@@ -234,7 +234,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
     @Override
     public boolean rollbackCommit(String commitTime) {
-        // TODO (weiy)
+        // Can't really rollback here. HBase only can let you go from recordKey to fileID,
+        // not the other way around
         return true;
     }
 }

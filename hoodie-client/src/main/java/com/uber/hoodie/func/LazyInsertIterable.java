@@ -16,14 +16,13 @@
 
 package com.uber.hoodie.func;
 
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 
 import com.uber.hoodie.io.HoodieIOHandle;
-import com.uber.hoodie.io.HoodieInsertHandle;
+import com.uber.hoodie.io.HoodieCreateHandle;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.spark.TaskContext;
 
@@ -43,7 +42,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
     private final String commitTime;
     private final HoodieTable<T> hoodieTable;
     private Set<String> partitionsCleaned;
-    private HoodieInsertHandle handle;
+    private HoodieCreateHandle handle;
 
     public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
         String commitTime, HoodieTable<T> hoodieTable) {
@@ -79,7 +78,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
             // lazily initialize the handle, for the first time
             if (handle == null) {
                 handle =
-                    new HoodieInsertHandle(hoodieConfig, commitTime, hoodieTable,
+                    new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable,
                         record.getPartitionPath());
             }
 
@@ -91,7 +90,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends LazyItera
                 statuses.add(handle.close());
                 // Need to handle the rejected record & open new handle
                 handle =
-                    new HoodieInsertHandle(hoodieConfig, commitTime, hoodieTable,
+                    new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable,
                         record.getPartitionPath());
                 handle.write(record); // we should be able to write 1 record.
                 break;

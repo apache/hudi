@@ -46,8 +46,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * IO Operation to append data onto an existing file.
+ *
+ * @param <T>
+ */
 public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
-    private static Logger logger = LogManager.getLogger(HoodieUpdateHandle.class);
+    private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
     private static AtomicLong recordIndex = new AtomicLong(1);
 
     private final WriteStatus writeStatus;
@@ -59,8 +64,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     private HoodieLogFile currentLogFile;
     private Writer writer;
 
-    public HoodieAppendHandle(HoodieWriteConfig config, String commitTime,
-        HoodieTable<T> hoodieTable, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+    public HoodieAppendHandle(HoodieWriteConfig config,
+                              String commitTime,
+                              HoodieTable<T> hoodieTable,
+                              String fileId,
+                              Iterator<HoodieRecord<T>> recordItr) {
         super(config, commitTime, hoodieTable);
         WriteStatus writeStatus = new WriteStatus();
         writeStatus.setStat(new HoodieDeltaWriteStat());
@@ -76,6 +84,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
             // extract some information from the first record
             if (partitionPath == null) {
                 partitionPath = record.getPartitionPath();
+                // HACK(vc) This also assumes a base file. It will break, if appending without one.
                 String latestValidFilePath =
                     fileSystemView.getLatestDataFilesForFileId(record.getPartitionPath(), fileId)
                         .findFirst().get().getFileName();

@@ -32,7 +32,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
 
 import com.uber.hoodie.config.HoodieCompactionConfig;
-import com.uber.hoodie.io.HoodieInsertHandle;
+import com.uber.hoodie.io.HoodieCreateHandle;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
@@ -92,7 +92,7 @@ public class TestCopyOnWriteTable {
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
 
-        HoodieInsertHandle io = new HoodieInsertHandle(config, commitTime, table, partitionPath);
+        HoodieCreateHandle io = new HoodieCreateHandle(config, commitTime, table, partitionPath);
         Path newPath = io.makeNewPath(record.getPartitionPath(), unitNumber, fileName);
         assertTrue(newPath.toString().equals(this.basePath + "/" + partitionPath + "/" + FSUtils
                 .makeDataFileName(commitTime, unitNumber, fileName)));

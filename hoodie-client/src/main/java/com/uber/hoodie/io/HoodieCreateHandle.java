@@ -38,8 +38,8 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
 
-public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
-    private static Logger logger = LogManager.getLogger(HoodieInsertHandle.class);
+public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
+    private static Logger logger = LogManager.getLogger(HoodieCreateHandle.class);
 
     private final WriteStatus status;
     private final HoodieStorageWriter<IndexedRecord> storageWriter;
@@ -47,7 +47,7 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
     private long recordsWritten = 0;
     private long recordsDeleted = 0;
 
-    public HoodieInsertHandle(HoodieWriteConfig config, String commitTime,
+    public HoodieCreateHandle(HoodieWriteConfig config, String commitTime,
                               HoodieTable<T> hoodieTable, String partitionPath) {
         super(config, commitTime, hoodieTable);
         this.status = new WriteStatus();

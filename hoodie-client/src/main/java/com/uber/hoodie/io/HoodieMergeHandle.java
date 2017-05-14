@@ -41,8 +41,8 @@ import java.util.Iterator;
 import java.util.Optional;
 
 @SuppressWarnings("Duplicates")
-public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
-    private static Logger logger = LogManager.getLogger(HoodieUpdateHandle.class);
+public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
+    private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
 
     private WriteStatus writeStatus;
     private HashMap<String, HoodieRecord<T>> keyToNewRecords;
@@ -52,13 +52,12 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
     private long recordsWritten = 0;
     private long recordsDeleted = 0;
     private long updatedRecordsWritten = 0;
-    private String fileId;
 
-    public HoodieUpdateHandle(HoodieWriteConfig config,
-                              String commitTime,
-                              HoodieTable<T> hoodieTable,
-                              Iterator<HoodieRecord<T>> recordItr,
-                              String fileId) {
+    public HoodieMergeHandle(HoodieWriteConfig config,
+                             String commitTime,
+                             HoodieTable<T> hoodieTable,
+                             Iterator<HoodieRecord<T>> recordItr,
+                             String fileId) {
         super(config, commitTime, hoodieTable);
         init(fileId, recordItr);
     }
@@ -70,7 +69,6 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
         WriteStatus writeStatus = new WriteStatus();
         writeStatus.setStat(new HoodieWriteStat());
         this.writeStatus = writeStatus;
-        this.fileId = fileId;
         this.keyToNewRecords = new HashMap<>();
 
         try {

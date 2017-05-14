@@ -203,6 +203,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM_PROP));
     }
 
+    public int getNumBucketsPerPartition() {
+        return Integer.parseInt(props.getProperty(HoodieIndexConfig.BUCKETED_INDEX_NUM_BUCKETS_PROP));
+    }
+
     /**
      * storage properties
      **/

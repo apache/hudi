@@ -55,7 +55,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
     @Override
     public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-            JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> hoodieTable) {
+            JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> table) {
         throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
     }
 
