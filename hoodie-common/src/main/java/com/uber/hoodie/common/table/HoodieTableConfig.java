@@ -52,7 +52,7 @@ public class HoodieTableConfig implements Serializable {
 
     public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
     public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
-    public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.AVRO;
+    public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
     private Properties props;
 
     public HoodieTableConfig(FileSystem fs, String metaPath) {

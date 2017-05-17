@@ -16,9 +16,12 @@
 
 package com.uber.hoodie.common.util;
 
+import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.exception.HoodieIOException;
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DecoderFactory;
 
@@ -59,4 +62,18 @@ public class SchemaTestUtil {
         }
     }
 
+    public static List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
+        throws IOException, URISyntaxException {
+        List<IndexedRecord> records = generateTestRecords(from, limit);
+        Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+        return records.stream()
+            .map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema))
+            .map(p -> {
+                p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
+                p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
+                return p;
+            }).collect(
+                Collectors.toList());
+
+    }
 }

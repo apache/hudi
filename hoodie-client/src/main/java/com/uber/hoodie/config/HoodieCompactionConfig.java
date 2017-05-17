@@ -45,7 +45,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     // Run a compaction every N delta commits
     public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
-    private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "4";
+    private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "10";
 
     public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP =
         "hoodie.cleaner.fileversions.retained";

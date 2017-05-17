@@ -21,37 +21,30 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.log.HoodieLogAppendConfig;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
-import com.uber.hoodie.common.table.log.avro.AvroLogAppender;
-import com.uber.hoodie.common.table.log.avro.RollingAvroLogAppender;
+import com.uber.hoodie.common.table.log.HoodieLogFormat;
+import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
+import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.util.FSUtils;
 
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-import com.uber.hoodie.common.util.SchemaTestUtil;
-import com.uber.hoodie.exception.HoodieException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.jute.Index;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -60,10 +53,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -181,17 +172,16 @@ public class HoodieTestUtils {
             HoodieRecordLocation location = s.getKey();
             String partitionPath = s.getValue().get(0).getPartitionPath();
 
-            HoodieLogAppendConfig logConfig = null;
+            Writer logWriter;
             try {
-                logConfig = HoodieLogAppendConfig.newBuilder()
-                    .onPartitionPath(new Path(basePath, partitionPath))
-                    .withLogFileExtension(HoodieLogFile.DELTA_EXTENSION)
+                logWriter = HoodieLogFormat.newWriterBuilder()
+                    .onParentPath(new Path(basePath, partitionPath))
+                    .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
                     .withFileId(location.getFileId())
-                    .withBaseCommitTime(location.getCommitTime())
-                    .withSchema(schema).withFs(fs).build();
+                    .overBaseCommit(location.getCommitTime())
+                    .withFs(fs).build();
 
-                AvroLogAppender log = new AvroLogAppender(logConfig);
-                log.append(s.getValue().stream().map(r -> {
+                logWriter.appendBlock(new HoodieAvroDataBlock(s.getValue().stream().map(r -> {
                     try {
                         GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
                         HoodieAvroUtils.addHoodieKeyToRecord(val,
@@ -202,8 +192,8 @@ public class HoodieTestUtils {
                     } catch (IOException e) {
                         return null;
                     }
-                }).collect(Collectors.toList()).iterator());
-                log.close();
+                }).collect(Collectors.toList()), schema));
+                logWriter.close();
             } catch (Exception e) {
                 fail(e.toString());
             }

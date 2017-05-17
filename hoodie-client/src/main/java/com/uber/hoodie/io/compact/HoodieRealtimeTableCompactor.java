@@ -25,7 +25,7 @@ import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.log.avro.HoodieAvroReader;
+import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
@@ -145,9 +145,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // Load all the delta commits since the last compaction commit and get all the blocks to be loaded and load it using CompositeAvroLogReader
     // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
 
-    HoodieAvroReader avroReader = new HoodieAvroReader(fs, operation.getDeltaFilePaths(),
-        readerSchema);
-    if (!avroReader.iterator().hasNext()) {
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, operation.getDeltaFilePaths(), readerSchema);
+    if (!scanner.iterator().hasNext()) {
       return Lists.newArrayList();
     }
 
@@ -155,15 +154,15 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     HoodieCopyOnWriteTable<HoodieAvroPayload> table =
         new HoodieCopyOnWriteTable<>(config, metaClient);
     Iterator<List<WriteStatus>> result = table
-        .handleUpdate(commitTime, operation.getFileId(), avroReader.iterator());
+        .handleUpdate(commitTime, operation.getFileId(), scanner.iterator());
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false)
         .flatMap(Collection::stream)
         .map(WriteStatus::getStat)
         .map(s -> CompactionWriteStat.newBuilder().withHoodieWriteStat(s)
-            .setTotalRecordsToUpdate(avroReader.getTotalRecordsToUpdate())
-            .setTotalLogFiles(avroReader.getTotalLogFiles())
-            .setTotalLogRecords(avroReader.getTotalLogRecords())
+            .setTotalRecordsToUpdate(scanner.getTotalRecordsToUpdate())
+            .setTotalLogFiles(scanner.getTotalLogFiles())
+            .setTotalLogRecords(scanner.getTotalLogRecords())
             .onPartition(operation.getPartitionPath()).build())
         .collect(toList());
   }

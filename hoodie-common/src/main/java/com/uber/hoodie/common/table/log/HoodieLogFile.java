@@ -32,7 +32,7 @@ import java.util.Optional;
  * Also contains logic to roll-over the log file
  */
 public class HoodieLogFile {
-    public static final String DELTA_EXTENSION = ".avro.delta";
+    public static final String DELTA_EXTENSION = ".log";
 
     private final Path path;
     private Optional<FileStatus> fileStatus;
@@ -87,11 +87,6 @@ public class HoodieLogFile {
                 DELTA_EXTENSION, baseCommitTime);
         return new HoodieLogFile(new Path(path.getParent(),
             FSUtils.makeLogFileName(fileId, DELTA_EXTENSION, baseCommitTime, newVersion)));
-    }
-
-    public boolean shouldRollOver(HoodieLogAppender currentWriter, HoodieLogAppendConfig config)
-        throws IOException {
-        return currentWriter.getCurrentSize() > config.getSizeThreshold();
     }
 
     public static Comparator<HoodieLogFile> getLogVersionComparator() {
