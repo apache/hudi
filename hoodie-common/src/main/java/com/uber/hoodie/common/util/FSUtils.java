@@ -52,8 +52,8 @@ import java.util.stream.Stream;
 public class FSUtils {
 
     private static final Logger LOG = LogManager.getLogger(FSUtils.class);
-    // Log files are of this pattern - b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.avro.delta.1
-    private static final Pattern LOG_FILE_PATTERN = Pattern.compile("(.*)_(.*)\\.(.*)\\.(.*)\\.([0-9]*)");
+    // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1
+    private static final Pattern LOG_FILE_PATTERN = Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)");
     private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
     private static final long MIN_CLEAN_TO_KEEP = 10;
     private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -188,7 +188,7 @@ public class FSUtils {
         if (!matcher.find()) {
             throw new InvalidHoodiePathException(logPath, "LogFile");
         }
-        return matcher.group(3) + "." + matcher.group(4);
+        return matcher.group(3);
     }
 
     /**
@@ -223,12 +223,12 @@ public class FSUtils {
         if (!matcher.find()) {
             throw new InvalidHoodiePathException(logPath, "LogFile");
         }
-        return Integer.parseInt(matcher.group(5));
+        return Integer.parseInt(matcher.group(4));
     }
 
     public static String makeLogFileName(String fileId, String logFileExtension,
-                                         String baseCommitTime, int version) {
-        return String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
+        String baseCommitTime, int version) {
+        return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
     }
 
     public static String maskWithoutLogVersion(String commitTime, String fileId, String logFileExtension) {
@@ -251,8 +251,8 @@ public class FSUtils {
     public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath,
                                                        final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
         return Arrays.stream(fs.listStatus(partitionPath,
-                path -> path.getName().startsWith(fileId) && path.getName().contains(logFileExtension)))
-                .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+            path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
+            .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
     }
 
     /**

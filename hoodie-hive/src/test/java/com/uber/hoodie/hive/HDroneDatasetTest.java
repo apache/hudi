@@ -55,10 +55,10 @@ public class HDroneDatasetTest {
 
         dataset = HoodieHiveDatasetSyncTask.newBuilder().withReference(metadata)
             .withConfiguration(TestUtil.hDroneConfiguration).build();
-        assertTrue("Table should exist after sync", hiveClient.checkTableExists(metadata));
-        assertEquals("After sync, There should not be any new partitions to sync", 0,
+        assertTrue("Table should exist after flush", hiveClient.checkTableExists(metadata));
+        assertEquals("After flush, There should not be any new partitions to flush", 0,
             dataset.getNewPartitions().size());
-        assertEquals("After sync, There should not be any modified partitions to sync", 0,
+        assertEquals("After flush, There should not be any modified partitions to flush", 0,
             dataset.getChangedPartitions().size());
 
         assertEquals("Table Schema should have 5 fields", 5,

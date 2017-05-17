@@ -17,7 +17,7 @@
 package com.uber.hoodie.common.model;
 
 public enum HoodieFileFormat {
-    PARQUET(".parquet"), AVRO(".avro");
+    PARQUET(".parquet"), HOODIE_LOG(".log");
 
     private final String extension;
 
