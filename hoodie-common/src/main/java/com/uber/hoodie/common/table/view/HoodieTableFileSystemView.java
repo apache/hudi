@@ -165,7 +165,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 visibleActiveCommitTimeline.lastInstant().get().getTimestamp())
                 .map((Function<List<HoodieDataFile>, Optional<HoodieDataFile>>) fss -> {
                     for (HoodieDataFile fs1 : fss) {
-                        if (visibleActiveCommitTimeline
+                        if (HoodieTimeline
                             .compareTimestamps(fs1.getCommitTime(), maxCommitToReturn,
                                 HoodieTimeline.LESSER_OR_EQUAL)) {
                             return Optional.of(fs1);
@@ -207,7 +207,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 l -> l.stream().sorted(HoodieLogFile.getLogVersionComparator())
                     .collect(toList())));
 
-        // Filter the delta files by the commit time of the latest base fine and collect as a list
+        // Filter the delta files by the commit time of the latest base file and collect as a list
         Optional<HoodieInstant> lastTimestamp = metaClient.getActiveTimeline().lastInstant();
         return lastTimestamp.map(hoodieInstant -> getLatestVersionInPartition(partitionPath,
             hoodieInstant.getTimestamp()).map(
@@ -215,6 +215,15 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 s -> s.getFileId().equals(hoodieDataFile.getFileId()) && s.getBaseCommitTime()
                     .equals(hoodieDataFile.getCommitTime())).collect(Collectors.toList()))).collect(
             Collectors.toMap(Pair::getKey, Pair::getRight))).orElseGet(Maps::newHashMap);
+    }
+
+    @Override
+    public FileStatus getFileStatus(String path) {
+        try {
+            return fs.getFileStatus(new Path(path));
+        } catch (IOException e) {
+            throw new HoodieIOException("Could not get FileStatus on path " + path);
+        }
     }
 
 
@@ -239,7 +248,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
                 .flatMap(fileStatus -> {
             HoodieDataFile dataFile = new HoodieDataFile(fileStatus);
             if (visibleActiveCommitTimeline.containsOrBeforeTimelineStarts(dataFile.getCommitTime())
-                && visibleActiveCommitTimeline
+                && HoodieTimeline
                 .compareTimestamps(dataFile.getCommitTime(), maxCommitTime,
                 HoodieTimeline.LESSER_OR_EQUAL)) {
                 return Stream.of(Pair.of(dataFile.getFileId(), dataFile));

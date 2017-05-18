@@ -14,21 +14,33 @@
  *  limitations under the License.
  */
 
-package com.uber.hoodie.io.compact;
+package com.uber.hoodie.io.strategy;
 
-import java.util.List;
+import com.uber.hoodie.common.table.log.HoodieLogFile;
+import java.util.Optional;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
-/**
- * Implementations of CompactionFilter allows prioritizing and filtering certain type of
- * compactions over other compactions.
- *
- * e.g. Filter in-efficient compaction like compacting a very large old parquet file with a small avro file
- */
-public interface CompactionFilter {
-    List<CompactionOperation> filter(List<CompactionOperation> input);
+public class TestHoodieLogFile extends HoodieLogFile {
 
-    // Default implementation - do not filter anything
-    static CompactionFilter allowAll() {
-        return s -> s;
-    }
+  private final long size;
+
+  public TestHoodieLogFile(long size) {
+    super((Path) null);
+    this.size = size;
+  }
+
+  @Override
+  public Path getPath() {
+    return new Path("/tmp/test-log");
+  }
+
+  @Override
+  public Optional<Long> getFileSize() {
+    return Optional.of(size);
+  }
+
+  public static HoodieLogFile newLogFile(long size) {
+    return new TestHoodieLogFile(size);
+  }
 }

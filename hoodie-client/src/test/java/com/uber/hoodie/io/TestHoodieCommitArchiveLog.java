@@ -80,13 +80,13 @@ public class TestHoodieCommitArchiveLog {
         HoodieTestDataGenerator.createCommitFile(basePath, "103");
 
         HoodieTimeline timeline =
-            metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
 
         assertEquals("Loaded 4 commits and the count should match", 4, timeline.countInstants());
         boolean result = archiveLog.archiveIfRequired();
         assertTrue(result);
         timeline =
-            metadata.getActiveTimeline().reload().getCommitTimeline().filterCompletedInstants();
+            metadata.getActiveTimeline().reload().getCommitsAndCompactionsTimeline().filterCompletedInstants();
         assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4,
             timeline.countInstants());
     }
@@ -107,14 +107,14 @@ public class TestHoodieCommitArchiveLog {
         HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
         HoodieTimeline timeline =
-            metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
         List<HoodieInstant> originalCommits = timeline.getInstants().collect(Collectors.toList());
 
         assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
         boolean result = archiveLog.archiveIfRequired();
         assertTrue(result);
         timeline =
-            metadata.getActiveTimeline().reload().getCommitTimeline().filterCompletedInstants();
+            metadata.getActiveTimeline().reload().getCommitsAndCompactionsTimeline().filterCompletedInstants();
         assertEquals(
             "Should archive commits when maxCommitsToKeep is 5 and now the commits length should be minCommitsToKeep which is 2",
             2, timeline.countInstants());
@@ -159,12 +159,12 @@ public class TestHoodieCommitArchiveLog {
         HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
         HoodieTimeline timeline =
-            metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
         assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
         boolean result = archiveLog.archiveIfRequired();
         assertTrue(result);
         timeline =
-            metadata.getActiveTimeline().reload().getCommitTimeline().filterCompletedInstants();
+            metadata.getActiveTimeline().reload().getCommitsAndCompactionsTimeline().filterCompletedInstants();
         assertTrue("Archived commits should always be safe",
             timeline.containsOrBeforeTimelineStarts("100"));
         assertTrue("Archived commits should always be safe",

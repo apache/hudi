@@ -73,8 +73,10 @@ import static parquet.filter2.predicate.FilterApi.gt;
 @UseFileSplitsFromInputFormat
 public class HoodieInputFormat extends MapredParquetInputFormat
     implements Configurable {
+
     public static final Log LOG = LogFactory.getLog(HoodieInputFormat.class);
-    private Configuration conf;
+
+    protected Configuration conf;
 
     @Override
     public FileStatus[] listStatus(JobConf job) throws IOException {
@@ -82,7 +84,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
         FileStatus[] fileStatuses = super.listStatus(job);
         Map<HoodieTableMetaClient, List<FileStatus>> groupedFileStatus = groupFileStatus(fileStatuses);
         LOG.info("Found a total of " + groupedFileStatus.size() + " groups");
-        List<FileStatus> returns = new ArrayList<FileStatus>();
+        List<FileStatus> returns = new ArrayList<>();
         for(Map.Entry<HoodieTableMetaClient, List<FileStatus>> entry:groupedFileStatus.entrySet()) {
             HoodieTableMetaClient metadata = entry.getKey();
             if(metadata == null) {
@@ -97,7 +99,8 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             }
             String tableName = metadata.getTableConfig().getTableName();
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
-            HoodieTimeline timeline = metadata.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+            // Get all commits, delta commits, compactions, as all of them produce a base parquet file today
+            HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
             TableFileSystemView fsView = new HoodieTableFileSystemView(metadata, timeline);
 
             if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
@@ -114,6 +117,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                         .collect(Collectors.toList());
                 for (HoodieDataFile filteredFile : filteredFiles) {
                     LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
+                    filteredFile = checkFileStatus(fsView, filteredFile);
                     returns.add(filteredFile.getFileStatus());
                 }
                 LOG.info(
@@ -126,6 +130,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
                     }
+                    filteredFile = checkFileStatus(fsView, filteredFile);
                     returns.add(filteredFile.getFileStatus());
                 }
             }
@@ -134,18 +139,40 @@ public class HoodieInputFormat extends MapredParquetInputFormat
 
     }
 
+    /**
+     * Checks the file status for a race condition which can set the file size to 0.
+     * 1. HiveInputFormat does super.listStatus() and gets back a FileStatus[]
+     * 2. Then it creates the HoodieTableMetaClient for the paths listed.
+     * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
+     *
+     * @param fsView
+     * @param fileStatus
+     * @return
+     */
+    private HoodieDataFile checkFileStatus(TableFileSystemView fsView, HoodieDataFile fileStatus) {
+        if(fileStatus.getFileSize() == 0) {
+            LOG.info("Refreshing file status " + fileStatus.getPath());
+            return new HoodieDataFile(fsView.getFileStatus(fileStatus.getPath()));
+        }
+        return fileStatus;
+    }
+
     private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)
         throws IOException {
         // This assumes the paths for different tables are grouped together
         Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
         HoodieTableMetaClient metadata = null;
         String nonHoodieBasePath = null;
-        for(FileStatus status:fileStatuses) {
+        for(FileStatus status: fileStatuses) {
+            if (!status.getPath().getName().endsWith(".parquet")) {
+                //FIXME(vc): skip non parquet files for now. This wont be needed once log file name start with "."
+                continue;
+            }
             if ((metadata == null && nonHoodieBasePath == null) || (metadata == null && !status.getPath().toString()
                 .contains(nonHoodieBasePath)) || (metadata != null && !status.getPath().toString()
                 .contains(metadata.getBasePath()))) {
                 try {
-                    metadata = getTableMetaClient(status.getPath().getParent());
+                    metadata = getTableMetaClient(status.getPath().getFileSystem(conf), status.getPath().getParent());
                     nonHoodieBasePath = null;
                 } catch (InvalidDatasetException e) {
                     LOG.info("Handling a non-hoodie path " + status.getPath());
@@ -258,8 +285,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
      * @return
      * @throws IOException
      */
-    private HoodieTableMetaClient getTableMetaClient(Path dataPath) throws IOException {
-        FileSystem fs = dataPath.getFileSystem(conf);
+    protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath) {
         int levels = HoodieHiveUtil.DEFAULT_LEVELS_TO_BASEPATH;
         if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
             HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
@@ -269,6 +295,5 @@ public class HoodieInputFormat extends MapredParquetInputFormat
         Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
         LOG.info("Reading hoodie metadata from path " + baseDir.toString());
         return new HoodieTableMetaClient(fs, baseDir.toString());
-
     }
 }

@@ -18,6 +18,7 @@ package com.uber.hoodie.common.util;
 
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 
+import com.uber.hoodie.exception.HoodieException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,4 +41,21 @@ public class ReflectionUtils {
             throw new IOException("Could not load payload class " + recordPayloadClass, e);
         }
     }
+
+    public static <T> T loadClass(String fqcn) {
+        try {
+            if(clazzCache.get(fqcn) == null) {
+                Class<?> clazz = Class.<HoodieRecordPayload>forName(fqcn);
+                clazzCache.put(fqcn, clazz);
+            }
+            return (T) clazzCache.get(fqcn).newInstance();
+        } catch (ClassNotFoundException e) {
+            throw new HoodieException("Could not load class " + fqcn, e);
+        } catch (InstantiationException e) {
+            throw new HoodieException("Could not load class " + fqcn, e);
+        } catch (IllegalAccessException e) {
+            throw new HoodieException("Could not load class " + fqcn, e);
+        }
+    }
+
 }

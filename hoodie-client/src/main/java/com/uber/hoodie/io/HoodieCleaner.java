@@ -187,8 +187,9 @@ public class HoodieCleaner<T extends HoodieRecordPayload<T>> {
                     }
 
                     // Always keep the last commit
-                    if (commitTimeline
-                        .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime,
+                    if (HoodieTimeline.compareTimestamps(
+                            earliestCommitToRetain.getTimestamp(),
+                            fileCommitTime,
                             HoodieTimeline.GREATER)) {
                         // this is a commit, that should be cleaned.
                         deletePaths.add(String
@@ -217,7 +218,7 @@ public class HoodieCleaner<T extends HoodieRecordPayload<T>> {
         HoodieInstant commitTime) {
         for (HoodieDataFile file : fileList) {
             String fileCommitTime = FSUtils.getCommitTime(file.getFileName());
-            if (commitTimeline.compareTimestamps(commitTime.getTimestamp(), fileCommitTime,
+            if (HoodieTimeline.compareTimestamps(commitTime.getTimestamp(), fileCommitTime,
                 HoodieTimeline.GREATER)) {
                 // fileList is sorted on the reverse, so the first commit we find <= commitTime is the one we want
                 return fileCommitTime;

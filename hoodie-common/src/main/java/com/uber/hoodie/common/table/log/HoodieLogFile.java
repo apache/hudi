@@ -75,6 +75,9 @@ public class HoodieLogFile {
         return fileStatus;
     }
 
+    public Optional<Long> getFileSize() {
+        return fileStatus.map(FileStatus::getLen);
+    }
 
     public HoodieLogFile rollOver(FileSystem fs) throws IOException {
         String fileId = getFileId();

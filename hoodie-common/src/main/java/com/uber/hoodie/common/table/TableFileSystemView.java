@@ -98,11 +98,18 @@ public interface TableFileSystemView {
 
     /**
      * Group data files with corresponding delta files
-     * @param fs
+     *
      * @param partitionPath
      * @return
      * @throws IOException
      */
     Map<HoodieDataFile, List<HoodieLogFile>> groupLatestDataFileWithLogFiles(String partitionPath) throws IOException;
 
+    /**
+     * Get the file Status for the path specified
+     *
+     * @param path
+     * @return
+     */
+    FileStatus getFileStatus(String path);
 }

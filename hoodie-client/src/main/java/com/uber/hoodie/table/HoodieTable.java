@@ -197,9 +197,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
             case MERGE_ON_READ:
                 // We need to include the parquet files written out in delta commits
                 // Include commit action to be able to start doing a MOR over a COW dataset - no migration required
-                return getActiveTimeline().getTimelineOfActions(
-                    Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION,
-                        HoodieActiveTimeline.DELTA_COMMIT_ACTION));
+                return getActiveTimeline().getCommitsAndCompactionsTimeline();
             default:
                 throw new HoodieException("Unsupported table type :"+ metaClient.getTableType());
         }
@@ -222,7 +220,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     public HoodieTimeline getCompactionCommitTimeline() {
         switch (metaClient.getTableType()) {
             case COPY_ON_WRITE:
-                return getActiveTimeline().getCommitTimeline();
+                return getActiveTimeline().getCommitsAndCompactionsTimeline();
             case MERGE_ON_READ:
                 // We need to include the parquet files written out in delta commits in tagging
                 return getActiveTimeline().getTimelineOfActions(
