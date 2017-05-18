@@ -57,6 +57,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
         // Hoodie currently relies on underlying object store being fully
         // consistent so only regional buckets should be used.
         SUPPORT_SCHEMES.add("gs");
+        SUPPORT_SCHEMES.add("viewfs");
     }
 
     private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams =
@@ -666,7 +667,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
             newScheme = HOODIE_SCHEME_PREFIX + scheme;
         } else {
             throw new IllegalArgumentException(
-                "BlockAlignedAvroParquetWriter does not support schema " + scheme);
+                "BlockAlignedAvroParquetWriter does not support scheme " + scheme);
         }
         return newScheme;
     }
