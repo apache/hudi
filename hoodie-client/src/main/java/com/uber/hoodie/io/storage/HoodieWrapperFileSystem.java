@@ -52,6 +52,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
         SUPPORT_SCHEMES = new HashSet<>(2);
         SUPPORT_SCHEMES.add("file");
         SUPPORT_SCHEMES.add("hdfs");
+        SUPPORT_SCHEMES.add("viewfs");
     }
 
     private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams =
