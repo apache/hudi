@@ -662,7 +662,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
             newScheme = HOODIE_SCHEME_PREFIX + scheme;
         } else {
             throw new IllegalArgumentException(
-                "BlockAlignedAvroParquetWriter does not support schema " + scheme);
+                "BlockAlignedAvroParquetWriter does not support scheme " + scheme);
         }
         return newScheme;
     }
