@@ -720,7 +720,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * by a running query can be cleaned)
      */
     public void clean() throws HoodieIOException {
-        String startCleanTime = startCommit();
+        String startCleanTime = HoodieActiveTimeline.createNewCommitTime();
         clean(startCleanTime);
     }
 
