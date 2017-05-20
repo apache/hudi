@@ -44,6 +44,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     private static double STREAM_COMPRESSION_RATIO = 0.1;
     private static AtomicLong recordIndex = new AtomicLong(1);
 
+
     private final Path file;
     private final HoodieWrapperFileSystem fs;
     private final long maxFileSize;

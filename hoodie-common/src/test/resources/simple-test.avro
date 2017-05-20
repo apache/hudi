@@ -4,7 +4,7 @@
  "name": "User",
  "fields": [
      {"name": "name", "type": "string"},
-     {"name": "favorite_number",  "type": "long"},
+     {"name": "favorite_number",  "type": "int"},
      {"name": "favorite_color", "type": "string"}
  ]
 }

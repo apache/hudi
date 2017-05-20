@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.hive.client;
+package com.uber.hoodie.hive.util;
 
 import com.google.common.collect.Maps;
 
