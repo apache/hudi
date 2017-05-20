@@ -14,25 +14,27 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.hive.model;
+package com.uber.hoodie.hive;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.metastore.api.Partition;
+public class HoodieHiveSyncException extends RuntimeException {
 
-public class TablePartition {
-    private final HoodieDatasetReference metadata;
-    private final Partition partition;
-
-    public TablePartition(HoodieDatasetReference metadata, Partition partition) {
-        this.metadata = metadata;
-        this.partition = partition;
+    public HoodieHiveSyncException() {
+        super();
     }
 
-    public Path getLocation() {
-        return Path.getPathWithoutSchemeAndAuthority(new Path(partition.getSd().getLocation()));
+    public HoodieHiveSyncException(String message) {
+        super(message);
     }
 
-    public String[] getPartitionFieldValues() {
-        return partition.getValues().toArray(new String[partition.getValuesSize()]);
+    public HoodieHiveSyncException(String message, Throwable t) {
+        super(message, t);
+    }
+
+    public HoodieHiveSyncException(Throwable t) {
+        super(t);
+    }
+
+    protected static String format(String message, Object... args) {
+        return String.format(String.valueOf(message), (Object[]) args);
     }
 }

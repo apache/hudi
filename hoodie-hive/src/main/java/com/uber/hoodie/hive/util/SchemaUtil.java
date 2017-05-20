@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.hive.client;
+package com.uber.hoodie.hive.util;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.uber.hoodie.hive.HoodieHiveDatasetException;
-import com.uber.hoodie.hive.model.HoodieDatasetReference;
-import com.uber.hoodie.hive.model.SchemaDifference;
-import org.apache.commons.lang.ArrayUtils;
-import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
+import com.uber.hoodie.hive.HiveSyncConfig;
+import com.uber.hoodie.hive.HoodieHiveSyncException;
+import com.uber.hoodie.hive.SchemaDifference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parquet.schema.DecimalMetadata;
@@ -52,12 +50,12 @@ public class SchemaUtil {
      * @return
      */
     public static SchemaDifference getSchemaDifference(MessageType storageSchema,
-        Map<String, String> tableSchema, String[] partitionKeys) {
+        Map<String, String> tableSchema, List<String> partitionKeys) {
         Map<String, String> newTableSchema;
         try {
             newTableSchema = convertParquetSchemaToHiveSchema(storageSchema);
         } catch (IOException e) {
-            throw new HoodieHiveDatasetException("Failed to convert parquet schema to hive schema",
+            throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema",
                 e);
         }
         LOG.info("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
@@ -68,14 +66,13 @@ public class SchemaUtil {
         for (Map.Entry<String, String> field : tableSchema.entrySet()) {
             String fieldName = field.getKey().toLowerCase();
             String tickSurroundedFieldName = tickSurround(fieldName);
-            if (!isFieldExistsInSchema(newTableSchema, tickSurroundedFieldName) && !ArrayUtils
-                .contains(partitionKeys, fieldName)) {
+            if (!isFieldExistsInSchema(newTableSchema, tickSurroundedFieldName) && !partitionKeys.contains(fieldName)) {
                 schemaDiffBuilder.deleteTableColumn(fieldName);
             } else {
                 // check type
                 String tableColumnType = field.getValue();
                 if (!isFieldExistsInSchema(newTableSchema, tickSurroundedFieldName)) {
-                    if (ArrayUtils.contains(partitionKeys, fieldName)) {
+                    if (partitionKeys.contains(fieldName)) {
                         // Partition key does not have to be part of the storage schema
                         continue;
                     }
@@ -93,7 +90,7 @@ public class SchemaUtil {
                 if (!tableColumnType.equalsIgnoreCase(expectedType)) {
                     // check for incremental datasets, the schema type change is allowed as per evolution rules
                     if (!isSchemaTypeUpdateAllowed(tableColumnType, expectedType)) {
-                        throw new HoodieHiveDatasetException(
+                        throw new HoodieHiveSyncException(
                             "Could not convert field Type from " + tableColumnType + " to "
                                 + expectedType + " for field " + fieldName);
                     }
@@ -401,27 +398,27 @@ public class SchemaUtil {
     }
 
     public static String generateCreateDDL(MessageType storageSchema,
-        HoodieDatasetReference metadata, String[] partitionKeys, String inputFormatClass,
-        String outputFormatClass) throws IOException {
+        HiveSyncConfig config, String inputFormatClass,
+        String outputFormatClass, String serdeClass) throws IOException {
         Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema);
         String columns = generateSchemaString(storageSchema);
 
         StringBuilder partitionFields = new StringBuilder();
-        for (String partitionKey : partitionKeys) {
+        for (String partitionKey : config.partitionFields) {
             partitionFields.append(partitionKey).append(" ")
                 .append(getPartitionKeyType(hiveSchema, partitionKey));
         }
 
         StringBuilder sb = new StringBuilder("CREATE EXTERNAL TABLE  IF NOT EXISTS ");
-        sb = sb.append(metadata.getDatabaseTableName());
+        sb = sb.append(config.databaseName).append(".").append(config.tableName);
         sb = sb.append("( ").append(columns).append(")");
-        if (partitionKeys.length > 0) {
+        if (!config.partitionFields.isEmpty()) {
             sb = sb.append(" PARTITIONED BY (").append(partitionFields).append(")");
         }
-        sb = sb.append(" ROW FORMAT SERDE '").append(ParquetHiveSerDe.class.getName()).append("'");
+        sb = sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
         sb = sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
         sb = sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '")
-            .append(metadata.getBaseDatasetPath()).append("'");
+            .append(config.basePath).append("'");
         return sb.toString();
     }
 

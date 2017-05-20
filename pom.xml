@@ -410,6 +410,11 @@
                 <artifactId>parquet-hive-bundle</artifactId>
                 <version>1.5.0</version>
             </dependency>
+            <dependency>
+                <groupId>com.twitter</groupId>
+                <artifactId>parquet-avro</artifactId>
+                <version>1.5.0-cdh5.7.2</version>
+            </dependency>
 
             <dependency>
                 <groupId>org.apache.parquet</groupId>

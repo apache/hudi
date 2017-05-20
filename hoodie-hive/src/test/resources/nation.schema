@@ -1,6 +1,0 @@
-message m {
-  required int32 nation_key;
-  required binary name;
-  required int32 region_key;
-  required binary comment_col;
-}

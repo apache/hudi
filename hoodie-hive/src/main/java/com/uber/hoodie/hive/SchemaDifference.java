@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.hive.model;
+package com.uber.hoodie.hive;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
