@@ -569,7 +569,7 @@
     <repositories>
         <repository>
             <id>cloudera-repo-releases</id>
-            <url>https://repository.cloudera.com/artifactory/repo/</url>
+            <url>https://repository.cloudera.com/artifactory/public/</url>
         </repository>
     </repositories>
 
