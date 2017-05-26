@@ -17,17 +17,10 @@
 package com.uber.hoodie;
 
 import com.google.common.collect.Iterables;
-
 import com.uber.hoodie.common.HoodieClientTestUtils;
+import com.uber.hoodie.common.HoodieMergeOnReadClientTestUtil;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
-import com.uber.hoodie.common.model.HoodieCleaningPolicy;
-import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.model.HoodieKey;
-import com.uber.hoodie.common.model.HoodiePartitionMetadata;
-import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTestUtils;
-import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.model.*;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -41,7 +34,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
-
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -53,28 +45,35 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
+@RunWith(Parameterized.class)
 public class TestHoodieClient implements Serializable {
+
+    private HoodieTableType tableType;
+
+    public TestHoodieClient(HoodieTableType tType) {
+        this.tableType = tType;
+    }
+
+    @Parameterized.Parameters(name = "HoodieTableTypes")
+    public static Collection<HoodieTableType[]> data() {
+        return Arrays.asList(new HoodieTableType[][]{
+                {HoodieTableType.COPY_ON_WRITE},
+                {HoodieTableType.MERGE_ON_READ}
+        });
+    }
+
     private transient JavaSparkContext jsc = null;
     private transient SQLContext sqlContext;
     private String basePath = null;
@@ -94,7 +93,11 @@ public class TestHoodieClient implements Serializable {
         TemporaryFolder folder = new TemporaryFolder();
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
-        HoodieTestUtils.init(basePath);
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+        } else {
+            HoodieTestUtils.init(basePath);
+        }
 
         dataGen = new HoodieTestDataGenerator();
     }
@@ -179,8 +182,16 @@ public class TestHoodieClient implements Serializable {
         assertFalse("If Autocommit is false, then commit should not be made automatically",
             HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
         assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+        HoodieReadClient readClient = null;
+
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            readClient = new HoodieReadClient(jsc, basePath);
+        } else {
+            readClient = new HoodieMergeOnReadClientTestUtil(jsc, basePath, sqlContext);
+        }
         assertTrue("After explicit commit, commit file should be created",
-            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+                readClient.hasNewCommits("000"));
+
 
         newCommitTime = "002";
         records = dataGen.generateUpdates(newCommitTime, 100);
@@ -189,8 +200,14 @@ public class TestHoodieClient implements Serializable {
         assertFalse("If Autocommit is false, then commit should not be made automatically",
             HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
         assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+        //re-init client to refresh commitTimeline
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            readClient = new HoodieReadClient(jsc, basePath);
+        } else {
+            readClient = new HoodieMergeOnReadClientTestUtil(jsc, basePath, sqlContext);
+        }
         assertTrue("After explicit commit, commit file should be created",
-            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+                readClient.hasNewCommits("001"));
     }
 
     @Test
@@ -214,7 +231,12 @@ public class TestHoodieClient implements Serializable {
         assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
 
         // verify that there is a commit
-        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        HoodieReadClient readClient = null;
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        } else {
+            readClient = new HoodieMergeOnReadClientTestUtil(jsc, basePath, sqlContext);
+        }
         assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
         assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
         assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
@@ -243,7 +265,12 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify there are now 2 commits
-        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        // verify that there is a commit
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        } else {
+            readClient = new HoodieMergeOnReadClientTestUtil(jsc, basePath, sqlContext);
+        }
         assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
         assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
 
@@ -252,7 +279,9 @@ public class TestHoodieClient implements Serializable {
 
         // Index should be able to locate all updates in correct locations.
         taggedRecords = index.tagLocation(jsc.parallelize(dedupedRecords, 1), table).collect();
-        checkTaggedRecords(taggedRecords, "004");
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            checkTaggedRecords(taggedRecords, "004");
+        }
 
         // Check the entire dataset has 100 records still
         String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
@@ -262,18 +291,23 @@ public class TestHoodieClient implements Serializable {
         assertEquals("Must contain 200 records", readClient.read(fullPartitionPaths).count(), 200);
 
 
-        // Check that the incremental consumption from time 000
-        assertEquals("Incremental consumption from time 002, should give all records in commit 004",
-            readClient.readCommit(newCommitTime).count(),
-            readClient.readSince("002").count());
-        assertEquals("Incremental consumption from time 001, should give all records in commit 004",
-            readClient.readCommit(newCommitTime).count(),
-            readClient.readSince("001").count());
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            // Check that the incremental consumption from time 000
+            assertEquals("Incremental consumption from time 002, should give all records in commit 004",
+                    readClient.readCommit(newCommitTime).count(),
+                    readClient.readSince("002").count());
+            assertEquals("Incremental consumption from time 001, should give all records in commit 004",
+                    readClient.readCommit(newCommitTime).count(),
+                    readClient.readSince("001").count());
+        }
     }
 
     @Test
     public void testDeletes() throws Exception {
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
@@ -352,6 +386,10 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testCreateSavepoint() throws Exception {
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
             HoodieCompactionConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
@@ -438,6 +476,10 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testRollbackToSavepoint() throws Exception {
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
             HoodieCompactionConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
@@ -545,6 +587,10 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testInsertAndCleanByVersions() throws Exception {
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         int maxVersions = 2; // keep upto 2 versions for each file
         HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
             HoodieCompactionConfig.newBuilder()
@@ -637,6 +683,10 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testInsertAndCleanByCommits() throws Exception {
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         int maxCommits = 3; // keep upto 3 commits from the past
         HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
             HoodieCompactionConfig.newBuilder()
@@ -896,6 +946,9 @@ public class TestHoodieClient implements Serializable {
     @Test
     public void testSmallInsertHandlingForUpserts() throws Exception {
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         FileSystem fs = FSUtils.getFs();
         final String TEST_PARTITION_PATH = "2016/09/26";
         final int INSERT_SPLIT_LIMIT = 10;
@@ -998,6 +1051,9 @@ public class TestHoodieClient implements Serializable {
     @Test
     public void testSmallInsertHandlingForInserts() throws Exception {
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         final String TEST_PARTITION_PATH = "2016/09/26";
         final int INSERT_SPLIT_LIMIT = 10;
         // setup the small file handling params
