@@ -77,7 +77,7 @@ public class HoodieCommitMetadata implements Serializable {
         // list all partitions paths
         for (Map.Entry<String, List<HoodieWriteStat>> entry: getPartitionToWriteStats().entrySet()) {
             for (HoodieWriteStat stat: entry.getValue()) {
-                filePaths.put(stat.getFileId(), stat.getFullPath());
+                filePaths.put(stat.getFileId(), stat.getRelativePath());
             }
         }
         return filePaths;
@@ -196,8 +196,8 @@ public class HoodieCommitMetadata implements Serializable {
         HoodieCommitMetadata that = (HoodieCommitMetadata) o;
 
         return partitionToWriteStats != null ?
-            partitionToWriteStats.equals(that.partitionToWriteStats) :
-            that.partitionToWriteStats == null;
+                partitionToWriteStats.equals(that.partitionToWriteStats) :
+                that.partitionToWriteStats == null;
 
     }
 
