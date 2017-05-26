@@ -299,6 +299,4 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
             return a;
         }).get();
     }
-
-
 }
