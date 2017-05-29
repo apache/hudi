@@ -50,7 +50,6 @@ import com.uber.hoodie.exception.HoodieSavepointException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.BulkInsertMapFunction;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.io.HoodieCleaner;
 import com.uber.hoodie.io.HoodieCommitArchiveLog;
 import com.uber.hoodie.metrics.HoodieMetrics;
 import com.uber.hoodie.table.HoodieTable;
@@ -738,24 +737,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             HoodieTable<T> table = HoodieTable
                 .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
 
-            List<String> partitionsToClean =
-                FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
-            // shuffle to distribute cleaning work across partitions evenly
-            Collections.shuffle(partitionsToClean);
-            logger.info("Partitions to clean up : " + partitionsToClean + ", with policy " + config
-                .getCleanerPolicy());
-            if (partitionsToClean.isEmpty()) {
-                logger.info("Nothing to clean here mom. It is already clean");
+            List<HoodieCleanStat> cleanStats = table.clean(jsc);
+            if (cleanStats.isEmpty()) {
                 return;
             }
-
-            int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
-            List<HoodieCleanStat> cleanStats = jsc.parallelize(partitionsToClean, cleanerParallelism)
-                    .map((Function<String, HoodieCleanStat>) partitionPathToClean -> {
-                        HoodieCleaner cleaner = new HoodieCleaner(table, config);
-                        return cleaner.clean(partitionPathToClean);
-                    })
-                .collect();
 
             // Emit metrics (duration, numFilesDeleted) if needed
             Optional<Long> durationInMs = Optional.empty();
