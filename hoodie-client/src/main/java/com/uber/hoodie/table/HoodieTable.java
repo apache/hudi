@@ -17,8 +17,12 @@
 package com.uber.hoodie.table;
 
 import com.google.common.collect.Sets;
+import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
+import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
+import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -27,23 +31,20 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.WriteStatus;
-import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
-
 import com.uber.hoodie.exception.HoodieSavepointException;
-import java.util.Optional;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.spark.Partitioner;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -52,6 +53,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
     protected final HoodieWriteConfig config;
     protected final HoodieTableMetaClient metaClient;
+    private static Logger logger = LogManager.getLogger(HoodieTable.class);
 
     protected HoodieTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
         this.config = config;
@@ -299,4 +301,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      * Compaction arranges the data so that it is optimized for data access
      */
     public abstract Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc);
+
+    /**
+     * Clean partition paths according to cleaning policy and returns the number
+     * of files cleaned.
+     */
+    public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc);
 }
