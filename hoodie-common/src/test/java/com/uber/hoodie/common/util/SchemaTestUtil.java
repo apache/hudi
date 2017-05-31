@@ -18,7 +18,6 @@ package com.uber.hoodie.common.util;
 
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -30,6 +29,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,6 +37,11 @@ public class SchemaTestUtil {
     public static Schema getSimpleSchema() throws IOException {
         return new Schema.Parser()
             .parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avro"));
+    }
+
+    public static Schema getEvolvedSchema() throws IOException {
+        return new Schema.Parser()
+                .parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved.avro"));
     }
 
     public static List<IndexedRecord> generateTestRecords(int from, int limit)
