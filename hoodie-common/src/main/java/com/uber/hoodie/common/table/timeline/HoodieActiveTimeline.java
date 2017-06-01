@@ -18,7 +18,6 @@ package com.uber.hoodie.common.table.timeline;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
-import com.google.common.io.Closeables;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
@@ -303,16 +302,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
 
     protected Optional<byte[]> readDataFromPath(Path detailPath) {
-        FSDataInputStream is = null;
-        try {
-            is = fs.open(detailPath);
+        try (FSDataInputStream is = fs.open(detailPath)) {
             return Optional.of(IOUtils.toByteArray(is));
         } catch (IOException e) {
             throw new HoodieIOException("Could not read commit details from " + detailPath, e);
-        } finally {
-            if (is != null) {
-                Closeables.closeQuietly(is);
-            }
         }
     }
 
