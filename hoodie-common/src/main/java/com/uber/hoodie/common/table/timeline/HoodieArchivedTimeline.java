@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.common.table.timeline;
 
-import com.google.common.io.Closeables;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -56,23 +55,18 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     public HoodieArchivedTimeline(FileSystem fs, String metaPath) {
         // Read back the commits to make sure
         Path archiveLogPath = getArchiveLogPath(metaPath);
-        try {
-            SequenceFile.Reader reader =
-                new SequenceFile.Reader(fs.getConf(), SequenceFile.Reader.file(archiveLogPath));
-            try {
-                Text key = new Text();
-                Text val = new Text();
-                while (reader.next(key, val)) {
-                    // TODO - limit the number of commits loaded in memory. this could get very large.
-                    // This is okay because only tooling will load the archived commit timeline today
-                    readCommits.put(key.toString(), Arrays.copyOf(val.getBytes(), val.getLength()));
-                }
-                this.instants = readCommits.keySet().stream().map(
-                    s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)).collect(
-                    Collectors.toList());
-            } finally {
-                Closeables.closeQuietly(reader);
+        try (SequenceFile.Reader reader =
+                     new SequenceFile.Reader(fs.getConf(), SequenceFile.Reader.file(archiveLogPath))) {
+            Text key = new Text();
+            Text val = new Text();
+            while (reader.next(key, val)) {
+                // TODO - limit the number of commits loaded in memory. this could get very large.
+                // This is okay because only tooling will load the archived commit timeline today
+                readCommits.put(key.toString(), Arrays.copyOf(val.getBytes(), val.getLength()));
             }
+            this.instants = readCommits.keySet().stream().map(
+                s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)).collect(
+                Collectors.toList());
         } catch (IOException e) {
             throw new HoodieIOException(
                 "Could not load archived commit timeline from path " + archiveLogPath, e);
