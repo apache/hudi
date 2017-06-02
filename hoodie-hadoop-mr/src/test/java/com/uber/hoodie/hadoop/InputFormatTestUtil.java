@@ -20,12 +20,10 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.rules.TemporaryFolder;
 
@@ -99,13 +97,14 @@ public class InputFormatTestUtil {
         File partitionPath = basePath.newFolder("2016", "05", "01");
         AvroParquetWriter parquetWriter;
         for (int i = 0; i < numberOfFiles; i++) {
+            String fileId = FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i);
             File dataFile =
-                new File(partitionPath, FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i));
+                new File(partitionPath, fileId);
             // dataFile.createNewFile();
             parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()),
                 schema);
             try {
-                for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber)) {
+                for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
                     parquetWriter.write(record);
                 }
             } finally {
@@ -116,20 +115,25 @@ public class InputFormatTestUtil {
 
     }
 
-    private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords, String commitTime) {
+    private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords, String commitTime, String fileId) {
         List<GenericRecord> records = new ArrayList<>(numberOfRecords);
         for(int i=0;i<numberOfRecords;i++) {
-            records.add(generateAvroRecord(schema, i, commitTime));
+            records.add(generateAvroRecord(schema, i, commitTime, fileId));
         }
         return records;
     }
 
-    private static GenericRecord generateAvroRecord(Schema schema, int recordNumber,
-        String commitTime) {
-        return new GenericRecordBuilder(schema).set("field1", "field" + recordNumber)
-            .set("field2", "field" + recordNumber)
-            .set(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime)
-            .set(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitTime + "_" + recordNumber).build();
+    public static GenericRecord generateAvroRecord(Schema schema, int recordNumber,
+        String commitTime, String fileId) {
+        GenericRecord record = new GenericData.Record(schema);
+        record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
+        record.put("field1", "field" + recordNumber);
+        record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, "key_" + recordNumber);
+        record.put("field2", "field" + recordNumber);
+        record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, commitTime);
+        record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileId);
+        record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitTime + "_" + recordNumber);
+        return record;
     }
 
     public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,
@@ -146,7 +150,7 @@ public class InputFormatTestUtil {
             schema);
         try {
             for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords,
-                originalCommit)) {
+                originalCommit, fileId)) {
                 if (numberOfRecordsToUpdate > 0) {
                     // update this record
                     record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, newCommit);
