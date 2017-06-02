@@ -19,6 +19,10 @@ package com.uber.hoodie.common;
 import com.google.common.base.Optional;
 import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
+=======
+import com.uber.hoodie.common.model.HoodieDataFile;
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -33,10 +37,22 @@ import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.Schema;
+=======
+import com.uber.hoodie.exception.HoodieIOException;
+import com.uber.hoodie.exception.SchemaCompatabilityException;
+import com.uber.hoodie.hadoop.realtime.HoodieRealtimeFileSplit;
+import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
+import com.uber.hoodie.hadoop.realtime.HoodieRealtimeRecordReader;
+import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.table.HoodieTable;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
@@ -46,22 +62,40 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
+=======
+import org.apache.hadoop.mapred.FileSplit;
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+=======
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hadoop.hdfs.TestBlockStoragePolicy.conf;
+
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
 //Test Util to workaround HoodieReadClient for MergeOnRead TableType
 //NOTE : The implementation is crude at the moment and needs iterations
 //TODO(na) : Use HoodieRealtimeInputFormat wherever possible
@@ -117,7 +151,12 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                     .map(stat -> stat.getFullPath())
                     .collect(Collectors.toList());
 
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
             return convertToDF(getRecordsUsingInputFormat(allFiles));
+=======
+            return convertToDF(getMergedRecords(allFiles));
+
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
         } catch (Exception e) {
             throw new HoodieException("Error reading commit " + commitTime, e);
         }
@@ -141,7 +180,12 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                     .map(stat -> stat.getFullPath())
                     .collect(Collectors.toList());
 
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
             return getRecordsUsingInputFormat(allFiles);
+=======
+            return getMergedRecords(allFiles);
+
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
         } catch (Exception e) {
             throw new HoodieException("Error reading commit " + commitTime, e);
         }
@@ -149,6 +193,10 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
 
     @Override
     public Dataset<Row> read(String... paths) {
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
+=======
+        List<GenericRecord> records = new ArrayList<>();
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
         try {
             List<String> inputPaths = new ArrayList<>();
             for (String path : paths) {
@@ -159,9 +207,15 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                 }
                 //TODO(na) : find a better way to list partitions only
                 String partition = path.substring(hoodieTable.getMetaClient().getBasePath().length() + 1, path.length() - 2);
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
                 inputPaths.add(basePath + "/" + partition);
             }
             return convertToDF(getRecordsUsingInputFormat(inputPaths));
+=======
+                records.addAll(gerMergedRecords(fs, generateSplit(this.basePath, partition)));
+            }
+            return convertToDF(records);
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
         } catch (Exception e) {
             throw new HoodieException("Error reading hoodie dataset as a dataframe", e);
         }
@@ -187,7 +241,12 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                 fullPaths.addAll(metadata.getFileIdAndFullPaths().values());
                 fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths());
             }
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
             return convertToDF(getRecordsUsingInputFormat(fullPaths));
+=======
+
+            return convertToDF(getMergedRecords(fullPaths));
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
         } catch (IOException e) {
             throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimestamp, e);
         }
@@ -209,6 +268,7 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
     }
 
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
     private Dataset<Row> convertToDF(List<GenericRecord> records) {
         //List<Row> rows = records.stream().map(r -> createRowFromGenericRecord(HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA)), r)).collect(Collectors.toList());
         return sqlContextOpt.get().createDataFrame(records,
@@ -217,6 +277,10 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
 
     private List<GenericRecord> getRecordsUsingScanner(List<String> allFiles) {
         List<GenericRecord> records = new ArrayList<>();
+=======
+    //generate splits for each <hoodiefile, List<logfile>> pairs
+    private List<HoodieRealtimeFileSplit> generateSplit(String basePath, String partition) {
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         List<String> allLogFiles = allFiles.stream().filter(s -> s
                 .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
@@ -226,6 +290,7 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                 .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
                 .collect(Collectors.toList());
 
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
         Schema schema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
         HoodieCompactedLogRecordScanner scanner =
                 new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema);
@@ -233,6 +298,38 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
             IndexedRecord rec = null;
             try {
                 rec = d.getData().getInsertValue(schema).get();
+=======
+    private List<GenericRecord> gerMergedRecords(FileSystem fs, List<HoodieRealtimeFileSplit> rtSplits) throws IOException {
+        List<GenericRecord> records = new ArrayList<GenericRecord>();
+        rtSplits.stream().forEach(split -> {
+            JobConf jobConf = new JobConf();
+            Schema schema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
+            List<Schema.Field> fields = schema.getFields();
+            String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+            String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+            jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+            jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+            jobConf.set("partition_columns", "datestr");
+            try {
+                RecordReader<Void, ArrayWritable> reader =
+                        new MapredParquetInputFormat().
+                                getRecordReader(new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
+                                        new JobConf(), null);
+                HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
+                Void key = recordReader.createKey();
+                ArrayWritable writable = recordReader.createValue();
+                while(recordReader.next(key, writable)) {
+
+                    GenericRecordBuilder newRecord = new GenericRecordBuilder(schema);
+                    // writable returns an array with [field1, field2, _hoodie_commit_time, _hoodie_commit_seqno]
+                    // Take the commit time and compare with the one we are interested in
+                    Writable[] values = writable.get();
+                    schema.getFields().forEach(field -> {
+                        newRecord.set(field, values[0]);
+                    });
+                    records.add(newRecord.build()); //Since commitTime is the first index
+                }
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -243,6 +340,7 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                 records.add(record);
             });
         });
+<<<<<<< a7ea7f2923a86c9c37287f904a3761822ec99fad
 
         return records;
     }
@@ -300,3 +398,49 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
         }).get();
     }
 }
+=======
+        return records;
+    }
+
+    private Dataset<Row> convertToDF(List<GenericRecord> records) {
+        //List<Row> rows = records.stream().map(r -> createRowFromGenericRecord(HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA)), r)).collect(Collectors.toList());
+        return sqlContextOpt.get().createDataFrame(records,
+                GenericRecord.class);
+    }
+
+
+    private List<GenericRecord> getMergedRecords(List<String> allFiles) {
+        List<GenericRecord> records = new ArrayList<>();
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        List<String> allLogFiles = allFiles.stream().filter(s -> s
+                .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
+                .collect(Collectors.toList());
+
+        List<String> allParquetFiles = allFiles.stream().filter(s -> !s
+                .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
+                .collect(Collectors.toList());
+
+        Schema schema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
+        HoodieCompactedLogRecordScanner scanner =
+                new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema);
+        scanner.iterator().forEachRemaining(d -> {
+            IndexedRecord rec = null;
+            try {
+                rec = d.getData().getInsertValue(schema).get();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            records.add((GenericRecord) rec);
+        });
+        allParquetFiles.forEach(parquetFile -> {
+            ParquetUtils.readAvroRecords(new Path(parquetFile)).forEach(record -> {
+                records.add(record);
+            });
+        });
+
+        return records;
+    }
+
+
+}
+>>>>>>> Fixed multiple tests in TestHoodieClient for MOR

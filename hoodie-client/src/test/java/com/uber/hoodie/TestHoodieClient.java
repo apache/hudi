@@ -76,7 +76,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -366,7 +365,6 @@ public class TestHoodieClient implements Serializable {
         if(tableType == HoodieTableType.MERGE_ON_READ) {
             return;
         }
-
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
@@ -541,7 +539,6 @@ public class TestHoodieClient implements Serializable {
 
         // rollback and reupsert 004
         client.rollback(newCommitTime);
-        // rollback and reupsert 004
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
