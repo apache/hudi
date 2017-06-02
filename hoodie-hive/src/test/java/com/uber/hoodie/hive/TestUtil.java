@@ -217,12 +217,12 @@ public class TestUtil {
     for (Entry<String, List<HoodieWriteStat>> wEntry : partitionWriteStats.entrySet()) {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
-        Path path = new Path(wStat.getFullPath());
+        Path path = new Path(wStat.getPath());
         HoodieDataFile dataFile = new HoodieDataFile(fileSystem.getFileStatus(path));
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
-        writeStat.setFullPath(logFile.getPath().toString());
+        writeStat.setPath(logFile.getPath().toString());
         commitMetadata.addWriteStat(partitionPath, writeStat);
       }
     }
@@ -258,7 +258,7 @@ public class TestUtil {
       generateParquetData(filePath, isParquetSchemaSimple);
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);
-      writeStat.setFullPath(filePath.toString());
+      writeStat.setPath(filePath.toString());
       writeStats.add(writeStat);
     }
     return writeStats;

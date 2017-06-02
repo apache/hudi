@@ -35,9 +35,9 @@ public class HoodieWriteStat implements Serializable {
     private String fileId;
 
     /**
-     * Full path to the file on underlying file system
+     * Relative path to the file from the base path
      */
-    private String fullPath;
+    private String path;
 
     /**
      * The previous version of the file. (null if this is the first version. i.e insert)
@@ -79,9 +79,7 @@ public class HoodieWriteStat implements Serializable {
         this.fileId = fileId;
     }
 
-    public void setFullPath(String fullFilePath) {
-        this.fullPath = fullFilePath;
-    }
+    public void setPath(String path) { this.path = path; }
 
     public void setPrevCommit(String prevCommit) {
         this.prevCommit = prevCommit;
@@ -131,15 +129,14 @@ public class HoodieWriteStat implements Serializable {
         return fileId;
     }
 
-    public String getFullPath() {
-        return fullPath;
-    }
+    public String getPath() { return path; }
+
 
     @Override
     public String toString() {
         return new StringBuilder()
                 .append("HoodieWriteStat {")
-                .append("fullPath='" + fullPath + '\'')
+                .append("path=" + path)
                 .append(", prevCommit='" + prevCommit + '\'')
                 .append(", numWrites=" + numWrites)
                 .append(", numDeletes=" + numDeletes)
@@ -157,7 +154,7 @@ public class HoodieWriteStat implements Serializable {
             return false;
 
         HoodieWriteStat that = (HoodieWriteStat) o;
-        if (!fullPath.equals(that.fullPath))
+        if (!path.equals(that.path))
             return false;
         return prevCommit.equals(that.prevCommit);
 
@@ -165,7 +162,7 @@ public class HoodieWriteStat implements Serializable {
 
     @Override
     public int hashCode() {
-        int result = fullPath.hashCode();
+        int result = path.hashCode();
         result = 31 * result + prevCommit.hashCode();
         return result;
     }

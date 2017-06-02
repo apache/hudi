@@ -129,8 +129,9 @@ public class TestHoodieCompactor {
 
         HoodieCompactionMetadata result =
             compactor.compact(jsc, getConfig(), table);
+        String basePath = table.getMetaClient().getBasePath();
         assertTrue("If there is nothing to compact, result will be empty",
-            result.getFileIdAndFullPaths().isEmpty());
+            result.getFileIdAndFullPaths(basePath).isEmpty());
     }
 
     @Test

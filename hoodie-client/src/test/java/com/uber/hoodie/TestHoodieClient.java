@@ -45,6 +45,7 @@ import com.uber.hoodie.table.HoodieTable;
 
 import java.util.Map;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
@@ -60,6 +61,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -101,7 +103,6 @@ public class TestHoodieClient implements Serializable {
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
         HoodieTestUtils.init(basePath);
-
         dataGen = new HoodieTestDataGenerator();
     }
 
@@ -616,7 +617,7 @@ public class TestHoodieClient implements Serializable {
                         if (!fileIdToVersions.containsKey(wstat.getFileId())) {
                             fileIdToVersions.put(wstat.getFileId(), new TreeSet<>());
                         }
-                        fileIdToVersions.get(wstat.getFileId()).add(FSUtils.getCommitTime(new Path(wstat.getFullPath()).getName()));
+                        fileIdToVersions.get(wstat.getFileId()).add(FSUtils.getCommitTime(new Path(wstat.getPath()).getName()));
                     }
                 }
 
@@ -1136,7 +1137,6 @@ public class TestHoodieClient implements Serializable {
         List<HoodieCleanStat> hoodieCleanStatsFour = table.clean(jsc);
         assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
-    }
 
     @Test
     public void testKeepLatestCommits() throws IOException {
@@ -1297,6 +1297,47 @@ public class TestHoodieClient implements Serializable {
                 + "and less records than the partitionPath with most files.",
             stageOneShuffleReadTaskRecordsCountMap.values().stream().filter(a -> a > 10 && a < 100).count() == 3);
     }
+
+    public void testCommitWritesRelativePaths() throws Exception {
+
+        HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+        HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+        FileSystem fs = FSUtils.getFs();
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg);
+
+        String commitTime = "000";
+        List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+        JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+        JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+
+        assertTrue("Commit should succeed", client.commit(commitTime, result));
+        assertTrue("After explicit commit, commit file should be created",
+                HoodieTestUtils.doesCommitExist(basePath, commitTime));
+
+        // Get parquet file paths from commit metadata
+        String actionType = table.getCompactedCommitActionType();
+        HoodieInstant commitInstant =
+                new HoodieInstant(false, actionType, commitTime);
+        HoodieTimeline commitTimeline = table.getCompletedCompactionCommitTimeline();
+        HoodieCommitMetadata commitMetadata =
+                HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commitInstant).get());
+        String basePath = table.getMetaClient().getBasePath();
+        Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
+
+        // Read from commit file
+        String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
+        FileInputStream inputStream = new FileInputStream(filename);
+        String everything = IOUtils.toString(inputStream);
+        HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything.toString());
+        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
+        inputStream.close();
+
+        // Compare values in both to make sure they are equal.
+        for (String pathName: paths.values()) {
+            assertTrue(commitPathNames.contains(pathName));
+        }
 
     private HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo,
         String partitionPath) {

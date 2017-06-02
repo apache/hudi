@@ -19,6 +19,7 @@ package com.uber.hoodie.common.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.annotate.JsonAutoDetect;
@@ -72,17 +73,25 @@ public class HoodieCommitMetadata implements Serializable {
         return extraMetadataMap.get(metaKey);
     }
 
-    public HashMap<String, String> getFileIdAndFullPaths() {
+    public HashMap<String, String> getFileIdAndRelativePaths() {
         HashMap<String, String> filePaths = new HashMap<>();
         // list all partitions paths
         for (Map.Entry<String, List<HoodieWriteStat>> entry: getPartitionToWriteStats().entrySet()) {
             for (HoodieWriteStat stat: entry.getValue()) {
-                filePaths.put(stat.getFileId(), stat.getFullPath());
+                filePaths.put(stat.getFileId(), stat.getPath());
             }
         }
         return filePaths;
     }
 
+    public HashMap<String, String> getFileIdAndFullPaths(String basePath) {
+        HashMap<String, String> fullPaths = new HashMap<>();
+        HashMap<String, String> relativePaths = getFileIdAndRelativePaths();
+        for (Map.Entry<String, String> entry: relativePaths.entrySet()) {
+            Path fullPath = new Path(basePath, entry.getValue());
+            fullPaths.put(entry.getKey(), fullPath.toString());
+        } return fullPaths;
+    }
 
     public String toJsonString() throws IOException {
         if(partitionToWriteStats.containsKey(null)) {
