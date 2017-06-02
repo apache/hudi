@@ -1301,10 +1301,10 @@ public class TestHoodieClient implements Serializable {
     @Test
     public void testKeepLatestFileVersions() throws IOException {
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withAssumeDatePartitioning(true)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-                .retainFileVersions(1).build()).build();
+                .withAssumeDatePartitioning(true)
+                .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+                        .retainFileVersions(1).build()).build();
 
         // make 1 commit, with 1 file per partition
         HoodieTestUtils.createCommitFiles(basePath, "000");
@@ -1312,18 +1312,18 @@ public class TestHoodieClient implements Serializable {
         String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
         String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
         HoodieTable table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+                .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
 
         List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
-        assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
-        assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[1]).getSuccessDeleteFiles().size());
+        assertEquals("Must not clean any files", 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must not clean any files", 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[1]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
 
         // make next commit, with 1 insert & 1 update per partition
         HoodieTestUtils.createCommitFiles(basePath, "001");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+                .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
 
         String file2P0C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "001"); // insert
         String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
@@ -1331,8 +1331,8 @@ public class TestHoodieClient implements Serializable {
         HoodieTestUtils.createDataFile(basePath, partitionPaths[1], "001", file1P1C0); // update
 
         List<HoodieCleanStat> hoodieCleanStatsTwo = table.clean(jsc);
-        assertEquals("Must clean 1 file" , 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[0]).getSuccessDeleteFiles().size());
-        assertEquals("Must clean 1 file" , 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[1]).getSuccessDeleteFiles().size());
+        assertEquals("Must clean 1 file", 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must clean 1 file", 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[1]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
@@ -1341,14 +1341,14 @@ public class TestHoodieClient implements Serializable {
         // make next commit, with 2 updates to existing files, and 1 insert
         HoodieTestUtils.createCommitFiles(basePath, "002");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+                .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
 
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
         String file3P0C2 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "002");
 
         List<HoodieCleanStat> hoodieCleanStatsThree = table.clean(jsc);
-        assertEquals("Must clean two files" , 2, getCleanStat(hoodieCleanStatsThree, partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must clean two files", 2, getCleanStat(hoodieCleanStatsThree, partitionPaths[0]).getSuccessDeleteFiles().size());
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
@@ -1356,7 +1356,7 @@ public class TestHoodieClient implements Serializable {
         // No cleaning on partially written file, with no commit.
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file3P0C2); // update
         List<HoodieCleanStat> hoodieCleanStatsFour = table.clean(jsc);
-        assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
+        assertEquals("Must not clean any files", 0, getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
     }
 
