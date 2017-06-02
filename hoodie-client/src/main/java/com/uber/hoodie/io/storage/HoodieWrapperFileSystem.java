@@ -450,7 +450,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
 
     @Override public void close() throws IOException {
-        fileSystem.close();
+        //fileSystem.close();
     }
 
     @Override public long getUsed() throws IOException {
