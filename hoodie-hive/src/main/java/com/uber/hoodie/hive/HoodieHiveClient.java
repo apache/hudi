@@ -313,7 +313,7 @@ public class HoodieHiveClient {
               .orElseThrow(() -> new InvalidDatasetException(syncConfig.basePath));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(activeTimeline.getInstantDetails(lastCommit).get());
-          String filePath = commitMetadata.getFileIdAndFullPaths().values().stream().findAny()
+          String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
               .orElseThrow(() -> new IllegalArgumentException(
                   "Could not find any data file written for commit " + lastCommit
                       + ", could not get schema for dataset " + metaClient.getBasePath()));
@@ -340,7 +340,7 @@ public class HoodieHiveClient {
             // read from the log file wrote
             commitMetadata = HoodieCommitMetadata
                 .fromBytes(activeTimeline.getInstantDetails(lastDeltaCommit).get());
-            filePath = commitMetadata.getFileIdAndFullPaths().values().stream().filter(s -> s.contains(
+            filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().filter(s -> s.contains(
                 HoodieLogFile.DELTA_EXTENSION)).findAny()
                 .orElseThrow(() -> new IllegalArgumentException(
                     "Could not find any data file written for commit " + lastDeltaCommit
@@ -377,7 +377,7 @@ public class HoodieHiveClient {
     // Read from the compacted file wrote
     HoodieCompactionMetadata compactionMetadata = HoodieCompactionMetadata
         .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get());
-    String filePath = compactionMetadata.getFileIdAndFullPaths().values().stream().findAny()
+    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException(
             "Could not find any data file written for compaction " + lastCompactionCommit
                 + ", could not get schema for dataset " + metaClient.getBasePath()));

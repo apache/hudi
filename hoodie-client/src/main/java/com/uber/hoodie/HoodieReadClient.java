@@ -210,9 +210,9 @@ public class HoodieReadClient implements Serializable {
                 HoodieCommitMetadata metadata =
                         HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get());
                 // get files from each commit, and replace any previous versions
-                fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths());
+                String basePath = hoodieTable.getMetaClient().getBasePath();
+                fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(basePath));
             }
-
             return sqlContextOpt.get().read()
                     .parquet(fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]))
                     .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTimestamp));
@@ -234,11 +234,12 @@ public class HoodieReadClient implements Serializable {
         }
 
         try {
-            HoodieCommitMetadata commitMetdata =
+            HoodieCommitMetadata commitMetadata =
                     HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commitInstant).get());
-            Collection<String> paths = commitMetdata.getFileIdAndFullPaths().values();
+            String basePath = hoodieTable.getMetaClient().getBasePath();
+            HashMap<String, String> paths = commitMetadata.getFileIdAndFullPaths(basePath);
             return sqlContextOpt.get().read()
-                    .parquet(paths.toArray(new String[paths.size()]))
+                    .parquet(paths.values().toArray(new String[paths.size()]))
                     .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
         } catch (Exception e) {
             throw new HoodieException("Error reading commit " + commitTime, e);
