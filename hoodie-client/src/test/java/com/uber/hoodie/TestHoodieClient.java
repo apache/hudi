@@ -1223,8 +1223,6 @@ public class TestHoodieClient implements Serializable {
         assertEquals("Total number of records must add up", totalInserts, inserts1.size() + inserts2.size() + insert3.size());
     }
 
-
-
     @After
     public void clean() throws IOException {
         if (basePath != null) {
