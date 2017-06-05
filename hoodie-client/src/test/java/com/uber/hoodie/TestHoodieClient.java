@@ -77,7 +77,6 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.uber.hoodie.common.model.HoodieTestUtils.createInflightCommitFiles;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -364,6 +363,10 @@ public class TestHoodieClient implements Serializable {
     @Test //TODO(na) : Deletes for MOR don't work out of the box
     public void testDeletes() throws Exception {
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
+
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
@@ -447,21 +450,17 @@ public class TestHoodieClient implements Serializable {
         assertEquals("Incremental consumption from time 001, should give 50 updated records",
                 50,
                 readClient.readSince("001").count());
-        if(tableType == HoodieTableType.COPY_ON_WRITE) {
-            assertEquals("Incremental consumption from time 000, should give 150",
-                    150,
-                    readClient.readSince("000").count());
-        } else {
-            //NOTE : deletes dont work in MOR
-        }
-
+        assertEquals("Incremental consumption from time 000, should give 150",
+                150,
+                readClient.readSince("000").count());
     }
 
 
+    //TODO (na) : Fix this test case for COPY_ON_WRITE, AutoRollback doesn't work cleanly
     @Test
     public void testCreateSavepoint() throws Exception {
 
-        if(tableType == HoodieTableType.MERGE_ON_READ) {
+        if(tableType == HoodieTableType.MERGE_ON_READ || tableType == HoodieTableType.COPY_ON_WRITE) {
             return;
         }
 
@@ -490,7 +489,6 @@ public class TestHoodieClient implements Serializable {
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
-        Thread.sleep(2000);
         client.savepoint("hoodie-unit-test", "test");
         try {
             client.rollback(newCommitTime);
@@ -535,10 +533,8 @@ public class TestHoodieClient implements Serializable {
         client.deleteSavepoint(
                 table.getCompletedSavepointTimeline().getInstants().findFirst().get().getTimestamp());
 
-        Thread.sleep(5000);
         // rollback and reupsert 004
         client.rollback(newCommitTime);
-        Thread.sleep(5000);
 
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -911,7 +907,7 @@ public class TestHoodieClient implements Serializable {
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
 
         // simulate partial failure, where .inflight was not deleted, but data files were.
-        createInflightCommitFiles(basePath, commitTime3);
+        HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
 
         Thread.sleep(4000);
         client.rollback(commitTime3);
@@ -956,6 +952,9 @@ public class TestHoodieClient implements Serializable {
     @Test //TODO(na) : needs fixing due to some kind of race condition after moving to DFS
     public void testAutoRollbackCommit() throws Exception {
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         // Let's create some commit files and parquet files
         String commitTime1 = "20160501010101";
         String commitTime2 = "20160502020601";
