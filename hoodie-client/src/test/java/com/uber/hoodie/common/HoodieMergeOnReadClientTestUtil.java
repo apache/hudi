@@ -19,13 +19,11 @@ package com.uber.hoodie.common;
 import com.google.common.base.Optional;
 import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
@@ -35,51 +33,35 @@ import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
-import com.uber.hoodie.exception.HoodieIOException;
-import com.uber.hoodie.exception.SchemaCompatabilityException;
-import com.uber.hoodie.hadoop.HoodieInputFormat;
-import com.uber.hoodie.hadoop.realtime.HoodieRealtimeFileSplit;
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
-import com.uber.hoodie.hadoop.realtime.HoodieRealtimeRecordReader;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.avro.TypeEnum.a;
-import static org.apache.hadoop.hdfs.TestBlockStoragePolicy.conf;
-import static org.codehaus.groovy.runtime.DefaultGroovyMethods.collect;
-
 //Test Util to workaround HoodieReadClient for MergeOnRead TableType
 //NOTE : The implementation is crude at the moment and needs iterations
 //TODO(na) : Use HoodieRealtimeInputFormat wherever possible
@@ -136,7 +118,6 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                     .collect(Collectors.toList());
 
             return convertToDF(getRecordsUsingInputFormat(allFiles));
-
         } catch (Exception e) {
             throw new HoodieException("Error reading commit " + commitTime, e);
         }
@@ -161,7 +142,6 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                     .collect(Collectors.toList());
 
             return getRecordsUsingInputFormat(allFiles);
-
         } catch (Exception e) {
             throw new HoodieException("Error reading commit " + commitTime, e);
         }
@@ -207,7 +187,6 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
                 fullPaths.addAll(metadata.getFileIdAndFullPaths().values());
                 fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths());
             }
-
             return convertToDF(getRecordsUsingInputFormat(fullPaths));
         } catch (IOException e) {
             throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimestamp, e);
@@ -235,7 +214,6 @@ public class HoodieMergeOnReadClientTestUtil extends HoodieReadClient {
         return sqlContextOpt.get().createDataFrame(records,
                 GenericRecord.class);
     }
-
 
     private List<GenericRecord> getRecordsUsingScanner(List<String> allFiles) {
         List<GenericRecord> records = new ArrayList<>();
