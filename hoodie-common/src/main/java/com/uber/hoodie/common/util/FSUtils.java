@@ -109,7 +109,12 @@ public class FSUtils {
     }
 
     public static String getCommitTime(String fullFileName) {
-        return fullFileName.split("_")[2].split("\\.")[0];
+        Matcher matcher = LOG_FILE_PATTERN.matcher(fullFileName);
+        if (!matcher.find()) {
+            return fullFileName.split("_")[2].split("\\.")[0];
+        } else {
+            return fullFileName.split("_")[1].split("\\.")[0];
+        }
     }
 
     public static long getFileSize(FileSystem fs, Path path) throws IOException {

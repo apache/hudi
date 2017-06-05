@@ -451,6 +451,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
         Optional<HoodieInstant> cleanInstant = table.getCompletedCleanTimeline().lastInstant();
 
+        // NOTE(na): MOR has deltacommit action
         HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
         if(!table.getCompletedCommitTimeline().containsInstant(commitInstant)) {
             throw new HoodieSavepointException("Could not savepoint non-existing commit " + commitInstant);
