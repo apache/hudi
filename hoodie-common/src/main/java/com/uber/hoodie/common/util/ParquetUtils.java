@@ -24,6 +24,8 @@ import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -40,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static com.uber.hoodie.common.util.FSUtils.getFs;
+
 /**
  * Utility functions involving with parquet.
  */
@@ -50,8 +54,12 @@ public class ParquetUtils {
      *
      * @param filePath    The parquet file path.
      */
+
+    public static final Log LOG = LogFactory.getLog(ParquetUtils.class);
+
     public static Set<String> readRowKeysFromParquet(Path filePath) {
         Configuration conf = new Configuration();
+        conf.addResource(FSUtils.getFs().getConf());
         Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
         AvroReadSupport.setAvroReadSchema(conf, readSchema);
         AvroReadSupport.setRequestedProjection(conf, readSchema);
@@ -97,7 +105,7 @@ public class ParquetUtils {
         ParquetMetadata footer;
         try {
             // TODO(vc): Should we use the parallel reading version here?
-            footer = ParquetFileReader.readFooter(conf, parquetFilePath);
+            footer = ParquetFileReader.readFooter(getFs().getConf(), parquetFilePath);
         } catch (IOException e) {
             throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
                     e);
@@ -145,7 +153,7 @@ public class ParquetUtils {
         ParquetReader reader = null;
         List<GenericRecord> records = new ArrayList<>();
         try {
-            reader = AvroParquetReader.builder(filePath).build();
+            reader = AvroParquetReader.builder(filePath).withConf(FSUtils.getFs().getConf()).build();
             Object obj = reader.read();
             while (obj != null) {
                 if (obj instanceof GenericRecord) {
