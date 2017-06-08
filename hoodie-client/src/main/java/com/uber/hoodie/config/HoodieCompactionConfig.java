@@ -187,6 +187,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withNumDeltaCommits(int numDeltaCommits) {
+            props.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, String.valueOf(numDeltaCommits));
+            return this;
+        }
+
         public Builder withTargetIOPerCompactionInMB(long targetIOPerCompactionInMB) {
             props.setProperty(TARGET_IO_PER_COMPACTION_IN_MB_PROP, String.valueOf(targetIOPerCompactionInMB));
             return this;

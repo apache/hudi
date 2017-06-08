@@ -452,7 +452,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         Optional<HoodieInstant> cleanInstant = table.getCompletedCleanTimeline().lastInstant();
 
         // NOTE(na): MOR has deltacommit action
-        HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+        String actionType = table.getCompactedCommitActionType();
+        HoodieInstant commitInstant = new HoodieInstant(false, actionType, commitTime);
         if(!table.getCompletedCommitTimeline().containsInstant(commitInstant)) {
             throw new HoodieSavepointException("Could not savepoint non-existing commit " + commitInstant);
         }
@@ -632,8 +633,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             }
 
             // Atomically unpublish all the commits
+            //TODO : Fix this for MOR where deltacommits and compaction commits both can be present
+            final String actionType = table.getCommitActionType();
             commits.stream().filter(s -> !inflights.contains(s))
-                .map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s))
+                .map(s -> new HoodieInstant(false, actionType, s))
                 .forEach(activeTimeline::revertToInflight);
             logger.info("Unpublished " + commits);
 
@@ -677,7 +680,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 }).collect();
 
             // Remove the rolled back inflight commits
-            commits.stream().map(s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s))
+            //TODO : Fix this for MOR where deltacommits and compaction commits both can be present
+            commits.stream().map(s -> new HoodieInstant(true, actionType, s))
                 .forEach(activeTimeline::deleteInflight);
             logger.info("Deleted inflight commits " + commits);
 
@@ -835,6 +839,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
             .collect(Collectors.toList());
         Collections.reverse(commits);
+        //NOTE : If a rollback() finishes in < 1 sec, we create 2 new commit times which are same
         for (String commit : commits) {
             rollback(commit);
         }

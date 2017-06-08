@@ -20,6 +20,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -66,6 +67,10 @@ public class HoodieTestUtils {
     public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
     public static final int DEFAULT_TASK_PARTITIONID = 1;
 
+    public static void resetFS() {
+        HoodieTestUtils.fs = FSUtils.getFs();
+    }
+
     public static HoodieTableMetaClient init(String basePath) throws IOException {
         return initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
     }
@@ -98,9 +103,27 @@ public class HoodieTestUtils {
         }
     }
 
+    public static final void createDeltaCommitFiles(String basePath, String... commitTimes) throws IOException {
+        for (String commitTime: commitTimes) {
+            boolean createFile = fs.createNewFile(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTimeline.makeDeltaFileName(commitTime)));
+            if(!createFile) {
+                throw new IOException("cannot create commit file for commit " + commitTime);
+            }
+        }
+    }
+
     public static final void createInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
         for (String commitTime: commitTimes) {
             boolean createFile = fs.createNewFile(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTimeline.makeInflightCommitFileName(commitTime)));
+            if(!createFile) {
+                throw new IOException("cannot create inflight commit file for commit " + commitTime);
+            }
+        }
+    }
+
+    public static final void createDeltaInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
+        for (String commitTime: commitTimes) {
+            boolean createFile = fs.createNewFile(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTimeline.makeInflightDeltaFileName(commitTime)));
             if(!createFile) {
                 throw new IOException("cannot create inflight commit file for commit " + commitTime);
             }
@@ -141,8 +164,16 @@ public class HoodieTestUtils {
         return fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTimeline.COMMIT_EXTENSION));
     }
 
+    public static final boolean doesDeltaCommitExist(String basePath, String commitTime) throws IOException {
+        return fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTimeline.DELTA_COMMIT_EXTENSION));
+    }
+
     public static final boolean doesInflightExist(String basePath, String commitTime) throws IOException {
         return fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTimeline.INFLIGHT_EXTENSION));
+    }
+
+    public static final boolean doesDeltaInflightExist(String basePath, String commitTime) throws IOException {
+        return fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + commitTime + HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION));
     }
 
     public static String makeInflightTestFileName(String instant) {
