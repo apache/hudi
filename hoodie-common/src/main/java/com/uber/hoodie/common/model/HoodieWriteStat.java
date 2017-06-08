@@ -40,6 +40,11 @@ public class HoodieWriteStat implements Serializable {
     private String fullPath;
 
     /**
+     * Relative path to the file from the base path
+     */
+    private String relativePath;
+
+    /**
      * The previous version of the file. (null if this is the first version. i.e insert)
      */
     private String prevCommit;
@@ -81,6 +86,10 @@ public class HoodieWriteStat implements Serializable {
 
     public void setFullPath(String fullFilePath) {
         this.fullPath = fullFilePath;
+    }
+
+    public void setRelativePath(String relativeFilePath) {
+        this.relativePath = relativeFilePath;
     }
 
     public void setPrevCommit(String prevCommit) {
@@ -134,6 +143,11 @@ public class HoodieWriteStat implements Serializable {
     public String getFullPath() {
         return fullPath;
     }
+
+    public String getRelativePath() {
+        return relativePath;
+    }
+
 
     @Override
     public String toString() {
