@@ -645,7 +645,7 @@ public class TestHoodieClient implements Serializable {
 
 
         String newCommitTime4 = null;
-        if(tableType == HoodieTableType.COPY_ON_WRITE) { //TODO : fix rollback() for deltacommit and compaction commits
+        if(tableType == HoodieTableType.COPY_ON_WRITE) { //TODO : avoid 4th upsert to prevent compaction, fix rollback() for deltacommit and compaction commits
             /**
              * Write 4 (updates)
              */
