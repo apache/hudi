@@ -43,7 +43,12 @@ public class HoodieInstant implements Serializable {
         // First read the instant timestamp. [==>20170101193025<==].commit
         String fileName = fileStatus.getPath().getName();
         String fileExtension = Files.getFileExtension(fileName);
-        timestamp = fileName.replace("." + fileExtension, "");
+        String actionExtension = Files.getFileExtension(Files.getNameWithoutExtension(fileName));
+        if(actionExtension.length() > 0) {
+            timestamp = fileName.replace("." + actionExtension + "." + fileExtension, "");
+        } else {
+            timestamp = fileName.replace("." + fileExtension, "");
+        }
 
         // Next read the action for this marker
         action = fileExtension;
