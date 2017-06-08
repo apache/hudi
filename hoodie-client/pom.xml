@@ -181,7 +181,7 @@
         <dependency>
             <groupId>com.uber.hoodie</groupId>
             <artifactId>hoodie-hadoop-mr</artifactId>
-            <version>0.3.8-SNAPSHOT</version>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
