@@ -539,7 +539,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         HoodieTable<T> table = HoodieTable
             .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
         HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-        HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
+        HoodieTimeline commitTimeline = table.getCommitTimeline();
 
         HoodieInstant savePoint =
             new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
