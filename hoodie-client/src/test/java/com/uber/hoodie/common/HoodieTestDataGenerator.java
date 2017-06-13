@@ -32,6 +32,11 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -66,6 +71,7 @@ public class HoodieTestDataGenerator {
 
     public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
 
+    public transient SQLContext sqlContext;
 
     public static void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
         for (String partitionPath: partitionPaths) {
@@ -84,6 +90,11 @@ public class HoodieTestDataGenerator {
 
     public HoodieTestDataGenerator() {
         this(new String[]{"2016/03/15", "2015/03/16", "2015/03/17"});
+    }
+
+    public HoodieTestDataGenerator(SQLContext sqlContext) {
+        this.sqlContext = sqlContext;
+        this.partitionPaths = DEFAULT_PARTITION_PATHS;
     }
 
 
@@ -155,11 +166,15 @@ public class HoodieTestDataGenerator {
      * Generates a new avro record of the above schema format, retaining the key if optionally
      * provided.
      */
-    public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
+    public HoodieRowPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
         GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime,
             "driver-" + commitTime, 0.0);
         HoodieAvroUtils.addCommitMetadataToRecord(rec, commitTime, "-1");
-        return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+
+        List<String> jsonData = Arrays.asList(rec.toString());
+        JavaRDD<String> rddData = new JavaSparkContext(sqlContext.sparkContext()).parallelize(jsonData);
+        Dataset<Row> finalData = sqlContext.read().json(rddData);
+        return new HoodieRowPayload(finalData.first());
     }
 
     public static GenericRecord generateGenericRecord(String rowKey, String riderName,

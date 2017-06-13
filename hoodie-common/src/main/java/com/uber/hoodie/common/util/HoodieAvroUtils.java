@@ -86,6 +86,7 @@ public class HoodieAvroUtils {
         Schema.Field partitionPathField = new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
         Schema.Field fileNameField = new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", null);
         Schema.Field deleteField = new Schema.Field(HoodieRecord.DELETE_FIELD, METADATA_FIELD_SCHEMA, "", null);
+        Schema.Field deletedAtField = new Schema.Field(HoodieRecord.DELETED_AT_FIELD, METADATA_FIELD_SCHEMA, "", null);
 
         parentFields.add(commitTimeField);
         parentFields.add(commitSeqnoField);
@@ -93,6 +94,7 @@ public class HoodieAvroUtils {
         parentFields.add(partitionPathField);
         parentFields.add(fileNameField);
         parentFields.add(deleteField);
+        parentFields.add(deletedAtField);
         for (Schema.Field field : schema.getFields()) {
             parentFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), null));
         }

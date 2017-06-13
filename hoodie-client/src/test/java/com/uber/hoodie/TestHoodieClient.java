@@ -51,13 +51,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-<<<<<<< HEAD
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerTaskEnd;
-=======
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
->>>>>>> Implemented delete capture prototype
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.util.AccumulatorV2;
 import org.junit.After;
@@ -108,7 +105,7 @@ public class TestHoodieClient implements Serializable {
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
         HoodieTestUtils.init(basePath);
-        dataGen = new HoodieTestDataGenerator();
+        dataGen = new HoodieTestDataGenerator(sqlContext);
     }
 
 
@@ -1304,6 +1301,7 @@ public class TestHoodieClient implements Serializable {
             stageOneShuffleReadTaskRecordsCountMap.values().stream().filter(a -> a > 10 && a < 100).count() == 3);
     }
 
+    @Test
     public void testCommitWritesRelativePaths() throws Exception {
 
         HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
@@ -1346,6 +1344,7 @@ public class TestHoodieClient implements Serializable {
         }
     }
 
+    @Test
     public void testDeleteCapture() throws Exception {
 
         HoodieWriteConfig cfg = getConfig();
@@ -1378,7 +1377,7 @@ public class TestHoodieClient implements Serializable {
         checkTaggedRecords(taggedRecords, "001");
 
         /**
-         * Write 2 (deletes+writes)
+         * Write 2 (deletes+writes) Delete 2 records
          */
         newCommitTime = "004";
         List<HoodieRecord> fewRecordsForDelete = records.subList(2,records.size());
@@ -1409,6 +1408,42 @@ public class TestHoodieClient implements Serializable {
         assertEquals("Incremental consumption from latest commit should give 8 updated records",
                 readClient.readCommit(newCommitTime).count(), fewRecordsForDelete.size());
 
+        Dataset<Row> deletedRecords = readClient.read(fullPartitionPaths)
+                .filter(row -> (Boolean.valueOf(row.getAs(HoodieRecord.DELETE_FIELD)) && (Float.valueOf(row.getAs(HoodieRecord.DELETED_AT_FIELD)) > 3)));
+        assertEquals("Number of deleted records since last commit time ", 2, deletedRecords.count());
+
+        /**
+         * Write 3 (deletes+writes) Delete 2 more records
+         */
+        newCommitTime = "006";
+        fewRecordsForDelete = records.subList(4,records.size());
+
+        statuses = client.upsert(jsc.parallelize(fewRecordsForDelete, 1), newCommitTime).collect();
+        // Verify there are no errors
+        assertNoWriteErrors(statuses);
+
+        // verify there are now 2 commits
+        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        assertEquals("Expecting two commits.", 3, readClient.listCommitsSince("000").size());
+        assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
+
+        metaClient = new HoodieTableMetaClient(fs, basePath);
+        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        recordsAfterDelete = readClient.read(fullPartitionPaths).filter(row -> !Boolean.valueOf(row.getAs(HoodieRecord.DELETE_FIELD)));
+
+        assertEquals("Number of total records on disk", readClient.read(fullPartitionPaths).count(), records.size());
+        assertEquals("Number of records after delete", recordsAfterDelete.count(), fewRecordsForDelete.size());
+
+        assertEquals("Incremental consumption from latest commit should give 8 updated records",
+                readClient.readCommit(newCommitTime).count(), fewRecordsForDelete.size());
+
+        deletedRecords = readClient.read(fullPartitionPaths)
+                .filter(row -> (Boolean.valueOf(row.getAs(HoodieRecord.DELETE_FIELD)) && (Float.valueOf(row.getAs(HoodieRecord.DELETED_AT_FIELD)) > 5)));
+        assertEquals("Number of deleted records since last commit time ", 2, deletedRecords.count());
+        Dataset<Row> allDeletedRecords = readClient.read(fullPartitionPaths)
+                .filter(row -> (Boolean.valueOf(row.getAs(HoodieRecord.DELETE_FIELD)) && (Float.valueOf(row.getAs(HoodieRecord.DELETED_AT_FIELD)) > 0)));
+        assertEquals("Number of deleted records since first commit time ", 4, allDeletedRecords.count());
     }
 
     private HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo,

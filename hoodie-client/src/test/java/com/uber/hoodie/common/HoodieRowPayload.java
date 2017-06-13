@@ -43,10 +43,11 @@ public class HoodieRowPayload implements HoodieRecordPayload<HoodieRowPayload> {
         while (iter.hasNext()) {
             Schema.Field field = iter.next();
             try {
-                ((GenericRecord) record).put(field.name(), row.get(row.fieldIndex(field.name())));
+                ((GenericRecord) record).put(field.name(), row.getAs(field.name()));
 
                 // This should be where the insert value modifies field to false again
                 ((GenericRecord) record).put(HoodieRecord.DELETE_FIELD, false);
+                ((GenericRecord) record).put(HoodieRecord.DELETED_AT_FIELD, null);
             } catch (IllegalArgumentException e) {
             } catch (java.lang.RuntimeException e2) {
             }
