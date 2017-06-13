@@ -1137,6 +1137,7 @@ public class TestHoodieClient implements Serializable {
         List<HoodieCleanStat> hoodieCleanStatsFour = table.clean(jsc);
         assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+    }
 
     @Test
     public void testKeepLatestCommits() throws IOException {
@@ -1335,9 +1336,10 @@ public class TestHoodieClient implements Serializable {
         inputStream.close();
 
         // Compare values in both to make sure they are equal.
-        for (String pathName: paths.values()) {
+        for (String pathName : paths.values()) {
             assertTrue(commitPathNames.contains(pathName));
         }
+    }
 
     private HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo,
         String partitionPath) {

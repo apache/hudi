@@ -123,13 +123,12 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
         try {
             storageWriter.close();
 
-            String relativePath = path.toString().replace(new Path(config.getBasePath()) + "/", "");
-
             HoodieWriteStat stat = new HoodieWriteStat();
             stat.setNumWrites(recordsWritten);
             stat.setNumDeletes(recordsDeleted);
             stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
             stat.setFileId(status.getFileId());
+            String relativePath = path.toString().replace(new Path(config.getBasePath()) + "/", "");
             stat.setPath(relativePath);
             stat.setTotalWriteBytes(FSUtils.getFileSize(fs, path));
             stat.setTotalWriteErrors(status.getFailedRecords().size());
