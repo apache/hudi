@@ -123,8 +123,6 @@ public class HoodieInsertHandle<T extends HoodieRecordPayload> extends HoodieIOH
         try {
             storageWriter.close();
 
-            String relativePath = path.toString().replace(new Path(config.getBasePath()) + "/", "");
-
             HoodieWriteStat stat = new HoodieWriteStat();
             stat.setNumWrites(recordsWritten);
             stat.setNumDeletes(recordsDeleted);
