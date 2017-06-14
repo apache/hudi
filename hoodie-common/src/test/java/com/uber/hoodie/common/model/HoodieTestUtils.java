@@ -39,6 +39,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.util.StringUtils;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.ByteArrayInputStream;
@@ -112,12 +113,42 @@ public class HoodieTestUtils {
         return fileID;
     }
 
+    public static final String createNewLogFile(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
+        String folderPath = basePath + "/" + partitionPath + "/";
+        boolean makeDir = fs.mkdirs(new Path(folderPath));
+        if(!makeDir) {
+            throw new IOException("cannot create directory for path " + folderPath);
+        }
+        boolean createFile = fs.createNewFile(new Path(folderPath + FSUtils.makeLogFileName(fileID, ".log",commitTime, DEFAULT_TASK_PARTITIONID)));
+        if(!createFile) {
+            throw new IOException(StringUtils.format("cannot create data file for commit %s and fileId %s", commitTime, fileID));
+        }
+        return fileID;
+    }
+
+    public static final void createCompactionCommitFiles(String basePath, String... commitTimes) throws IOException {
+        for (String commitTime: commitTimes) {
+            boolean createFile = fs.createNewFile(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME+ "/" + HoodieTimeline.makeCompactionFileName(commitTime)));
+            if(!createFile) {
+                throw new IOException("cannot create commit file for commit " + commitTime);
+            }
+        }
+    }
+
     public static final String getDataFilePath(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
         return basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileID);
     }
 
+    public static final String getLogFilePath(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
+        return basePath + "/" + partitionPath + "/" + FSUtils.makeLogFileName(fileID, ".log", commitTime, DEFAULT_TASK_PARTITIONID);
+    }
+
     public static final boolean doesDataFileExist(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
         return new File(getDataFilePath(basePath, partitionPath, commitTime, fileID)).exists();
+    }
+
+    public static final boolean doesLogFileExist(String basePath, String partitionPath, String commitTime, String fileID) throws IOException {
+        return new File(getLogFilePath(basePath, partitionPath, commitTime, fileID)).exists();
     }
 
     public static final boolean doesCommitExist(String basePath, String commitTime) {
