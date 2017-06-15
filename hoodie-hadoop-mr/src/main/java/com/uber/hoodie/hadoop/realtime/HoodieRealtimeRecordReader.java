@@ -18,20 +18,24 @@
 
 package com.uber.hoodie.hadoop.realtime;
 
+import com.google.common.collect.Lists;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
@@ -45,18 +49,15 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
+import parquet.avro.AvroSchemaConverter;
+import parquet.hadoop.ParquetFileReader;
+import parquet.schema.MessageType;
 
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time
@@ -83,12 +84,28 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
 
         LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
         try {
-            baseFileSchema = ParquetUtils.readSchema(split.getPath());
+            baseFileSchema = readSchema(jobConf, split.getPath());
             readAndCompactLog();
         } catch (IOException e) {
-            throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
+            throw new HoodieIOException(
+                "Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
         }
     }
+
+    /**
+     * Reads the schema from the parquet file. This is different from ParquetUtils as it uses the
+     * twitter parquet to support hive 1.1.0
+     */
+    private static MessageType readSchema(Configuration conf, Path parquetFilePath) {
+        try {
+            return ParquetFileReader.readFooter(conf, parquetFilePath).getFileMetaData()
+                .getSchema();
+        } catch (IOException e) {
+            throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
+                e);
+        }
+    }
+
 
     /**
      * Goes through the log files and populates a map with latest version of each key logged, since the base split was written.
@@ -96,24 +113,25 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
     private void readAndCompactLog() throws IOException {
         Schema writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
         List<String> projectionFields = orderFields(
-                jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-                jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR),
-                jobConf.get("partition_columns"));
+            jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+            jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR),
+            jobConf.get("partition_columns", ""));
         // TODO(vc): In the future, the reader schema should be updated based on log files & be able to null out fields not present before
         Schema readerSchema = generateProjectionSchema(writerSchema, projectionFields);
 
-        LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
+        LOG.info(
+            String.format("About to read compacted logs %s for base split %s, projecting cols %s",
                 split.getDeltaFilePaths(), split.getPath(), projectionFields));
 
         HoodieCompactedLogRecordScanner compactedLogRecordScanner =
-                new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getDeltaFilePaths(), readerSchema);
-        Iterator<HoodieRecord<HoodieAvroPayload>> itr = compactedLogRecordScanner.iterator();
+            new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getDeltaFilePaths(),
+                readerSchema);
 
         // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
         // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)
-        while(itr.hasNext()) {
-            HoodieRecord<HoodieAvroPayload> hoodieRecord = itr.next();
-            GenericRecord rec = (GenericRecord) hoodieRecord.getData().getInsertValue(readerSchema).get();
+        for (HoodieRecord<HoodieAvroPayload> hoodieRecord : compactedLogRecordScanner) {
+            GenericRecord rec = (GenericRecord) hoodieRecord.getData().getInsertValue(readerSchema)
+                .get();
             String key = hoodieRecord.getRecordKey();
             // we assume, a later safe record in the log, is newer than what we have in the map & replace it.
             ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, writerSchema);
@@ -146,22 +164,27 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
      * @param fieldOrderCsv
      * @return
      */
-    public static List<String> orderFields(String fieldNameCsv, String fieldOrderCsv, String partitioningFieldsCsv) {
+    public static List<String> orderFields(String fieldNameCsv, String fieldOrderCsv,
+        String partitioningFieldsCsv) {
 
         String[] fieldOrders = fieldOrderCsv.split(",");
-        Set<String> partitioningFields = Arrays.stream(partitioningFieldsCsv.split(",")).collect(Collectors.toSet());
-        List<String> fieldNames = Arrays.stream(fieldNameCsv.split(",")).filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
+        Set<String> partitioningFields = Arrays.stream(partitioningFieldsCsv.split(","))
+            .collect(Collectors.toSet());
+        List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
+            .filter(fn -> !partitioningFields.contains(fn)).collect(
+                Collectors.toList());
 
         // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
         if (fieldNames.size() != fieldOrders.length) {
-            throw new HoodieException(String.format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
-                    fieldNames.size(), fieldOrders.length));
+            throw new HoodieException(String.format(
+                "Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
+                fieldNames.size(), fieldOrders.length));
         }
         TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
-        for (int ox=0; ox < fieldOrders.length; ox++) {
+        for (int ox = 0; ox < fieldOrders.length; ox++) {
             orderedFieldMap.put(Integer.parseInt(fieldOrders[ox]), fieldNames.get(ox));
         }
-        return orderedFieldMap.values().stream().collect(Collectors.toList());
+        return new ArrayList<>(orderedFieldMap.values());
     }
 
     /**
@@ -235,6 +258,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
                 return new ArrayWritable(Writable.class, values2);
             case MAP:
                 // TODO(vc): Need to add support for complex types
+                return NullWritable.get();
             case UNION:
                 List<Schema> types = schema.getTypes();
                 if (types.size() != 2) {
@@ -271,7 +295,10 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
                         key, arrayWritableToString(arrayWritable), arrayWritableToString(deltaRecordMap.get(key))));
             }
             if (deltaRecordMap.containsKey(key)) {
-                arrayWritable.set(deltaRecordMap.get(key).get());
+                Writable[] replaceValue = deltaRecordMap.get(key).get();
+                Writable[] originalValue = arrayWritable.get();
+                System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);
+                arrayWritable.set(originalValue);
             }
             return true;
         }
