@@ -167,7 +167,7 @@
           </descriptors>
           <archive>
             <manifest>
-              <mainClass>com.uber.hoodie.hive.example.HoodieHiveSyncExample</mainClass>
+              <mainClass>com.uber.hoodie.hive.HiveSyncTool</mainClass>
             </manifest>
           </archive>
 

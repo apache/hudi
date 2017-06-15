@@ -49,7 +49,7 @@ public class HiveSyncConfig implements Serializable {
       "--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
   public String basePath;
 
-  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
+  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by", required = true)
   public List<String> partitionFields = new ArrayList<>();
 
   @Parameter(names = "-partition-value-extractor", description = "Class which implements PartitionValueExtractor to extract the partition values from HDFS path")
