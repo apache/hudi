@@ -21,7 +21,7 @@
     <groupId>com.uber.hoodie</groupId>
     <artifactId>hoodie</artifactId>
     <packaging>pom</packaging>
-    <version>0.3.8-SNAPSHOT</version>
+    <version>0.3.9-SNAPSHOT</version>
     <description>Hoodie is a Apache Spark library that provides the ability to efficiently do incremental processing on datasets in HDFS</description>
     <url>https://github.com/uber/hoodie</url>
     <name>Hoodie</name>
@@ -77,6 +77,10 @@
         </contributor>
          <contributor>
             <name>Zeeshan Qureshi</name>
+            <organization>Shopify</organization>
+        </contributor>
+        <contributor>
+            <name>Kathy Ge</name>
             <organization>Shopify</organization>
         </contributor>
     </contributors>
@@ -410,6 +414,11 @@
                 <artifactId>parquet-hive-bundle</artifactId>
                 <version>1.5.0</version>
             </dependency>
+            <dependency>
+                <groupId>com.twitter</groupId>
+                <artifactId>parquet-avro</artifactId>
+                <version>1.5.0-cdh5.7.2</version>
+            </dependency>
 
             <dependency>
                 <groupId>org.apache.parquet</groupId>
@@ -561,7 +570,6 @@
                 <version>4.0.0</version>
                 <scope>test</scope>
             </dependency>
-
         </dependencies>
 
     </dependencyManagement>
@@ -653,4 +661,9 @@
             </build>
         </profile>
     </profiles>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/uber/hoodie/issues</url>
+    </issueManagement>
 </project>

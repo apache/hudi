@@ -20,9 +20,11 @@ package com.uber.hoodie.hadoop.realtime;
 
 import com.google.common.base.Preconditions;
 
+import com.google.common.collect.Sets;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
@@ -66,6 +68,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
     // These positions have to be deterministic across all tables
     public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
     public static final int HOODIE_RECORD_KEY_COL_POS = 2;
+    public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
 
     @Override
     public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
@@ -112,9 +115,18 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
                     List<FileSplit> dataFileSplits = groupedInputSplits.get(dataFile.getFileId());
                     dataFileSplits.forEach(split -> {
                         try {
-                            List<String> logFilePaths = logFiles.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-                            String maxCommitTime = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
-                            rtSplits.add(new HoodieRealtimeFileSplit(split, logFilePaths, maxCommitTime));
+                            List<String> logFilePaths = logFiles.stream()
+                                .map(logFile -> logFile.getPath().toString())
+                                .collect(Collectors.toList());
+                            // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
+                            String maxCommitTime = metaClient.getActiveTimeline()
+                                .getTimelineOfActions(
+                                    Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
+                                        HoodieTimeline.COMPACTION_ACTION,
+                                        HoodieTimeline.DELTA_COMMIT_ACTION))
+                                .filterCompletedInstants().lastInstant().get().getTimestamp();
+                            rtSplits.add(
+                                new HoodieRealtimeFileSplit(split, logFilePaths, maxCommitTime));
                         } catch (IOException e) {
                             throw new HoodieIOException("Error creating hoodie real time split ", e);
                         }
@@ -124,7 +136,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
                 throw new HoodieIOException("Error obtaining data file/log file grouping: " + partitionPath, e);
             }
         });
-
+        LOG.info("Returning a total splits of " + rtSplits.size());
         return rtSplits.toArray(new InputSplit[rtSplits.size()]);
     }
 
@@ -135,35 +147,48 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
         return super.listStatus(job);
     }
 
+    /**
+     * Add a field to the existing fields projected
+     */
+    private static Configuration addProjectionField(Configuration conf, String fieldName,
+        int fieldIndex) {
+        String readColNames = conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
+        String readColIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "");
 
-    private static Configuration addExtraReadColsIfNeeded(Configuration configuration) {
-        String readColNames = configuration.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
-        String readColIds = configuration.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-
-        if (!readColNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
-            configuration.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR,
-                    readColNames + "," + HoodieRecord.RECORD_KEY_METADATA_FIELD);
-            configuration.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR,
-                    readColIds + "," + HOODIE_RECORD_KEY_COL_POS);
-            LOG.info(String.format("Adding extra _hoodie_record_key column, to enable log merging cols (%s) ids (%s) ",
-                    configuration.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-                    configuration.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
+        String readColNamesPrefix = readColNames + ",";
+        if (readColNames == null || readColNames.isEmpty()) {
+            readColNamesPrefix = "";
+        }
+        String readColIdsPrefix = readColIds + ",";
+        if (readColIds == null || readColIds.isEmpty()) {
+            readColIdsPrefix = "";
         }
 
-        if (!readColNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
-            configuration.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR,
-                    readColNames + "," + HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-            configuration.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR,
-                    readColIds + "," + HOODIE_COMMIT_TIME_COL_POS);
-            LOG.info(String.format("Adding extra _hoodie_commit_time column, to enable log merging cols (%s) ids (%s) ",
-                    configuration.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-                    configuration.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
+        if (!readColNames.contains(fieldName)) {
+            // If not already in the list - then add it
+            conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR,
+                readColNamesPrefix + fieldName);
+            conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Adding extra column " + fieldName
+                        + ", to enable log merging cols (%s) ids (%s) ",
+                    conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+                    conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
+            }
         }
-
-        return configuration;
+        return conf;
     }
 
-
+    private static Configuration addRequiredProjectionFields(Configuration configuration) {
+        // Need this to do merge records in HoodieRealtimeRecordReader
+        configuration = addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+            HOODIE_RECORD_KEY_COL_POS);
+        configuration = addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+            HOODIE_COMMIT_TIME_COL_POS);
+        configuration = addProjectionField(configuration,
+            HoodieRecord.PARTITION_PATH_METADATA_FIELD, HOODIE_PARTITION_PATH_COL_POS);
+        return configuration;
+    }
 
     @Override
     public RecordReader<Void, ArrayWritable> getRecordReader(final InputSplit split,
@@ -172,17 +197,17 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
         LOG.info("Creating record reader with readCols :" + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
         // sanity check
         Preconditions.checkArgument(split instanceof HoodieRealtimeFileSplit,
-                "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit");
+                "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with " + split );
         return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, job, super.getRecordReader(split, job, reporter));
     }
 
     @Override
     public void setConf(Configuration conf) {
-        this.conf = addExtraReadColsIfNeeded(conf);
+        this.conf = addRequiredProjectionFields(conf);
     }
 
     @Override
     public Configuration getConf() {
-        return addExtraReadColsIfNeeded(conf);
+        return conf;
     }
 }

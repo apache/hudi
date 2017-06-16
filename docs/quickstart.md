@@ -70,20 +70,22 @@ bin/hiveserver2 \
 
 #### Hive Sync Tool
 
-Once Hive is up and running, the sync tool can be used to sync commits done above to a Hive table, as follows.
+Hive Sync Tool will update/create the necessary metadata(schema and partitions) in hive metastore.
+This allows for schema evolution and incremental addition of new partitions written to.
+It uses an incremental approach by storing the last commit time synced in the TBLPROPERTIES and only syncing the commits from the last sync commit time stored.
+This can be run as frequently as the ingestion pipeline to make sure new partitions and schema evolution changes are reflected immediately.
 
 ```
-java -cp target/hoodie-hive-0.3.1-SNAPSHOT-jar-with-dependencies.jar:target/jars/* com.uber.hoodie.hive.HiveSyncTool \
-  --base-path file:///tmp/hoodie/sample-table/ \
-  --database default \
-  --table hoodie_test \
-  --user hive \
-  --pass hive \
-  --jdbc-url jdbc:hive2://localhost:10010/
+{JAVA8}/bin/java -cp "/etc/hive/conf:./hoodie-hive-0.3.8-SNAPSHOT-jar-with-dependencies.jar:/opt/hadoop/lib/hadoop-mapreduce/*" com.uber.hoodie.hive.HiveSyncTool 
+  --user hive
+  --pass hive 
+  --database default 
+  --jdbc-url "jdbc:hive2://localhost:10010/" 
+  --base-path tmp/hoodie/sample-table/ 
+  --table hoodie_test 
+  --partitioned-by field1,field2
 
 ```
-
-{% include callout.html content="Hive sync tools does not yet support Merge-On-Read tables." type="info" %}
 
 
 

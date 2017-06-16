@@ -21,30 +21,45 @@ package com.uber.hoodie.hive;
 import com.beust.jcommander.Parameter;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Configs needed to sync data into Hive.
  */
 public class HiveSyncConfig implements Serializable {
 
-    @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
-    public String databaseName;
+  @Parameter(names = {
+      "--database"}, description = "name of the target database in Hive", required = true)
+  public String databaseName;
 
-    @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
-    public String tableName;
+  @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
+  public String tableName;
 
-    @Parameter(names = {"--user"}, description = "Hive username", required = true)
-    public String hiveUser;
+  @Parameter(names = {"--user"}, description = "Hive username", required = true)
+  public String hiveUser;
 
-    @Parameter(names = {"--pass"}, description = "Hive password", required = true)
-    public String hivePass;
+  @Parameter(names = {"--pass"}, description = "Hive password", required = true)
+  public String hivePass;
 
-    @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
-    public String jdbcUrl;
+  @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
+  public String jdbcUrl;
 
-    @Parameter(names = {"--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
-    public String basePath;
+  @Parameter(names = {
+      "--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
+  public String basePath;
 
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
+  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by", required = true)
+  public List<String> partitionFields = new ArrayList<>();
+
+  @Parameter(names = "-partition-value-extractor", description = "Class which implements PartitionValueExtractor to extract the partition values from HDFS path")
+  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class
+      .getName();
+
+  @Parameter(names = {
+      "--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
+  public Boolean assumeDatePartitioning = false;
+
+  @Parameter(names = {"--help", "-h"}, help = true)
+  public Boolean help = false;
 }

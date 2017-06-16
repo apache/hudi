@@ -28,11 +28,11 @@ import org.apache.hadoop.fs.Path;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CompactionWriteStat implements Serializable {
 
-  private final HoodieWriteStat writeStat;
+  private HoodieWriteStat writeStat;
   private String partitionPath;
-  private final long totalLogRecords;
-  private final long totalLogFiles;
-  private final long totalRecordsToBeUpdate;
+  private long totalLogRecords;
+  private long totalLogFiles;
+  private long totalRecordsToBeUpdate;
 
   public CompactionWriteStat(HoodieWriteStat writeStat, String partitionPath, long totalLogFiles, long totalLogRecords,
       long totalRecordsToUpdate) {
@@ -41,6 +41,10 @@ public class CompactionWriteStat implements Serializable {
     this.totalLogFiles = totalLogFiles;
     this.totalLogRecords = totalLogRecords;
     this.totalRecordsToBeUpdate = totalRecordsToUpdate;
+  }
+
+  public CompactionWriteStat() {
+    // For de-serialization
   }
 
   public long getTotalLogRecords() {

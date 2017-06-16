@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.3.8-SNAPSHOT</version>
+    <version>0.3.9-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -120,6 +120,10 @@
       <artifactId>mockito-all</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-avro</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>com.uber.hoodie</groupId>
@@ -136,6 +140,12 @@
       <artifactId>hoodie-common</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.esotericsoftware.kryo</groupId>
+      <artifactId>kryo</artifactId>
+      <version>2.21</version>
       <scope>test</scope>
     </dependency>
 
@@ -157,7 +167,7 @@
           </descriptors>
           <archive>
             <manifest>
-              <mainClass>com.uber.hoodie.hive.example.HoodieHiveSyncExample</mainClass>
+              <mainClass>com.uber.hoodie.hive.HiveSyncTool</mainClass>
             </manifest>
           </archive>
 

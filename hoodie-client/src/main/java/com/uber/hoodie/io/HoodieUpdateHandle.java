@@ -93,9 +93,9 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
                     oldFilePath = new Path(
                         config.getBasePath() + "/" + record.getPartitionPath() + "/"
                             + latestValidFilePath);
-                    newFilePath = new Path(
-                        config.getBasePath() + "/" + record.getPartitionPath() + "/" + FSUtils
-                            .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId));
+                    String relativePath = new Path( record.getPartitionPath() + "/" + FSUtils
+                            .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId)).toString();
+                    newFilePath = new Path(config.getBasePath(), relativePath);
 
                     // handle cases of partial failures, for update task
                     if (fs.exists(newFilePath)) {
@@ -108,7 +108,7 @@ public class HoodieUpdateHandle <T extends HoodieRecordPayload> extends HoodieIO
                     writeStatus.setFileId(fileId);
                     writeStatus.setPartitionPath(record.getPartitionPath());
                     writeStatus.getStat().setFileId(fileId);
-                    writeStatus.getStat().setFullPath(newFilePath.toString());
+                    writeStatus.getStat().setPath(relativePath);
                 }
                 keyToNewRecords.put(record.getRecordKey(), record);
                 // update the new location of the record, so we know where to find it next

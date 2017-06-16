@@ -18,13 +18,10 @@ package com.uber.hoodie.common;
 
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Collects stats about a single partition clean operation
@@ -99,12 +96,13 @@ public class HoodieCleanStat implements Serializable {
             return this;
         }
 
-        public Builder withDeletedFileResults(Map<FileStatus, Boolean> deletedFiles) {
-            //noinspection Convert2MethodRef
-            successDeleteFiles = deletedFiles.entrySet().stream().filter(s -> s.getValue())
-                .map(s -> s.getKey().getPath().toString()).collect(Collectors.toList());
-            failedDeleteFiles = deletedFiles.entrySet().stream().filter(s -> !s.getValue())
-                .map(s -> s.getKey().getPath().toString()).collect(Collectors.toList());
+        public Builder withSuccessfulDeletes(List<String> successDeleteFiles) {
+            this.successDeleteFiles = successDeleteFiles;
+            return this;
+        }
+
+        public Builder withFailedDeletes(List<String> failedDeleteFiles) {
+            this.failedDeleteFiles= failedDeleteFiles;
             return this;
         }
 

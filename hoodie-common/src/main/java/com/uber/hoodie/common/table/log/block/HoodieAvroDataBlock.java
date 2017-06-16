@@ -112,6 +112,10 @@ public class HoodieAvroDataBlock implements HoodieLogBlock {
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(HoodieAvroUtils.decompress(compressedSchema));
 
+    if(readerSchema == null) {
+      readerSchema = writerSchema;
+    }
+
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     // 2. Get the total records
     int totalRecords = dis.readInt();
