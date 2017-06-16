@@ -566,7 +566,6 @@
                 <version>4.0.0</version>
                 <scope>test</scope>
             </dependency>
-
         </dependencies>
 
     </dependencyManagement>
@@ -658,4 +657,9 @@
             </build>
         </profile>
     </profiles>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/uber/hoodie/issues</url>
+    </issueManagement>
 </project>
