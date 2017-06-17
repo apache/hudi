@@ -31,6 +31,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     public static String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
     public static String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
     public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
+    public static String DELETE_FIELD = "_hoodie_delete";
 
     /**
      * Identifies the record across the table

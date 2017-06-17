@@ -51,8 +51,13 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+<<<<<<< HEAD
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerTaskEnd;
+=======
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+>>>>>>> Implemented delete capture prototype
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.util.AccumulatorV2;
 import org.junit.After;
@@ -1339,6 +1344,71 @@ public class TestHoodieClient implements Serializable {
         for (String pathName : paths.values()) {
             assertTrue(commitPathNames.contains(pathName));
         }
+    }
+
+    public void testDeleteCapture() throws Exception {
+
+        HoodieWriteConfig cfg = getConfig();
+        HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+        HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
+        FileSystem fs = FSUtils.getFs();
+
+        /**
+         * Write 1 (inserts and deletes)
+         * Write actual 200 insert records and ignore 100 delete records
+         */
+        String newCommitTime = "001";
+        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
+
+        JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+        List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+        assertNoWriteErrors(statuses);
+
+        // verify that there is a commit
+        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
+        assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
+        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
+        // Should have 100 records in table (check using Index), all in locations marked at commit
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
+        checkTaggedRecords(taggedRecords, "001");
+
+        /**
+         * Write 2 (deletes+writes)
+         */
+        newCommitTime = "004";
+        List<HoodieRecord> fewRecordsForDelete = records.subList(2,records.size());
+
+        statuses = client.upsert(jsc.parallelize(fewRecordsForDelete, 1), newCommitTime).collect();
+        // Verify there are no errors
+        assertNoWriteErrors(statuses);
+
+        // verify there are now 2 commits
+        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
+        assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
+
+        metaClient = new HoodieTableMetaClient(fs, basePath);
+        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        // Check the entire dataset has 150 records(200-50) still
+        String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+        for (int i=0; i < fullPartitionPaths.length; i++) {
+            fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+        }
+
+        Dataset<Row> recordsAfterDelete = readClient.read(fullPartitionPaths).filter(row -> !Boolean.valueOf(row.getAs(HoodieRecord.DELETE_FIELD)));
+
+        assertEquals("Number of total records on disk", readClient.read(fullPartitionPaths).count(), records.size());
+        assertEquals("Number of records after delete", recordsAfterDelete.count(), fewRecordsForDelete.size());
+
+        assertEquals("Incremental consumption from latest commit should give 8 updated records",
+                readClient.readCommit(newCommitTime).count(), fewRecordsForDelete.size());
+
     }
 
     private HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo,
