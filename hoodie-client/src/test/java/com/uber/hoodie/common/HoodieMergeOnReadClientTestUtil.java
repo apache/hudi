@@ -94,7 +94,7 @@ public class HoodieMergeOnReadClientTestUtil {
                 allStats.addAll(v);
             });
             List<String> allFiles = allStats.stream()
-                    .map(stat -> stat.getFullPath())
+                    .map(stat -> basePath + "/" + stat.getPath())
                     .collect(Collectors.toList());
 
             return getRecordsUsingInputFormat(allFiles);
@@ -135,8 +135,8 @@ public class HoodieMergeOnReadClientTestUtil {
                 HoodieCommitMetadata metadata =
                         HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get());
                 // get files from each commit, and replace any previous versions
-                fullPaths.addAll(metadata.getFileIdAndFullPaths().values());
-                fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths());
+                fullPaths.addAll(metadata.getFileIdAndFullPaths(basePath).values());
+                fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(basePath));
             }
             return getRecordsUsingInputFormat(fullPaths);
         } catch (IOException e) {
