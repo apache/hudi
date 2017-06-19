@@ -203,7 +203,7 @@ public class TestHoodieClient implements Serializable {
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
 
         /**
          * Write 1 (only inserts)
@@ -282,7 +282,7 @@ public class TestHoodieClient implements Serializable {
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
 
         /**
          * Write 1 (inserts and deletes)
@@ -362,7 +362,7 @@ public class TestHoodieClient implements Serializable {
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
                 .build()).build();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
         /**
@@ -446,7 +446,7 @@ public class TestHoodieClient implements Serializable {
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
                 .build()).build();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
         /**
@@ -550,7 +550,7 @@ public class TestHoodieClient implements Serializable {
                 .retainFileVersions(maxVersions).build()).build();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
 
         /**
          * do a big insert
@@ -644,7 +644,7 @@ public class TestHoodieClient implements Serializable {
                 .retainCommits(maxCommits).build()).build();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
 
         /**
          * do a big insert
@@ -724,7 +724,7 @@ public class TestHoodieClient implements Serializable {
         String commitTime2 = "20160502020601";
         String commitTime3 = "20160506030611";
         new File(basePath + "/.hoodie").mkdirs();
-        HoodieTestDataGenerator.writePartitionMetadata(FSUtils.getFs(),
+        HoodieTestDataGenerator.writePartitionMetadata(FSUtils.getFs(basePath),
                 new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
                 basePath);
 
@@ -817,7 +817,7 @@ public class TestHoodieClient implements Serializable {
         String commitTime2 = "20160502020601";
         String commitTime3 = "20160506030611";
         new File(basePath + "/.hoodie").mkdirs();
-        HoodieTestDataGenerator.writePartitionMetadata(FSUtils.getFs(),
+        HoodieTestDataGenerator.writePartitionMetadata(FSUtils.getFs(basePath),
                 new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
                 basePath);
 
@@ -896,7 +896,7 @@ public class TestHoodieClient implements Serializable {
     @Test
     public void testSmallInsertHandlingForUpserts() throws Exception {
 
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         final String TEST_PARTITION_PATH = "2016/09/26";
         final int INSERT_SPLIT_LIMIT = 10;
         // setup the small file handling params
@@ -1013,7 +1013,7 @@ public class TestHoodieClient implements Serializable {
         List<WriteStatus> statuses= client.insert(insertRecordsRDD1, commitTime1).collect();
 
         assertNoWriteErrors(statuses);
-        assertPartitionMetadata(new String[]{TEST_PARTITION_PATH}, FSUtils.getFs());
+        assertPartitionMetadata(new String[]{TEST_PARTITION_PATH}, FSUtils.getFs(basePath));
 
         assertEquals("Just 1 file needs to be added.", 1, statuses.size());
         String file1 = statuses.get(0).getFileId();
@@ -1052,7 +1052,7 @@ public class TestHoodieClient implements Serializable {
         assertEquals("2 files needs to be committed.", 2, statuses.size());
 
 
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
         List<HoodieDataFile> files =
@@ -1084,7 +1084,7 @@ public class TestHoodieClient implements Serializable {
         String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
         String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
         HoodieTable table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
         assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
@@ -1095,7 +1095,7 @@ public class TestHoodieClient implements Serializable {
         // make next commit, with 1 insert & 1 update per partition
         HoodieTestUtils.createCommitFiles(basePath, "001");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         String file2P0C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "001"); // insert
         String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
@@ -1113,7 +1113,7 @@ public class TestHoodieClient implements Serializable {
         // make next commit, with 2 updates to existing files, and 1 insert
         HoodieTestUtils.createCommitFiles(basePath, "002");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
@@ -1183,7 +1183,7 @@ public class TestHoodieClient implements Serializable {
         String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
 
         HoodieTable table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
         assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
@@ -1194,7 +1194,7 @@ public class TestHoodieClient implements Serializable {
         // make next commit, with 1 insert & 1 update per partition
         HoodieTestUtils.createCommitFiles(basePath, "001");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         String file2P0C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "001"); // insert
         String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
@@ -1212,7 +1212,7 @@ public class TestHoodieClient implements Serializable {
         // make next commit, with 2 updates to existing files, and 1 insert
         HoodieTestUtils.createCommitFiles(basePath, "002");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
@@ -1228,7 +1228,7 @@ public class TestHoodieClient implements Serializable {
         // make next commit, with 2 updates to existing files, and 1 insert
         HoodieTestUtils.createCommitFiles(basePath, "003");
         table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
 
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file1P0C0); // update
         HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file2P0C1); // update
@@ -1268,7 +1268,7 @@ public class TestHoodieClient implements Serializable {
         HoodieTestUtils.createCommitFiles(basePath, "000");
 
         HoodieTable table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true),
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true),
                 config);
 
         List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
@@ -1332,7 +1332,7 @@ public class TestHoodieClient implements Serializable {
         updateAllFilesInPartition(filesP2C0, partitionPaths[2], "003");
 
         HoodieTable table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(basePath), config.getBasePath(), true), config);
         List<HoodieCleanStat> hoodieCleanStats = table.clean(jsc);
 
         assertEquals(100,  getCleanStat(hoodieCleanStats, partitionPaths[0]).getSuccessDeleteFiles().size());
@@ -1354,7 +1354,7 @@ public class TestHoodieClient implements Serializable {
 
         HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg);
 

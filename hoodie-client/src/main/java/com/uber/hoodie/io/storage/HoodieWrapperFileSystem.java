@@ -16,6 +16,8 @@
 
 package com.uber.hoodie.io.storage;
 
+import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.AclEntry;
@@ -67,7 +69,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
     @Override public void initialize(URI uri, Configuration conf) throws IOException {
         // Get the default filesystem to decorate
-        fileSystem = FileSystem.get(conf);
+        Path path = new Path(uri);
+        // Remove 'hoodie-' prefix from path
+        if (path.toString().startsWith(HOODIE_SCHEME_PREFIX)) {
+            path = new Path(path.toString().replace(HOODIE_SCHEME_PREFIX, ""));
+        }
+        this.fileSystem = FSUtils.getFs(path.toString(), conf);
         // Do not need to explicitly initialize the default filesystem, its done already in the above FileSystem.get
         // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
         // fileSystem.setConf(conf);
@@ -632,8 +639,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
 
     public static Path convertToHoodiePath(Path file, Configuration conf) {
-        String scheme = FileSystem.getDefaultUri(conf).getScheme();
-        return convertPathWithScheme(file, getHoodieScheme(scheme));
+        try {
+            String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
+            return convertPathWithScheme(file, getHoodieScheme(scheme));
+        } catch (HoodieIOException e) {
+            throw e;
+        }
     }
 
     private Path convertToDefaultPath(Path oldPath) {

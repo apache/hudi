@@ -56,7 +56,7 @@ public class TestUpdateMapFunction {
     public void testSchemaEvolutionOnUpdate() throws Exception {
         // Create a bunch of records with a old version of schema
         HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(basePath), basePath);
         HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
         String recordStr1 =
@@ -81,12 +81,12 @@ public class TestUpdateMapFunction {
         Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
         Path commitFile =
             new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
-        FSUtils.getFs().create(commitFile);
+        FSUtils.getFs(config.getBasePath()).create(commitFile);
 
         // Now try an update with an evolved schema
         // Evolved schema does not have guarantee on preserving the original field ordering
         config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        metadata = new HoodieTableMetaClient(FSUtils.getFs(basePath), basePath);
         String fileId = insertResult.next().get(0).getFileId();
         System.out.println(fileId);
 

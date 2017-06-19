@@ -114,7 +114,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public HoodieDeltaStreamer(Config cfg) throws IOException {
         this.cfg = cfg;
-        this.fs = FSUtils.getFs();
+        this.fs = FSUtils.getFs(cfg.targetBasePath);
 
 
         if (fs.exists(new Path(cfg.targetBasePath))) {
@@ -193,7 +193,7 @@ public class HoodieDeltaStreamer implements Serializable {
         } else {
             Properties properties = new Properties();
             properties.put(HoodieWriteConfig.TABLE_NAME, cfg.targetTableName);
-            HoodieTableMetaClient.initializePathAsHoodieDataset(FSUtils.getFs(), cfg.targetBasePath, properties);
+            HoodieTableMetaClient.initializePathAsHoodieDataset(FSUtils.getFs(cfg.targetBasePath), cfg.targetBasePath, properties);
         }
         log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 

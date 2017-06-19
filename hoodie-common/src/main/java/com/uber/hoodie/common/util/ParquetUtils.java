@@ -56,7 +56,7 @@ public class ParquetUtils {
      */
     public static Set<String> readRowKeysFromParquet(Path filePath) {
         Configuration conf = new Configuration();
-        conf.addResource(getFs().getConf());
+        conf.addResource(getFs(filePath.toString()).getConf());
         Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
         AvroReadSupport.setAvroReadSchema(conf, readSchema);
         AvroReadSupport.setRequestedProjection(conf, readSchema);
@@ -102,7 +102,7 @@ public class ParquetUtils {
         ParquetMetadata footer;
         try {
             // TODO(vc): Should we use the parallel reading version here?
-            footer = ParquetFileReader.readFooter(getFs().getConf(), parquetFilePath);
+            footer = ParquetFileReader.readFooter(getFs(parquetFilePath.toString()).getConf(), parquetFilePath);
         } catch (IOException e) {
             throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
                     e);

@@ -67,7 +67,7 @@ public class HoodieSnapshotCopier implements Serializable {
     }
 
     public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir, final boolean shouldAssumeDatePartitioning) throws IOException {
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(baseDir);
         final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
         final TableFileSystemView.ReadOptimizedView fsView = new HoodieTableFileSystemView(tableMetadata,
             tableMetadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants());
@@ -95,7 +95,7 @@ public class HoodieSnapshotCopier implements Serializable {
             jsc.parallelize(partitions, partitions.size())
                     .flatMap(partition -> {
                         // Only take latest version files <= latestCommit.
-                        FileSystem fs1 = FSUtils.getFs();
+                        FileSystem fs1 = FSUtils.getFs(baseDir);
                         List<Tuple2<String, String>> filePaths = new ArrayList<>();
                         Stream<HoodieDataFile> dataFiles = fsView.getLatestDataFilesBeforeOrOn(partition, latestCommitTimestamp);
                         dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
@@ -111,7 +111,7 @@ public class HoodieSnapshotCopier implements Serializable {
                         String partition = tuple._1();
                         Path sourceFilePath = new Path(tuple._2());
                         Path toPartitionPath = new Path(outputDir, partition);
-                        FileSystem fs1 = FSUtils.getFs();
+                        FileSystem fs1 = FSUtils.getFs(baseDir);
 
                         if (!fs1.exists(toPartitionPath)) {
                           fs1.mkdirs(toPartitionPath);

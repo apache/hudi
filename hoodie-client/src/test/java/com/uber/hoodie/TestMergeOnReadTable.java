@@ -73,7 +73,7 @@ import static org.junit.Assert.assertTrue;
 public class TestMergeOnReadTable {
     private transient JavaSparkContext jsc = null;
     private transient SQLContext sqlContext;
-    private String basePath = null;
+    private static String basePath = null;
     private HoodieCompactor compactor;
     private FileSystem fs;
 
@@ -92,7 +92,7 @@ public class TestMergeOnReadTable {
         FSUtils.setFs(null);
         // TEMPFIX(vc): Fix failing build
         //FileSystem.closeAll();
-        HoodieTestUtils.resetFS();
+        HoodieTestUtils.resetFS(basePath);
     }
 
     @BeforeClass
@@ -106,21 +106,21 @@ public class TestMergeOnReadTable {
             dfs = dfsCluster.getFileSystem();
         }
         FSUtils.setFs(dfs);
-        HoodieTestUtils.resetFS();
+        HoodieTestUtils.resetFS(basePath);
     }
 
     @Before
     public void init() throws IOException {
-        this.fs = FSUtils.getFs();
 
         // Initialize a local spark env
         jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieMergeOnReadTable"));
-        jsc.hadoopConfiguration().addResource(FSUtils.getFs().getConf());
+        jsc.hadoopConfiguration().addResource(FSUtils.getFs(basePath).getConf());
 
         // Create a temp folder as the base path
         TemporaryFolder folder = new TemporaryFolder();
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
+        fs = FSUtils.getFs(basePath);
         dfs.mkdirs(new Path(basePath));
         FSUtils.setFs(dfs);
         HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
@@ -296,7 +296,7 @@ public class TestMergeOnReadTable {
         assertTrue(dataFilesToRead.findAny().isPresent());
 
         List<String> dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
-        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles);
+        List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
         //Wrote 40 records and deleted 20 records, so remaining 40-20 = 20
         assertEquals("Must contain 20 records", 20, recordsRead.size());
     }

@@ -49,7 +49,7 @@ public class TestHoodieSnapshotCopier {
         basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
         HoodieTestUtils.init(basePath);
         outputPath = rootPath + "/output";
-        fs = FSUtils.getFs();
+        fs = FSUtils.getFs(basePath);
         // Start a local Spark job
         SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
         jsc = new JavaSparkContext(conf);

@@ -87,7 +87,7 @@ public class HoodieReadClient implements Serializable {
      */
     public HoodieReadClient(JavaSparkContext jsc, String basePath) {
         this.jsc = jsc;
-        this.fs = FSUtils.getFs();
+        this.fs = FSUtils.getFs(basePath);
         // Create a Hoodie table which encapsulated the commits and files visible
         this.hoodieTable = HoodieTable
                 .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);

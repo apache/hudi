@@ -106,7 +106,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, TableFile
     private void readObject(java.io.ObjectInputStream in)
             throws IOException, ClassNotFoundException {
         in.defaultReadObject();
-        this.fs = FSUtils.getFs();
+        this.fs = FSUtils.getFs(metaClient.getBasePath());
     }
 
     private void writeObject(java.io.ObjectOutputStream out)

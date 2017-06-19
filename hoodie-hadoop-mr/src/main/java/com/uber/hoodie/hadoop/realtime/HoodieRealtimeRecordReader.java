@@ -126,8 +126,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
                 split.getDeltaFilePaths(), split.getPath(), projectionFields));
 
         HoodieCompactedLogRecordScanner compactedLogRecordScanner =
-            new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getDeltaFilePaths(),
-                readerSchema);
+            new HoodieCompactedLogRecordScanner(FSUtils.getFs(split.getPath().toString()), split.getDeltaFilePaths(), readerSchema);
 
         // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
         // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)

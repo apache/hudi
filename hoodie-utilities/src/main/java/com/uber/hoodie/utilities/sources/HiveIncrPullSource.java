@@ -73,7 +73,7 @@ public class HiveIncrPullSource extends Source {
 
     public HiveIncrPullSource(PropertiesConfiguration config, JavaSparkContext sparkContext, SourceDataFormat dataFormat, SchemaProvider schemaProvider) {
         super(config, sparkContext, dataFormat, schemaProvider);
-        this.fs = FSUtils.getFs();
+        this.fs = FSUtils.getFs(config.getBasePath());
         UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
         this.incrPullRootPath = config.getString(Config.ROOT_INPUT_PATH_PROP);
     }

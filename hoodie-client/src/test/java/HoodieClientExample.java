@@ -82,7 +82,7 @@ public class HoodieClientExample {
 
         // initialize the table, if not done already
         Path path = new Path(tablePath);
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(tablePath);
         if (!fs.exists(path)) {
             HoodieTableMetaClient.initTableType(fs, tablePath, HoodieTableType.valueOf(tableType), tableName);
         }

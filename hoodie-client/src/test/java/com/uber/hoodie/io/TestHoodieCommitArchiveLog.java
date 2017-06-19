@@ -56,7 +56,7 @@ public class TestHoodieCommitArchiveLog {
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
         HoodieTestUtils.init(basePath);
-        fs = FSUtils.getFs();
+        fs = FSUtils.getFs(basePath);
     }
 
     @Test
@@ -111,7 +111,7 @@ public class TestHoodieCommitArchiveLog {
         originalCommits.removeAll(timeline.getInstants().collect(Collectors.toList()));
 
         //read the file
-        HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(),
+        HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath),
                 new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")), HoodieArchivedMetaEntry.getClassSchema());
 
         int archivedRecordsCount = 0;

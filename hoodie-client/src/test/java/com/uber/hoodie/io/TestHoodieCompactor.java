@@ -106,7 +106,7 @@ public class TestHoodieCompactor {
     public void testCompactionOnCopyOnWriteFail() throws Exception {
         HoodieTestUtils.initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
 
-        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(basePath), basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
         compactor.compact(jsc, getConfig(), table);
@@ -114,7 +114,7 @@ public class TestHoodieCompactor {
 
     @Test
     public void testCompactionEmpty() throws Exception {
-        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(basePath), basePath);
         HoodieWriteConfig config = getConfig();
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
         HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
@@ -133,7 +133,7 @@ public class TestHoodieCompactor {
 
     @Test
     public void testLogFileCountsAfterCompaction() throws Exception {
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         // insert 100 records
         HoodieWriteConfig config = getConfig();
         HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);

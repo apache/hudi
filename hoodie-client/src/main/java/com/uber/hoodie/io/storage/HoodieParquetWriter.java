@@ -19,6 +19,7 @@ package com.uber.hoodie.io.storage;
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -52,10 +53,9 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     private final String commitTime;
     private final Schema schema;
 
-
-    private static Configuration registerFileSystem(Configuration conf) {
+    private static Configuration registerFileSystem(Path file, Configuration conf) {
         Configuration returnConf = new Configuration(conf);
-        String scheme = FileSystem.getDefaultUri(conf).getScheme();
+        String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
         returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
             HoodieWrapperFileSystem.class.getName());
         return returnConf;
@@ -69,11 +69,11 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
             parquetConfig.getPageSize(), parquetConfig.getPageSize(),
             ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
             ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION,
-            registerFileSystem(parquetConfig.getHadoopConf()));
+            registerFileSystem(file, parquetConfig.getHadoopConf()));
         this.file =
             HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
         this.fs = (HoodieWrapperFileSystem) this.file
-            .getFileSystem(registerFileSystem(parquetConfig.getHadoopConf()));
+            .getFileSystem(registerFileSystem(file, parquetConfig.getHadoopConf()));
         // We cannot accurately measure the snappy compressed output file size. We are choosing a conservative 10%
         // TODO - compute this compression ratio dynamically by looking at the bytes written to the stream and the actual file size reported by HDFS
         this.maxFileSize = parquetConfig.getMaxFileSize() + Math

@@ -68,18 +68,19 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 public class HoodieTestUtils {
-    public static FileSystem fs = FSUtils.getFs();
+    public static FileSystem fs;
     public static final String TEST_EXTENSION = ".test";
     public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
     public static final int DEFAULT_TASK_PARTITIONID = 1;
     public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
     private static Random rand = new Random(46474747);
 
-    public static void resetFS() {
-        HoodieTestUtils.fs = FSUtils.getFs();
+    public static void resetFS(String basePath) {
+        HoodieTestUtils.fs = FSUtils.getFs(basePath);
     }
 
     public static HoodieTableMetaClient init(String basePath) throws IOException {
+        fs = FSUtils.getFs(basePath);
         return initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
     }
 
@@ -87,6 +88,7 @@ public class HoodieTestUtils {
         Properties properties = new Properties();
         properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
         properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+        fs = FSUtils.getFs(basePath);
         return HoodieTableMetaClient.initializePathAsHoodieDataset(fs, basePath, properties);
     }
 
@@ -183,7 +185,7 @@ public class HoodieTestUtils {
     public static void createCleanFiles(String basePath, String commitTime) throws IOException {
         Path commitFile =
                 new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         FSDataOutputStream os = fs.create(commitFile, true);
         try {
             HoodieCleanStat cleanStats = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
@@ -233,6 +235,8 @@ public class HoodieTestUtils {
     }
 
     public static void writeRecordsToLogFiles(String basePath, Schema schema, List<HoodieRecord> updatedRecords) {
+
+        fs = FSUtils.getFs(basePath);
         Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated = updatedRecords.stream()
             .collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation));
 
