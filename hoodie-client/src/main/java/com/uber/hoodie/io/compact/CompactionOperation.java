@@ -17,7 +17,7 @@
 package com.uber.hoodie.io.compact;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodieLogFile;
 
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;

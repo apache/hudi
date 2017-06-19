@@ -40,7 +40,6 @@ import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -306,7 +305,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
          * @return
          */
         private List<SmallFile> getSmallFiles(String partitionPath) {
-            FileSystem fs = FSUtils.getFs();
             List<SmallFile> smallFileLocations = new ArrayList<>();
 
             HoodieTimeline commitTimeline = getCompletedCommitTimeline();
@@ -314,7 +312,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             if (!commitTimeline.empty()) { // if we have some commits
                 HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
                 List<HoodieDataFile> allFiles = getFileSystemView()
-                    .getLatestVersionInPartition(partitionPath, latestCommitTime.getTimestamp())
+                    .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
                     .collect(Collectors.toList());
 
                 for (HoodieDataFile file : allFiles) {

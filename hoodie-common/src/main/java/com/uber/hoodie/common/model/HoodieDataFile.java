@@ -63,7 +63,7 @@ public class HoodieDataFile {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder("HoodieDataFile{");
+        final StringBuilder sb = new StringBuilder("HoodieDataFile {");
         sb.append("fileStatus=").append(fileStatus);
         sb.append('}');
         return sb.toString();

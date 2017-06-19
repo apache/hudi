@@ -184,7 +184,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                     List<Tuple2<String, String>> list = new ArrayList<>();
                     if (latestCommitTime.isPresent()) {
                         List<HoodieDataFile> filteredFiles =
-                                hoodieTable.getFileSystemView().getLatestVersionInPartition(partitionPath,
+                                hoodieTable.getFileSystemView().getLatestDataFilesBeforeOrOn(partitionPath,
                                         latestCommitTime.get().getTimestamp()).collect(Collectors.toList());
                         for (HoodieDataFile file : filteredFiles) {
                             list.add(new Tuple2<>(partitionPath, file.getFileName()));

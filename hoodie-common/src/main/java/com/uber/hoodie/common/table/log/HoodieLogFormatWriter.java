@@ -17,6 +17,8 @@
 package com.uber.hoodie.common.table.log;
 
 import com.google.common.base.Preconditions;
+
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
@@ -56,7 +58,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    * @param sizeThreshold
    */
   HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize,
-      Short replication, Long sizeThreshold)
+                        Short replication, Long sizeThreshold)
       throws IOException, InterruptedException {
     this.fs = fs;
     this.logFile = logFile;

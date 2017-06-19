@@ -21,13 +21,14 @@ package com.uber.hoodie.hadoop.realtime;
 import com.google.common.base.Preconditions;
 
 import com.google.common.collect.Sets;
-import com.uber.hoodie.common.model.HoodieDataFile;
+
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.hadoop.HoodieInputFormat;
 import com.uber.hoodie.hadoop.UseFileSplitsFromInputFormat;
@@ -106,16 +107,16 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
             String relPartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
 
             try {
-                Map<HoodieDataFile, List<HoodieLogFile>> dataLogFileGrouping = fsView.groupLatestDataFileWithLogFiles(relPartitionPath);
+                Stream<FileSlice> latestFileSlices = fsView.getLatestFileSlices(relPartitionPath);
 
                 // subgroup splits again by file id & match with log files.
                 Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
                         .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
-                dataLogFileGrouping.forEach((dataFile, logFiles) -> {
-                    List<FileSplit> dataFileSplits = groupedInputSplits.get(dataFile.getFileId());
+                latestFileSlices.forEach(fileSlice -> {
+                    List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
                     dataFileSplits.forEach(split -> {
                         try {
-                            List<String> logFilePaths = logFiles.stream()
+                            List<String> logFilePaths = fileSlice.getLogFiles()
                                 .map(logFile -> logFile.getPath().toString())
                                 .collect(Collectors.toList());
                             // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
@@ -132,8 +133,8 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
                         }
                     });
                 });
-            } catch (IOException e) {
-                throw new HoodieIOException("Error obtaining data file/log file grouping: " + partitionPath, e);
+            } catch (Exception e) {
+                throw new HoodieException("Error obtaining data file/log file grouping: " + partitionPath, e);
             }
         });
         LOG.info("Returning a total splits of " + rtSplits.size());

@@ -18,19 +18,16 @@ package com.uber.hoodie.common.table.view;
 
 import static java.util.stream.Collectors.toList;
 
-import com.google.common.collect.Maps;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.common.model.HoodieFileGroup;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.util.function.BinaryOperator;
+
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -38,37 +35,70 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Common abstract implementation for multiple TableFileSystemView Implementations.
- * 2 possible implementations are ReadOptimizedView and RealtimeView
- * <p>
- * Concrete implementations extending this abstract class, should only implement
- * listDataFilesInPartition which includes files to be included in the view
+ * Common abstract implementation for multiple TableFileSystemView Implementations. 2 possible
+ * implementations are ReadOptimizedView and RealtimeView <p> Concrete implementations extending
+ * this abstract class, should only implement getDataFilesInPartition which includes files to be
+ * included in the view
  *
  * @see TableFileSystemView
  * @since 0.3.0
  */
 public class HoodieTableFileSystemView implements TableFileSystemView, Serializable {
+
     protected HoodieTableMetaClient metaClient;
     protected transient FileSystem fs;
     // This is the commits that will be visible for all views extending this view
-    protected HoodieTimeline visibleActiveCommitTimeline;
+    protected HoodieTimeline visibleActiveTimeline;
 
+    // mapping from partition paths to file groups contained within them
+    protected HashMap<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
+    // mapping from file id to the file group.
+    protected HashMap<String, HoodieFileGroup> fileGroupMap;
+
+    /**
+     * Create a file system view, as of the given timeline
+     *
+     * @param metaClient
+     * @param visibleActiveTimeline
+     */
     public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
-        HoodieTimeline visibleActiveCommitTimeline) {
+                                     HoodieTimeline visibleActiveTimeline) {
         this.metaClient = metaClient;
         this.fs = metaClient.getFs();
-        this.visibleActiveCommitTimeline = visibleActiveCommitTimeline;
+        this.visibleActiveTimeline = visibleActiveTimeline;
+        this.fileGroupMap = new HashMap<>();
+        this.partitionToFileGroupsMap = new HashMap<>();
     }
+
+
+    /**
+     * Create a file system view, as of the given timeline, with the provided file statuses.
+     *
+     * @param metaClient
+     * @param visibleActiveTimeline
+     * @param fileStatuses
+     */
+    public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
+                                     HoodieTimeline visibleActiveTimeline,
+                                     FileStatus[] fileStatuses) {
+        this(metaClient, visibleActiveTimeline);
+        addFilesToView(fileStatuses);
+    }
+
 
     /**
      * This method is only used when this object is deserialized in a spark executor.
@@ -76,145 +106,170 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
      * @deprecated
      */
     private void readObject(java.io.ObjectInputStream in)
-        throws IOException, ClassNotFoundException {
+            throws IOException, ClassNotFoundException {
         in.defaultReadObject();
         this.fs = FSUtils.getFs();
     }
 
     private void writeObject(java.io.ObjectOutputStream out)
-        throws IOException {
+            throws IOException {
         out.defaultWriteObject();
     }
 
-    public Stream<HoodieDataFile> getLatestDataFilesForFileId(final String partitionPath,
-        String fileId) {
-        Optional<HoodieInstant> lastInstant = visibleActiveCommitTimeline.lastInstant();
-        if (lastInstant.isPresent()) {
-            return getLatestVersionInPartition(partitionPath, lastInstant.get().getTimestamp())
-                .filter(hoodieDataFile -> hoodieDataFile.getFileId().equals(fileId));
-        }
-        return Stream.empty();
-    }
+    /**
+     * Adds the provided statuses into the file system view, and also caches it inside this object.
+     *
+     * @param statuses
+     * @return
+     */
+    private List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+        Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = convertFileStatusesToDataFiles(statuses)
+                .collect(Collectors.groupingBy((dataFile) -> {
+                    String partitionPathStr = FSUtils.getRelativePartitionPath(
+                            new Path(metaClient.getBasePath()),
+                            dataFile.getFileStatus().getPath().getParent());
+                    return Pair.of(partitionPathStr , dataFile.getFileId());
+                }));
+        Map<Pair<String, String>, List<HoodieLogFile>> logFiles = convertFileStatusesToLogFiles(statuses)
+                .collect(Collectors.groupingBy((logFile) -> {
+                    String partitionPathStr = FSUtils.getRelativePartitionPath(
+                            new Path(metaClient.getBasePath()),
+                            logFile.getPath().getParent());
+                    return Pair.of(partitionPathStr , logFile.getFileId());
+                }));
 
-    @Override
-    public Stream<HoodieDataFile> getLatestVersionInPartition(String partitionPathStr,
-        String maxCommitTime) {
-        return getLatestVersionsBeforeOrOn(listDataFilesInPartition(partitionPathStr),
-            maxCommitTime);
-    }
+        Set<Pair<String, String>> fileIdSet = new HashSet<>(dataFiles.keySet());
+        fileIdSet.addAll(logFiles.keySet());
 
-
-    @Override
-    public Stream<List<HoodieDataFile>> getEveryVersionInPartition(String partitionPath) {
-        try {
-            if (visibleActiveCommitTimeline.lastInstant().isPresent()) {
-                return getFilesByFileId(listDataFilesInPartition(partitionPath),
-                    visibleActiveCommitTimeline.lastInstant().get().getTimestamp());
+        List<HoodieFileGroup> fileGroups = new ArrayList<>();
+        fileIdSet.forEach(pair -> {
+            HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), pair.getValue(), visibleActiveTimeline);
+            if (dataFiles.containsKey(pair)) {
+                dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
             }
-            return Stream.empty();
-        } catch (IOException e) {
-            throw new HoodieIOException(
-                "Could not load all file versions in partition " + partitionPath, e);
-        }
+            if (logFiles.containsKey(pair)) {
+                logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
+            }
+            fileGroups.add(group);
+        });
+
+        // add to the cache.
+        fileGroups.forEach(group -> {
+            fileGroupMap.put(group.getId(), group);
+            if (!partitionToFileGroupsMap.containsKey(group.getPartitionPath())) {
+                partitionToFileGroupsMap.put(group.getPartitionPath(), new ArrayList<>());
+            }
+            partitionToFileGroupsMap.get(group.getPartitionPath()).add(group);
+        });
+
+        return fileGroups;
     }
 
-    protected FileStatus[] listDataFilesInPartition(String partitionPathStr) {
-        Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
+    private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
+        Predicate<FileStatus> roFilePredicate = fileStatus ->
+                fileStatus.getPath().getName().contains(metaClient.getTableConfig().getROFileFormat().getFileExtension());
+        return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieDataFile::new);
+    }
+
+    private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
+        Predicate<FileStatus> rtFilePredicate = fileStatus ->
+                fileStatus.getPath().getName().contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension());
+        return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
+    }
+
+    @Override
+    public Stream<HoodieDataFile> getLatestDataFiles(final String partitionPath) {
+        return getAllFileGroups(partitionPath)
+                .map(fileGroup -> fileGroup.getLatestDataFile())
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<HoodieDataFile> getLatestDataFiles() {
+        return  fileGroupMap.values().stream()
+                .map(fileGroup -> fileGroup.getLatestDataFile())
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
+                                                               String maxCommitTime) {
+        return getAllFileGroups(partitionPath)
+                .map(fileGroup -> fileGroup.getLatestDataFileBeforeOrOn(maxCommitTime))
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
+        return  fileGroupMap.values().stream()
+                .map(fileGroup -> fileGroup.getLatestDataFileInRange(commitsToReturn))
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
+        return getAllFileGroups(partitionPath)
+                .map(fileGroup -> fileGroup.getAllDataFiles())
+                .flatMap(dataFileList -> dataFileList);
+    }
+
+    @Override
+    public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
+        return getAllFileGroups(partitionPath)
+                .map(fileGroup -> fileGroup.getLatestFileSlice())
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime) {
+        return getAllFileGroups(partitionPath)
+                .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
+        return fileGroupMap.values().stream()
+                .map(fileGroup -> fileGroup.getLatestFileSliceInRange(commitsToReturn))
+                .filter(dataFileOpt -> dataFileOpt.isPresent())
+                .map(Optional::get);
+    }
+
+    @Override
+    public Stream<FileSlice> getAllFileSlices(String partitionPath) {
+        return getAllFileGroups(partitionPath)
+                .map(group -> group.getAllFileSlices())
+                .flatMap(sliceList -> sliceList);
+    }
+
+    /**
+     * Given a partition path, obtain all filegroups within that. All methods, that work at the partition level
+     * go through this.
+     */
+    @Override
+    public Stream<HoodieFileGroup> getAllFileGroups(String partitionPathStr) {
+        // return any previously fetched groups.
+        if (partitionToFileGroupsMap.containsKey(partitionPathStr)) {
+            return partitionToFileGroupsMap.get(partitionPathStr).stream();
+        }
+
         try {
             // Create the path if it does not exist already
+            Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
             FSUtils.createPathIfNotExists(fs, partitionPath);
-            return fs.listStatus(partitionPath, path -> path.getName()
-                .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension()));
+            FileStatus[] statuses = fs.listStatus(partitionPath);
+            List<HoodieFileGroup> fileGroups = addFilesToView(statuses);
+            return fileGroups.stream();
         } catch (IOException e) {
             throw new HoodieIOException(
-                "Failed to list data files in partition " + partitionPathStr, e);
+                    "Failed to list data files in partition " + partitionPathStr, e);
         }
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestVersionInRange(FileStatus[] fileStatuses,
-        List<String> commitsToReturn) {
-        if (visibleActiveCommitTimeline.empty() || commitsToReturn.isEmpty()) {
-            return Stream.empty();
-        }
-        try {
-            return getFilesByFileId(fileStatuses,
-                visibleActiveCommitTimeline.lastInstant().get().getTimestamp())
-                .map((Function<List<HoodieDataFile>, Optional<HoodieDataFile>>) fss -> {
-                    for (HoodieDataFile fs : fss) {
-                        if (commitsToReturn.contains(fs.getCommitTime())) {
-                            return Optional.of(fs);
-                        }
-                    }
-                    return Optional.empty();
-                }).filter(Optional::isPresent).map(Optional::get);
-        } catch (IOException e) {
-            throw new HoodieIOException("Could not filter files from commits " + commitsToReturn,
-                e);
-        }
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestVersionsBeforeOrOn(FileStatus[] fileStatuses,
-        String maxCommitToReturn) {
-        try {
-            if (visibleActiveCommitTimeline.empty()) {
-                return Stream.empty();
-            }
-            return getFilesByFileId(fileStatuses,
-                visibleActiveCommitTimeline.lastInstant().get().getTimestamp())
-                .map((Function<List<HoodieDataFile>, Optional<HoodieDataFile>>) fss -> {
-                    for (HoodieDataFile fs1 : fss) {
-                        if (HoodieTimeline
-                            .compareTimestamps(fs1.getCommitTime(), maxCommitToReturn,
-                                HoodieTimeline.LESSER_OR_EQUAL)) {
-                            return Optional.of(fs1);
-                        }
-                    }
-                    return Optional.empty();
-                }).filter(Optional::isPresent).map(Optional::get);
-        } catch (IOException e) {
-            throw new HoodieIOException("Could not filter files for latest version ", e);
-        }
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestVersions(FileStatus[] fileStatuses) {
-        try {
-            if (visibleActiveCommitTimeline.empty()) {
-                return Stream.empty();
-            }
-            return getFilesByFileId(fileStatuses,
-                visibleActiveCommitTimeline.lastInstant().get().getTimestamp())
-                .map(statuses -> statuses.get(0));
-        } catch (IOException e) {
-            throw new HoodieIOException("Could not filter files for latest version ", e);
-        }
-    }
-
-    public Map<HoodieDataFile, List<HoodieLogFile>> groupLatestDataFileWithLogFiles(
-        String partitionPath) throws IOException {
-        if (metaClient.getTableType() != HoodieTableType.MERGE_ON_READ) {
-            throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-        }
-
-        // All the files in the partition
-        FileStatus[] files = fs.listStatus(new Path(metaClient.getBasePath(), partitionPath));
-        // All the log files filtered from the above list, sorted by version numbers
-        List<HoodieLogFile> allLogFiles = Arrays.stream(files).filter(s -> s.getPath().getName()
-            .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension()))
-            .map(HoodieLogFile::new).collect(Collectors.collectingAndThen(toList(),
-                l -> l.stream().sorted(HoodieLogFile.getLogVersionComparator())
-                    .collect(toList())));
-
-        // Filter the delta files by the commit time of the latest base file and collect as a list
-        Optional<HoodieInstant> lastTimestamp = metaClient.getActiveTimeline().lastInstant();
-        return lastTimestamp.map(hoodieInstant -> getLatestVersionInPartition(partitionPath,
-            hoodieInstant.getTimestamp()).map(
-            hoodieDataFile -> Pair.of(hoodieDataFile, allLogFiles.stream().filter(
-                s -> s.getFileId().equals(hoodieDataFile.getFileId()) && s.getBaseCommitTime()
-                    .equals(hoodieDataFile.getCommitTime())).collect(Collectors.toList()))).collect(
-            Collectors.toMap(Pair::getKey, Pair::getRight))).orElseGet(Maps::newHashMap);
     }
 
     @Override
@@ -225,44 +280,4 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
             throw new HoodieIOException("Could not get FileStatus on path " + path);
         }
     }
-
-
-    protected Stream<List<HoodieDataFile>> getFilesByFileId(FileStatus[] files,
-        String maxCommitTime) throws IOException {
-        return groupFilesByFileId(files, maxCommitTime).values().stream();
-    }
-
-    /**
-     * Filters the list of FileStatus to exclude non-committed data files and group by FileID
-     * and sort the actial files by commit time (newer commit first)
-     *
-     * @param files         Files to filter and group from
-     * @param maxCommitTime maximum permissible commit time
-     * @return Grouped map by fileId
-     */
-    private Map<String, List<HoodieDataFile>> groupFilesByFileId(FileStatus[] files,
-        String maxCommitTime) throws IOException {
-        return Arrays.stream(files)
-                // filter out files starting with "."
-                .filter(file -> !file.getPath().getName().startsWith("."))
-                .flatMap(fileStatus -> {
-            HoodieDataFile dataFile = new HoodieDataFile(fileStatus);
-            if (visibleActiveCommitTimeline.containsOrBeforeTimelineStarts(dataFile.getCommitTime())
-                && HoodieTimeline
-                .compareTimestamps(dataFile.getCommitTime(), maxCommitTime,
-                HoodieTimeline.LESSER_OR_EQUAL)) {
-                return Stream.of(Pair.of(dataFile.getFileId(), dataFile));
-            }
-            return Stream.empty();
-        }).collect(Collectors
-            .groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, toSortedFileStatus())));
-    }
-
-    private Collector<HoodieDataFile, ?, List<HoodieDataFile>> toSortedFileStatus() {
-        return Collectors.collectingAndThen(toList(),
-            l -> l.stream().sorted(HoodieDataFile.getCommitTimeComparator())
-                .collect(toList()));
-    }
-
-
 }

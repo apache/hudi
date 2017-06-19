@@ -26,6 +26,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
@@ -167,7 +168,6 @@ public class HoodieReadClient implements Serializable {
     public Dataset<Row> read(String... paths) {
         assertSqlContext();
         List<String> filteredPaths = new ArrayList<>();
-        TableFileSystemView fileSystemView = hoodieTable.getFileSystemView();
 
         try {
             for (String path : paths) {
@@ -177,7 +177,9 @@ public class HoodieReadClient implements Serializable {
                             + hoodieTable.getMetaClient().getBasePath());
                 }
 
-                List<HoodieDataFile> latestFiles = fileSystemView.getLatestVersions(fs.globStatus(new Path(path))).collect(
+                TableFileSystemView fileSystemView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(),
+                        hoodieTable.getCompletedCommitTimeline(), fs.globStatus(new Path(path)));
+                List<HoodieDataFile> latestFiles = fileSystemView.getLatestDataFiles().collect(
                         Collectors.toList());
                 for (HoodieDataFile file : latestFiles) {
                     filteredPaths.add(file.getPath());

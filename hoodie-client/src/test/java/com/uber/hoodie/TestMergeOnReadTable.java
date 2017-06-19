@@ -26,6 +26,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -126,13 +127,14 @@ public class TestMergeOnReadTable {
             metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
         assertFalse(commit.isPresent());
 
-        TableFileSystemView fsView = hoodieTable.getCompactedFileSystemView();
         FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
-        Stream<HoodieDataFile> dataFilesToRead = fsView.getLatestVersions(allFiles);
+        TableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+                hoodieTable.getCompletedCompactionCommitTimeline(), allFiles);
+        Stream<HoodieDataFile> dataFilesToRead = fsView.getLatestDataFiles();
         assertTrue(!dataFilesToRead.findAny().isPresent());
 
-        fsView = hoodieTable.getFileSystemView();
-        dataFilesToRead = fsView.getLatestVersions(allFiles);
+        fsView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
+        dataFilesToRead = fsView.getLatestDataFiles();
         assertTrue("RealtimeTableView should list the parquet files we wrote in the delta commit",
             dataFilesToRead.findAny().isPresent());
 
@@ -167,7 +169,8 @@ public class TestMergeOnReadTable {
         compactor.compact(jsc, getConfig(), table);
 
         allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());
-        dataFilesToRead = fsView.getLatestVersions(allFiles);
+        fsView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
+        dataFilesToRead = fsView.getLatestDataFiles();
         assertTrue(dataFilesToRead.findAny().isPresent());
 
         // verify that there is a commit

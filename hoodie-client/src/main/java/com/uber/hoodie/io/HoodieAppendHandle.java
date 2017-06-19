@@ -22,10 +22,10 @@ import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -86,8 +86,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
                 partitionPath = record.getPartitionPath();
                 // HACK(vc) This also assumes a base file. It will break, if appending without one.
                 String latestValidFilePath =
-                    fileSystemView.getLatestDataFilesForFileId(record.getPartitionPath(), fileId)
-                        .findFirst().get().getFileName();
+                    fileSystemView.getLatestDataFiles(record.getPartitionPath())
+                            .filter(dataFile -> dataFile.getFileId().equals(fileId))
+                            .findFirst().get().getFileName();
                 String baseCommitTime = FSUtils.getCommitTime(latestValidFilePath);
                 writeStatus.getStat().setPrevCommit(baseCommitTime);
                 writeStatus.setFileId(fileId);

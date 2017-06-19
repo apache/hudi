@@ -16,9 +16,9 @@
 
 package com.uber.hoodie.io.strategy;
 
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import java.util.Optional;
-import org.apache.hadoop.fs.FileStatus;
+
 import org.apache.hadoop.fs.Path;
 
 public class TestHoodieLogFile extends HoodieLogFile {
