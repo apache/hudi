@@ -19,7 +19,7 @@ package com.uber.hoodie.io.compact.strategy;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.CompactionOperation;

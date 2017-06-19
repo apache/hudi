@@ -30,7 +30,6 @@ import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -482,7 +481,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                     logger.info("Collecting latest files in partition path " + partitionPath);
                     TableFileSystemView view = table.getFileSystemView();
                     List<String> latestFiles =
-                        view.getLatestVersionInPartition(partitionPath, commitTime)
+                        view.getLatestDataFilesBeforeOrOn(partitionPath, commitTime)
                             .map(HoodieDataFile::getFileName).collect(Collectors.toList());
                     return new Tuple2<>(partitionPath, latestFiles);
                 }).collectAsMap();
@@ -801,26 +800,16 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * Deduplicate Hoodie records, using the given deduplication funciton.
      */
     private JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records, int parallelism) {
-        return records.mapToPair(new PairFunction<HoodieRecord<T>, HoodieKey, HoodieRecord<T>>() {
-            @Override
-            public Tuple2<HoodieKey, HoodieRecord<T>> call(HoodieRecord<T> record) {
-                return new Tuple2<>(record.getKey(), record);
-            }
-        }).reduceByKey(new Function2<HoodieRecord<T>, HoodieRecord<T>, HoodieRecord<T>>() {
-            @Override
-            public HoodieRecord<T> call(HoodieRecord<T> rec1, HoodieRecord<T> rec2) {
-                @SuppressWarnings("unchecked")
-                T reducedData = (T) rec1.getData().preCombine(rec2.getData());
-                // we cannot allow the user to change the key or partitionPath, since that will affect everything
-                // so pick it from one of the records.
-                return new HoodieRecord<T>(rec1.getKey(), reducedData);
-            }
-        }, parallelism).map(new Function<Tuple2<HoodieKey, HoodieRecord<T>>, HoodieRecord<T>>() {
-            @Override
-            public HoodieRecord<T> call(Tuple2<HoodieKey, HoodieRecord<T>> recordTuple) {
-                return recordTuple._2();
-            }
-        });
+        return records
+                .mapToPair(record -> new Tuple2<>(record.getKey(), record))
+                .reduceByKey((rec1, rec2) -> {
+                    @SuppressWarnings("unchecked")
+                    T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+                    // we cannot allow the user to change the key or partitionPath, since that will affect everything
+                    // so pick it from one of the records.
+                    return new HoodieRecord<T>(rec1.getKey(), reducedData);
+                }, parallelism)
+                .map(recordTuple -> recordTuple._2());
     }
 
     /**

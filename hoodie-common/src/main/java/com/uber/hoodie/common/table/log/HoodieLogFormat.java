@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.table.log;
 
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.Closeable;

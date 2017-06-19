@@ -18,11 +18,12 @@ package com.uber.hoodie.io;
 
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodieFileGroup;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -78,17 +79,17 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
         throws IOException {
         logger.info("Cleaning " + partitionPath + ", retaining latest " + config
             .getCleanerFileVersionsRetained() + " file versions. ");
-        List<List<HoodieDataFile>> fileVersions =
-            fileSystemView.getEveryVersionInPartition(partitionPath)
+        List<HoodieFileGroup> fileGroups =
+            fileSystemView.getAllFileGroups(partitionPath)
                 .collect(Collectors.toList());
         List<String> deletePaths = new ArrayList<>();
         // Collect all the datafiles savepointed by all the savepoints
         List<String> savepointedFiles = hoodieTable.getSavepoints().stream()
             .flatMap(s -> hoodieTable.getSavepointedDataFiles(s)).collect(Collectors.toList());
 
-        for (List<HoodieDataFile> versionsForFileId : fileVersions) {
+        for (HoodieFileGroup fileGroup : fileGroups) {
             int keepVersions = config.getCleanerFileVersionsRetained();
-            Iterator<HoodieDataFile> commitItr = versionsForFileId.iterator();
+            Iterator<HoodieDataFile> commitItr = fileGroup.getAllDataFiles().iterator();
             while (commitItr.hasNext() && keepVersions > 0) {
                 // Skip this most recent version
                 HoodieDataFile next = commitItr.next();
@@ -150,10 +151,11 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
         // determine if we have enough commits, to start cleaning.
         if (commitTimeline.countInstants() > commitsRetained) {
             HoodieInstant earliestCommitToRetain = getEarliestCommitToRetain().get();
-            List<List<HoodieDataFile>> fileVersions =
-                fileSystemView.getEveryVersionInPartition(partitionPath)
+            List<HoodieFileGroup> fileGroups =
+                fileSystemView.getAllFileGroups(partitionPath)
                     .collect(Collectors.toList());
-            for (List<HoodieDataFile> fileList : fileVersions) {
+            for (HoodieFileGroup fileGroup : fileGroups) {
+                List<HoodieDataFile> fileList = fileGroup.getAllDataFiles().collect(Collectors.toList());
                 String lastVersion = FSUtils.getCommitTime(fileList.get(0).getFileName());
                 String lastVersionBeforeEarliestCommitToRetain =
                     getLatestVersionBeforeCommit(fileList, earliestCommitToRetain);

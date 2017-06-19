@@ -16,15 +16,16 @@
 
 package com.uber.hoodie.common.table;
 
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodieFileGroup;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -37,27 +38,40 @@ import java.util.stream.Stream;
  * @since 0.3.0
  */
 public interface TableFileSystemView {
+
     /**
-     * Stream all the data files for a specific FileId.
-     * This usually has a single RO file and multiple WO files if present.
+     * Stream all the latest data files in the given partition
      *
      * @param partitionPath
-     * @param fileId
      * @return
      */
-    Stream<HoodieDataFile> getLatestDataFilesForFileId(final String partitionPath,
-        final String fileId);
+    Stream<HoodieDataFile> getLatestDataFiles(String partitionPath);
+
+    /**
+     * Stream all the latest data files, in the file system view
+     *
+     * @return
+     */
+    Stream<HoodieDataFile> getLatestDataFiles();
 
     /**
      * Stream all the latest version data files in the given partition
      * with precondition that commitTime(file) before maxCommitTime
      *
-     * @param partitionPathStr
+     * @param partitionPath
      * @param maxCommitTime
      * @return
      */
-    Stream<HoodieDataFile> getLatestVersionInPartition(String partitionPathStr,
-        String maxCommitTime);
+    Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
+                                                        String maxCommitTime);
+
+    /**
+     * Stream all the latest data files pass
+     *
+     * @param commitsToReturn
+     * @return
+     */
+    Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
 
     /**
      * Stream all the data file versions grouped by FileId for a given partition
@@ -65,45 +79,50 @@ public interface TableFileSystemView {
      * @param partitionPath
      * @return
      */
-    Stream<List<HoodieDataFile>> getEveryVersionInPartition(String partitionPath);
+    Stream<HoodieDataFile> getAllDataFiles(String partitionPath);
 
     /**
-     * Stream all the versions from the passed in fileStatus[] with commit times containing in commitsToReturn.
-     *
-     * @param fileStatuses
-     * @param commitsToReturn
-     * @return
-     */
-    Stream<HoodieDataFile> getLatestVersionInRange(FileStatus[] fileStatuses,
-        List<String> commitsToReturn);
-
-    /**
-     * Stream the latest version from the passed in FileStatus[] with commit times less than maxCommitToReturn
-     *
-     * @param fileStatuses
-     * @param maxCommitToReturn
-     * @return
-     */
-    Stream<HoodieDataFile> getLatestVersionsBeforeOrOn(FileStatus[] fileStatuses,
-        String maxCommitToReturn);
-
-    /**
-     * Stream latest versions from the passed in FileStatus[].
-     * Similar to calling getLatestVersionsBeforeOrOn(fileStatuses, currentTimeAsCommitTime)
-     *
-     * @param fileStatuses
-     * @return
-     */
-    Stream<HoodieDataFile> getLatestVersions(FileStatus[] fileStatuses);
-
-    /**
-     * Group data files with corresponding delta files
+     * Stream all the latest file slices in the given partition
      *
      * @param partitionPath
      * @return
-     * @throws IOException
      */
-    Map<HoodieDataFile, List<HoodieLogFile>> groupLatestDataFileWithLogFiles(String partitionPath) throws IOException;
+    Stream<FileSlice> getLatestFileSlices(String partitionPath);
+
+    /**
+     * Stream all the latest file slices in the given partition
+     * with precondition that commitTime(file) before maxCommitTime
+     *
+     * @param partitionPath
+     * @param maxCommitTime
+     * @return
+     */
+    Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
+                                                    String maxCommitTime);
+
+    /**
+     * Stream all the latest file slices, in the given range
+     *
+     * @param commitsToReturn
+     * @return
+     */
+    Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);
+
+    /**
+     * Stream all the file slices for a given partition, latest or not.
+     *
+     * @param partitionPath
+     * @return
+     */
+    Stream<FileSlice> getAllFileSlices(String partitionPath);
+
+    /**
+     * Stream all the file groups for a given partition
+     *
+     * @param partitionPath
+     * @return
+     */
+    Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
 
     /**
      * Get the file Status for the path specified

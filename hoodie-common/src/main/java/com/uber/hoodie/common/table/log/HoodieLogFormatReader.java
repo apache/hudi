@@ -17,6 +17,8 @@
 package com.uber.hoodie.common.table.log;
 
 import com.google.common.base.Preconditions;
+
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCorruptBlock;

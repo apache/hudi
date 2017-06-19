@@ -16,21 +16,21 @@
 
 package com.uber.hoodie.common.model;
 
+import com.google.common.collect.Lists;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
-import com.google.common.collect.Lists;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.util.FSUtils;
-
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;

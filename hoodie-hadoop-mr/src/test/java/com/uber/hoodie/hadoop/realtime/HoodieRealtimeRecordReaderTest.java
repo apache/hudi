@@ -19,9 +19,9 @@
 package com.uber.hoodie.hadoop.realtime;
 
 
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.util.FSUtils;

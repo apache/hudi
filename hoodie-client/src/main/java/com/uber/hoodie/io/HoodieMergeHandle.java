@@ -78,8 +78,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
                 // If the first record, we need to extract some info out
                 if (oldFilePath == null) {
                     String latestValidFilePath = fileSystemView
-                        .getLatestDataFilesForFileId(record.getPartitionPath(), fileId).findFirst()
-                        .get().getFileName();
+                            .getLatestDataFiles(record.getPartitionPath())
+                            .filter(dataFile -> dataFile.getFileId().equals(fileId))
+                            .findFirst()
+                            .get().getFileName();
                     writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
                     HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,

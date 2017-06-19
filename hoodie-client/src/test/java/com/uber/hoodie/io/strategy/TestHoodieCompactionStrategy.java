@@ -22,8 +22,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.beust.jcommander.internal.Lists;
 import com.google.common.collect.Maps;
-import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.CompactionOperation;
@@ -32,7 +31,6 @@ import com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.junit.Test;
 

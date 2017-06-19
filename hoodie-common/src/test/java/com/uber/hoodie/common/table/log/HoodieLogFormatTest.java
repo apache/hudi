@@ -17,6 +17,7 @@
 package com.uber.hoodie.common.table.log;
 
 import com.uber.hoodie.common.minicluster.MiniClusterUtil;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Reader;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;

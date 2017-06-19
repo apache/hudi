@@ -20,6 +20,7 @@ import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -27,7 +28,7 @@ import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.log.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -43,7 +44,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SQLContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,6 +53,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -164,11 +166,12 @@ public class TestHoodieCompactor {
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, config);
         for (String partitionPath : dataGen.getPartitionPaths()) {
-            Map<HoodieDataFile, List<HoodieLogFile>> groupedLogFiles =
-                table.getFileSystemView().groupLatestDataFileWithLogFiles(partitionPath);
-            for (List<HoodieLogFile> logFiles : groupedLogFiles.values()) {
+            List<FileSlice> groupedLogFiles =
+                table.getFileSystemView().getLatestFileSlices(partitionPath)
+                    .collect(Collectors.toList());
+            for (FileSlice fileSlice : groupedLogFiles) {
                 assertEquals("There should be 1 log file written for every data file", 1,
-                    logFiles.size());
+                    fileSlice.getLogFiles().count());
             }
         }
 
@@ -189,12 +192,13 @@ public class TestHoodieCompactor {
                 HoodieTimeline.GREATER));
 
         for (String partitionPath : dataGen.getPartitionPaths()) {
-            Map<HoodieDataFile, List<HoodieLogFile>> groupedLogFiles =
-                table.getFileSystemView().groupLatestDataFileWithLogFiles(partitionPath);
-            for (List<HoodieLogFile> logFiles : groupedLogFiles.values()) {
+            List<FileSlice> groupedLogFiles = table.getFileSystemView()
+                    .getLatestFileSlices(partitionPath)
+                    .collect(Collectors.toList());
+            for (FileSlice slice: groupedLogFiles) {
                 assertTrue(
                     "After compaction there should be no log files visiable on a Realtime view",
-                    logFiles.isEmpty());
+                    slice.getLogFiles().collect(Collectors.toList()).isEmpty());
             }
             assertTrue(result.getPartitionToCompactionWriteStats().containsKey(partitionPath));
         }

@@ -35,6 +35,7 @@ import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.Collection;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -84,9 +85,9 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         jsc.parallelize(partitionPaths, partitionPaths.size())
             .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> hoodieTable
                 .getFileSystemView()
-                .groupLatestDataFileWithLogFiles(partitionPath).entrySet()
-                .stream()
-                .map(s -> new CompactionOperation(s.getKey(), partitionPath, s.getValue(), config))
+                .getLatestFileSlices(partitionPath)
+                .map(s -> new CompactionOperation(s.getDataFile().get(),
+                        partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
                 .collect(toList()).iterator()).collect();
     log.info("Total of " + operations.size() + " compactions are retrieved");
 
