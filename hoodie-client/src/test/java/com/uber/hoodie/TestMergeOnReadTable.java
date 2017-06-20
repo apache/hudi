@@ -128,13 +128,13 @@ public class TestMergeOnReadTable {
         assertFalse(commit.isPresent());
 
         FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
-        TableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+        TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metaClient,
                 hoodieTable.getCompletedCompactionCommitTimeline(), allFiles);
-        Stream<HoodieDataFile> dataFilesToRead = fsView.getLatestDataFiles();
+        Stream<HoodieDataFile> dataFilesToRead = roView.getLatestDataFiles();
         assertTrue(!dataFilesToRead.findAny().isPresent());
 
-        fsView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
-        dataFilesToRead = fsView.getLatestDataFiles();
+        roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
+        dataFilesToRead = roView.getLatestDataFiles();
         assertTrue("RealtimeTableView should list the parquet files we wrote in the delta commit",
             dataFilesToRead.findAny().isPresent());
 
@@ -169,8 +169,8 @@ public class TestMergeOnReadTable {
         compactor.compact(jsc, getConfig(), table);
 
         allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());
-        fsView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
-        dataFilesToRead = fsView.getLatestDataFiles();
+        roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
+        dataFilesToRead = roView.getLatestDataFiles();
         assertTrue(dataFilesToRead.findAny().isPresent());
 
         // verify that there is a commit

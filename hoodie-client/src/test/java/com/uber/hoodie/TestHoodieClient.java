@@ -44,6 +44,7 @@ import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 
+import java.util.Collection;
 import java.util.Map;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
@@ -412,7 +413,7 @@ public class TestHoodieClient implements Serializable {
         List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view = table.getFileSystemView();
+        final TableFileSystemView.ReadOptimizedView view = table.getROFileSystemView();
         List<HoodieDataFile> dataFiles = partitionPaths.stream().flatMap(s -> {
             return view.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("002"));
         }).collect(Collectors.toList());
@@ -431,7 +432,7 @@ public class TestHoodieClient implements Serializable {
 
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view1 = table.getFileSystemView();
+        final TableFileSystemView.ReadOptimizedView view1 = table.getROFileSystemView();
         dataFiles = partitionPaths.stream().flatMap(s -> {
             return view1.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("002"));
         }).collect(Collectors.toList());
@@ -482,7 +483,7 @@ public class TestHoodieClient implements Serializable {
         List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view1 = table.getFileSystemView();
+        final TableFileSystemView.ReadOptimizedView view1 = table.getROFileSystemView();
 
         List<HoodieDataFile> dataFiles = partitionPaths.stream().flatMap(s -> {
             return view1.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("003"));
@@ -501,7 +502,7 @@ public class TestHoodieClient implements Serializable {
 
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view2 = table.getFileSystemView();
+        final TableFileSystemView.ReadOptimizedView view2 = table.getROFileSystemView();
 
         dataFiles = partitionPaths.stream().flatMap(s -> {
             return view2.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("004"));
@@ -524,7 +525,7 @@ public class TestHoodieClient implements Serializable {
 
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view3 = table.getFileSystemView();
+        final TableFileSystemView.ReadOptimizedView view3 = table.getROFileSystemView();
         dataFiles = partitionPaths.stream().flatMap(s -> {
             return view3.getAllDataFiles(s).filter(f -> f.getCommitTime().equals("002"));
         }).collect(Collectors.toList());
@@ -961,7 +962,7 @@ public class TestHoodieClient implements Serializable {
         assertEquals("2 files needs to be committed.", 2, statuses.size());
         HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
-        TableFileSystemView fileSystemView = table.getFileSystemView();
+        TableFileSystemView.ReadOptimizedView fileSystemView = table.getROFileSystemView();
         List<HoodieDataFile> files = fileSystemView.getLatestDataFilesBeforeOrOn(TEST_PARTITION_PATH, commitTime3).collect(
             Collectors.toList());
         int numTotalInsertsInCommit3 = 0;
@@ -1057,7 +1058,7 @@ public class TestHoodieClient implements Serializable {
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
         List<HoodieDataFile> files =
-            table.getFileSystemView().getLatestDataFilesBeforeOrOn(TEST_PARTITION_PATH, commitTime3)
+            table.getROFileSystemView().getLatestDataFilesBeforeOrOn(TEST_PARTITION_PATH, commitTime3)
                 .collect(Collectors.toList());
         assertEquals("Total of 2 valid data files", 2, files.size());
 

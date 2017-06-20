@@ -24,6 +24,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -101,7 +102,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
             String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
             // Get all commits, delta commits, compactions, as all of them produce a base parquet file today
             HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
-            TableFileSystemView fsView = new HoodieTableFileSystemView(metadata, timeline, statuses);
+            TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metadata, timeline, statuses);
 
             if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
                 // this is of the form commitTs_partition_sequenceNumber
@@ -112,25 +113,25 @@ public class HoodieInputFormat extends MapredParquetInputFormat
                 List<String> commitsToReturn =
                     timeline.findInstantsAfter(lastIncrementalTs, maxCommits).getInstants()
                         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-                List<HoodieDataFile> filteredFiles = fsView
+                List<HoodieDataFile> filteredFiles = roView
                         .getLatestDataFilesInRange(commitsToReturn)
                         .collect(Collectors.toList());
                 for (HoodieDataFile filteredFile : filteredFiles) {
                     LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
-                    filteredFile = checkFileStatus(fsView, filteredFile);
+                    filteredFile = checkFileStatus(filteredFile);
                     returns.add(filteredFile.getFileStatus());
                 }
                 LOG.info(
                     "Total paths to process after hoodie incremental filter " + filteredFiles.size());
             } else {
                 // filter files on the latest commit found
-                List<HoodieDataFile> filteredFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
+                List<HoodieDataFile> filteredFiles = roView.getLatestDataFiles().collect(Collectors.toList());
                 LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
                 for (HoodieDataFile filteredFile : filteredFiles) {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
                     }
-                    filteredFile = checkFileStatus(fsView, filteredFile);
+                    filteredFile = checkFileStatus(filteredFile);
                     returns.add(filteredFile.getFileStatus());
                 }
             }
@@ -140,21 +141,23 @@ public class HoodieInputFormat extends MapredParquetInputFormat
     }
 
     /**
-     * Checks the file status for a race condition which can set the file size to 0.
-     * 1. HiveInputFormat does super.listStatus() and gets back a FileStatus[]
-     * 2. Then it creates the HoodieTableMetaClient for the paths listed.
-     * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
-     *
-     * @param fsView
-     * @param dataFile
-     * @return
+     * Checks the file status for a race condition which can set the file size to 0. 1.
+     * HiveInputFormat does super.listStatus() and gets back a FileStatus[] 2. Then it creates the
+     * HoodieTableMetaClient for the paths listed. 3. Generation of splits looks at FileStatus size
+     * to create splits, which skips this file
      */
-    private HoodieDataFile checkFileStatus(TableFileSystemView fsView, HoodieDataFile dataFile) {
-        if(dataFile.getFileSize() == 0) {
-            LOG.info("Refreshing file status " + dataFile.getPath());
-            return new HoodieDataFile(fsView.getFileStatus(dataFile.getPath()));
+    private HoodieDataFile checkFileStatus(HoodieDataFile dataFile) throws IOException {
+        Path dataPath = dataFile.getFileStatus().getPath();
+        try {
+            if (dataFile.getFileSize() == 0) {
+                FileSystem fs = dataPath.getFileSystem(conf);
+                LOG.info("Refreshing file status " + dataFile.getPath());
+                return new HoodieDataFile(fs.getFileStatus(dataPath));
+            }
+            return dataFile;
+        } catch (IOException e) {
+            throw new HoodieIOException("Could not get FileStatus on path " + dataPath);
         }
-        return dataFile;
     }
 
     private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)

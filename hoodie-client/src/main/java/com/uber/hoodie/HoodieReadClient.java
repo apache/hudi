@@ -177,7 +177,7 @@ public class HoodieReadClient implements Serializable {
                             + hoodieTable.getMetaClient().getBasePath());
                 }
 
-                TableFileSystemView fileSystemView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(),
+                TableFileSystemView.ReadOptimizedView fileSystemView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(),
                         hoodieTable.getCompletedCommitTimeline(), fs.globStatus(new Path(path)));
                 List<HoodieDataFile> latestFiles = fileSystemView.getLatestDataFiles().collect(
                         Collectors.toList());

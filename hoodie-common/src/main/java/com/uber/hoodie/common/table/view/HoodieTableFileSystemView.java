@@ -16,8 +16,6 @@
 
 package com.uber.hoodie.common.table.view;
 
-import static java.util.stream.Collectors.toList;
-
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
@@ -44,7 +42,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -57,7 +54,8 @@ import java.util.stream.Stream;
  * @see TableFileSystemView
  * @since 0.3.0
  */
-public class HoodieTableFileSystemView implements TableFileSystemView, Serializable {
+public class HoodieTableFileSystemView implements TableFileSystemView, TableFileSystemView.ReadOptimizedView,
+        TableFileSystemView.RealtimeView, Serializable {
 
     protected HoodieTableMetaClient metaClient;
     protected transient FileSystem fs;
@@ -187,7 +185,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
 
     @Override
     public Stream<HoodieDataFile> getLatestDataFiles() {
-        return  fileGroupMap.values().stream()
+        return fileGroupMap.values().stream()
                 .map(fileGroup -> fileGroup.getLatestDataFile())
                 .filter(dataFileOpt -> dataFileOpt.isPresent())
                 .map(Optional::get);
@@ -269,15 +267,6 @@ public class HoodieTableFileSystemView implements TableFileSystemView, Serializa
         } catch (IOException e) {
             throw new HoodieIOException(
                     "Failed to list data files in partition " + partitionPathStr, e);
-        }
-    }
-
-    @Override
-    public FileStatus getFileStatus(String path) {
-        try {
-            return fs.getFileStatus(new Path(path));
-        } catch (IOException e) {
-            throw new HoodieIOException("Could not get FileStatus on path " + path);
         }
     }
 }

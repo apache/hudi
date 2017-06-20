@@ -82,7 +82,7 @@ public class FileSlice implements Serializable {
     }
 
     public Optional<HoodieDataFile> getDataFile() {
-        return Optional.of(dataFile);
+        return Optional.ofNullable(dataFile);
     }
 
     @Override
