@@ -1226,6 +1226,28 @@ public class TestHoodieClient implements Serializable {
     }
 
     @Test
+    public void testCleaningWithZeroPartitonPaths() throws IOException {
+        HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withAssumeDatePartitioning(true)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+                .retainCommits(2).build()).build();
+
+        // Make a commit, although there are no partitionPaths.
+        // Example use-case of this is when a client wants to create a table
+        // with just some commit metadata, but no data/partitionPaths.
+        HoodieTestUtils.createCommitFiles(basePath, "000");
+
+        HoodieTable table = HoodieTable
+            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true),
+                config);
+
+        List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
+        assertTrue("HoodieCleanStats should be empty for a table with empty partitionPaths",
+            hoodieCleanStatsOne.isEmpty());
+    }
+
+    @Test
     public void testCleaningSkewedPartitons() throws IOException {
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withAssumeDatePartitioning(true)

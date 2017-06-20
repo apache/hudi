@@ -492,21 +492,19 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      */
     @Override
     public List<HoodieCleanStat> clean(JavaSparkContext jsc) {
-        List<HoodieCleanStat> partitionCleanStats;
         try {
             List<String> partitionsToClean =
                 FSUtils.getAllPartitionPaths(getFs(), getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
             logger.info("Partitions to clean up : " + partitionsToClean + ", with policy " + config
                 .getCleanerPolicy());
-            partitionCleanStats = cleanPartitionPaths(partitionsToClean, jsc);
             if (partitionsToClean.isEmpty()) {
                 logger.info("Nothing to clean here mom. It is already clean");
-                return partitionCleanStats;
+                return Collections.emptyList();
             }
+            return cleanPartitionPaths(partitionsToClean, jsc);
         } catch (IOException e) {
             throw new HoodieIOException("Failed to clean up after commit", e);
         }
-        return partitionCleanStats;
     }
 
     private static class PartitionCleanStat implements Serializable {
