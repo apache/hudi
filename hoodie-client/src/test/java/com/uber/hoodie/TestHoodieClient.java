@@ -1299,6 +1299,7 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testKeepLatestFileVersions() throws IOException {
+        
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
                 .withAssumeDatePartitioning(true)
                 .withCompactionConfig(HoodieCompactionConfig.newBuilder()
