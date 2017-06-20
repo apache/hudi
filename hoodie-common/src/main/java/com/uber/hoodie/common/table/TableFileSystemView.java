@@ -30,91 +30,69 @@ import java.util.stream.Stream;
 
 /**
  * Interface for viewing the table file system.
- * Dependening on the Hoodie Table Type - The view of the filesystem changes.
- * <p>
- * ReadOptimizedView - Lets queries run only on organized columnar data files at the expense of latency
- * WriteOptimizedView - Lets queries run on columnar data as well as delta files (sequential) at the expense of query execution time
  *
  * @since 0.3.0
  */
 public interface TableFileSystemView {
 
     /**
-     * Stream all the latest data files in the given partition
-     *
-     * @param partitionPath
-     * @return
+     * ReadOptimizedView - methods to provide a view of columnar data files only.
      */
-    Stream<HoodieDataFile> getLatestDataFiles(String partitionPath);
+    interface ReadOptimizedView {
+        /**
+         * Stream all the latest data files in the given partition
+         */
+        Stream<HoodieDataFile> getLatestDataFiles(String partitionPath);
+
+        /**
+         * Stream all the latest data files, in the file system view
+         */
+        Stream<HoodieDataFile> getLatestDataFiles();
+
+        /**
+         * Stream all the latest version data files in the given partition with precondition that
+         * commitTime(file) before maxCommitTime
+         */
+        Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
+                                                            String maxCommitTime);
+
+        /**
+         * Stream all the latest data files pass
+         */
+        Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
+
+        /**
+         * Stream all the data file versions grouped by FileId for a given partition
+         */
+        Stream<HoodieDataFile> getAllDataFiles(String partitionPath);
+    }
 
     /**
-     * Stream all the latest data files, in the file system view
-     *
-     * @return
+     * RealtimeView - methods to access a combination of columnar data files + log files with real time data.
      */
-    Stream<HoodieDataFile> getLatestDataFiles();
+    interface RealtimeView {
+        /**
+         * Stream all the latest file slices in the given partition
+         */
+        Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
-    /**
-     * Stream all the latest version data files in the given partition
-     * with precondition that commitTime(file) before maxCommitTime
-     *
-     * @param partitionPath
-     * @param maxCommitTime
-     * @return
-     */
-    Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
+        /**
+         * Stream all the latest file slices in the given partition with precondition that
+         * commitTime(file) before maxCommitTime
+         */
+        Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
                                                         String maxCommitTime);
 
-    /**
-     * Stream all the latest data files pass
-     *
-     * @param commitsToReturn
-     * @return
-     */
-    Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
+        /**
+         * Stream all the latest file slices, in the given range
+         */
+        Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);
 
-    /**
-     * Stream all the data file versions grouped by FileId for a given partition
-     *
-     * @param partitionPath
-     * @return
-     */
-    Stream<HoodieDataFile> getAllDataFiles(String partitionPath);
-
-    /**
-     * Stream all the latest file slices in the given partition
-     *
-     * @param partitionPath
-     * @return
-     */
-    Stream<FileSlice> getLatestFileSlices(String partitionPath);
-
-    /**
-     * Stream all the latest file slices in the given partition
-     * with precondition that commitTime(file) before maxCommitTime
-     *
-     * @param partitionPath
-     * @param maxCommitTime
-     * @return
-     */
-    Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
-                                                    String maxCommitTime);
-
-    /**
-     * Stream all the latest file slices, in the given range
-     *
-     * @param commitsToReturn
-     * @return
-     */
-    Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);
-
-    /**
-     * Stream all the file slices for a given partition, latest or not.
-     *
-     * @param partitionPath
-     * @return
-     */
-    Stream<FileSlice> getAllFileSlices(String partitionPath);
+        /**
+         * Stream all the file slices for a given partition, latest or not.
+         */
+        Stream<FileSlice> getAllFileSlices(String partitionPath);
+    }
 
     /**
      * Stream all the file groups for a given partition
@@ -123,12 +101,4 @@ public interface TableFileSystemView {
      * @return
      */
     Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
-
-    /**
-     * Get the file Status for the path specified
-     *
-     * @param path
-     * @return
-     */
-    FileStatus getFileStatus(String path);
 }

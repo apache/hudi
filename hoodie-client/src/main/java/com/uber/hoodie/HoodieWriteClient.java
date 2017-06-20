@@ -479,7 +479,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 .mapToPair((PairFunction<String, String, List<String>>) partitionPath -> {
                     // Scan all partitions files with this commit time
                     logger.info("Collecting latest files in partition path " + partitionPath);
-                    TableFileSystemView view = table.getFileSystemView();
+                    TableFileSystemView.ReadOptimizedView view = table.getROFileSystemView();
                     List<String> latestFiles =
                         view.getLatestDataFilesBeforeOrOn(partitionPath, commitTime)
                             .map(HoodieDataFile::getFileName).collect(Collectors.toList());

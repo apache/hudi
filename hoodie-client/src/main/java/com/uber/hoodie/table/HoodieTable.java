@@ -109,6 +109,24 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     }
 
     /**
+     * Get the read optimized view of the file system for this table
+     *
+     * @return
+     */
+    public TableFileSystemView.ReadOptimizedView getROFileSystemView() {
+        return new HoodieTableFileSystemView(metaClient, getCompletedCommitTimeline());
+    }
+
+    /**
+     * Get the real time view of the file system for this table
+     *
+     * @return
+     */
+    public TableFileSystemView.RealtimeView getRTFileSystemView() {
+        return new HoodieTableFileSystemView(metaClient, getCompletedCommitTimeline());
+    }
+
+    /**
      * Get the view of the file system for this table
      *
      * @return

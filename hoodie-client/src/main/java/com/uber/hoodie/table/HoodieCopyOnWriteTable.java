@@ -311,7 +311,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
             if (!commitTimeline.empty()) { // if we have some commits
                 HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-                List<HoodieDataFile> allFiles = getFileSystemView()
+                List<HoodieDataFile> allFiles = getROFileSystemView()
                     .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
                     .collect(Collectors.toList());
 

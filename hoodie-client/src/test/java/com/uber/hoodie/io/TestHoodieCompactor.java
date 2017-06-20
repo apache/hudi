@@ -167,7 +167,7 @@ public class TestHoodieCompactor {
         table = HoodieTable.getHoodieTable(metaClient, config);
         for (String partitionPath : dataGen.getPartitionPaths()) {
             List<FileSlice> groupedLogFiles =
-                table.getFileSystemView().getLatestFileSlices(partitionPath)
+                table.getRTFileSystemView().getLatestFileSlices(partitionPath)
                     .collect(Collectors.toList());
             for (FileSlice fileSlice : groupedLogFiles) {
                 assertEquals("There should be 1 log file written for every data file", 1,
@@ -192,7 +192,7 @@ public class TestHoodieCompactor {
                 HoodieTimeline.GREATER));
 
         for (String partitionPath : dataGen.getPartitionPaths()) {
-            List<FileSlice> groupedLogFiles = table.getFileSystemView()
+            List<FileSlice> groupedLogFiles = table.getRTFileSystemView()
                     .getLatestFileSlices(partitionPath)
                     .collect(Collectors.toList());
             for (FileSlice slice: groupedLogFiles) {

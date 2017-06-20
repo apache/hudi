@@ -69,7 +69,7 @@ public class HoodieSnapshotCopier implements Serializable {
     public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir, final boolean shouldAssumeDatePartitioning) throws IOException {
         FileSystem fs = FSUtils.getFs();
         final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
-        final TableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata,
+        final TableFileSystemView.ReadOptimizedView fsView = new HoodieTableFileSystemView(tableMetadata,
             tableMetadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants());
         // Get the latest commit
         Optional<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline()

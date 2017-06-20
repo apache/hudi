@@ -84,7 +84,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     List<CompactionOperation> operations =
         jsc.parallelize(partitionPaths, partitionPaths.size())
             .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> hoodieTable
-                .getFileSystemView()
+                .getRTFileSystemView()
                 .getLatestFileSlices(partitionPath)
                 .map(s -> new CompactionOperation(s.getDataFile().get(),
                         partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
