@@ -178,6 +178,18 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>com.uber.hoodie</groupId>
+            <artifactId>hoodie-hadoop-mr</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-exec</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
 </project>

@@ -68,6 +68,7 @@ public class TestCopyOnWriteTable {
     @Before
     public void init() throws Exception {
 
+        FileSystem.closeAll();
         // Initialize a local spark env
         SparkConf sparkConf = new SparkConf().setAppName("TestCopyOnWriteTable").setMaster("local[4]");
         jsc = new JavaSparkContext(sparkConf);

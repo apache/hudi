@@ -17,23 +17,27 @@
 package com.uber.hoodie;
 
 import com.google.common.collect.Iterables;
-
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.ReadClientTestHelper;
+import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -41,13 +45,16 @@ import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
 import com.uber.hoodie.table.HoodieTable;
-
-import java.util.Map;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -56,44 +63,77 @@ import org.apache.spark.scheduler.SparkListenerTaskEnd;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.util.AccumulatorV2;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import scala.collection.Iterator;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import scala.collection.Iterator;
 
+import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@RunWith(Parameterized.class)
 public class TestHoodieClient implements Serializable {
+
+    private HoodieTableType tableType;
+
+    public TestHoodieClient(HoodieTableType tType) {
+        this.tableType = tType;
+    }
+
+    @Parameterized.Parameters(name = "HoodieTableTypes")
+    public static Collection<HoodieTableType[]> data() {
+        return Arrays.asList(new HoodieTableType[][]{
+                {HoodieTableType.COPY_ON_WRITE},
+                {HoodieTableType.MERGE_ON_READ}
+        });
+    }
+
     private transient JavaSparkContext jsc = null;
     private transient SQLContext sqlContext;
     private String basePath = null;
     private transient HoodieTestDataGenerator dataGen = null;
     private String[] partitionPaths = {"2016/01/01", "2016/02/02", "2016/06/02"};
 
+    //NOTE : Be careful in using DFS (FileSystem.class) vs LocalFs(RawLocalFileSystem.class)
+    //The implementation and gurantees of many API's differ, for example check rename(src,dst)
+    private static MiniDFSCluster dfsCluster;
+    private static DistributedFileSystem dfs;
+    private static HdfsTestService hdfsTestService;
+
     @Before
     public void init() throws IOException {
+
         // Initialize a local spark env
-        SparkConf sparkConf = new SparkConf().setAppName("TestHoodieClient").setMaster("local[4]");
+        //TODO(na) : fix filesystem close problem, workaround is to change to local[1] to run individual tests
+        SparkConf sparkConf = new SparkConf().setAppName("TestHoodieClient").setMaster("local[1]");
         jsc = new JavaSparkContext(HoodieReadClient.addHoodieSupport(sparkConf));
+        jsc.hadoopConfiguration().addResource(FSUtils.getFs().getConf());
 
         //SQLContext stuff
         sqlContext = new SQLContext(jsc);
@@ -102,8 +142,40 @@ public class TestHoodieClient implements Serializable {
         TemporaryFolder folder = new TemporaryFolder();
         folder.create();
         basePath = folder.getRoot().getAbsolutePath();
-        HoodieTestUtils.init(basePath);
+        dfs.mkdirs(new Path(basePath));
+        FSUtils.setFs(dfs);
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+        } else {
+            HoodieTestUtils.init(basePath);
+        }
         dataGen = new HoodieTestDataGenerator();
+    }
+
+    @AfterClass
+    public static void cleanUp() throws Exception {
+        if (hdfsTestService != null) {
+            hdfsTestService.stop();
+            dfsCluster.shutdown();;
+        }
+        FSUtils.setFs(null);
+        HoodieTestUtils.resetFS();
+        FileSystem.closeAll();
+    }
+
+    @BeforeClass
+    public static void setUpDFS() throws IOException {
+
+        FileSystem.closeAll();
+        if (hdfsTestService == null) {
+            hdfsTestService = new HdfsTestService();
+            dfsCluster = hdfsTestService.start(true);
+            // Create a temp folder as the base path
+            dfs = dfsCluster.getFileSystem();
+        }
+        FSUtils.setFs(dfs);
+        HoodieTestUtils.resetFS();
     }
 
 
@@ -113,11 +185,11 @@ public class TestHoodieClient implements Serializable {
 
     private HoodieWriteConfig.Builder getConfigBuilder() {
         return HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-            .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
-            .forTable("test-trip-table").withIndexConfig(
-                HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
+                .withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+                .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
+                .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+                .forTable("test-trip-table").withIndexConfig(
+                        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
     }
 
     private void assertNoWriteErrors(List<WriteStatus> statuses) {
@@ -175,6 +247,7 @@ public class TestHoodieClient implements Serializable {
     public void testAutoCommit() throws Exception {
         // Set autoCommit false
         HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+        Schema readerSchema = HoodieAvroUtils.addMetadataFields(Schema.parse(cfg.getSchema()));
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
         String newCommitTime = "001";
@@ -184,25 +257,31 @@ public class TestHoodieClient implements Serializable {
         JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, newCommitTime);
 
         assertFalse("If Autocommit is false, then commit should not be made automatically",
-            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+                HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
         assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+
+        ReadClientTestHelper readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
         assertTrue("After explicit commit, commit file should be created",
-            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+                readClient.hasNewCommits("000"));
 
         newCommitTime = "002";
         records = dataGen.generateUpdates(newCommitTime, 100);
         JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(records, 1);
         result = client.upsert(updateRecords, newCommitTime);
         assertFalse("If Autocommit is false, then commit should not be made automatically",
-            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+                HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
         assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+        //re-init client to refresh commitTimeline
+        readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
         assertTrue("After explicit commit, commit file should be created",
-            HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+                readClient.hasNewCommits("001"));
     }
 
     @Test
     public void testUpserts() throws Exception {
         HoodieWriteConfig cfg = getConfig();
+        Schema readerSchema = HoodieAvroUtils.addMetadataFields(Schema.parse(cfg.getSchema()));
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
         FileSystem fs = FSUtils.getFs();
@@ -221,10 +300,11 @@ public class TestHoodieClient implements Serializable {
         assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
 
         // verify that there is a commit
-        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        ReadClientTestHelper readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
         assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
         assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
-        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
+        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).size(), records.size());
         // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
@@ -250,7 +330,10 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify there are now 2 commits
-        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        // verify that there is a commit
+        readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
+        readClient.readCommit(newCommitTime);
         assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
         assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
 
@@ -259,29 +342,40 @@ public class TestHoodieClient implements Serializable {
 
         // Index should be able to locate all updates in correct locations.
         taggedRecords = index.tagLocation(jsc.parallelize(dedupedRecords, 1), table).collect();
-        checkTaggedRecords(taggedRecords, "004");
+        // No index for MOR after upserts()
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            checkTaggedRecords(taggedRecords, "004");
+        }
 
         // Check the entire dataset has 100 records still
         String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
         for (int i=0; i < fullPartitionPaths.length; i++) {
             fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
         }
-        assertEquals("Must contain 200 records", readClient.read(fullPartitionPaths).count(), 200);
+        assertEquals("Must contain 200 records", readClient.read(fullPartitionPaths).size(), 200);
 
 
-        // Check that the incremental consumption from time 000
-        assertEquals("Incremental consumption from time 002, should give all records in commit 004",
-            readClient.readCommit(newCommitTime).count(),
-            readClient.readSince("002").count());
-        assertEquals("Incremental consumption from time 001, should give all records in commit 004",
-            readClient.readCommit(newCommitTime).count(),
-            readClient.readSince("001").count());
+        //NOTE : MOR can't read a specific commit at the moment (aka incremental pull)
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            // Check that the incremental consumption from time 000
+            assertEquals("Incremental consumption from time 002, should give all records in commit 004",
+                    readClient.readCommit(newCommitTime).size(),
+                    readClient.readSince("002").size());
+            assertEquals("Incremental consumption from time 001, should give all records in commit 004",
+                    readClient.readCommit(newCommitTime).size(),
+                    readClient.readSince("001").size());
+        }
     }
 
     @Test
     public void testDeletes() throws Exception {
 
+        //Deletes for MOR don't work out of the box
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
         HoodieWriteConfig cfg = getConfig();
+        Schema readerSchema = HoodieAvroUtils.addMetadataFields(Schema.parse(cfg.getSchema()));
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
         FileSystem fs = FSUtils.getFs();
@@ -302,11 +396,11 @@ public class TestHoodieClient implements Serializable {
         List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
         assertNoWriteErrors(statuses);
 
-        // verify that there is a commit
-        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        ReadClientTestHelper readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
         assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
         assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
-        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), fewRecordsForInsert.size());
+        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).size(), fewRecordsForInsert.size());
         // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
@@ -329,7 +423,8 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify there are now 2 commits
-        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
+        readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
         assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
         assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
 
@@ -341,28 +436,43 @@ public class TestHoodieClient implements Serializable {
         for (int i=0; i < fullPartitionPaths.length; i++) {
             fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
         }
-        assertEquals("Must contain 150 records", readClient.read(fullPartitionPaths).count(), 150);
 
+        assertEquals("Must contain 150 records", readClient.read(fullPartitionPaths).size(), 150);
 
         // Check that the incremental consumption from time 000
         assertEquals("Incremental consumption from latest commit, should give 50 updated records",
-                readClient.readCommit(newCommitTime).count(),
+                readClient.readCommit(newCommitTime).size(),
                 50);
         assertEquals("Incremental consumption from time 001, should give 50 updated records",
                 50,
-                readClient.readSince("001").count());
+                readClient.readSince("001").size());
         assertEquals("Incremental consumption from time 000, should give 150",
                 150,
-                readClient.readSince("000").count());
+                readClient.readSince("000").size());
     }
 
 
     @Test
     public void testCreateSavepoint() throws Exception {
-        HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
-            HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
-                .build()).build();
+
+        HoodieWriteConfig cfg = null;
+        //Only works for MOR with compacted commits
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            cfg = getConfigBuilder().withCompactionConfig(
+                    HoodieCompactionConfig.newBuilder()
+                            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
+                            .withInlineCompaction(true)
+                            .withCompactionStrategy(new UnBoundedCompactionStrategy())
+                            .withNumDeltaCommits(1) //This means every second deltacommit, a compaction commit will be created
+                            .build()).build();
+
+        } else {
+            cfg = getConfigBuilder().withCompactionConfig(
+                    HoodieCompactionConfig.newBuilder()
+                            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
+                            .build()).build();
+
+        }
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         FileSystem fs = FSUtils.getFs();
         HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
@@ -370,7 +480,7 @@ public class TestHoodieClient implements Serializable {
         /**
          * Write 1 (only inserts)
          */
-        String newCommitTime = "001";
+        String newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
         List<WriteStatus> statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         assertNoWriteErrors(statuses);
@@ -378,11 +488,15 @@ public class TestHoodieClient implements Serializable {
         /**
          * Write 2 (updates)
          */
-        newCommitTime = "002";
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
+
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+        final String savepointedCommit = tableType == HoodieTableType.COPY_ON_WRITE ? newCommitTime : table.getCompactionCommitTimeline().lastInstant().get().getTimestamp();
 
         client.savepoint("hoodie-unit-test", "test");
         try {
@@ -395,7 +509,7 @@ public class TestHoodieClient implements Serializable {
         /**
          * Write 3 (updates)
          */
-        newCommitTime = "003";
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -404,51 +518,86 @@ public class TestHoodieClient implements Serializable {
         /**
          * Write 4 (updates)
          */
-        newCommitTime = "004";
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            /**
+             * Write 5 (updates) to create a new deltacommit (earlier commit turns into a compacted commit)
+             */
+            newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+            records = dataGen.generateUpdates(newCommitTime, records);
+            statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+            // Verify there are no errors
+            assertNoWriteErrors(statuses);
+        }
+
         List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
-        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
-        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view = table.getFileSystemView();
+        metaClient = new HoodieTableMetaClient(fs, basePath);
+        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+
+        final TableFileSystemView view = tableType == HoodieTableType.COPY_ON_WRITE ? table.getFileSystemView() : table.getCompactedFileSystemView();
+
         List<HoodieDataFile> dataFiles = partitionPaths.stream().flatMap(s -> {
             Stream<List<HoodieDataFile>> files = view.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("002"));
+            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(savepointedCommit));
         }).collect(Collectors.toList());
 
-        assertEquals("The data files for commit 002 should not be cleaned", 3, dataFiles.size());
+        assertEquals(StringUtils.format("The data files for commit %s should not be cleaned", savepointedCommit), 3, dataFiles.size());
 
         // Delete savepoint
         assertFalse(table.getCompletedSavepointTimeline().empty());
         client.deleteSavepoint(
-            table.getCompletedSavepointTimeline().getInstants().findFirst().get().getTimestamp());
-        // rollback and reupsert 004
-        client.rollback(newCommitTime);
+                table.getCompletedSavepointTimeline().getInstants().findFirst().get().getTimestamp());
+
+        metaClient = new HoodieTableMetaClient(fs, basePath);
+        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+        // rollback and reupsert 004 will not work (because it renames .clean as well), upsert with a new commitTime
+        String lastCommit = tableType == HoodieTableType.COPY_ON_WRITE ? newCommitTime : table.getActiveTimeline().lastInstant().get().getTimestamp();
+        client.rollback(lastCommit);
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
-        metaClient = new HoodieTableMetaClient(fs, basePath);
-        table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view1 = table.getFileSystemView();
+        final TableFileSystemView view1 = tableType == HoodieTableType.COPY_ON_WRITE ? table.getFileSystemView() : table.getCompactedFileSystemView();
+
         dataFiles = partitionPaths.stream().flatMap(s -> {
             Stream<List<HoodieDataFile>> files = view1.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("002"));
+            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(savepointedCommit));
         }).collect(Collectors.toList());
 
-        assertEquals("The data files for commit 002 should be cleaned now", 0, dataFiles.size());
+        assertEquals(StringUtils.format("The data files for commit %s should be cleaned now", savepointedCommit), 0, dataFiles.size());
     }
-
 
     @Test
     public void testRollbackToSavepoint() throws Exception {
-        HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
-            HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
-                .build()).build();
+
+        //TODO : test fails intermittenly for merge on read
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
+        HoodieWriteConfig cfg = null;
+        //This can work for MOR with compacted commits
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            cfg = getConfigBuilder().withCompactionConfig(
+                    HoodieCompactionConfig.newBuilder()
+                            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
+                            .withInlineCompaction(true)
+                            .withCompactionStrategy(new UnBoundedCompactionStrategy())
+                            .withNumDeltaCommits(1) //This means every second deltacommit, a compaction commit will be created
+                            .build()).build();
+
+        } else {
+            cfg = getConfigBuilder().withCompactionConfig(
+                    HoodieCompactionConfig.newBuilder()
+                            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
+                            .build()).build();
+        }
+
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         FileSystem fs = FSUtils.getFs();
         HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
@@ -456,62 +605,71 @@ public class TestHoodieClient implements Serializable {
         /**
          * Write 1 (only inserts)
          */
-        String newCommitTime = "001";
-        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+        String newCommitTime1 = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime1, 200);
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-        List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+        List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime1).collect();
         assertNoWriteErrors(statuses);
 
         /**
          * Write 2 (updates)
          */
-        newCommitTime = "002";
-        records = dataGen.generateUpdates(newCommitTime, records);
-        statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+        String newCommitTime2 = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+        records = dataGen.generateUpdates(newCommitTime2, records);
+        statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime2).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
         client.savepoint("hoodie-unit-test", "test");
 
+        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
+        final String savepointedCommit = tableType == HoodieTableType.COPY_ON_WRITE ? newCommitTime2 : table.getCompactionCommitTimeline().lastInstant().get().getTimestamp();
+
         /**
          * Write 3 (updates)
          */
-        newCommitTime = "003";
-        records = dataGen.generateUpdates(newCommitTime, records);
-        statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+        String newCommitTime3 = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+        records = dataGen.generateUpdates(newCommitTime3, records);
+        statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime3).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
         List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
-        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
-        HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view1 = table.getFileSystemView();
-
-        List<HoodieDataFile> dataFiles = partitionPaths.stream().flatMap(s -> {
-            Stream<List<HoodieDataFile>> files = view1.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("003"));
-        }).collect(Collectors.toList());
-        assertEquals("The data files for commit 003 should be present", 3, dataFiles.size());
-
-
-        /**
-         * Write 4 (updates)
-         */
-        newCommitTime = "004";
-        records = dataGen.generateUpdates(newCommitTime, records);
-        statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-        // Verify there are no errors
-        assertNoWriteErrors(statuses);
-
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view2 = table.getFileSystemView();
+        final TableFileSystemView view1 = tableType == HoodieTableType.COPY_ON_WRITE ? table.getFileSystemView() : table.getCompactedFileSystemView();
 
-        dataFiles = partitionPaths.stream().flatMap(s -> {
-            Stream<List<HoodieDataFile>> files = view2.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("004"));
+        final String checkCommit1 = tableType == HoodieTableType.COPY_ON_WRITE ? newCommitTime3 : table.getCommitTimeline().nthFromLastInstant(1).get().getTimestamp();
+        List<HoodieDataFile> dataFiles = partitionPaths.stream().flatMap(s -> {
+            Stream<List<HoodieDataFile>> files = view1.getEveryVersionInPartition(s);
+            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(checkCommit1));
         }).collect(Collectors.toList());
-        assertEquals("The data files for commit 004 should be present", 3, dataFiles.size());
+        assertEquals(StringUtils.format("The data files for commit %s should be present", newCommitTime3), 3, dataFiles.size());
+
+
+        String newCommitTime4 = null;
+        if(tableType == HoodieTableType.COPY_ON_WRITE) { //TODO : avoid 4th upsert to prevent compaction, fix rollback() for deltacommit and compaction commits
+            /**
+             * Write 4 (updates)
+             */
+            newCommitTime4 = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+            records = dataGen.generateUpdates(newCommitTime4, records);
+            statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime4).collect();
+            // Verify there are no errors
+            assertNoWriteErrors(statuses);
+
+            metaClient = new HoodieTableMetaClient(fs, basePath);
+            table = HoodieTable.getHoodieTable(metaClient, getConfig());
+            final TableFileSystemView view2 = table.getFileSystemView();
+
+            final String checkCommit2 = tableType == HoodieTableType.COPY_ON_WRITE ? newCommitTime4 : table.getCommitTimeline().lastInstant().get().getTimestamp();
+            dataFiles = partitionPaths.stream().flatMap(s -> {
+                Stream<List<HoodieDataFile>> files = view2.getEveryVersionInPartition(s);
+                return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(checkCommit2));
+            }).collect(Collectors.toList());
+            assertEquals(StringUtils.format("The data files for commit %s should be present", newCommitTime4), 3, dataFiles.size());
+        }
 
 
         // rolling back to a non existent savepoint must not succeed
@@ -522,41 +680,45 @@ public class TestHoodieClient implements Serializable {
             // this is good
         }
 
-        // rollback to savepoint 002
+        // rollback to savepoint 002 (newCommit2)
         HoodieInstant savepoint =
-            table.getCompletedSavepointTimeline().getInstants().findFirst().get();
+                table.getCompletedSavepointTimeline().getInstants().findFirst().get();
         client.rollbackToSavepoint(savepoint.getTimestamp());
 
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, getConfig());
-        final TableFileSystemView view3 = table.getFileSystemView();
+        final TableFileSystemView view3 = tableType == HoodieTableType.COPY_ON_WRITE ? table.getFileSystemView() : table.getCompactedFileSystemView();
         dataFiles = partitionPaths.stream().flatMap(s -> {
             Stream<List<HoodieDataFile>> files = view3.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("002"));
+            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(savepointedCommit));
         }).collect(Collectors.toList());
-        assertEquals("The data files for commit 002 be available", 3, dataFiles.size());
+        assertEquals(StringUtils.format("The data files for commit %s be available", savepointedCommit), 3, dataFiles.size());
 
         dataFiles = partitionPaths.stream().flatMap(s -> {
             Stream<List<HoodieDataFile>> files = view3.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("003"));
+            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(newCommitTime3));
         }).collect(Collectors.toList());
-        assertEquals("The data files for commit 003 should be rolled back", 0, dataFiles.size());
+        assertEquals(StringUtils.format("The data files for commit %s should be rolled back", newCommitTime3), 0, dataFiles.size());
 
-        dataFiles = partitionPaths.stream().flatMap(s -> {
-            Stream<List<HoodieDataFile>> files = view3.getEveryVersionInPartition(s);
-            return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals("004"));
-        }).collect(Collectors.toList());
-        assertEquals("The data files for commit 004 should be rolled back", 0, dataFiles.size());
+        if(tableType == HoodieTableType.COPY_ON_WRITE) { //For mergeonread we never upserted commit4
+            final String commitTime4 = newCommitTime4;
+            dataFiles = partitionPaths.stream().flatMap(s -> {
+                Stream<List<HoodieDataFile>> files = view3.getEveryVersionInPartition(s);
+                return files.flatMap(Collection::stream).filter(f -> f.getCommitTime().equals(commitTime4));
+            }).collect(Collectors.toList());
+            assertEquals(StringUtils.format("The data files for commit %s should be rolled back", newCommitTime4), 0, dataFiles.size());
+        }
     }
-
 
     @Test
     public void testInsertAndCleanByVersions() throws Exception {
+
         int maxVersions = 2; // keep upto 2 versions for each file
         HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
-            HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-                .retainFileVersions(maxVersions).build()).build();
+                HoodieCompactionConfig.newBuilder()
+                        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+                        .retainFileVersions(maxVersions).build()).build();
+        Schema readerSchema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
         FileSystem fs = FSUtils.getFs();
@@ -576,16 +738,18 @@ public class TestHoodieClient implements Serializable {
 
         // verify that there is a commit
 
-        assertEquals("Expecting a single commit.", new HoodieReadClient(jsc, basePath).listCommitsSince("000").size(), 1);
+        ReadClientTestHelper readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
+        assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
         // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
         assertFalse(table.getCompletedCommitTimeline().empty());
         String commitTime =
-            table.getCompletedCommitTimeline().getInstants().findFirst().get().getTimestamp();
+                table.getCompletedCommitTimeline().getInstants().findFirst().get().getTimestamp();
         assertFalse(table.getCompletedCleanTimeline().empty());
         assertEquals("The clean instant should be the same as the commit instant", commitTime,
-            table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
+                table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
 
         List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
         checkTaggedRecords(taggedRecords, newCommitTime);
@@ -605,7 +769,7 @@ public class TestHoodieClient implements Serializable {
             table = HoodieTable.getHoodieTable(metadata, getConfig());
             HoodieTimeline timeline = table.getCommitTimeline();
 
-            TableFileSystemView fsView = table.getFileSystemView();
+            TableFileSystemView fsView = table.getCompactedFileSystemView();
             // Need to ensure the following
             for (String partitionPath : dataGen.getPartitionPaths()) {
                 // compute all the versions of all files, from time 0
@@ -621,20 +785,19 @@ public class TestHoodieClient implements Serializable {
                     }
                 }
 
-
                 List<List<HoodieDataFile>> fileVersions = fsView.getEveryVersionInPartition(partitionPath).collect(Collectors.toList());
                 for (List<HoodieDataFile> entry : fileVersions) {
                     // No file has no more than max versions
                     String fileId = entry.iterator().next().getFileId();
 
                     assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
-                        entry.size() <= maxVersions);
+                            entry.size() <= maxVersions);
 
                     // Each file, has the latest N versions (i.e cleaning gets rid of older versions)
                     List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
                     for (int i = 0; i < entry.size(); i++) {
                         assertEquals("File " + fileId + " does not have latest versions on commits" + commitedVersions,
-                            Iterables.get(entry, i).getCommitTime(),
+                                Iterables.get(entry, i).getCommitTime(),
                                 commitedVersions.get(commitedVersions.size() - 1 - i));
                     }
                 }
@@ -644,11 +807,13 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testInsertAndCleanByCommits() throws Exception {
+
         int maxCommits = 3; // keep upto 3 commits from the past
         HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
-            HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-                .retainCommits(maxCommits).build()).build();
+                HoodieCompactionConfig.newBuilder()
+                        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+                        .retainCommits(maxCommits).build()).build();
+        Schema readerSchema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
         FileSystem fs = FSUtils.getFs();
@@ -667,17 +832,19 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify that there is a commit
-        assertEquals("Expecting a single commit.", new HoodieReadClient(jsc, basePath).listCommitsSince("000").size(), 1);
+        ReadClientTestHelper readClient = new ReadClientTestHelper(jsc, basePath, sqlContext, tableType, readerSchema);
+
+        assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
         // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
         assertFalse(table.getCompletedCommitTimeline().empty());
         String commitTime =
-            table.getCompletedCommitTimeline().getInstants().findFirst().get().getTimestamp();
+                table.getCompletedCommitTimeline().getInstants().findFirst().get().getTimestamp();
         assertFalse(table.getCompletedCleanTimeline().empty());
         assertEquals("The clean instant should be the same as the commit instant", commitTime,
-            table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
+                table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
 
         List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
         checkTaggedRecords(taggedRecords, newCommitTime);
@@ -696,29 +863,28 @@ public class TestHoodieClient implements Serializable {
             HoodieTable table1 = HoodieTable.getHoodieTable(metadata, cfg);
             HoodieTimeline activeTimeline = table1.getCompletedCommitTimeline();
             Optional<HoodieInstant>
-                earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
+                    earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
             Set<HoodieInstant> acceptableCommits =
-                activeTimeline.getInstants().collect(Collectors.toSet());
+                    activeTimeline.getInstants().collect(Collectors.toSet());
             if (earliestRetainedCommit.isPresent()) {
                 acceptableCommits.removeAll(
-                    activeTimeline.findInstantsInRange("000", earliestRetainedCommit.get().getTimestamp()).getInstants()
-                        .collect(Collectors.toSet()));
+                        activeTimeline.findInstantsInRange("000", earliestRetainedCommit.get().getTimestamp()).getInstants()
+                                .collect(Collectors.toSet()));
                 acceptableCommits.add(earliestRetainedCommit.get());
             }
 
-            TableFileSystemView fsView = table1.getFileSystemView();
+            TableFileSystemView fsView = table1.getCompactedFileSystemView();
             // Need to ensure the following
             for (String partitionPath : dataGen.getPartitionPaths()) {
                 List<List<HoodieDataFile>> fileVersions = fsView.getEveryVersionInPartition(partitionPath).collect(Collectors.toList());
                 for (List<HoodieDataFile> entry : fileVersions) {
                     Set<String> commitTimes = new HashSet<>();
                     for(HoodieDataFile value:entry) {
-                        System.out.println("Data File - " + value);
                         commitTimes.add(value.getCommitTime());
                     }
                     assertEquals("Only contain acceptable versions of file should be present",
-                        acceptableCommits.stream().map(HoodieInstant::getTimestamp)
-                            .collect(Collectors.toSet()), commitTimes);
+                            acceptableCommits.stream().map(HoodieInstant::getTimestamp)
+                                    .collect(Collectors.toSet()), commitTimes);
                 }
             }
         }
@@ -726,20 +892,26 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testRollbackCommit() throws Exception {
+
         // Let's create some commit files and parquet files
         String commitTime1 = "20160501010101";
         String commitTime2 = "20160502020601";
         String commitTime3 = "20160506030611";
-        new File(basePath + "/.hoodie").mkdirs();
+        FSUtils.getFs().mkdirs(new Path(basePath + "/.hoodie"));
         HoodieTestDataGenerator.writePartitionMetadata(FSUtils.getFs(),
                 new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
                 basePath);
 
-
-        // Only first two have commit files
-        HoodieTestUtils.createCommitFiles(basePath, commitTime1, commitTime2);
-        // Third one has a .inflight intermediate commit file
-        HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            // Only first two have commit files
+            HoodieTestUtils.createCommitFiles(basePath, commitTime1, commitTime2);
+            // Third one has a .inflight intermediate commit file
+            HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
+        } else {
+            HoodieTestUtils.createDeltaCommitFiles(basePath, commitTime1, commitTime2);
+            // Third one has a .inflight intermediate commit file
+            HoodieTestUtils.createDeltaInflightCommitFiles(basePath, commitTime3);
+        }
 
         // Make commit1
         String file11 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime1, "id11");
@@ -757,9 +929,9 @@ public class TestHoodieClient implements Serializable {
         String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
 
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withIndexConfig(
-                HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY)
-                    .build()).build();
+                .withIndexConfig(
+                        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY)
+                                .build()).build();
 
         HoodieWriteClient client = new HoodieWriteClient(jsc, config, false);
 
@@ -771,67 +943,99 @@ public class TestHoodieClient implements Serializable {
             // should get here
         }
 
+        // Wait for 1 second to make sure we get a new timestamp for rollback commit
+        Thread.sleep(1000);
         // Rollback commit3
         client.rollback(commitTime3);
         assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) ||
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
 
         // simulate partial failure, where .inflight was not deleted, but data files were.
-        HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
+
+        } else {
+            HoodieTestUtils.createDeltaInflightCommitFiles(basePath, commitTime3);
+        }
+
+        Thread.sleep(1000);
         client.rollback(commitTime3);
         assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
 
-
+        Thread.sleep(1000);
         // Rollback commit2
         client.rollback(commitTime2);
-        assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
+
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
+        } else {
+            assertFalse(HoodieTestUtils.doesDeltaCommitExist(basePath, commitTime2));
+        }
         assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
 
         // simulate partial failure, where only .commit => .inflight renaming succeeded, leaving a
         // .inflight commit and a bunch of data files around.
-        HoodieTestUtils.createInflightCommitFiles(basePath, commitTime2);
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            HoodieTestUtils.createInflightCommitFiles(basePath, commitTime2);
+
+        } else {
+            HoodieTestUtils.createDeltaInflightCommitFiles(basePath, commitTime2);
+        }
         file21 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime2, "id21");
         file22 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime2, "id22");
         file23 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime2, "id23");
 
+        Thread.sleep(1000);
         client.rollback(commitTime2);
-        assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
-        assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
+        } else {
+            assertFalse(HoodieTestUtils.doesDeltaCommitExist(basePath, commitTime2));
+        }        assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
 
 
+        Thread.sleep(1000);
         // Let's rollback commit1, Check results
         client.rollback(commitTime1);
         assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
         assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime1));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12) ||
-                    HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12) ||
+                HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
     }
 
 
     @Test
     public void testAutoRollbackCommit() throws Exception {
+
         // Let's create some commit files and parquet files
         String commitTime1 = "20160501010101";
         String commitTime2 = "20160502020601";
         String commitTime3 = "20160506030611";
-        new File(basePath + "/.hoodie").mkdirs();
+        FSUtils.getFs().mkdirs(new Path(basePath + "/.hoodie"));
         HoodieTestDataGenerator.writePartitionMetadata(FSUtils.getFs(),
                 new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
                 basePath);
 
-        // One good commit
-        HoodieTestUtils.createCommitFiles(basePath, commitTime1);
-        // Two inflight commits
-        HoodieTestUtils.createInflightCommitFiles(basePath, commitTime2, commitTime3);
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            //Two good commits
+            HoodieTestUtils.createCommitFiles(basePath, commitTime1, commitTime2);
+            // One .inflight commit file
+            HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
+        } else {
+            //Two good commits
+            HoodieTestUtils.createDeltaCommitFiles(basePath, commitTime1, commitTime2);
+            // One .inflight commit file
+            HoodieTestUtils.createDeltaInflightCommitFiles(basePath, commitTime3);
+        }
 
         // Make commit1
         String file11 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime1, "id11");
@@ -850,16 +1054,21 @@ public class TestHoodieClient implements Serializable {
 
         // Turn auto rollback off
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withIndexConfig(
-                HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY)
-                    .build()).build();
+                .withIndexConfig(
+                        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY)
+                                .build()).build();
 
         new HoodieWriteClient(jsc, config, false);
-
         // Check results, nothing changed
-        assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-        assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-        assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
+            assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
+            assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
+        } else {
+            assertTrue(HoodieTestUtils.doesDeltaCommitExist(basePath, commitTime1));
+            assertTrue(HoodieTestUtils.doesDeltaCommitExist(basePath, commitTime2));
+            assertTrue(HoodieTestUtils.doesDeltaInflightExist(basePath, commitTime3));
+        }
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31) &&
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) &&
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
@@ -872,13 +1081,18 @@ public class TestHoodieClient implements Serializable {
 
         // Turn auto rollback on
         new HoodieWriteClient(jsc, config, true);
-        assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-        assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
+        if(tableType == HoodieTableType.COPY_ON_WRITE) {
+            assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
+            assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
+        } else {
+            assertTrue(HoodieTestUtils.doesDeltaCommitExist(basePath, commitTime1));
+            assertTrue(HoodieTestUtils.doesDeltaCommitExist(basePath, commitTime2));
+        }
         assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
         assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31) ||
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) ||
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
-        assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
+        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
                 HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
         assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11) &&
@@ -902,6 +1116,11 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testSmallInsertHandlingForUpserts() throws Exception {
+
+        //MOR : Small upserts to existing parquet files don't work
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
 
         FileSystem fs = FSUtils.getFs();
         final String TEST_PARTITION_PATH = "2016/09/26";
@@ -969,7 +1188,7 @@ public class TestHoodieClient implements Serializable {
         HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
         TableFileSystemView fileSystemView = table.getFileSystemView();
         List<HoodieDataFile> files = fileSystemView.getLatestVersionInPartition(TEST_PARTITION_PATH, commitTime3).collect(
-            Collectors.toList());
+                Collectors.toList());
         int numTotalInsertsInCommit3 = 0;
         for (HoodieDataFile file:  files) {
             if (file.getFileName().contains(file1)) {
@@ -1004,6 +1223,11 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testSmallInsertHandlingForInserts() throws Exception {
+
+        //MOR : Small inserts to existing parquet files don't work
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
 
         final String TEST_PARTITION_PATH = "2016/09/26";
         final int INSERT_SPLIT_LIMIT = 10;
@@ -1063,8 +1287,8 @@ public class TestHoodieClient implements Serializable {
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
         List<HoodieDataFile> files =
-            table.getFileSystemView().getLatestVersionInPartition(TEST_PARTITION_PATH, commitTime3)
-                .collect(Collectors.toList());
+                table.getFileSystemView().getLatestVersionInPartition(TEST_PARTITION_PATH, commitTime3)
+                        .collect(Collectors.toList());
         assertEquals("Total of 2 valid data files", 2, files.size());
 
 
@@ -1080,67 +1304,92 @@ public class TestHoodieClient implements Serializable {
     @Test
     public void testKeepLatestFileVersions() throws IOException {
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-            .withAssumeDatePartitioning(true)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-                .retainFileVersions(1).build()).build();
+                .withAssumeDatePartitioning(true)
+                .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+                        .retainFileVersions(1).build()).build();
 
-        // make 1 commit, with 1 file per partition
-        HoodieTestUtils.createCommitFiles(basePath, "000");
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            // Make 2 files, one base file and one log file associated with base file
+            String file1P0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
+            String file2P0L0 = HoodieTestUtils.createNewLogFile(basePath, partitionPaths[0], "000", file1P0);
+            // make 1 compaction commit
+            HoodieTestUtils.createCompactionCommitFiles(basePath, "000");
 
-        String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
-        String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
-        HoodieTable table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            // Make 2 files, one base file and one log file associated with base file
+            HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "001", file1P0);
+            file2P0L0 = HoodieTestUtils.createNewLogFile(basePath, partitionPaths[0], "001", file2P0L0);
+            // make 1 compaction commit
+            HoodieTestUtils.createCompactionCommitFiles(basePath, "001");
 
-        List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
-        assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
-        assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[1]).getSuccessDeleteFiles().size());
-        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
+            HoodieTable table = HoodieTable
+                    .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            assertEquals("Must clean files" , 1, getCleanStat(table.clean(jsc), partitionPaths[0]).getSuccessDeleteFiles().size());
+            assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0));
+            assertFalse(HoodieTestUtils.doesLogFileExist(basePath, partitionPaths[0], "000", file2P0L0));
+        } else {
+            // make 1 commit, with 1 file per partition
+            HoodieTestUtils.createCommitFiles(basePath, "000");
 
-        // make next commit, with 1 insert & 1 update per partition
-        HoodieTestUtils.createCommitFiles(basePath, "001");
-        table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            String file1P0C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
+            String file1P1C0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "000");
+            HoodieTable table = HoodieTable
+                    .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
 
-        String file2P0C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "001"); // insert
-        String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
-        HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "001", file1P0C0); // update
-        HoodieTestUtils.createDataFile(basePath, partitionPaths[1], "001", file1P1C0); // update
+            List<HoodieCleanStat> hoodieCleanStatsOne = table.clean(jsc);
+            assertEquals("Must not clean any files", 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
+            assertEquals("Must not clean any files", 0, getCleanStat(hoodieCleanStatsOne, partitionPaths[1]).getSuccessDeleteFiles().size());
+            assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
+            assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
 
-        List<HoodieCleanStat> hoodieCleanStatsTwo = table.clean(jsc);
-        assertEquals("Must clean 1 file" , 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[0]).getSuccessDeleteFiles().size());
-        assertEquals("Must clean 1 file" , 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[1]).getSuccessDeleteFiles().size());
-        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
-        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
-        assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-        assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
+            // make next commit, with 1 insert & 1 update per partition
+            HoodieTestUtils.createCommitFiles(basePath, "001");
+            table = HoodieTable
+                    .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
 
-        // make next commit, with 2 updates to existing files, and 1 insert
-        HoodieTestUtils.createCommitFiles(basePath, "002");
-        table = HoodieTable
-            .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
+            String file2P0C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "001"); // insert
+            String file2P1C1 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[1], "001"); // insert
+            HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "001", file1P0C0); // update
+            HoodieTestUtils.createDataFile(basePath, partitionPaths[1], "001", file1P1C0); // update
 
-        HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
-        HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
-        String file3P0C2 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "002");
+            List<HoodieCleanStat> hoodieCleanStatsTwo = table.clean(jsc);
+            assertEquals("Must clean 1 file", 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[0]).getSuccessDeleteFiles().size());
+            assertEquals("Must clean 1 file", 1, getCleanStat(hoodieCleanStatsTwo, partitionPaths[1]).getSuccessDeleteFiles().size());
+            assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
+            assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
+            assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
+            assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
 
-        List<HoodieCleanStat> hoodieCleanStatsThree = table.clean(jsc);
-        assertEquals("Must clean two files" , 2, getCleanStat(hoodieCleanStatsThree, partitionPaths[0]).getSuccessDeleteFiles().size());
-        assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
-        assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
-        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+            // make next commit, with 2 updates to existing files, and 1 insert
+            HoodieTestUtils.createCommitFiles(basePath, "002");
+            table = HoodieTable
+                    .getHoodieTable(new HoodieTableMetaClient(FSUtils.getFs(), config.getBasePath(), true), config);
 
-        // No cleaning on partially written file, with no commit.
-        HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file3P0C2); // update
-        List<HoodieCleanStat> hoodieCleanStatsFour = table.clean(jsc);
-        assertEquals("Must not clean any files" , 0, getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
-        assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+            HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file1P0C0); // update
+            HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "002", file2P0C1); // update
+            String file3P0C2 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "002");
+
+            List<HoodieCleanStat> hoodieCleanStatsThree = table.clean(jsc);
+            assertEquals("Must clean two files", 2, getCleanStat(hoodieCleanStatsThree, partitionPaths[0]).getSuccessDeleteFiles().size());
+            assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
+            assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
+            assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+
+            // No cleaning on partially written file, with no commit.
+            HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file3P0C2); // update
+            List<HoodieCleanStat> hoodieCleanStatsFour = table.clean(jsc);
+            assertEquals("Must not clean any files", 0, getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
+            assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+        }
     }
 
     @Test
     public void testKeepLatestCommits() throws IOException {
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
+
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withAssumeDatePartitioning(true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -1249,6 +1498,11 @@ public class TestHoodieClient implements Serializable {
 
     @Test
     public void testCleaningSkewedPartitons() throws IOException {
+
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
+
         HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
             .withAssumeDatePartitioning(true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -1323,6 +1577,10 @@ public class TestHoodieClient implements Serializable {
 
     public void testCommitWritesRelativePaths() throws Exception {
 
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            return;
+        }
+
         HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
         FileSystem fs = FSUtils.getFs();
@@ -1386,7 +1644,7 @@ public class TestHoodieClient implements Serializable {
     }
 
     @After
-    public void clean() {
+    public void clean() throws IOException {
         if (basePath != null) {
             new File(basePath).delete();
         }
