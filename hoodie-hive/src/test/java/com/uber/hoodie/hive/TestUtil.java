@@ -47,6 +47,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
@@ -213,7 +214,7 @@ public class TestUtil {
   }
 
   private static HoodieCommitMetadata createLogFiles(
-      HashMap<String, List<HoodieWriteStat>> partitionWriteStats, boolean isLogSchemaSimple)
+          Map<String, List<HoodieWriteStat>> partitionWriteStats, boolean isLogSchemaSimple)
       throws InterruptedException, IOException, URISyntaxException {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     for (Entry<String, List<HoodieWriteStat>> wEntry : partitionWriteStats.entrySet()) {

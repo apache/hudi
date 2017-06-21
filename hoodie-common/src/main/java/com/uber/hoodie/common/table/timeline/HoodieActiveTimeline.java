@@ -130,6 +130,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
 
     /**
+     * Get all instants (commits, delta commits, compactions, clean, savepoint, rollback) that result in actions, in the active timeline
+     **
+     * @return
+     */
+    public HoodieTimeline getAllCommitsTimeline() {
+        return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION));
+    }
+
+    /**
      * Get only pure commits (inflight and completed) in the active timeline
      *
      * @return

@@ -41,9 +41,9 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
     private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
-    protected HashMap<String, List<HoodieWriteStat>> partitionToWriteStats;
+    protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
 
-    private HashMap<String, String> extraMetadataMap;
+    private Map<String, String> extraMetadataMap;
 
     public HoodieCommitMetadata() {
         extraMetadataMap = new HashMap<>();
@@ -65,7 +65,9 @@ public class HoodieCommitMetadata implements Serializable {
         return partitionToWriteStats.get(partitionPath);
     }
 
-    public HashMap<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
+    public Map<String, String> getExtraMetadata() { return extraMetadataMap; }
+
+    public Map<String, List<HoodieWriteStat>> getPartitionToWriteStats() {
         return partitionToWriteStats;
     }
 

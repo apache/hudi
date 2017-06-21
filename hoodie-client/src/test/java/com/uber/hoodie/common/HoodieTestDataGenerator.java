@@ -16,16 +16,17 @@
 
 package com.uber.hoodie.common;
 
+import com.uber.hoodie.avro.model.HoodieCleanMetadata;
+import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -35,7 +36,12 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Random;
+import java.util.UUID;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -209,9 +215,7 @@ public class HoodieTestDataGenerator {
     }
   }
 
-
-
-  public String[] getPartitionPaths() {
+    public String[] getPartitionPaths() {
         return partitionPaths;
     }
 }

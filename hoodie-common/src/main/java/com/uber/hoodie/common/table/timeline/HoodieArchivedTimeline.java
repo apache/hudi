@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
-    private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE = "commits.archived";
+    private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE = "commits";
     private transient FileSystem fs;
     private String metaPath;
     private Map<String, byte[]> readCommits = new HashMap<>();

@@ -22,17 +22,21 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import com.uber.hoodie.avro.model.HoodieCleanMetadata;
+import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -46,11 +50,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -63,6 +71,8 @@ public class HoodieTestUtils {
     public static final String TEST_EXTENSION = ".test";
     public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
     public static final int DEFAULT_TASK_PARTITIONID = 1;
+    public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
+    private static Random rand = new Random(46474747);
 
     public static void resetFS() {
         HoodieTestUtils.fs = FSUtils.getFs();
@@ -137,6 +147,26 @@ public class HoodieTestUtils {
 
     public static String makeInflightTestFileName(String instant) {
         return instant + TEST_EXTENSION + HoodieTimeline.INFLIGHT_EXTENSION;
+    }
+
+    public static void createCleanFiles(String basePath, String commitTime) throws IOException {
+        Path commitFile =
+                new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
+        FileSystem fs = FSUtils.getFs();
+        FSDataOutputStream os = fs.create(commitFile, true);
+        try {
+            HoodieCleanStat cleanStats = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
+                    DEFAULT_PARTITION_PATHS[rand.nextInt(DEFAULT_PARTITION_PATHS.length)],
+                    new ArrayList<>(), new ArrayList<>(),
+                    new ArrayList<>(), commitTime);
+            // Create the clean metadata
+            HoodieCleanMetadata cleanMetadata =
+                    AvroUtils.convertCleanMetadata(commitTime, Optional.of(0L), Arrays.asList(cleanStats));
+            // Write empty clean metadata
+            os.write(AvroUtils.serializeCleanMetadata(cleanMetadata).get());
+        } finally {
+            os.close();
+        }
     }
 
     public static String makeTestFileName(String instant) {
