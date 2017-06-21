@@ -1,0 +1,55 @@
+{
+   "type":"record",
+   "name":"HoodieArchivedMetaEntry",
+   "namespace":"com.uber.hoodie.avro.model",
+   "fields":[
+      {
+         "name":"hoodieCommitMetadata",
+         "type":[
+            "null",
+            "HoodieCommitMetadata"
+         ],
+         "default": "null"
+      },
+      {
+         "name":"hoodieCleanMetadata",
+         "type":[
+            "null",
+            "HoodieCleanMetadata"
+         ],
+         "default": "null"
+      },
+      {
+         "name":"hoodieCompactionMetadata",
+         "type":[
+            "null",
+            "HoodieCompactionMetadata"
+         ],
+         "default": "null"
+      },
+      {
+         "name":"hoodieRollbackMetadata",
+         "type":[
+            "null",
+            "HoodieRollbackMetadata"
+         ],
+         "default": "null"
+      },
+      {
+         "name":"hoodieSavePointMetadata",
+         "type":[
+            "null",
+            "HoodieSavepointMetadata"
+         ],
+         "default": "null"
+      },
+      {
+         "name":"commitTime",
+         "type":["null","string"]
+      },
+      {
+         "name":"actionType",
+         "type":["null","string"]
+      }
+   ]
+}

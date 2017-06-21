@@ -50,6 +50,16 @@
             <plugin>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-maven-plugin</artifactId>
+                <configuration>
+                    <imports>
+                        <!-- import avro files -->
+                        <import>${basedir}/src/main/avro/HoodieCommitMetadata.avsc</import>
+                        <import>${basedir}/src/main/avro/HoodieSavePointMetadata.avsc</import>
+                        <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>
+                        <import>${basedir}/src/main/avro/HoodieCleanMetadata.avsc</import>
+                        <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
+                    </imports>
+                </configuration>
             </plugin>
         </plugins>
     </build>

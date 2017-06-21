@@ -83,11 +83,12 @@ public class HoodieLogFile {
     public HoodieLogFile rollOver(FileSystem fs) throws IOException {
         String fileId = getFileId();
         String baseCommitTime = getBaseCommitTime();
+        String extension = "." + FSUtils.getFileExtensionFromLog(path);
         int newVersion = FSUtils
             .computeNextLogVersion(fs, path.getParent(), fileId,
-                DELTA_EXTENSION, baseCommitTime);
+                    extension, baseCommitTime);
         return new HoodieLogFile(new Path(path.getParent(),
-            FSUtils.makeLogFileName(fileId, DELTA_EXTENSION, baseCommitTime, newVersion)));
+            FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion)));
     }
 
     public static Comparator<HoodieLogFile> getLogVersionComparator() {

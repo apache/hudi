@@ -1,0 +1,42 @@
+{
+   "namespace":"com.uber.hoodie.avro.model",
+   "type":"record",
+   "name":"HoodieCompactionMetadata",
+   "fields":[
+      {
+         "name":"partitionToCompactionWriteStats",
+         "type": ["null", {
+            "type":"map",
+            "values":{
+               "type":"array",
+               "items":{
+                  "name":"HoodieCompactionWriteStat",
+                  "type":"record",
+                  "fields":[
+                     {
+                        "name":"partitionPath",
+                        "type":["null","string"]
+                     },
+                     {
+                        "name":"totalLogRecords",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalLogFiles",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalRecordsToBeUpdate",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"hoodieWriteStat",
+                        "type":["null","HoodieWriteStat"]
+                     }
+                  ]
+               }
+            }
+         }]
+      }
+   ]
+}

@@ -53,17 +53,6 @@ import com.uber.hoodie.io.HoodieCommitArchiveLog;
 import com.uber.hoodie.metrics.HoodieMetrics;
 import com.uber.hoodie.table.HoodieTable;
 import com.uber.hoodie.table.WorkloadProfile;
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -80,6 +69,18 @@ import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.util.LongAccumulator;
 import scala.Option;
 import scala.Tuple2;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Hoodie Write Client helps you build datasets on HDFS [insert()] and then
