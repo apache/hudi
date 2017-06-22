@@ -30,7 +30,6 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
