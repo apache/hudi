@@ -43,7 +43,8 @@ import java.util.*;
  * Test data uses a toy Uber trips, data model.
  */
 public class HoodieTestDataGenerator {
-    static class KeyPartition {
+
+  static class KeyPartition {
         HoodieKey key;
         String partitionPath;
     }
@@ -190,10 +191,27 @@ public class HoodieTestDataGenerator {
         } finally {
             os.close();
         }
-
     }
 
-    public String[] getPartitionPaths() {
+  public static void createSavepointFile(String basePath, String commitTime) throws IOException {
+    Path commitFile =
+        new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
+            .makeSavePointFileName(commitTime));
+    FileSystem fs = FSUtils.getFs();
+    FSDataOutputStream os = fs.create(commitFile, true);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    try {
+      // Write empty commit metadata
+      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(
+          StandardCharsets.UTF_8)));
+    } finally {
+      os.close();
+    }
+  }
+
+
+
+  public String[] getPartitionPaths() {
         return partitionPaths;
     }
 }
