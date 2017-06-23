@@ -175,6 +175,7 @@ public class TestUtil {
     DateTime dateTime = DateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true, dateTime, commitTime);
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE);
     HoodieCompactionMetadata compactionMetadata = new HoodieCompactionMetadata();
     commitMetadata.getPartitionToWriteStats()
         .forEach((key, value) -> value.stream().map(k -> new CompactionWriteStat(k, key, 0, 0, 0))
@@ -201,6 +202,7 @@ public class TestUtil {
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions,
         isParquetSchemaSimple, startFrom, commitTime);
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE);
     HoodieCompactionMetadata compactionMetadata = new HoodieCompactionMetadata();
     commitMetadata.getPartitionToWriteStats()
         .forEach((key, value) -> value.stream().map(k -> new CompactionWriteStat(k, key, 0, 0, 0))

@@ -26,10 +26,6 @@ import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import com.uber.hoodie.hive.util.SchemaUtil;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -38,6 +34,12 @@ import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parquet.schema.MessageType;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 
 /**
  * Tool to sync a hoodie HDFS dataset with a hive metastore table.
@@ -53,6 +55,7 @@ public class HiveSyncTool {
 
   private static Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
+  public final static String SUFFIX_REALTIME_TABLE = "_rt";
   private final HiveSyncConfig cfg;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
@@ -61,15 +64,38 @@ public class HiveSyncTool {
   }
 
   public void syncHoodieTable() {
-    LOG.info("Trying to sync hoodie table" + cfg.tableName + " with base path " + hoodieHiveClient
+    switch(hoodieHiveClient.getTableType()) {
+      case COPY_ON_WRITE:
+        syncHoodieTable(false);
+        break;
+      case MERGE_ON_READ:
+        //sync a RO table for MOR
+        syncHoodieTable(false);
+        String originalTableName = cfg.tableName;
+        //TODO : Make realtime table registration optional using a config param
+        cfg.tableName = cfg.tableName + SUFFIX_REALTIME_TABLE;
+        //sync a RT table for MOR
+        syncHoodieTable(true);
+        cfg.tableName = originalTableName;
+        break;
+      default:
+        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+        throw new InvalidDatasetException(hoodieHiveClient.getBasePath());
+    }
+    hoodieHiveClient.close();
+  }
+
+  private void syncHoodieTable(boolean isRealTime) {
+    LOG.info("Trying to sync hoodie table " + cfg.tableName + " with base path " + hoodieHiveClient
         .getBasePath() + " of type " + hoodieHiveClient
         .getTableType());
+
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist();
     // Get the parquet schema for this dataset looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed
-    syncSchema(tableExists, schema);
+    syncSchema(tableExists, isRealTime, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + cfg.tableName);
     // Get the last time we successfully synced partitions
@@ -86,8 +112,6 @@ public class HiveSyncTool {
 
     hoodieHiveClient.updateLastCommitTimeSynced();
     LOG.info("Sync complete for " + cfg.tableName);
-
-    hoodieHiveClient.close();
   }
 
   /**
@@ -97,29 +121,19 @@ public class HiveSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(boolean tableExists, MessageType schema) {
+  private void syncSchema(boolean tableExists, boolean isRealTime, MessageType schema) {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Table " + cfg.tableName + " is not found. Creating it");
-      switch (hoodieHiveClient.getTableType()) {
-        case COPY_ON_WRITE:
-          hoodieHiveClient.createTable(schema, HoodieInputFormat.class.getName(),
-              MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
-          break;
-        case MERGE_ON_READ:
-          // create RT Table
+      if(!isRealTime) {
+        // TODO - RO Table for MOR only after major compaction (UnboundedCompaction is default for now)
+        hoodieHiveClient.createTable(schema, HoodieInputFormat.class.getName(),
+                MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
+      } else {
           // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
           // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive/ql/exec/DDLTask.java#L3488
-          // Need a fix to check instance of
-          // hoodieHiveClient.createTable(schema, HoodieRealtimeInputFormat.class.getName(),
-          // MapredParquetOutputFormat.class.getName(), HoodieParquetSerde.class.getName());
           hoodieHiveClient.createTable(schema, HoodieRealtimeInputFormat.class.getName(),
-              MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
-          // TODO - create RO Table
-          break;
-        default:
-          LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-          throw new InvalidDatasetException(hoodieHiveClient.getBasePath());
+                  MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
       }
     } else {
       // Check if the dataset schema has evolved
