@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
@@ -23,9 +24,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
-import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.hadoop.fs.FileSystem;
@@ -89,29 +88,28 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
         for (HoodieFileGroup fileGroup : fileGroups) {
             int keepVersions = config.getCleanerFileVersionsRetained();
-            Iterator<HoodieDataFile> commitItr = fileGroup.getAllDataFiles().iterator();
-            while (commitItr.hasNext() && keepVersions > 0) {
+            Iterator<FileSlice> fileSliceIterator = fileGroup.getAllFileSlices().iterator();
+            while (fileSliceIterator.hasNext() && keepVersions > 0) {
                 // Skip this most recent version
-                HoodieDataFile next = commitItr.next();
-                if(savepointedFiles.contains(next.getFileName())) {
+                FileSlice nextSlice = fileSliceIterator.next();
+                HoodieDataFile dataFile = nextSlice.getDataFile().get();
+                if(savepointedFiles.contains(dataFile.getFileName())) {
                     // do not clean up a savepoint data file
                     continue;
                 }
                 keepVersions--;
             }
             // Delete the remaining files
-            while (commitItr.hasNext()) {
-                HoodieDataFile nextRecord = commitItr.next();
-                deletePaths.add(nextRecord.getFileStatus().getPath().toString());
+            while (fileSliceIterator.hasNext()) {
+                FileSlice nextSlice = fileSliceIterator.next();
+                HoodieDataFile dataFile = nextSlice.getDataFile().get();
+                deletePaths.add(dataFile.getFileStatus().getPath().toString());
                 if (hoodieTable.getMetaClient().getTableType()
                     == HoodieTableType.MERGE_ON_READ) {
                     // If merge on read, then clean the log files for the commits as well
-                    // todo: fix below for MERGE_ON_READ
-                    deletePaths.add(String
-                        .format("%s/%s/%s", config.getBasePath(), partitionPath,
-                            FSUtils.maskWithoutLogVersion(nextRecord.getCommitTime(),
-                                nextRecord.getFileId(),
-                                HoodieLogFile.DELTA_EXTENSION)));
+                    deletePaths.addAll(nextSlice.getLogFiles()
+                            .map(file -> file.getPath().toString())
+                            .collect(Collectors.toList()));
                 }
             }
         }
@@ -155,16 +153,18 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
                 fileSystemView.getAllFileGroups(partitionPath)
                     .collect(Collectors.toList());
             for (HoodieFileGroup fileGroup : fileGroups) {
-                List<HoodieDataFile> fileList = fileGroup.getAllDataFiles().collect(Collectors.toList());
-                String lastVersion = FSUtils.getCommitTime(fileList.get(0).getFileName());
+                List<FileSlice> fileSliceList = fileGroup.getAllFileSlices().collect(Collectors.toList());
+                HoodieDataFile dataFile = fileSliceList.get(0).getDataFile().get();
+                String lastVersion = dataFile.getCommitTime();
                 String lastVersionBeforeEarliestCommitToRetain =
-                    getLatestVersionBeforeCommit(fileList, earliestCommitToRetain);
+                    getLatestVersionBeforeCommit(fileSliceList, earliestCommitToRetain);
 
                 // Ensure there are more than 1 version of the file (we only clean old files from updates)
                 // i.e always spare the last commit.
-                for (HoodieDataFile afile : fileList) {
-                    String fileCommitTime = afile.getCommitTime();
-                    if(savepointedFiles.contains(afile.getFileName())) {
+                for (FileSlice aSlice : fileSliceList) {
+                    HoodieDataFile aFile = aSlice.getDataFile().get();
+                    String fileCommitTime = aFile.getCommitTime();
+                    if(savepointedFiles.contains(aFile.getFileName())) {
                         // do not clean up a savepoint data file
                         continue;
                     }
@@ -184,15 +184,13 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
                             fileCommitTime,
                             HoodieTimeline.GREATER)) {
                         // this is a commit, that should be cleaned.
-                        deletePaths.add(afile.getFileStatus().getPath().toString());
+                        deletePaths.add(aFile.getFileStatus().getPath().toString());
                         if (hoodieTable.getMetaClient().getTableType()
                             == HoodieTableType.MERGE_ON_READ) {
                             // If merge on read, then clean the log files for the commits as well
-                            // todo: fix below for MERGE_ON_READ
-                            deletePaths.add(String
-                                .format("%s/%s/%s", config.getBasePath(), partitionPath,
-                                    FSUtils.maskWithoutLogVersion(fileCommitTime, afile.getFileId(),
-                                        HoodieLogFile.DELTA_EXTENSION)));
+                            deletePaths.addAll(aSlice.getLogFiles()
+                                    .map(file -> file.getPath().toString())
+                                    .collect(Collectors.toList()));
                         }
                     }
                 }
@@ -205,10 +203,10 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
     /**
      * Gets the latest version < commitTime. This version file could still be used by queries.
      */
-    private String getLatestVersionBeforeCommit(List<HoodieDataFile> fileList,
+    private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList,
         HoodieInstant commitTime) {
-        for (HoodieDataFile file : fileList) {
-            String fileCommitTime = FSUtils.getCommitTime(file.getFileName());
+        for (FileSlice file : fileSliceList) {
+            String fileCommitTime = file.getDataFile().get().getCommitTime();
             if (HoodieTimeline.compareTimestamps(commitTime.getTimestamp(), fileCommitTime,
                 HoodieTimeline.GREATER)) {
                 // fileList is sorted on the reverse, so the first commit we find <= commitTime is the one we want
