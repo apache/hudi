@@ -18,13 +18,11 @@ package com.uber.hoodie.common.util;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-
-import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidHoodiePathException;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -54,6 +52,7 @@ public class FSUtils {
     private static final Logger LOG = LogManager.getLogger(FSUtils.class);
     // Log files are of this pattern - .b5068208-e1a4-11e6-bf01-fe55135034f3_20170101134598.log.1
     private static final Pattern LOG_FILE_PATTERN = Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)");
+    private static final String LOG_FILE_PREFIX = ".";
     private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
     private static final long MIN_CLEAN_TO_KEEP = 10;
     private static final long MIN_ROLLBACK_TO_KEEP = 10;
@@ -109,7 +108,12 @@ public class FSUtils {
     }
 
     public static String getCommitTime(String fullFileName) {
-        return fullFileName.split("_")[2].split("\\.")[0];
+        Matcher matcher = LOG_FILE_PATTERN.matcher(fullFileName);
+        if (!matcher.find()) {
+            return fullFileName.split("_")[2].split("\\.")[0];
+        } else {
+            return fullFileName.split("_")[1].split("\\.")[0];
+        }
     }
 
     public static long getFileSize(FileSystem fs, Path path) throws IOException {
@@ -228,11 +232,11 @@ public class FSUtils {
 
     public static String makeLogFileName(String fileId, String logFileExtension,
         String baseCommitTime, int version) {
-        return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
+        return LOG_FILE_PREFIX + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
     }
 
     public static String maskWithoutLogVersion(String commitTime, String fileId, String logFileExtension) {
-        return String.format("%s_%s%s*", fileId, commitTime, logFileExtension);
+        return LOG_FILE_PREFIX + String.format("%s_%s%s*", fileId, commitTime, logFileExtension);
     }
 
 

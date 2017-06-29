@@ -40,6 +40,7 @@ import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -626,9 +627,14 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     private Boolean deleteFileAndGetResult(String deletePathStr) throws IOException {
         Path deletePath = new Path(deletePathStr);
         logger.debug("Working on delete path :" + deletePath);
-        boolean deleteResult = getFs().delete(deletePath, false);
-        if (deleteResult) {
-            logger.debug("Cleaned file at path :" + deletePath);
+        //handle wildcard matches, especially for log* files with versions
+        FileStatus [] files = getFs().globStatus(deletePath);
+        boolean deleteResult = true;
+        for(FileStatus fileStatus: files) {
+            deleteResult &= getFs().delete(fileStatus.getPath(), false);
+            if (deleteResult) {
+                logger.debug("Cleaned file at path :" + deletePath);
+            }
         }
         return deleteResult;
     }
