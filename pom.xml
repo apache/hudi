@@ -21,7 +21,7 @@
     <groupId>com.uber.hoodie</groupId>
     <artifactId>hoodie</artifactId>
     <packaging>pom</packaging>
-    <version>0.3.8</version>
+    <version>0.3.9-SNAPSHOT</version>
     <description>Hoodie is a Apache Spark library that provides the ability to efficiently do incremental processing on datasets in HDFS</description>
     <url>https://github.com/uber/hoodie</url>
     <name>Hoodie</name>
