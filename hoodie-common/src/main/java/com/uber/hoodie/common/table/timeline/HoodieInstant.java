@@ -18,6 +18,7 @@ package com.uber.hoodie.common.table.timeline;
 
 import com.google.common.io.Files;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.util.FSUtils;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
@@ -42,11 +43,11 @@ public class HoodieInstant implements Serializable {
     public HoodieInstant(FileStatus fileStatus) {
         // First read the instant timestamp. [==>20170101193025<==].commit
         String fileName = fileStatus.getPath().getName();
-        String fileExtension = Files.getFileExtension(fileName);
-        timestamp = fileName.replace("." + fileExtension, "");
+        String fileExtension = FSUtils.getFileExtension(fileName);
+        timestamp = fileName.replace(fileExtension, "");
 
         // Next read the action for this marker
-        action = fileExtension;
+        action = fileExtension.replaceFirst(".", "");
         if(action.equals("inflight")) {
             // This is to support backwards compatibility on how in-flight commit files were written
             // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight
