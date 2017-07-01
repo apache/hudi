@@ -113,4 +113,9 @@ public class SchemaTestUtil {
         throws IOException, URISyntaxException {
         return toRecords(getSimpleSchema(), getEvolvedSchema(), from, limit);
     }
+
+    public static Schema getComplexEvolvedSchema() throws IOException {
+        return new Schema.Parser()
+            .parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avro"));
+    }
 }

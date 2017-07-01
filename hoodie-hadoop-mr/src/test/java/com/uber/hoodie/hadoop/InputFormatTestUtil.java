@@ -16,9 +16,11 @@
 
 package com.uber.hoodie.hadoop;
 
+import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.TestRecord;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -115,10 +117,10 @@ public class InputFormatTestUtil {
 
     }
 
-    private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords, String commitTime, String fileId) {
+    private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords, String commitTime, String fileId) throws IOException {
         List<GenericRecord> records = new ArrayList<>(numberOfRecords);
         for(int i=0;i<numberOfRecords;i++) {
-            records.add(generateAvroRecord(schema, i, commitTime, fileId));
+            records.add(generateAvroRecordFromJson(schema, i, commitTime, fileId));
         }
         return records;
     }
@@ -134,6 +136,13 @@ public class InputFormatTestUtil {
         record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileId);
         record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitTime + "_" + recordNumber);
         return record;
+    }
+
+    public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber,
+        String commitTime, String fileId) throws IOException {
+        TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
+        MercifulJsonConverter converter = new MercifulJsonConverter(schema);
+        return converter.convert(record.toJsonString());
     }
 
     public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,

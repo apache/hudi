@@ -55,6 +55,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
 import parquet.avro.AvroSchemaConverter;
 import parquet.hadoop.ParquetFileReader;
 import parquet.schema.MessageType;
@@ -250,15 +252,25 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
             case ENUM:
                 return new Text(value.toString());
             case ARRAY:
-                Writable[] values2 = new Writable[schema.getFields().size()];
+                GenericArray arrayValue = (GenericArray) value;
+                Writable[] values2 = new Writable[arrayValue.size()];
                 int index2 = 0;
-                for (Object obj : (GenericArray) value) {
+                for (Object obj : arrayValue) {
                     values2[index2++] = avroToArrayWritable(obj, schema.getElementType());
                 }
                 return new ArrayWritable(Writable.class, values2);
             case MAP:
-                // TODO(vc): Need to add support for complex types
-                return NullWritable.get();
+                Map mapValue = (Map) value;
+                Writable[] values3 = new Writable[mapValue.size()];
+                int index3 = 0;
+                for (Object entry : mapValue.entrySet()) {
+                    Map.Entry mapEntry = (Map.Entry) entry;
+                    Writable[] mapValues = new Writable[2];
+                    mapValues[0] = new Text(mapEntry.getKey().toString());
+                    mapValues[1] = avroToArrayWritable(mapEntry.getValue(), schema.getValueType());
+                    values3[index3++] = new ArrayWritable(Writable.class, mapValues);
+                }
+                return new ArrayWritable(Writable.class, values3);
             case UNION:
                 List<Schema> types = schema.getTypes();
                 if (types.size() != 2) {
