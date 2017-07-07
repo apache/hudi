@@ -19,32 +19,36 @@ package com.uber.hoodie.io;
 import com.clearspring.analytics.util.Lists;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
-import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieAppendException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.table.HoodieTable;
-import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 /**
  * IO Operation to append data onto an existing file.
@@ -151,11 +155,22 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     }
 
     public void doAppend() {
-        List<IndexedRecord> recordItr =
-            records.stream().map(this::getIndexedRecord).filter(Optional::isPresent)
-                .map(Optional::get).collect(Collectors.toList());
+
+        List<IndexedRecord> recordList = new ArrayList<>();
+        List<String> keysToDelete = new ArrayList<>();
+        records.stream().forEach(record -> {
+            Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
+            if(indexedRecord.isPresent()) {
+                recordList.add(indexedRecord.get());
+            } else {
+                keysToDelete.add(record.getRecordKey());
+            }
+        });
         try {
-            writer = writer.appendBlock(new HoodieAvroDataBlock(recordItr, schema));
+            writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, schema));
+            if(keysToDelete.size() > 0) {
+                writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.stream().toArray(String[]::new)));
+            }
         } catch (Exception e) {
             throw new HoodieAppendException(
                 "Failed while appeding records to " + currentLogFile.getPath(), e);
