@@ -64,6 +64,10 @@ public class HoodieTestUtils {
     public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
     public static final int DEFAULT_TASK_PARTITIONID = 1;
 
+    public static void resetFS() {
+        HoodieTestUtils.fs = FSUtils.getFs();
+    }
+
     public static HoodieTableMetaClient init(String basePath) throws IOException {
         return initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
     }

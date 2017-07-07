@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static com.uber.hoodie.common.util.FSUtils.getFs;
+
 /**
  * Utility functions involving with parquet.
  */
@@ -52,6 +54,7 @@ public class ParquetUtils {
      */
     public static Set<String> readRowKeysFromParquet(Path filePath) {
         Configuration conf = new Configuration();
+        conf.addResource(getFs().getConf());
         Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
         AvroReadSupport.setAvroReadSchema(conf, readSchema);
         AvroReadSupport.setRequestedProjection(conf, readSchema);
@@ -97,7 +100,7 @@ public class ParquetUtils {
         ParquetMetadata footer;
         try {
             // TODO(vc): Should we use the parallel reading version here?
-            footer = ParquetFileReader.readFooter(conf, parquetFilePath);
+            footer = ParquetFileReader.readFooter(getFs().getConf(), parquetFilePath);
         } catch (IOException e) {
             throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
                     e);
