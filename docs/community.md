@@ -18,4 +18,5 @@ If you are from select pre-listed email domains, you can self signup. Others, pl
 
 ## Becoming a Committer 
 
-Hoodie has adopted guidelines set forth in [Google Chromium project](https://www.chromium.org/getting-involved/become-a-committer), to determine committership proposals. However, given this is a much smaller project, we would have the contribution bar to be 7-10 non-trivial patches instead. 
+Hoodie has adopted a lot of guidelines set forth in [Google Chromium project](https://www.chromium.org/getting-involved/become-a-committer), to determine committership proposals. However, given this is a much younger project, we would have the contribution bar to be 10-15 non-trivial patches instead.
+Additionally, we expect active engagement with the community over a few months, in terms of conference/meetup talks, helping out with issues/questions on slack/github.
