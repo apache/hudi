@@ -157,6 +157,8 @@ public class HiveTestService {
         conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
             Files.createTempDir().getAbsolutePath());
 
+        conf.set(HiveConf.ConfVars.METASTORE_AUTO_CREATE_ALL.varname, "true");
+
         return new HiveConf(conf, this.getClass());
     }
 
