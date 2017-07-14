@@ -20,8 +20,10 @@ import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieRecord;
 
+import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
-import com.uber.hoodie.exception.HoodieIndexException;
+import com.uber.hoodie.exception.MetadataNotFoundException;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -120,22 +122,40 @@ public class ParquetUtils {
     }
 
 
+    private static List<String> readParquetFooter(Path parquetFilePath, String... footerNames) {
+        List<String> footerVals = new ArrayList<>();
+        ParquetMetadata footer = readMetadata(parquetFilePath);
+        Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
+        for (String footerName: footerNames) {
+            if (metadata.containsKey(footerName)) {
+                footerVals.add(metadata.get(footerName));
+            } else {
+                throw new MetadataNotFoundException("Could not find index in Parquet footer. " +
+                        "Looked for key " + footerName + " in " + parquetFilePath);
+            }
+        }
+        return footerVals;
+    }
 
     /**
      * Read out the bloom filter from the parquet file meta data.
      */
     public static BloomFilter readBloomFilterFromParquetMetadata(Path parquetFilePath) {
-        ParquetMetadata footer = readMetadata(parquetFilePath);
-        Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
-        if (metadata.containsKey(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY)) {
-            return new BloomFilter(metadata.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY));
-        } else {
-            throw new HoodieIndexException("Could not find index in Parquet footer. Looked for key "
-                + HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY + " in "
-                + parquetFilePath);
-        }
+        String footerVal = readParquetFooter(parquetFilePath,
+                HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY).get(0);
+        return new BloomFilter(footerVal);
     }
 
+    public static String[] readMinMaxRecordKeys(Path parquetFilePath) {
+        List<String> minMaxKeys = readParquetFooter(parquetFilePath, HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER,
+                HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
+        if (minMaxKeys.size() != 2) {
+            throw new HoodieException(String.format(
+                    "Could not read min/max record key out of footer correctly from %s. read) : %s",
+                    parquetFilePath, minMaxKeys));
+        }
+        return new String[]{minMaxKeys.get(0), minMaxKeys.get(1)};
+    }
 
     /**
      *

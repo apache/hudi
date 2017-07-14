@@ -203,6 +203,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM_PROP));
     }
 
+    public boolean getBloomIndexPruneByRanges() {
+        return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PRUNE_BY_RANGES_PROP));
+    }
+
+    public boolean getBloomIndexUseCaching() {
+        return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING_PROP));
+    }
+
     public int getNumBucketsPerPartition() {
         return Integer.parseInt(props.getProperty(HoodieIndexConfig.BUCKETED_INDEX_NUM_BUCKETS_PROP));
     }

@@ -30,24 +30,47 @@ import java.util.HashMap;
  */
 public class HoodieAvroWriteSupport extends AvroWriteSupport {
     private BloomFilter bloomFilter;
+    private String minRecordKey;
+    private String maxRecordKey;
+
+
     public final static String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY =
         "com.uber.hoodie.bloomfilter";
+    public final static String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
+    public final static String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
+
 
     public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
         super(schema, avroSchema);
         this.bloomFilter = bloomFilter;
     }
 
-    @Override public WriteSupport.FinalizedWriteContext finalizeWrite() {
+    @Override
+    public WriteSupport.FinalizedWriteContext finalizeWrite() {
         HashMap<String, String> extraMetaData = new HashMap<>();
         if (bloomFilter != null) {
             extraMetaData
                 .put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilter.serializeToString());
+            if (minRecordKey != null && maxRecordKey != null) {
+                extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
+                extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
+            }
         }
         return new WriteSupport.FinalizedWriteContext(extraMetaData);
     }
 
     public void add(String recordKey) {
         this.bloomFilter.add(recordKey);
+        if (minRecordKey != null) {
+            minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
+        } else {
+            minRecordKey = recordKey;
+        }
+
+        if (maxRecordKey != null) {
+            maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
+        } else {
+            maxRecordKey = recordKey;
+        }
     }
 }

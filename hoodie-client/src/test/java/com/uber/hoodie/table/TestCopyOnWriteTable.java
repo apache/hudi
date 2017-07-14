@@ -69,8 +69,7 @@ public class TestCopyOnWriteTable {
     public void init() throws Exception {
 
         // Initialize a local spark env
-        SparkConf sparkConf = new SparkConf().setAppName("TestCopyOnWriteTable").setMaster("local[4]");
-        jsc = new JavaSparkContext(sparkConf);
+        jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestCopyOnWriteTable"));
 
         // Create a temp folder as the base path
         TemporaryFolder folder = new TemporaryFolder();

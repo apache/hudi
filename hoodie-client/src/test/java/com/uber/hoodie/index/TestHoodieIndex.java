@@ -19,6 +19,9 @@ package com.uber.hoodie.index;
 import com.uber.hoodie.config.HoodieWriteConfig;
 
 import com.uber.hoodie.config.HoodieIndexConfig;
+import com.uber.hoodie.index.bloom.HoodieBloomIndex;
+import com.uber.hoodie.index.hbase.HBaseIndex;
+
 import org.junit.Test;
 
 import static org.junit.Assert.*;

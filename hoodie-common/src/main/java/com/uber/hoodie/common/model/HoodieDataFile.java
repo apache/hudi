@@ -21,9 +21,10 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 
+import java.io.Serializable;
 import java.util.Comparator;
 
-public class HoodieDataFile {
+public class HoodieDataFile implements Serializable {
     private FileStatus fileStatus;
 
     public HoodieDataFile(FileStatus fileStatus) {
