@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Optional;
 
@@ -32,7 +33,7 @@ import java.util.Optional;
  *
  * Also contains logic to roll-over the log file
  */
-public class HoodieLogFile {
+public class HoodieLogFile implements Serializable {
     public static final String DELTA_EXTENSION = ".log";
 
     private final Path path;

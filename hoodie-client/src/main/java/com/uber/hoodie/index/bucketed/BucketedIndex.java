@@ -16,7 +16,7 @@
  *
  */
 
-package com.uber.hoodie.index;
+package com.uber.hoodie.index.bucketed;
 
 import com.google.common.base.Optional;
 
@@ -25,9 +25,9 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
+import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 
 import org.apache.log4j.LogManager;

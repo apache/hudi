@@ -16,8 +16,6 @@
 
 package com.uber.hoodie.exception;
 
-import java.io.IOException;
-
 /**
  * <p>
  * Exception thrown for HoodieIndex related errors.

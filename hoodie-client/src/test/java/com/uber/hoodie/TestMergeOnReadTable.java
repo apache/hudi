@@ -16,6 +16,7 @@
 
 package com.uber.hoodie;
 
+import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieMergeOnReadTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.minicluster.HdfsTestService;
@@ -30,32 +31,21 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.avro.Schema;
+
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -68,8 +58,6 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +65,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.uber.hoodie.common.HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat;
 import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -126,10 +113,7 @@ public class TestMergeOnReadTable {
         this.fs = FSUtils.getFs();
 
         // Initialize a local spark env
-        SparkConf sparkConf =
-            new SparkConf().set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-                .setAppName("TestHoodieCompactor").setMaster("local[1]");
-        jsc = new JavaSparkContext(HoodieReadClient.addHoodieSupport(sparkConf));
+        jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieMergeOnReadTable"));
         jsc.hadoopConfiguration().addResource(FSUtils.getFs().getConf());
 
         // Create a temp folder as the base path

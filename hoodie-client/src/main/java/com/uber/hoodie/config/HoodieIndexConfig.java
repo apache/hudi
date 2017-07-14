@@ -42,6 +42,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
     public static final String BLOOM_INDEX_PARALLELISM_PROP = "hoodie.bloom.index.parallelism";
     // Disable explicit bloom index parallelism setting by default - hoodie auto computes
     public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = "0";
+    public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = "hoodie.bloom.index.prune.by.ranges";
+    public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = "true";
+    public static final String BLOOM_INDEX_USE_CACHING_PROP = "hoodie.bloom.index.use.caching";
+    public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
 
     // ***** HBase Index Configs *****
     public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
@@ -112,6 +116,16 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder bloomIndexPruneByRanges(boolean pruneRanges) {
+            props.setProperty(BLOOM_INDEX_PRUNE_BY_RANGES_PROP, String.valueOf(pruneRanges));
+            return this;
+        }
+
+        public Builder bloomIndexUseCaching(boolean useCaching) {
+            props.setProperty(BLOOM_INDEX_USE_CACHING_PROP, String.valueOf(useCaching));
+            return this;
+        }
+
         public Builder numBucketsPerPartition(int numBuckets) {
             props.setProperty(BUCKETED_INDEX_NUM_BUCKETS_PROP, String.valueOf(numBuckets));
             return this;
@@ -127,6 +141,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
                 BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
             setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PARALLELISM_PROP),
                     BLOOM_INDEX_PARALLELISM_PROP, DEFAULT_BLOOM_INDEX_PARALLELISM);
+            setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PRUNE_BY_RANGES_PROP),
+                    BLOOM_INDEX_PRUNE_BY_RANGES_PROP, DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES);
+            setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_USE_CACHING_PROP),
+                    BLOOM_INDEX_USE_CACHING_PROP, DEFAULT_BLOOM_INDEX_USE_CACHING);
             // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
             HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
             return config;

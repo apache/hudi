@@ -16,11 +16,14 @@
 
 package com.uber.hoodie.common;
 
+import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+
+import org.apache.spark.SparkConf;
 
 import java.io.File;
 import java.io.IOException;
@@ -78,5 +81,13 @@ public class HoodieClientTestUtils {
         String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, 0, fileId));
         new File(path).createNewFile();
         new RandomAccessFile(path, "rw").setLength(length);
+    }
+
+    public static SparkConf getSparkConfForTest(String appName) {
+        SparkConf sparkConf = new SparkConf()
+                .setAppName(appName)
+                .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+                .setMaster("local[4]");
+        return HoodieReadClient.addHoodieSupport(sparkConf);
     }
 }

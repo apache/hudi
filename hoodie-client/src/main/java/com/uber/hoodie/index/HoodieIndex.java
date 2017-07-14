@@ -17,8 +17,7 @@
 package com.uber.hoodie.index;
 
 import com.google.common.base.Optional;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.HoodieTimeline;
+
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
@@ -26,6 +25,9 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
 
 import com.uber.hoodie.exception.HoodieIndexException;
+import com.uber.hoodie.index.bloom.HoodieBloomIndex;
+import com.uber.hoodie.index.bucketed.BucketedIndex;
+import com.uber.hoodie.index.hbase.HBaseIndex;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;

@@ -92,8 +92,7 @@ public class TestHoodieClient implements Serializable {
     @Before
     public void init() throws IOException {
         // Initialize a local spark env
-        SparkConf sparkConf = new SparkConf().setAppName("TestHoodieClient").setMaster("local[4]");
-        jsc = new JavaSparkContext(HoodieReadClient.addHoodieSupport(sparkConf));
+        jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieClient"));
 
         //SQLContext stuff
         sqlContext = new SQLContext(jsc);
