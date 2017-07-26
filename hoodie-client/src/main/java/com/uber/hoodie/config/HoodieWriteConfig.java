@@ -42,6 +42,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public static final String TABLE_NAME = "hoodie.table.name";
     private static final String DEFAULT_PARALLELISM = "200";
     private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
+    private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
     private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
     private static final String COMBINE_BEFORE_INSERT_PROP = "hoodie.combine.before.insert";
     private static final String DEFAULT_COMBINE_BEFORE_INSERT = "false";
@@ -53,7 +54,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
     private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
     private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
-
 
     private HoodieWriteConfig(Properties props) {
         super(props);
@@ -80,6 +80,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Boolean shouldAssumeDatePartitioning() {
         return Boolean.parseBoolean(props.getProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP));
+    }
+
+    public int getBulkInsertShuffleParallelism() {
+        return Integer.parseInt(props.getProperty(BULKINSERT_PARALLELISM));
     }
 
     public int getInsertShuffleParallelism() {
@@ -303,6 +307,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withBulkInsertParallelism(int bulkInsertParallelism) {
+            props.setProperty(BULKINSERT_PARALLELISM, String.valueOf(bulkInsertParallelism));
+            return this;
+        }
+
         public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
             props.setProperty(INSERT_PARALLELISM, String.valueOf(insertShuffleParallelism));
             props.setProperty(UPSERT_PARALLELISM, String.valueOf(upsertShuffleParallelism));
@@ -360,6 +369,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             Preconditions.checkArgument(config.getBasePath() != null);
             setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM,
                 DEFAULT_PARALLELISM);
+            setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
+                    DEFAULT_PARALLELISM);
             setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM,
                 DEFAULT_PARALLELISM);
             setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP),
