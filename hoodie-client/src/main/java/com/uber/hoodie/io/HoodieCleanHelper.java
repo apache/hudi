@@ -59,7 +59,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
     public HoodieCleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
         this.hoodieTable = hoodieTable;
-        this.fileSystemView = hoodieTable.getCompactedFileSystemView();
+        this.fileSystemView = hoodieTable.getCompletedFileSystemView();
         this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
         this.config = config;
         this.fs = hoodieTable.getFs();
