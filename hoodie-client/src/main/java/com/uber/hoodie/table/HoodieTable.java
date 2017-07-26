@@ -127,12 +127,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     }
 
     /**
-     * Get the view of the file system for this table
+     * Get the completed (commit + compaction) view of the file system for this table
      *
      * @return
      */
-    public TableFileSystemView getCompactedFileSystemView() {
-        return new HoodieTableFileSystemView(metaClient, getCompletedCompactionCommitTimeline());
+    public TableFileSystemView getCompletedFileSystemView() {
+        return new HoodieTableFileSystemView(metaClient, getCommitTimeline());
     }
 
     /**
