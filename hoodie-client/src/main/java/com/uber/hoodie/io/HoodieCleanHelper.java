@@ -106,7 +106,6 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
                 if (hoodieTable.getMetaClient().getTableType()
                     == HoodieTableType.MERGE_ON_READ) {
                     // If merge on read, then clean the log files for the commits as well
-                    // todo: fix below for MERGE_ON_READ
                     deletePaths.add(String
                         .format("%s/%s/%s", config.getBasePath(), partitionPath,
                             FSUtils.maskWithoutLogVersion(nextRecord.getCommitTime(),
@@ -188,7 +187,6 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
                         if (hoodieTable.getMetaClient().getTableType()
                             == HoodieTableType.MERGE_ON_READ) {
                             // If merge on read, then clean the log files for the commits as well
-                            // todo: fix below for MERGE_ON_READ
                             deletePaths.add(String
                                 .format("%s/%s/%s", config.getBasePath(), partitionPath,
                                     FSUtils.maskWithoutLogVersion(fileCommitTime, afile.getFileId(),
