@@ -90,14 +90,15 @@ public class TestMergeOnReadTable {
             dfsCluster.shutdown();;
         }
         FSUtils.setFs(null);
-        FileSystem.closeAll();
+        // TEMPFIX(vc): Fix failing build
+        //FileSystem.closeAll();
         HoodieTestUtils.resetFS();
     }
 
     @BeforeClass
     public static void setUpDFS() throws IOException {
-
-        FileSystem.closeAll();
+        // TEMPFIX(vc): Fix failing build
+        //FileSystem.closeAll();
         if (hdfsTestService == null) {
             hdfsTestService = new HdfsTestService();
             dfsCluster = hdfsTestService.start(true);
