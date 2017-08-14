@@ -90,15 +90,15 @@ public class TestMergeOnReadTable {
             dfsCluster.shutdown();;
         }
         FSUtils.setFs(null);
-        // TEMPFIX(vc): Fix failing build
-        //FileSystem.closeAll();
+        // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the same JVM
+        FileSystem.closeAll();
         HoodieTestUtils.resetFS();
     }
 
     @BeforeClass
     public static void setUpDFS() throws IOException {
-        // TEMPFIX(vc): Fix failing build
-        //FileSystem.closeAll();
+        // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the same JVM
+        FileSystem.closeAll();
         if (hdfsTestService == null) {
             hdfsTestService = new HdfsTestService();
             dfsCluster = hdfsTestService.start(true);

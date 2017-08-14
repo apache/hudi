@@ -87,7 +87,7 @@ public class HoodieClientTestUtils {
         SparkConf sparkConf = new SparkConf()
                 .setAppName(appName)
                 .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-                .setMaster("local[4]");
+                .setMaster("local[1]");
         return HoodieReadClient.addHoodieSupport(sparkConf);
     }
 }

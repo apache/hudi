@@ -284,7 +284,7 @@ public class TestHDFSParquetImporter implements Serializable {
 
     private JavaSparkContext getJavaSparkContext() {
         // Initialize a local spark env
-        SparkConf sparkConf = new SparkConf().setAppName("TestConversionCommand").setMaster("local[4]");
+        SparkConf sparkConf = new SparkConf().setAppName("TestConversionCommand").setMaster("local[1]");
         sparkConf = HoodieWriteClient.registerClasses(sparkConf);
         return new JavaSparkContext(HoodieReadClient.addHoodieSupport(sparkConf));
     }
