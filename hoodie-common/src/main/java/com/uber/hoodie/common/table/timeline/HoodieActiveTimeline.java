@@ -256,7 +256,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         return readDataFromPath(detailPath);
     }
 
-
     protected void moveInflightToComplete(HoodieInstant inflight, HoodieInstant completed,
         Optional<byte[]> data) {
         Path commitFilePath = new Path(metaPath, completed.getFileName());
@@ -288,6 +287,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         } catch (IOException e) {
             throw new HoodieIOException("Could not complete revert " + completed, e);
         }
+    }
+
+    public void saveToInflight(HoodieInstant instant, Optional<byte[]> content) {
+        createFileInMetaPath(instant.getFileName(), content);
     }
 
     protected void createFileInMetaPath(String filename, Optional<byte[]> content) {

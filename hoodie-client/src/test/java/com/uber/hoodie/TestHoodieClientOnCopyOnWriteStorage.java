@@ -181,6 +181,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
         String newCommitTime = "001";
+        client.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
@@ -193,6 +195,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
             HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
 
         newCommitTime = "002";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, 100);
         JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(records, 1);
         result = client.upsert(updateRecords, newCommitTime);
@@ -214,6 +218,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 1 (only inserts)
          */
         String newCommitTime = "001";
+        client.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
@@ -242,6 +248,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 2 (updates)
          */
         newCommitTime = "004";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, 100);
         LinkedHashMap<HoodieKey, HoodieRecord> recordsMap = new LinkedHashMap<>();
         for (HoodieRecord rec : records) {
@@ -299,6 +307,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write actual 200 insert records and ignore 100 delete records
          */
         String newCommitTime = "001";
+        client.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> fewRecordsForInsert = dataGen.generateInserts(newCommitTime, 200);
         List<HoodieRecord> fewRecordsForDelete = dataGen.generateDeletes(newCommitTime, 100);
 
@@ -327,6 +337,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 2 (deletes+writes)
          */
         newCommitTime = "004";
+        client.startCommitWithTime(newCommitTime);
+
         fewRecordsForDelete = records.subList(0,50);
         List<HoodieRecord> fewRecordsForUpdate = records.subList(50,100);
         records = dataGen.generateDeletesFromExistingRecords(fewRecordsForDelete);
@@ -378,6 +390,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 1 (only inserts)
          */
         String newCommitTime = "001";
+        client.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
         List<WriteStatus> statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         assertNoWriteErrors(statuses);
@@ -386,6 +400,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 2 (updates)
          */
         newCommitTime = "002";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -403,6 +419,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 3 (updates)
          */
         newCommitTime = "003";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -412,6 +430,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 4 (updates)
          */
         newCommitTime = "004";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -433,6 +453,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
             table.getCompletedSavepointTimeline().getInstants().findFirst().get().getTimestamp());
         // rollback and reupsert 004
         client.rollback(newCommitTime);
+
+        client.startCommitWithTime(newCommitTime);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
         assertNoWriteErrors(statuses);
@@ -462,6 +484,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 1 (only inserts)
          */
         String newCommitTime = "001";
+        client.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
@@ -472,6 +496,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 2 (updates)
          */
         newCommitTime = "002";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -483,6 +509,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 3 (updates)
          */
         newCommitTime = "003";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -502,6 +530,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
          * Write 4 (updates)
          */
         newCommitTime = "004";
+        client.startCommitWithTime(newCommitTime);
+
         records = dataGen.generateUpdates(newCommitTime, records);
         statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         // Verify there are no errors
@@ -917,7 +947,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
         // Inserts => will write file1
         String commitTime1 = "001";
-        List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, INSERT_SPLIT_LIMIT); // this writes ~5000kb
+        client.startCommitWithTime(commitTime1);
+        List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, INSERT_SPLIT_LIMIT); // this writes ~500kb
         Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
 
         JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
@@ -933,6 +964,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
         // Update + Inserts such that they just expand file1
         String commitTime2 = "002";
+        client.startCommitWithTime(commitTime2);
         List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, 40);
         Set<String> keys2 = HoodieClientTestUtils.getRecordKeys(inserts2);
         List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>();
@@ -958,6 +990,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
         // update + inserts such that file1 is updated and expanded, a new file2 is created.
         String commitTime3 = "003";
+        client.startCommitWithTime(commitTime3);
         List<HoodieRecord> insertsAndUpdates3 = dataGen.generateInserts(commitTime3, 200);
         Set<String> keys3 = HoodieClientTestUtils.getRecordKeys(insertsAndUpdates3);
         List<HoodieRecord> updates3 = dataGen.generateUpdates(commitTime3, inserts2);
@@ -1017,7 +1050,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
         // Inserts => will write file1
         String commitTime1 = "001";
-        List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, INSERT_SPLIT_LIMIT); // this writes ~5000kb
+        client.startCommitWithTime(commitTime1);
+        List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, INSERT_SPLIT_LIMIT); // this writes ~500kb
         Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
         JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
         List<WriteStatus> statuses= client.insert(insertRecordsRDD1, commitTime1).collect();
@@ -1033,6 +1067,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
         // Second, set of Inserts should just expand file1
         String commitTime2 = "002";
+        client.startCommitWithTime(commitTime2);
         List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, 40);
         Set<String> keys2 = HoodieClientTestUtils.getRecordKeys(inserts2);
         JavaRDD<HoodieRecord> insertRecordsRDD2 = jsc.parallelize(inserts2, 1);
@@ -1055,6 +1090,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
         // Lots of inserts such that file1 is updated and expanded, a new file2 is created.
         String commitTime3 = "003";
+        client.startCommitWithTime(commitTime3);
         List<HoodieRecord> insert3 = dataGen.generateInserts(commitTime3, 200);
         JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(insert3, 1);
         statuses = client.insert(insertRecordsRDD3, commitTime3).collect();
@@ -1369,6 +1405,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg);
 
         String commitTime = "000";
+        client.startCommitWithTime(commitTime);
+
         List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 

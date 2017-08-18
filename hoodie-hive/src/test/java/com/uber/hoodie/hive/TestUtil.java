@@ -16,10 +16,8 @@
 
 package com.uber.hoodie.hive;
 
-import static com.uber.hoodie.common.model.HoodieTestUtils.DEFAULT_TASK_PARTITIONID;
-import static org.junit.Assert.fail;
-
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
@@ -38,19 +36,10 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.hive.util.HiveTestService;
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.commons.io.FileUtils;
@@ -69,6 +58,19 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.junit.runners.model.InitializationError;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.UUID;
+
+import static com.uber.hoodie.common.model.HoodieTestUtils.DEFAULT_TASK_PARTITIONID;
+import static org.junit.Assert.fail;
 
 @SuppressWarnings("SameParameterValue")
 public class TestUtil {
@@ -306,7 +308,9 @@ public class TestUtil {
     List<IndexedRecord> records = (isLogSchemaSimple ? SchemaTestUtil
         .generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100));
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
+    Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
+    metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema, metadata);
     logWriter.appendBlock(dataBlock);
     logWriter.close();
     return logWriter.getLogFile();

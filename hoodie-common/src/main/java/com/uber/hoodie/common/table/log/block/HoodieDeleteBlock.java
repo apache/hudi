@@ -16,24 +16,43 @@
 
 package com.uber.hoodie.common.table.log.block;
 
+import org.apache.commons.lang3.StringUtils;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import org.apache.commons.lang3.StringUtils;
+import java.util.Map;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far
  */
-public class HoodieDeleteBlock implements HoodieLogBlock {
+public class HoodieDeleteBlock extends HoodieLogBlock {
 
   private final String[] keysToDelete;
 
-  public HoodieDeleteBlock(String[] keysToDelete) {
+  public HoodieDeleteBlock(String[] keysToDelete, Map<LogMetadataType, String> metadata) {
+    super(metadata);
     this.keysToDelete = keysToDelete;
+  }
+
+  public HoodieDeleteBlock(String[] keysToDelete) {
+    this(keysToDelete, null);
   }
 
   @Override
   public byte[] getBytes() throws IOException {
-    return StringUtils.join(keysToDelete, ',').getBytes(Charset.forName("utf-8"));
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream output = new DataOutputStream(baos);
+    if(super.getLogMetadata() != null) {
+      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
+    }
+    byte [] bytesToWrite = StringUtils.join(keysToDelete, ',').getBytes(Charset.forName("utf-8"));
+    output.writeInt(bytesToWrite.length);
+    output.write(bytesToWrite);
+    return baos.toByteArray();
   }
 
   public String[] getKeysToDelete() {
@@ -45,7 +64,15 @@ public class HoodieDeleteBlock implements HoodieLogBlock {
     return HoodieLogBlockType.DELETE_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content) {
-    return new HoodieDeleteBlock(new String(content).split(","));
+  public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
+    Map<LogMetadataType, String> metadata = null;
+    if(readMetadata) {
+      metadata = HoodieLogBlock.getLogMetadata(dis);
+    }
+    int dataLength = dis.readInt();
+    byte [] data = new byte[dataLength];
+    dis.readFully(data);
+    return new HoodieDeleteBlock(new String(data).split(","), metadata);
   }
 }

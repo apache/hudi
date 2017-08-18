@@ -20,6 +20,7 @@ import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
+import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -33,6 +34,7 @@ import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
+import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.exception.HoodieSavepointException;
 import java.io.IOException;
 import java.io.Serializable;
@@ -327,4 +329,17 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      * of files cleaned.
      */
     public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc);
+
+    /**
+     * Rollback the (inflight/committed) record changes with the given commit time.
+     * Four steps:
+     * (1) Atomically unpublish this commit
+     * (2) clean indexing data
+     * (3) clean new generated parquet files / log blocks
+     * (4) Finally, delete .<action>.commit or .<action>.inflight file
+     * @param commits
+     * @return
+     * @throws HoodieRollbackException
+     */
+    public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits) throws IOException;
 }

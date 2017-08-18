@@ -18,13 +18,6 @@ package com.uber.hoodie.common.table.log.block;
 
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -33,6 +26,15 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * DataBlock contains a list of records serialized using Avro.
@@ -43,14 +45,19 @@ import org.apache.avro.io.EncoderFactory;
  * 4. Size of a record
  * 5. Actual avro serialized content of the record
  */
-public class HoodieAvroDataBlock implements HoodieLogBlock {
+public class HoodieAvroDataBlock extends HoodieLogBlock {
 
   private List<IndexedRecord> records;
   private Schema schema;
 
-  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
+  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema, Map<LogMetadataType, String> metadata) {
+    super(metadata);
     this.records = records;
     this.schema = schema;
+  }
+
+  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
+    this(records, schema, null);
   }
 
   public List<IndexedRecord> getRecords() {
@@ -63,19 +70,25 @@ public class HoodieAvroDataBlock implements HoodieLogBlock {
 
   @Override
   public byte[] getBytes() throws IOException {
+
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
 
-    // 1. Compress and Write schema out
+    // 1. Write out metadata
+    if(super.getLogMetadata() != null) {
+      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
+    }
+
+    // 2. Compress and Write schema out
     byte[] schemaContent = HoodieAvroUtils.compress(schema.toString());
     output.writeInt(schemaContent.length);
     output.write(schemaContent);
 
-    // 2. Write total number of records
+    // 3. Write total number of records
     output.writeInt(records.size());
 
-    // 3. Write the records
+    // 4. Write the records
     records.forEach(s -> {
       ByteArrayOutputStream temp = new ByteArrayOutputStream();
       Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
@@ -104,9 +117,15 @@ public class HoodieAvroDataBlock implements HoodieLogBlock {
     return HoodieLogBlockType.AVRO_DATA_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, Schema readerSchema) throws IOException {
-    // 1. Read the schema written out
+  public static HoodieLogBlock fromBytes(byte[] content, Schema readerSchema, boolean readMetadata) throws IOException {
+
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
+    Map<LogMetadataType, String> metadata = null;
+    // 1. Read the metadata written out, if applicable
+    if(readMetadata) {
+      metadata = HoodieLogBlock.getLogMetadata(dis);
+    }
+    // 1. Read the schema written out
     int schemaLength = dis.readInt();
     byte[] compressedSchema = new byte[schemaLength];
     dis.readFully(compressedSchema, 0, schemaLength);
@@ -133,6 +152,6 @@ public class HoodieAvroDataBlock implements HoodieLogBlock {
     }
 
     dis.close();
-    return new HoodieAvroDataBlock(records, readerSchema);
+    return new HoodieAvroDataBlock(records, readerSchema, metadata);
   }
 }

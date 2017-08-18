@@ -112,7 +112,7 @@ public class TestHoodieCommitArchiveLog {
 
         //read the file
         HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(),
-                new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")), HoodieArchivedMetaEntry.getClassSchema());
+                new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")), HoodieArchivedMetaEntry.getClassSchema(), false);
 
         int archivedRecordsCount = 0;
         List<IndexedRecord> readRecords = new ArrayList<>();

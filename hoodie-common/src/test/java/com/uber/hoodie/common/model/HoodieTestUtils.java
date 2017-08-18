@@ -16,12 +16,12 @@
 
 package com.uber.hoodie.common.model;
 
-import com.google.common.collect.Lists;
-
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.uber.hoodie.avro.model.HoodieCleanMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.table.HoodieTableConfig;
@@ -30,6 +30,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
@@ -249,6 +250,8 @@ public class HoodieTestUtils {
                     .overBaseCommit(location.getCommitTime())
                     .withFs(fs).build();
 
+                Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
+                metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, location.getCommitTime());
                 logWriter.appendBlock(new HoodieAvroDataBlock(s.getValue().stream().map(r -> {
                     try {
                         GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
@@ -260,7 +263,7 @@ public class HoodieTestUtils {
                     } catch (IOException e) {
                         return null;
                     }
-                }).collect(Collectors.toList()), schema));
+                }).collect(Collectors.toList()), schema, metadata));
                 logWriter.close();
             } catch (Exception e) {
                 fail(e.toString());

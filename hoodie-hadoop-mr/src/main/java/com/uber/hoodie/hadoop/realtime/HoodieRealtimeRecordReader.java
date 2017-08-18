@@ -18,16 +18,12 @@
 
 package com.uber.hoodie.hadoop.realtime;
 
-import com.google.common.collect.Lists;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
@@ -49,6 +45,9 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import parquet.avro.AvroSchemaConverter;
+import parquet.hadoop.ParquetFileReader;
+import parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,10 +55,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import parquet.avro.AvroSchemaConverter;
-import parquet.hadoop.ParquetFileReader;
-import parquet.schema.MessageType;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time
@@ -127,7 +125,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
 
         HoodieCompactedLogRecordScanner compactedLogRecordScanner =
             new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getDeltaFilePaths(),
-                readerSchema);
+                readerSchema, split.getMaxCommitTime());
 
         // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
         // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)

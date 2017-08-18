@@ -21,20 +21,12 @@ import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
-import com.uber.hoodie.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -42,6 +34,21 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.LogMetadataType.INSTANT_TIME;
 
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged
@@ -63,69 +70,99 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
   private AtomicLong totalLogRecords = new AtomicLong(0);
   // Total final list of compacted/merged records
   private long totalRecordsToUpdate;
+  // Latest valid instant time
+  private String latestInstantTime;
 
   public HoodieCompactedLogRecordScanner(FileSystem fs, List<String> logFilePaths,
-      Schema readerSchema) {
+                                         Schema readerSchema, String latestInstantTime) {
     this.readerSchema = readerSchema;
+    this.latestInstantTime = latestInstantTime;
 
+    // Store only the last log blocks (needed to implement rollback)
+    Deque<HoodieLogBlock> lastBlocks = new ArrayDeque<>();
+    // Store merged records for all versions for this log file
     Map<String, HoodieRecord<HoodieAvroPayload>> records = Maps.newHashMap();
     // iterate over the paths
-    logFilePaths.stream().map(s -> new HoodieLogFile(new Path(s))).forEach(s -> {
-      log.info("Scanning log file " + s.getPath());
+    Iterator<String> logFilePathsItr = logFilePaths.iterator();
+    while(logFilePathsItr.hasNext()) {
+      HoodieLogFile logFile = new HoodieLogFile(new Path(logFilePathsItr.next()));
+      log.info("Scanning log file " + logFile.getPath());
       totalLogFiles.incrementAndGet();
       try {
         // Use the HoodieLogFormatReader to iterate through the blocks in the log file
-        HoodieLogFormatReader reader = new HoodieLogFormatReader(fs, s, readerSchema);
-        // Store the records loaded from the last data block (needed to implement rollback)
-        Map<String, HoodieRecord<HoodieAvroPayload>> recordsFromLastBlock = Maps.newHashMap();
-        reader.forEachRemaining(r -> {
+        HoodieLogFormatReader reader = new HoodieLogFormatReader(fs, logFile, readerSchema, true);
+        while(reader.hasNext()) {
+          HoodieLogBlock r = reader.next();
+          String blockInstantTime = r.getLogMetadata().get(INSTANT_TIME);
+          if(!HoodieTimeline.compareTimestamps(blockInstantTime, this.latestInstantTime,
+                  HoodieTimeline.LESSER_OR_EQUAL)) {
+            //hit a block with instant time greater than should be processed, stop processing further
+            break;
+          }
           switch (r.getBlockType()) {
             case AVRO_DATA_BLOCK:
-              log.info("Reading a data block from file " + s.getPath());
+              log.info("Reading a data block from file " + logFile.getPath());
               // If this is a avro data block, then merge the last block records into the main result
-              merge(records, recordsFromLastBlock);
-              // Load the merged records into recordsFromLastBlock
-              HoodieAvroDataBlock dataBlock = (HoodieAvroDataBlock) r;
-              loadRecordsFromBlock(dataBlock, recordsFromLastBlock);
+              merge(records, lastBlocks);
+              // store the last block
+              lastBlocks.push(r);
               break;
             case DELETE_BLOCK:
-              log.info("Reading a delete block from file " + s.getPath());
-              // This is a delete block, so lets merge any records from previous data block
-              merge(records, recordsFromLastBlock);
-              // Delete the keys listed as to be deleted
-              HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) r;
-              Arrays.stream(deleteBlock.getKeysToDelete()).forEach(records::remove);
+              log.info("Reading a delete block from file " + logFile.getPath());
+              String lastBlockInstantTime = lastBlocks.peek().getLogMetadata().get(INSTANT_TIME);
+              if(!lastBlockInstantTime.equals(blockInstantTime)) {
+                // Block with the keys listed as to be deleted, data and delete blocks written in different batches
+                // so it is safe to merge
+                // This is a delete block, so lets merge any records from previous data block
+                merge(records, lastBlocks);
+              }
+              // store deletes so can be rolled back
+              lastBlocks.push(r);
               break;
             case COMMAND_BLOCK:
-              log.info("Reading a command block from file " + s.getPath());
+              log.info("Reading a command block from file " + logFile.getPath());
               // This is a command block - take appropriate action based on the command
               HoodieCommandBlock commandBlock = (HoodieCommandBlock) r;
-              if (commandBlock.getType() == HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK) {
-                log.info("Rolling back the last data block read in " + s.getPath());
-                // rollback the last read data block
-                recordsFromLastBlock.clear();
+              String targetInstantForCommandBlock = r.getLogMetadata().get(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME);
+              switch (commandBlock.getType()) { // there can be different types of command blocks
+                case ROLLBACK_PREVIOUS_BLOCK:
+                  // Rollback the last read log block
+                  // Get commit time from last record block, compare with targetCommitTime, rollback only if equal,
+                  // this is required in scenarios of invalid/extra rollback blocks written due to failures during
+                  // the rollback operation itself
+                  HoodieLogBlock lastBlock = lastBlocks.peek();
+                  if (lastBlock != null && lastBlock.getBlockType() != CORRUPT_BLOCK &&
+                        targetInstantForCommandBlock.contentEquals(lastBlock.getLogMetadata().get(INSTANT_TIME))) {
+                    log.info("Rolling back the last log block read in " + logFile.getPath());
+                    lastBlocks.pop();
+                  } else if(lastBlock != null && lastBlock.getBlockType() == CORRUPT_BLOCK) {
+                    // handle corrupt blocks separately since they may not have metadata
+                    log.info("Rolling back the last corrupted log block read in " + logFile.getPath());
+                    lastBlocks.pop();
+                  }
+                  else {
+                    log.warn("Invalid or extra rollback command block in " + logFile.getPath());
+                  }
+                  break;
               }
               break;
             case CORRUPT_BLOCK:
-              log.info("Found a corrupt block in " + s.getPath());
+              log.info("Found a corrupt block in " + logFile.getPath());
               // If there is a corrupt block - we will assume that this was the next data block
-              // so merge the last block records (TODO - handle when the corrupted block was a tombstone written partially?)
-              merge(records, recordsFromLastBlock);
-              recordsFromLastBlock.clear();
+              lastBlocks.push(r);
               break;
           }
-        });
-
-        // merge the last read block when all the blocks are done reading
-        if (!recordsFromLastBlock.isEmpty()) {
-          log.info("Merging the final data block in " + s.getPath());
-          merge(records, recordsFromLastBlock);
         }
 
       } catch (IOException e) {
-        throw new HoodieIOException("IOException when reading log file " + s);
+        throw new HoodieIOException("IOException when reading log file " + logFile);
       }
-    });
+      // merge the last read block when all the blocks are done reading
+      if(!lastBlocks.isEmpty()) {
+        log.info("Merging the final data blocks in " + logFile.getPath());
+        merge(records, lastBlocks);
+      }
+    }
     this.logRecords = Collections.unmodifiableCollection(records.values());
     this.totalRecordsToUpdate = records.size();
   }
@@ -135,17 +172,14 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
    * and merge with the HoodieAvroPayload if the same key was found before
    *
    * @param dataBlock
-   * @param recordsFromLastBlock
    */
-  private void loadRecordsFromBlock(
-      HoodieAvroDataBlock dataBlock,
-      Map<String, HoodieRecord<HoodieAvroPayload>> recordsFromLastBlock) {
-    recordsFromLastBlock.clear();
+  private Map<String, HoodieRecord<HoodieAvroPayload>> loadRecordsFromBlock(HoodieAvroDataBlock dataBlock) {
+    Map<String, HoodieRecord<HoodieAvroPayload>> recordsFromLastBlock = Maps.newHashMap();
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
     recs.forEach(rec -> {
       String key = ((GenericRecord) rec).get(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-          .toString();
+        .toString();
       String partitionPath =
           ((GenericRecord) rec).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
               .toString();
@@ -155,15 +189,39 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
       if (recordsFromLastBlock.containsKey(key)) {
         // Merge and store the merged record
         HoodieAvroPayload combinedValue = recordsFromLastBlock.get(key).getData()
-            .preCombine(hoodieRecord.getData());
+          .preCombine(hoodieRecord.getData());
         recordsFromLastBlock
-            .put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
-                combinedValue));
+          .put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
+                        combinedValue));
       } else {
         // Put the record as is
         recordsFromLastBlock.put(key, hoodieRecord);
       }
     });
+    return recordsFromLastBlock;
+  }
+
+  /**
+   * Merge the last seen log blocks with the accumulated records
+   *
+   * @param records
+   * @param lastBlocks
+   */
+  private void merge(Map<String, HoodieRecord<HoodieAvroPayload>> records,
+      Deque<HoodieLogBlock> lastBlocks) {
+    while (!lastBlocks.isEmpty()) {
+      HoodieLogBlock lastBlock = lastBlocks.pop();
+      switch (lastBlock.getBlockType()) {
+        case AVRO_DATA_BLOCK:
+          merge(records, loadRecordsFromBlock((HoodieAvroDataBlock) lastBlock));
+          break;
+        case DELETE_BLOCK:
+          Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(records::remove);
+          break;
+        case CORRUPT_BLOCK:
+          break;
+      }
+    }
   }
 
   /**
@@ -178,9 +236,9 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
       if (records.containsKey(key)) {
         // Merge and store the merged record
         HoodieAvroPayload combinedValue = records.get(key).getData()
-            .preCombine(hoodieRecord.getData());
+          .preCombine(hoodieRecord.getData());
         records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
-            combinedValue));
+          combinedValue));
       } else {
         // Put the record as is
         records.put(key, hoodieRecord);
