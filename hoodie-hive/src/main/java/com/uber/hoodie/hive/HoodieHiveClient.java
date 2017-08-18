@@ -395,7 +395,7 @@ public class HoodieHiveClient {
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private MessageType readSchemaFromLogFile(Optional<HoodieInstant> lastCompactionCommitOpt,
       Path path) throws IOException {
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
+    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null, true);
     HoodieAvroDataBlock lastBlock = null;
     while (reader.hasNext()) {
       HoodieLogBlock block = reader.next();

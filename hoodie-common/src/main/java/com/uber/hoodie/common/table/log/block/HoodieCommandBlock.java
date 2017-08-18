@@ -16,25 +16,42 @@
 
 package com.uber.hoodie.common.table.log.block;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * Command block issues a specific command to the scanner
  */
-public class HoodieCommandBlock implements HoodieLogBlock {
+public class HoodieCommandBlock extends HoodieLogBlock {
 
   private final HoodieCommandBlockTypeEnum type;
 
   public enum HoodieCommandBlockTypeEnum {ROLLBACK_PREVIOUS_BLOCK}
 
-  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type) {
+  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type, Map<LogMetadataType, String> metadata) {
+    super(metadata);
     this.type = type;
+  }
+
+  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type) {
+    this(type, null);
   }
 
   @Override
   public byte[] getBytes() throws IOException {
-    return ByteBuffer.allocate(4).putInt(type.ordinal()).array();
+
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream output = new DataOutputStream(baos);
+    if(super.getLogMetadata() != null) {
+      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
+    }
+    output.writeInt(type.ordinal());
+    output.close();
+    return baos.toByteArray();
   }
 
   public HoodieCommandBlockTypeEnum getType() {
@@ -46,8 +63,13 @@ public class HoodieCommandBlock implements HoodieLogBlock {
     return HoodieLogBlockType.COMMAND_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content) {
-    int ordinal = ByteBuffer.wrap(content).getInt();
-    return new HoodieCommandBlock(HoodieCommandBlockTypeEnum.values()[ordinal]);
+  public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
+    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
+    Map<LogMetadataType, String> metadata = null;
+    if(readMetadata) {
+      metadata = HoodieLogBlock.getLogMetadata(dis);
+    }
+    int ordinal = dis.readInt();
+    return new HoodieCommandBlock(HoodieCommandBlockTypeEnum.values()[ordinal], metadata);
   }
 }

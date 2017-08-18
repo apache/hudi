@@ -18,6 +18,7 @@ package com.uber.hoodie.io.compact;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.CompactionWriteStat;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
@@ -147,7 +148,14 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // Load all the delta commits since the last compaction commit and get all the blocks to be loaded and load it using CompositeAvroLogReader
     // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, operation.getDeltaFilePaths(), readerSchema);
+    String maxInstantTime = metaClient.getActiveTimeline()
+            .getTimelineOfActions(
+                    Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
+                            HoodieTimeline.COMPACTION_ACTION,
+                            HoodieTimeline.DELTA_COMMIT_ACTION))
+            .filterCompletedInstants().lastInstant().get().getTimestamp();
+
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, operation.getDeltaFilePaths(), readerSchema, maxInstantTime);
     if (!scanner.iterator().hasNext()) {
       return Lists.newArrayList();
     }

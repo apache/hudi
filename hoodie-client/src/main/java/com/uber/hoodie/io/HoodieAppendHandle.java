@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.io;
 
+import com.beust.jcommander.internal.Maps;
 import com.clearspring.analytics.util.Lists;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
@@ -27,6 +28,7 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
@@ -45,6 +47,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -157,6 +160,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
         List<IndexedRecord> recordList = new ArrayList<>();
         List<String> keysToDelete = new ArrayList<>();
+        Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
+        metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, commitTime);
         records.stream().forEach(record -> {
             Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
             if(indexedRecord.isPresent()) {
@@ -166,9 +171,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
             }
         });
         try {
-            writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, schema));
+            if(recordList.size() > 0) {
+                writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, schema, metadata));
+            }
             if(keysToDelete.size() > 0) {
-                writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.stream().toArray(String[]::new)));
+                writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.stream().toArray(String[]::new), metadata));
             }
         } catch (Exception e) {
             throw new HoodieAppendException(

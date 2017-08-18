@@ -19,11 +19,13 @@
 package com.uber.hoodie.hadoop.realtime;
 
 
+import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
@@ -55,6 +57,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertTrue;
@@ -81,7 +84,9 @@ public class HoodieRealtimeRecordReaderTest {
             records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
         }
         Schema writeSchema = records.get(0).getSchema();
-        HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, writeSchema);
+        Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
+        metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, newCommit);
+        HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, writeSchema, metadata);
         writer = writer.appendBlock(dataBlock);
         long size = writer.getCurrentSize();
         return writer;

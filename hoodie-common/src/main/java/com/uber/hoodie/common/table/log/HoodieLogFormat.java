@@ -187,8 +187,8 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readMetadata)
       throws IOException {
-    return new HoodieLogFormatReader(fs, logFile, readerSchema);
+    return new HoodieLogFormatReader(fs, logFile, readerSchema, readMetadata);
   }
 }

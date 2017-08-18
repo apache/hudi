@@ -138,6 +138,8 @@ public class TestHoodieCompactor {
         HoodieWriteConfig config = getConfig();
         HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
         String newCommitTime = "100";
+        writeClient.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
         JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
         List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
@@ -147,6 +149,8 @@ public class TestHoodieCompactor {
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
 
         newCommitTime = "101";
+        writeClient.startCommitWithTime(newCommitTime);
+
         List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
         JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
         HoodieIndex index = new HoodieBloomIndex<>(config, jsc);

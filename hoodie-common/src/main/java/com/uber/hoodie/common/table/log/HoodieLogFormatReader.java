@@ -51,15 +51,17 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private static final byte[] magicBuffer = new byte[4];
   private final Schema readerSchema;
   private HoodieLogBlock nextBlock = null;
+  private boolean readMetadata = true;
 
-  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize) throws IOException {
+  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean readMetadata) throws IOException {
     this.inputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
     this.readerSchema = readerSchema;
+    this.readMetadata = readMetadata;
   }
 
-  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema) throws IOException {
-    this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE);
+  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readMetadata) throws IOException {
+    this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, readMetadata);
   }
 
   @Override
@@ -93,11 +95,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     switch (blockType) {
       // based on type read the block
       case AVRO_DATA_BLOCK:
-        return HoodieAvroDataBlock.fromBytes(content, readerSchema);
+        return HoodieAvroDataBlock.fromBytes(content, readerSchema, readMetadata);
       case DELETE_BLOCK:
-        return HoodieDeleteBlock.fromBytes(content);
+        return HoodieDeleteBlock.fromBytes(content, readMetadata);
       case COMMAND_BLOCK:
-        return HoodieCommandBlock.fromBytes(content);
+        return HoodieCommandBlock.fromBytes(content, readMetadata);
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);
     }
@@ -113,7 +115,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     int corruptedBlockSize = (int) (nextBlockOffset - currentPos);
     byte[] content = new byte[corruptedBlockSize];
     inputStream.readFully(content, 0, corruptedBlockSize);
-    return HoodieCorruptBlock.fromBytes(content);
+    return HoodieCorruptBlock.fromBytes(content, corruptedBlockSize, true);
   }
 
   private boolean isBlockCorrupt(int blocksize) throws IOException {
