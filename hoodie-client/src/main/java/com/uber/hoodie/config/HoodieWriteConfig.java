@@ -18,6 +18,7 @@ package com.uber.hoodie.config;
 
 
 import com.google.common.base.Preconditions;
+import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
@@ -54,6 +55,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
     private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
     private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
+    private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
+    private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
 
     private HoodieWriteConfig(Properties props) {
         super(props);
@@ -104,6 +107,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public StorageLevel getWriteStatusStorageLevel() {
         return StorageLevel.fromString(props.getProperty(WRITE_STATUS_STORAGE_LEVEL));
+    }
+
+    public String getWriteStatusClassName() {
+        return props.getProperty(HOODIE_WRITE_STATUS_CLASS_PROP);
     }
 
     /**
@@ -363,6 +370,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withWriteStatusClass(Class<? extends WriteStatus> writeStatusClass) {
+            props.setProperty(HOODIE_WRITE_STATUS_CLASS_PROP, writeStatusClass.getName());
+            return this;
+        }
+
         public HoodieWriteConfig build() {
             HoodieWriteConfig config = new HoodieWriteConfig(props);
             // Check for mandatory properties
@@ -383,6 +395,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
                 HOODIE_AUTO_COMMIT_PROP, DEFAULT_HOODIE_AUTO_COMMIT);
             setDefaultOnCondition(props, !props.containsKey(HOODIE_ASSUME_DATE_PARTITIONING_PROP),
                     HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
+            setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
+                    HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
 
             // Make sure the props is propagated
             setDefaultOnCondition(props, !isIndexConfigSet,

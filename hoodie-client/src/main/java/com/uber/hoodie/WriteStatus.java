@@ -24,6 +24,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Status of a write operation.
@@ -47,16 +49,34 @@ public class WriteStatus implements Serializable {
     private long totalRecords = 0;
     private long totalErrorRecords = 0;
 
-    public void markSuccess(HoodieRecord record) {
-        writtenRecords.add(record);
-        totalRecords++;
+    /**
+     * Mark write as success, optionally using given parameters for the purpose of calculating
+     * some aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
+     * objects are collected in Spark Driver.
+     *
+     * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+     * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
+     */
+    public void markSuccess(HoodieRecord record,
+        Optional<Map<String, String>> optionalRecordMetadata) {
+      writtenRecords.add(record);
+      totalRecords++;
     }
 
-    public void markFailure(HoodieRecord record, Throwable t) {
-        failedRecords.add(record);
-        errors.put(record.getKey(), t);
-        totalRecords++;
-        totalErrorRecords++;
+    /**
+     * Mark write as failed, optionally using given parameters for the purpose of calculating
+     * some aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
+     * objects are collected in Spark Driver.
+     *
+     * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+     * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
+     */
+    public void markFailure(HoodieRecord record, Throwable t,
+        Optional<Map<String, String>> optionalRecordMetadata) {
+      failedRecords.add(record);
+      errors.put(record.getKey(), t);
+      totalRecords++;
+      totalErrorRecords++;
     }
 
     public String getFileId() {
