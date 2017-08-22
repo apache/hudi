@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.model;
 
+import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -56,4 +57,13 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
      * Return EMPTY to skip writing this record.
      */
     Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException;
+
+    /**
+     * This method can be used to extract some metadata from HoodieRecordPayload. The metadata is passed
+     * to {@code WriteStatus.markSuccess()} and {@code WriteStatus.markFailure()} in order to compute
+     * some aggregate metrics using the metadata in the context of a write success or failure.
+     */
+    default Optional<Map<String, String>> getMetadata() {
+        return Optional.empty();
+    }
 }

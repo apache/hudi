@@ -19,6 +19,7 @@ package com.uber.hoodie;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieMergeOnReadTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
@@ -224,7 +225,26 @@ public class TestMergeOnReadTable {
         assertEquals("Must contain 200 records", 200, readClient.readSince("000").count());
     }
 
+    // Check if record level metadata is aggregated properly at the end of write.
     @Test
+    public void testMetadataAggregateFromWriteStatus() throws Exception {
+        HoodieWriteConfig cfg = getConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class).build();
+        HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+
+        String newCommitTime = "001";
+        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
+        JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+        List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+        assertNoWriteErrors(statuses);
+        Map<String, String> allWriteStatusMergedMetadataMap = MetadataMergeWriteStatus .mergeMetadataForWriteStatuses(statuses);
+        assertTrue(allWriteStatusMergedMetadataMap.containsKey("InputRecordCount_1506582000"));
+        // For metadata key InputRecordCount_1506582000, value is 2 for each record. So sum of this should be 2 * records.size()
+        assertEquals(String.valueOf(2 * records.size()), allWriteStatusMergedMetadataMap.get("InputRecordCount_1506582000"));
+    }
+
+        @Test
     public void testSimpleInsertAndDelete() throws Exception {
         HoodieWriteConfig cfg = getConfig();
         HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);

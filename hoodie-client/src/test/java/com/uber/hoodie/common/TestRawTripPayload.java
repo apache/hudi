@@ -18,9 +18,14 @@ package com.uber.hoodie.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.MercifulJsonConverter;
+import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map.Entry;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.commons.io.IOUtils;
@@ -91,6 +96,15 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         }
     }
 
+    @Override
+    public Optional<Map<String, String>> getMetadata() {
+        // Let's assume we want to count the number of input row change events
+        // that are processed. Let the time-bucket for this row change event be 1506582000.
+        Map<String, String> metadataMap = new HashMap<>();
+        metadataMap.put("InputRecordCount_1506582000", "2");
+        return Optional.of(metadataMap);
+    }
+
     public String getRowKey() {
         return rowKey;
     }
@@ -119,5 +133,59 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         StringWriter sw = new StringWriter(dataSize);
         IOUtils.copy(iis, sw);
         return sw.toString();
+    }
+
+    /**
+     * A custom {@link WriteStatus} that merges passed metadata key value map
+     * to {@code WriteStatus.markSuccess()} and {@code WriteStatus.markFailure()}.
+     */
+    public static class MetadataMergeWriteStatus extends WriteStatus {
+        private Map<String, String> mergedMetadataMap = new HashMap<>();
+
+        @Override
+        public void markSuccess(HoodieRecord record, Optional<Map<String, String>> recordMetadata) {
+            super.markSuccess(record, recordMetadata);
+            if(recordMetadata.isPresent()) {
+                mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
+            }
+        }
+
+        @Override
+        public void markFailure(HoodieRecord record, Throwable t,
+            Optional<Map<String, String>> recordMetadata) {
+            super.markFailure(record, t, recordMetadata);
+            if(recordMetadata.isPresent()) {
+                mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
+            }
+        }
+
+        public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
+            Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
+            for (WriteStatus writeStatus : writeStatuses) {
+                MetadataMergeWriteStatus.mergeMetadataMaps(
+                    ((MetadataMergeWriteStatus)writeStatus).getMergedMetadataMap(),
+                    allWriteStatusMergedMetadataMap);
+            }
+            return allWriteStatusMergedMetadataMap;
+        }
+
+        private static void mergeMetadataMaps(Map<String, String> mergeFromMap, Map<String, String> mergeToMap) {
+            for (Entry<String, String> entry : mergeFromMap.entrySet()) {
+                String key = entry.getKey();
+                if(!mergeToMap.containsKey(key)) {
+                    mergeToMap.put(key, "0");
+                }
+                mergeToMap
+                    .put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
+            }
+        }
+
+        private Map<String, String> getMergedMetadataMap() {
+            return mergedMetadataMap;
+        }
+
+        private static String addStrsAsInt(String a, String b) {
+            return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
+        }
     }
 }
