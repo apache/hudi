@@ -185,7 +185,7 @@ public class HiveSyncTool {
       cmd.usage();
       System.exit(1);
     }
-    FileSystem fs = FSUtils.getFs();
+    FileSystem fs = FSUtils.getFs(cfg.basePath);
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(fs.getConf());
     new HiveSyncTool(cfg, hiveConf, fs).syncHoodieTable();

@@ -70,7 +70,7 @@ public class HDFSParquetImporter implements Serializable{
     public HDFSParquetImporter(
         Config cfg) throws IOException {
         this.cfg = cfg;
-        fs = FSUtils.getFs();
+        fs = FSUtils.getFs(cfg.targetPath);
     }
 
     public static class FormatValidator implements IValueValidator<String> {

@@ -187,7 +187,7 @@ public class HoodieTestDataGenerator {
     public static void createCommitFile(String basePath, String commitTime) throws IOException {
         Path commitFile =
             new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime));
-        FileSystem fs = FSUtils.getFs();
+        FileSystem fs = FSUtils.getFs(basePath);
         FSDataOutputStream os = fs.create(commitFile, true);
         HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
         try {
@@ -203,7 +203,7 @@ public class HoodieTestDataGenerator {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeSavePointFileName(commitTime));
-    FileSystem fs = FSUtils.getFs();
+    FileSystem fs = FSUtils.getFs(basePath);
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     try {

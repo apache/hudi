@@ -75,7 +75,7 @@ public class HoodieRealtimeRecordReaderTest {
                                                 String baseCommit, String newCommit, int numberOfRecords) throws InterruptedException,IOException {
         HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-                .overBaseCommit(baseCommit).withFs(FSUtils.getFs()).build();
+                .overBaseCommit(baseCommit).withFs(FSUtils.getFs(basePath.getRoot().getAbsolutePath())).build();
         List<IndexedRecord> records = new ArrayList<>();
         for(int i=0; i < numberOfRecords; i++) {
             records.add(InputFormatTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -114,7 +114,7 @@ public class HoodieRealtimeRecordReaderTest {
         RecordReader<Void, ArrayWritable> reader =
                 new MapredParquetInputFormat().
                         getRecordReader(new FileSplit(split.getPath(), 0,
-                                        FSUtils.getFs().getLength(split.getPath()), (String[]) null), jobConf, null);
+                                        FSUtils.getFs(basePath.getRoot().getAbsolutePath()).getLength(split.getPath()), (String[]) null), jobConf, null);
         JobConf jobConf = new JobConf();
         List<Schema.Field> fields = schema.getFields();
         String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
@@ -168,10 +168,9 @@ public class HoodieRealtimeRecordReaderTest {
         RecordReader<Void, ArrayWritable> reader =
           new MapredParquetInputFormat().
             getRecordReader(new FileSplit(split.getPath(), 0,
-              FSUtils.getFs().getLength(split.getPath()), (String[]) null), jobConf, null);
+              FSUtils.getFs(basePath.toString()).getLength(split.getPath()), (String[]) null), jobConf, null);
         JobConf jobConf = new JobConf();
         List<Schema.Field> fields = schema.getFields();
-
         String names = fields.stream().map(f -> f.name()).collect(Collectors.joining(","));
         String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
         jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);

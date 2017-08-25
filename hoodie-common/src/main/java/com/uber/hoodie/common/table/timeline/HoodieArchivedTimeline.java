@@ -92,7 +92,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     private void readObject(java.io.ObjectInputStream in)
         throws IOException, ClassNotFoundException {
         in.defaultReadObject();
-        this.fs = FSUtils.getFs();
+        this.fs = FSUtils.getFs(metaPath);
     }
 
 

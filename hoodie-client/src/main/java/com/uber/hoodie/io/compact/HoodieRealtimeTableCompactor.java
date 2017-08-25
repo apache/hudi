@@ -136,7 +136,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
   private List<CompactionWriteStat> executeCompaction(HoodieTableMetaClient metaClient,
       HoodieWriteConfig config, CompactionOperation operation, String commitTime)
       throws IOException {
-    FileSystem fs = FSUtils.getFs();
+    FileSystem fs = FSUtils.getFs(config.getBasePath());
     Schema readerSchema =
         HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
 

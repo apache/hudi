@@ -80,7 +80,10 @@ public class TestHoodieBloomIndex {
     private Schema schema;
 
     public TestHoodieBloomIndex() throws Exception {
-        fs = FSUtils.getFs();
+        TemporaryFolder folder = new TemporaryFolder();
+        folder.create();
+        basePath = folder.getRoot().getAbsolutePath();
+        fs = FSUtils.getFs(basePath);
     }
 
     @Before
@@ -88,9 +91,6 @@ public class TestHoodieBloomIndex {
         // Initialize a local spark env
         jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieBloomIndex"));
         // Create a temp folder as the base path
-        TemporaryFolder folder = new TemporaryFolder();
-        folder.create();
-        basePath = folder.getRoot().getAbsolutePath();
         HoodieTestUtils.init(basePath);
         // We have some records to be tagged (two different partitions)
         schemaStr = IOUtils.toString(getClass().getResourceAsStream("/exampleSchema.txt"), "UTF-8");

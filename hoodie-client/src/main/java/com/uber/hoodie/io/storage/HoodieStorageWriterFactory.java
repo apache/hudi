@@ -32,6 +32,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import java.io.IOException;
 
 public class HoodieStorageWriterFactory {
+
     public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
             String commitTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema)
         throws IOException {
@@ -50,7 +51,7 @@ public class HoodieStorageWriterFactory {
         HoodieParquetConfig parquetConfig =
             new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
                 config.getParquetBlockSize(), config.getParquetPageSize(),
-                config.getParquetMaxFileSize(), FSUtils.getFs().getConf());
+                config.getParquetMaxFileSize(), FSUtils.getFs(config.getBasePath()).getConf());
 
         return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
     }

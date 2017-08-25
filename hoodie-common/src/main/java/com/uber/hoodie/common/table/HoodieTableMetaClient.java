@@ -101,7 +101,7 @@ public class HoodieTableMetaClient implements Serializable {
     private void readObject(java.io.ObjectInputStream in)
         throws IOException, ClassNotFoundException {
         in.defaultReadObject();
-        this.fs = FSUtils.getFs();
+        this.fs = FSUtils.getFs(basePath);
     }
 
     private void writeObject(java.io.ObjectOutputStream out)

@@ -116,9 +116,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
      * @param rollbackInFlight
      */
     public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackInFlight) {
-        this.fs = FSUtils.getFs();
         this.jsc = jsc;
         this.config = clientConfig;
+        this.fs = FSUtils.getFs(config.getBasePath());
         this.index = HoodieIndex.createIndex(config, jsc);
         this.metrics = new HoodieMetrics(config, config.getTableName());
         this.archiveLog = new HoodieCommitArchiveLog(clientConfig, fs);
@@ -654,7 +654,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 .map((Function<String, HoodieRollbackStat>) partitionPath -> {
                     // Scan all partitions files with this commit time
                     logger.info("Cleaning path " + partitionPath);
-                    FileSystem fs1 = FSUtils.getFs();
+                    FileSystem fs1 = FSUtils.getFs(config.getBasePath());
                     FileStatus[] toBeDeleted =
                         fs1.listStatus(new Path(config.getBasePath(), partitionPath), path -> {
                             if(!path.toString().contains(".parquet")) {

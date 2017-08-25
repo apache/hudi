@@ -66,17 +66,23 @@ public class FSUtils {
         FSUtils.fs = fs;
     }
 
-
-    public static FileSystem getFs() {
+    public static FileSystem getFs(String path) {
         if (fs != null) {
             return fs;
         }
         Configuration conf = new Configuration();
         conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
         conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+        return getFs(path, conf);
+    }
+
+    public static FileSystem getFs(String path, Configuration conf) {
+        if (fs != null) {
+            return fs;
+        }
         FileSystem fs;
         try {
-            fs = FileSystem.get(conf);
+            fs = new Path(path).getFileSystem(conf);
         } catch (IOException e) {
             throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(),
                     e);
