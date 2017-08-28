@@ -3,6 +3,7 @@ title: Quickstart
 keywords: quickstart
 tags: [quickstart]
 sidebar: mydoc_sidebar
+toc: false
 permalink: quickstart.html
 ---
 
@@ -16,7 +17,7 @@ Normally build the maven project, from command line
 $ mvn clean install -DskipTests
 ```
 
-{% include callout.html content="You might want to add your spark assembly jar to project dependencies under 'Module Setttings', to be able to run Spark from IDE" type="info" %}
+{% include callout.html content="You might want to add your spark jars folder to project dependencies under 'Module Setttings', to be able to run Spark from IDE" type="info" %}
 
 {% include note.html content="Setup your local hadoop/hive test environment, so you can play with entire ecosystem. See [this](http://www.bytearray.io/2016/05/setting-up-hadoopyarnsparkhive-on-mac.html) for reference" %}
 
@@ -25,13 +26,15 @@ $ mvn clean install -DskipTests
 ## Generate a Hoodie Dataset
 
 
-You can run the __hoodie-client/src/test/java/HoodieClientExample.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS/local filesystem
+### DataSource API
+
+Run __hoodie-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS/local filesystem
+
 ```
 
 Usage: <main class> [options]
   Options:
     --help, -h
-
        Default: false
     --table-name, -n
        table name for Hoodie sample table
@@ -46,7 +49,14 @@ Usage: <main class> [options]
 
 ```
 
-The class lets you choose table names, output paths and one of the storage types.
+The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the `hoodie-spark` module as dependency
+and follow a similar pattern to write/read datasets via the datasource.
+
+### RDD API
+
+RDD level APIs give you more power and control over things, via the `hoodie-client` module .
+Refer to  __hoodie-client/src/test/java/HoodieClientExample.java__ class for an example.
+
 
 
 ## Register Dataset to Hive Metastore

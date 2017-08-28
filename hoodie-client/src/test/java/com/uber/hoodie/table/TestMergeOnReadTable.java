@@ -1,21 +1,26 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *           http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ *
  */
 
-package com.uber.hoodie;
+package com.uber.hoodie.table;
 
+
+import com.uber.hoodie.HoodieWriteClient;
+import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieMergeOnReadTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
@@ -39,7 +44,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
-import com.uber.hoodie.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
@@ -217,12 +221,15 @@ public class TestMergeOnReadTable {
         assertTrue(dataFilesToRead.findAny().isPresent());
 
         // verify that there is a commit
-        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
-        assertEquals("Expecting a single commit.", 1, readClient.listCommitsSince("000").size());
-        String latestCompactionCommitTime = readClient.latestCommit();
+        table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(fs, cfg.getBasePath(), true), getConfig());
+        HoodieTimeline timeline = table.getCompletedCompactionCommitTimeline();
+        assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
+        String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
         assertTrue(HoodieTimeline
             .compareTimestamps("000", latestCompactionCommitTime, HoodieTimeline.LESSER));
-        assertEquals("Must contain 200 records", 200, readClient.readSince("000").count());
+
+        assertEquals("Must contain 200 records", 200,
+                HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "000").count());
     }
 
     // Check if record level metadata is aggregated properly at the end of write.

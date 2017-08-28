@@ -16,15 +16,13 @@
  *
  */
 
-package com.uber.hoodie.utilities.keygen;
+package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieKey;
-import com.uber.hoodie.utilities.UtilHelpers;
+import com.uber.hoodie.exception.HoodieException;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.configuration.PropertiesConfiguration;
-
-import java.util.Arrays;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath
@@ -36,23 +34,18 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
     protected final String partitionPathField;
 
-    /**
-     * Supported configs
-     */
-    static class Config {
-        private static final String RECORD_KEY_FIELD_PROP = "hoodie.deltastreamer.keygen.simple.recordkey.field";
-        private static final String PARTITION_PATH_FIELD_PROP = "hoodie.deltastreamer.keygen.simple.partitionpath.field";
-    }
-
     public SimpleKeyGenerator(PropertiesConfiguration config) {
         super(config);
-        UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.PARTITION_PATH_FIELD_PROP, Config.RECORD_KEY_FIELD_PROP));
-        this.recordKeyField = config.getString(Config.RECORD_KEY_FIELD_PROP);
-        this.partitionPathField = config.getString(Config.PARTITION_PATH_FIELD_PROP);
+        this.recordKeyField = config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
+        this.partitionPathField = config.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
     }
 
     @Override
     public HoodieKey getKey(GenericRecord record) {
-        return new HoodieKey(record.get(recordKeyField).toString(), record.get(partitionPathField).toString());
+        if (recordKeyField == null || partitionPathField == null) {
+            throw new HoodieException("Unable to find field names for record key or partition path in cfg");
+        }
+        return new HoodieKey(DataSourceUtils.getNestedFieldValAsString(record, recordKeyField),
+                DataSourceUtils.getNestedFieldValAsString(record, partitionPathField));
     }
 }

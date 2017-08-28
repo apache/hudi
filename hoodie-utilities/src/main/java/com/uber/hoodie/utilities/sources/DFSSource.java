@@ -18,10 +18,10 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import com.uber.hoodie.utilities.UtilHelpers;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
@@ -66,7 +66,7 @@ public class DFSSource extends Source {
     public DFSSource(PropertiesConfiguration config, JavaSparkContext sparkContext, SourceDataFormat dataFormat, SchemaProvider schemaProvider) {
         super(config, sparkContext, dataFormat, schemaProvider);
         this.fs = FSUtils.getFs();
-        UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+        DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
     }
 
 

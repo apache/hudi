@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -298,6 +299,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             }
         }
 
+        public Builder withProps(Map kvprops) {
+            props.putAll(kvprops);
+            return this;
+        }
 
         public Builder withPath(String basePath) {
             props.setProperty(BASE_PATH_PROP, basePath);

@@ -17,6 +17,7 @@
 package com.uber.hoodie;
 
 import com.google.common.collect.Iterables;
+
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
@@ -33,6 +34,7 @@ import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
@@ -43,11 +45,11 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.scheduler.SparkListener;
@@ -58,7 +60,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import scala.collection.Iterator;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -76,12 +77,14 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import scala.collection.Iterator;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class TestHoodieClient implements Serializable {
+public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     private transient JavaSparkContext jsc = null;
     private transient SQLContext sqlContext;
     private String basePath = null;
@@ -141,6 +144,8 @@ public class TestHoodieClient implements Serializable {
                     rec.getCurrentLocation().getCommitTime(), commitTime);
         }
     }
+
+
 
     @Test
     public void testFilterExist() throws Exception {
@@ -219,12 +224,15 @@ public class TestHoodieClient implements Serializable {
         assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
 
         // verify that there is a commit
-        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
-        assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
-        assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
-        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), records.size());
-        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTimeline timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+
+        assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
+        assertEquals("Latest commit should be 001", newCommitTime, timeline.lastInstant().get().getTimestamp());
+        assertEquals("Must contain 200 records",
+                records.size(),
+                HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
         List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table).collect();
@@ -248,9 +256,9 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify there are now 2 commits
-        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
-        assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
-        assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
+        timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+        assertEquals("Expecting two commits.", timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), 2);
+        assertEquals("Latest commit should be 004", timeline.lastInstant().get().getTimestamp(), newCommitTime);
 
         metaClient = new HoodieTableMetaClient(fs, basePath);
         table = HoodieTable.getHoodieTable(metaClient, getConfig());
@@ -264,16 +272,18 @@ public class TestHoodieClient implements Serializable {
         for (int i=0; i < fullPartitionPaths.length; i++) {
             fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
         }
-        assertEquals("Must contain 200 records", readClient.read(fullPartitionPaths).count(), 200);
+        assertEquals("Must contain 200 records",
+                200,
+                HoodieClientTestUtils.read(basePath, sqlContext, fs, fullPartitionPaths).count());
 
 
         // Check that the incremental consumption from time 000
         assertEquals("Incremental consumption from time 002, should give all records in commit 004",
-            readClient.readCommit(newCommitTime).count(),
-            readClient.readSince("002").count());
+            HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
+            HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "002").count());
         assertEquals("Incremental consumption from time 001, should give all records in commit 004",
-            readClient.readCommit(newCommitTime).count(),
-            readClient.readSince("001").count());
+            HoodieClientTestUtils.readCommit(basePath, sqlContext,timeline, newCommitTime).count(),
+            HoodieClientTestUtils.readSince(basePath, sqlContext,timeline, "001").count());
     }
 
     @Test
@@ -301,12 +311,13 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify that there is a commit
-        HoodieReadClient readClient = new HoodieReadClient(jsc, basePath, sqlContext);
-        assertEquals("Expecting a single commit.", readClient.listCommitsSince("000").size(), 1);
-        assertEquals("Latest commit should be 001",readClient.latestCommit(), newCommitTime);
-        assertEquals("Must contain 200 records", readClient.readCommit(newCommitTime).count(), fewRecordsForInsert.size());
-        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTimeline timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+        assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
+        assertEquals("Latest commit should be 001", newCommitTime, timeline.lastInstant().get().getTimestamp());
+        assertEquals("Must contain 200 records", fewRecordsForInsert.size(),
+                HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
+        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
         List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(fewRecordsForInsert, 1), table).collect();
@@ -327,31 +338,29 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify there are now 2 commits
-        readClient = new HoodieReadClient(jsc, basePath, sqlContext);
-        assertEquals("Expecting two commits.", readClient.listCommitsSince("000").size(), 2);
-        assertEquals("Latest commit should be 004",readClient.latestCommit(), newCommitTime);
-
-        metaClient = new HoodieTableMetaClient(fs, basePath);
-        table = HoodieTable.getHoodieTable(metaClient, getConfig());
+        timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+        assertEquals("Expecting two commits.", timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), 2);
+        assertEquals("Latest commit should be 004", timeline.lastInstant().get().getTimestamp(), newCommitTime);
 
         // Check the entire dataset has 150 records(200-50) still
         String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
         for (int i=0; i < fullPartitionPaths.length; i++) {
             fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
         }
-        assertEquals("Must contain 150 records", readClient.read(fullPartitionPaths).count(), 150);
+        assertEquals("Must contain 150 records", 150,
+                HoodieClientTestUtils.read(basePath, sqlContext, fs, fullPartitionPaths).count());
 
 
         // Check that the incremental consumption from time 000
         assertEquals("Incremental consumption from latest commit, should give 50 updated records",
-                readClient.readCommit(newCommitTime).count(),
-                50);
+                50,
+                HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
         assertEquals("Incremental consumption from time 001, should give 50 updated records",
                 50,
-                readClient.readSince("001").count());
+                HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "001").count());
         assertEquals("Incremental consumption from time 000, should give 150",
                 150,
-                readClient.readSince("000").count());
+                HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "000").count());
     }
 
 
@@ -566,10 +575,10 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify that there is a commit
-
-        assertEquals("Expecting a single commit.", new HoodieReadClient(jsc, basePath).listCommitsSince("000").size(), 1);
-        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTimeline timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+        assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
+        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
         assertFalse(table.getCompletedCommitTimeline().empty());
         String commitTime =
@@ -594,7 +603,7 @@ public class TestHoodieClient implements Serializable {
 
             HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
             table = HoodieTable.getHoodieTable(metadata, getConfig());
-            HoodieTimeline timeline = table.getCommitTimeline();
+            timeline = table.getCommitTimeline();
 
             TableFileSystemView fsView = table.getFileSystemView();
             // Need to ensure the following
@@ -660,9 +669,10 @@ public class TestHoodieClient implements Serializable {
         assertNoWriteErrors(statuses);
 
         // verify that there is a commit
-        assertEquals("Expecting a single commit.", new HoodieReadClient(jsc, basePath).listCommitsSince("000").size(), 1);
-        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+        HoodieTimeline timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+        assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
+        // Should have 100 records in table (check using Index), all in locations marked at commit
         HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
         assertFalse(table.getCompletedCommitTimeline().empty());

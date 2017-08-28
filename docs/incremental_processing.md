@@ -19,8 +19,28 @@ discusses a few tools that can be used to achieve these on different contexts.
 Upserts can be used to apply a delta or an incremental change to a Hoodie dataset. For e.g, the incremental changes could be from a Kafka topic or files uploaded to HDFS or
 even changes pulled from another Hoodie dataset.
 
+#### Via Spark Job
 
-#### DeltaStreamer
+The `hoodie-spark` module offers the DataSource API to write any data frame into a Hoodie dataset. Following is how we can upsert a dataframe, while specifying the field names that need to be used
+for `recordKey => _row_key`, `partitionPath => partition` and `precombineKey => timestamp`
+
+
+```
+inputDF.write()
+       .format("com.uber.hoodie")
+       .options(clientOpts) // any of the hoodie client opts can be passed in as well
+       .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
+       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
+       .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
+       .option(HoodieWriteConfig.TABLE_NAME, tableName)
+       .mode(SaveMode.Append)
+       .save(basePath);
+```
+
+Please refer to [configurations](configurations.html) section, to view all datasource options.
+
+
+#### DeltaStreamer Tool
 
 The `HoodieDeltaStreamer` utility provides the way to achieve all of these, by using the capabilities of `HoodieWriteClient`.
 
@@ -151,8 +171,34 @@ This, together with upserts, are particularly useful for building data pipelines
 joined with other tables (datasets/dimensions), to produce deltas to a target hoodie dataset. Then, using the delta streamer tool these deltas can be upserted into the
 target hoodie dataset to complete the pipeline.
 
-#### Pulling through Hive
+#### Via Spark Job
+The `hoodie-spark` module offers the DataSource API, offers a more elegant way to pull data from Hoodie dataset (plus more) and process it via Spark.
+This class can be used within existing Spark jobs and offers the following functionality.
 
+A sample incremental pull, that will obtain all records written since `beginInstantTime`, looks like below.
+
+```
+ Dataset<Row> hoodieIncViewDF = spark.read()
+     .format("com.uber.hoodie")
+     .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
+             DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
+     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
+            <beginInstantTime>)
+     .load(tablePath); // For incremental view, pass in the root/base path of dataset
+```
+
+Please refer to [configurations](configurations.html) section, to view all datasource options.
+
+
+Additionally, `HoodieReadClient` offers the following functionality using Hoodie's implicit indexing.
+
+| **API** | **Description** |
+| read(keys) | Read out the data corresponding to the keys as a DataFrame, using Hoodie's own index for faster lookup |
+| filterExists() | Filter out already existing records from the provided RDD[HoodieRecord]. Useful for de-duplication |
+| checkExists(keys) | Check if the provided keys exist in a Hoodie dataset |
+
+
+#### HiveIncrementalPuller Tool
 `HiveIncrementalPuller` allows the above to be done via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and incremental primitives
 (speed up query by pulling tables incrementally instead of scanning fully). The tool uses Hive JDBC to run the Hive query saving its results in a temp table.
 that can later be upserted. Upsert utility (`HoodieDeltaStreamer`) has all the state it needs from the directory structure to know what should be the commit time on the target table.
@@ -183,24 +229,4 @@ it will automatically use the backfill configuration, since applying the last 24
 is the lack of support for self-joining the same table in mixed mode (normal and incremental modes).
 
 
-#### Pulling through Spark
-
-`HoodieReadClient` (inside hoodie-client) offers a more elegant way to pull data from Hoodie dataset (plus more) and process it via Spark.
-This class can be used within existing Spark jobs and offers the following functionality.
-
-| **API** | **Description** |
-| listCommitsSince(),latestCommit() | Obtain commit times to pull data from |
-| readSince(commitTime),readCommit(commitTime) | Provide the data from the commit time as a DataFrame, to process further on |
-| read(keys) | Read out the data corresponding to the keys as a DataFrame, using Hoodie's own index for faster lookup |
-| read(paths) | Read out the data under specified path, with the functionality of HoodieInputFormat. An alternative way to do SparkSQL on Hoodie datasets |
-| filterExists() | Filter out already existing records from the provided RDD[HoodieRecord]. Useful for de-duplication |
-| checkExists(keys) | Check if the provided keys exist in a Hoodie dataset |
-
-
-## SQL Streamer
-
-work in progress, tool being refactored out into open source Hoodie
-
-
-{% include callout.html content="Get involved in building this tool [here](https://github.com/uber/hoodie/issues/20)" type="info" %}
 

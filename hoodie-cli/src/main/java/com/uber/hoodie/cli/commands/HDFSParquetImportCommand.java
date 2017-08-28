@@ -67,9 +67,8 @@ public class HDFSParquetImportCommand implements CommandMarker {
 
         boolean initialized = HoodieCLI.initConf();
         HoodieCLI.initFS(initialized);
-
         String sparkPropertiesPath = Utils
-            .getDefaultPropertiesFile(scala.collection.JavaConversions.asScalaMap(System.getenv()));
+            .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
         sparkLauncher.addAppArgs(SparkCommand.IMPORT.toString(), srcPath, targetPath, tableName,

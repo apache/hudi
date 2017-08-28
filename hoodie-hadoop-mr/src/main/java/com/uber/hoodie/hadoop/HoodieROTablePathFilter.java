@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
-    public static final Log LOG = LogFactory.getLog(HoodieInputFormat.class);
+    public static final Log LOG = LogFactory.getLog(HoodieROTablePathFilter.class);
 
     /**
      * Its quite common, to have all files from a given partition path be passed into accept(),
