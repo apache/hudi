@@ -21,7 +21,7 @@ package com.uber.hoodie.utilities;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import com.uber.hoodie.utilities.keygen.KeyGenerator;
+import com.uber.hoodie.KeyGenerator;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.Source;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
@@ -60,22 +60,6 @@ public class UtilHelpers {
         }
     }
 
-    public static KeyGenerator createKeyGenerator(String keyGeneratorClass, PropertiesConfiguration cfg) throws IOException {
-        try {
-            return (KeyGenerator) ConstructorUtils.invokeConstructor(Class.forName(keyGeneratorClass), (Object) cfg);
-        } catch (Throwable e) {
-            throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-        }
-    }
-
-    public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal) throws IOException {
-        try {
-            return (HoodieRecordPayload) ConstructorUtils.invokeConstructor(Class.forName(payloadClass), (Object) record, (Object) orderingVal);
-        } catch (Throwable e) {
-            throw new IOException("Could not create payload for class: " + payloadClass, e);
-        }
-    }
-
     /**
      *
      * TODO: Support hierarchical config files (see CONFIGURATION-609 for sample)
@@ -98,11 +82,4 @@ public class UtilHelpers {
         }
     }
 
-    public static void checkRequiredProperties(PropertiesConfiguration configuration, List<String> checkPropNames) {
-        checkPropNames.stream().forEach(prop -> {
-            if (!configuration.containsKey(prop)) {
-                throw new HoodieNotSupportedException("Required property "+ prop + " is missing");
-            }
-        });
-    }
 }

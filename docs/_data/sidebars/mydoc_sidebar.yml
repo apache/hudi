@@ -2,8 +2,8 @@
 
 entries:
 - title: sidebar
-  product: Hoodie Ver
-  version: 0.2
+  product: Documentation
+  version:
   folders:
 
   - title: Getting Started

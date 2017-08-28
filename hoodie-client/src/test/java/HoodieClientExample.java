@@ -61,7 +61,7 @@ public class HoodieClientExample {
         HoodieClientExample cli = new HoodieClientExample();
         JCommander cmd = new JCommander(cli, args);
 
-        if (cli.help || args.length == 0) {
+        if (cli.help) {
             cmd.usage();
             System.exit(1);
         }

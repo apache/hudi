@@ -18,9 +18,9 @@
 
 package com.uber.hoodie.utilities.schema;
 
+import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
-import com.uber.hoodie.utilities.UtilHelpers;
 
 import org.apache.avro.Schema;
 import org.apache.commons.configuration.PropertiesConfiguration;
@@ -53,7 +53,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
         super(config);
         this.fs = FSUtils.getFs();
 
-        UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.SOURCE_SCHEMA_FILE_PROP, Config.TARGET_SCHEMA_FILE_PROP));
+        DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.SOURCE_SCHEMA_FILE_PROP, Config.TARGET_SCHEMA_FILE_PROP));
         try {
             this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(config.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
             this.targetSchema = new Schema.Parser().parse(fs.open(new Path(config.getString(Config.TARGET_SCHEMA_FILE_PROP))));

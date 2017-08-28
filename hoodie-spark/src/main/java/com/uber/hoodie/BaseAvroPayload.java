@@ -16,32 +16,34 @@
  *
  */
 
-package com.uber.hoodie.utilities.keygen;
-
-import com.uber.hoodie.common.model.HoodieKey;
+package com.uber.hoodie;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.configuration.PropertiesConfiguration;
-
 import java.io.Serializable;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link com.uber.hoodie.common.model.HoodieKey}
- * from an Avro record
+ * Base class for all AVRO record based payloads, that can be ordered based on a field
  */
-public abstract class KeyGenerator implements Serializable {
+public abstract class BaseAvroPayload implements Serializable {
 
-    protected transient PropertiesConfiguration config;
-
-    protected KeyGenerator(PropertiesConfiguration config) {
-        this.config = config;
-    }
 
     /**
-     * Generate a Hoodie Key out of provided generic record.
+     * Avro data extracted from the source
+     */
+    protected final GenericRecord record;
+
+    /**
+     * For purposes of preCombining
+     */
+    protected final Comparable orderingVal;
+
+    /**
      *
      * @param record
-     * @return
+     * @param orderingVal
      */
-    public abstract HoodieKey getKey(GenericRecord record);
+    public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
+        this.record = record;
+        this.orderingVal = orderingVal;
+    }
 }

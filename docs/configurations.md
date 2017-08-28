@@ -90,4 +90,49 @@ summary: "Here we list all possible configurations and what they mean"
     - [GCSConfigs](gcs_hoodie.html) (Hoodie GCS Configs) <br/>
     <span style="color:grey">Configurations required for GCS and Hoodie co-operability.</span>
 
+* [Hoodie Datasource](#datasource) <br/>
+<span style="color:grey">Configs for datasource</span>
+    - [write options](#writeoptions) (write.format.option(...)) <br/>
+    <span style="color:grey"> Options useful for writing datasets </span>
+        - [OPERATION_OPT_KEY](#OPERATION_OPT_KEY) (Default: upsert) <br/>
+        <span style="color:grey">whether to do upsert, insert or bulkinsert for the write operation</span>
+        - [STORAGE_TYPE_OPT_KEY](#STORAGE_TYPE_OPT_KEY) (Default: COPY_ON_WRITE) <br/>
+        <span style="color:grey">The storage type for the underlying data, for this write.</span>
+        - [TABLE_NAME_OPT_KEY](#TABLE_NAME_OPT_KEY) (Default: None (mandatory)) <br/>
+        <span style="color:grey">Hive table name, to register the dataset into.</span>
+        - [PRECOMBINE_FIELD_OPT_KEY](#PRECOMBINE_FIELD_OPT_KEY) (Default: ts) <br/>
+        <span style="color:grey">Field used in preCombining before actual write. When two records have the same key value,
+        we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)</span>
+        - [PAYLOAD_CLASS_OPT_KEY](#PAYLOAD_CLASS_OPT_KEY) (Default: com.uber.hoodie.OverwriteWithLatestAvroPayload) <br/>
+        <span style="color:grey">Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
+        This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective</span>
+        - [RECORDKEY_FIELD_OPT_KEY](#RECORDKEY_FIELD_OPT_KEY) (Default: uuid) <br/>
+        <span style="color:grey">Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
+        will be obtained by invoking .toString() on the field value. Nested fields can be specified using
+        the dot notation eg: `a.b.c`</span>
+        - [PARTITIONPATH_FIELD_OPT_KEY](#PARTITIONPATH_FIELD_OPT_KEY) (Default: partitionpath) <br/>
+        <span style="color:grey">Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.
+        Actual value ontained by invoking .toString()</span>
+        - [KEYGENERATOR_CLASS_OPT_KEY](#KEYGENERATOR_CLASS_OPT_KEY) (Default: com.uber.hoodie.SimpleKeyGenerator) <br/>
+        <span style="color:grey">Key generator class, that implements will extract the key out of incoming `Row` object</span>
+        - [COMMIT_METADATA_KEYPREFIX_OPT_KEY](#COMMIT_METADATA_KEYPREFIX_OPT_KEY) (Default: _) <br/>
+        <span style="color:grey">Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata.
+        This is useful to store checkpointing information, in a consistent way with the hoodie timeline</span>
+
+    - [read options](#readoptions) (read.format.option(...)) <br/>
+    <span style="color:grey">Options useful for reading datasets</span>
+        - [VIEW_TYPE_OPT_KEY](#VIEW_TYPE_OPT_KEY) (Default:  = READ_OPTIMIZED) <br/>
+        <span style="color:grey">Whether data needs to be read, in incremental mode (new data since an instantTime)
+        (or) Read Optimized mode (obtain latest view, based on columnar data)
+        (or) Real time mode (obtain latest view, based on row & columnar data)</span>
+        - [BEGIN_INSTANTTIME_OPT_KEY](#BEGIN_INSTANTTIME_OPT_KEY) (Default: None (Mandatory in incremental mode)) <br/>
+        <span style="color:grey">Instant time to start incrementally pulling data from. The instanttime here need not
+        necessarily correspond to an instant on the timeline. New data written with an
+         `instant_time > BEGIN_INSTANTTIME` are fetched out. For e.g: '20170901080000' will get
+         all new data written after Sep 1, 2017 08:00AM.</span>
+        - [END_INSTANTTIME_OPT_KEY](#END_INSTANTTIME_OPT_KEY) (Default: latest instant (i.e fetches all new data since begin instant time)) <br/>
+        <span style="color:grey"> Instant time to limit incrementally fetched data to. New data written with an
+        `instant_time <= END_INSTANTTIME` are fetched out.</span>
+
+
 {% include callout.html content="Hoodie is a young project. A lot of pluggable interfaces and configurations to support diverse workloads need to be created. Get involved [here](https://github.com/uber/hoodie)" type="info" %}

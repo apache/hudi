@@ -109,10 +109,9 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
         return rowKey;
     }
 
-    private String getJsonData() throws IOException {
+    public String getJsonData() throws IOException {
         return unCompressData(jsonDataCompressed);
     }
-
 
     private byte[] compressData(String jsonData) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

@@ -16,7 +16,7 @@
  *
  */
 
-package com.uber.hoodie.utilities.deltastreamer;
+package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
@@ -34,19 +34,20 @@ import java.util.Optional;
  * 1. preCombine - Picks the latest delta record for a key, based on an ordering field
  * 2. combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
  */
-public class DeltaStreamerAvroPayload extends DeltaStreamerPayload implements HoodieRecordPayload<DeltaStreamerAvroPayload> {
+public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
     /**
      *
      * @param record
      * @param orderingVal
      */
-    public DeltaStreamerAvroPayload(GenericRecord record, Comparable orderingVal) {
+    public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
        super(record, orderingVal);
     }
 
     @Override
-    public DeltaStreamerAvroPayload preCombine(DeltaStreamerAvroPayload another) {
+    public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
+        // pick the payload with greatest ordering value
         if (another.orderingVal.compareTo(orderingVal) > 0) {
             return another;
         } else {

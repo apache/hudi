@@ -30,6 +30,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
+import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
@@ -126,7 +127,7 @@ public class ParquetUtils {
         List<String> footerVals = new ArrayList<>();
         ParquetMetadata footer = readMetadata(parquetFilePath);
         Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
-        for (String footerName: footerNames) {
+        for (String footerName : footerNames) {
             if (metadata.containsKey(footerName)) {
                 footerVals.add(metadata.get(footerName));
             } else {
@@ -135,6 +136,10 @@ public class ParquetUtils {
             }
         }
         return footerVals;
+    }
+
+    public static Schema readAvroSchema(Path parquetFilePath) {
+        return new AvroSchemaConverter().convert(readSchema(parquetFilePath));
     }
 
     /**

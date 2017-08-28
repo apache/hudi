@@ -368,7 +368,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                           JavaRDD<WriteStatus> writeStatuses,
                           Optional<HashMap<String, String>> extraMetadata) {
 
-        logger.info("Comitting " + commitTime);
+        logger.info("Commiting " + commitTime);
         // Create a Hoodie table which encapsulated the commits and files visible
         HoodieTable<T> table = HoodieTable
             .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);

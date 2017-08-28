@@ -16,34 +16,32 @@
  *
  */
 
-package com.uber.hoodie.utilities.deltastreamer;
+package com.uber.hoodie;
+
+import com.uber.hoodie.common.model.HoodieKey;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.configuration.PropertiesConfiguration;
+
 import java.io.Serializable;
 
 /**
- * Base class for all payload supported for the {@link HoodieDeltaStreamer}
+ * Abstract class to extend for plugging in extraction of {@link com.uber.hoodie.common.model.HoodieKey}
+ * from an Avro record
  */
-public abstract class DeltaStreamerPayload implements Serializable {
+public abstract class KeyGenerator implements Serializable {
 
+    protected transient PropertiesConfiguration config;
 
-    /**
-     * Avro data extracted from the source
-     */
-    protected final GenericRecord record;
-
-    /**
-     * For purposes of preCombining
-     */
-    protected final Comparable orderingVal;
+    protected KeyGenerator(PropertiesConfiguration config) {
+        this.config = config;
+    }
 
     /**
+     * Generate a Hoodie Key out of provided generic record.
      *
      * @param record
-     * @param orderingVal
+     * @return
      */
-    public DeltaStreamerPayload(GenericRecord record, Comparable orderingVal) {
-        this.record = record;
-        this.orderingVal = orderingVal;
-    }
+    public abstract HoodieKey getKey(GenericRecord record);
 }

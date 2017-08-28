@@ -18,8 +18,8 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import com.uber.hoodie.utilities.UtilHelpers;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 
@@ -175,7 +175,7 @@ public class KafkaSource extends Source {
         Stream<String> keys = StreamSupport.stream(Spliterators.spliteratorUnknownSize(config.getKeys(), Spliterator.NONNULL), false);
         keys.forEach(k -> kafkaParams.put(k, config.getString(k)));
 
-        UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.KAFKA_TOPIC_NAME));
+        DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.KAFKA_TOPIC_NAME));
         topicName = config.getString(Config.KAFKA_TOPIC_NAME);
     }
 

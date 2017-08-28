@@ -22,7 +22,9 @@ import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
+import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.HoodieWriteClient;
+import com.uber.hoodie.OverwriteWithLatestAvroPayload;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -36,10 +38,10 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.utilities.HiveIncrementalPuller;
 import com.uber.hoodie.utilities.UtilHelpers;
-import com.uber.hoodie.utilities.keygen.SimpleKeyGenerator;
+import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
 import com.uber.hoodie.utilities.sources.DFSSource;
-import com.uber.hoodie.utilities.keygen.KeyGenerator;
+import com.uber.hoodie.KeyGenerator;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.Source;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
@@ -148,7 +150,7 @@ public class HoodieDeltaStreamer implements Serializable {
     private void initKeyGenerator() throws IOException {
         PropertiesConfiguration keygenCfg = UtilHelpers.readConfig(fs, new Path(cfg.keyGeneratorProps));
         log.info("Creating key generator " + cfg.keyGeneratorClass + " with configs : " + keygenCfg.toString());
-        this.keyGenerator = UtilHelpers.createKeyGenerator(cfg.keyGeneratorClass, keygenCfg);
+        this.keyGenerator = DataSourceUtils.createKeyGenerator(cfg.keyGeneratorClass, keygenCfg);
     }
 
 
@@ -174,8 +176,6 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     private void sync() throws Exception {
-
-
         // Retrieve the previous round checkpoints, if any
         Optional<String> resumeCheckpointStr = Optional.empty();
         if (commitTimelineOpt.isPresent()) {
@@ -209,7 +209,7 @@ public class HoodieDeltaStreamer implements Serializable {
         JavaRDD<GenericRecord> avroRDD = dataAndCheckpoint.getKey().get();
         JavaRDD<HoodieRecord> records = avroRDD
                 .map(gr -> {
-                    HoodieRecordPayload payload = UtilHelpers.createPayload(
+                    HoodieRecordPayload payload = DataSourceUtils.createPayload(
                             cfg.payloadClassName,
                             gr,
                             (Comparable) gr.get(cfg.sourceOrderingField));
@@ -248,7 +248,6 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     private HoodieWriteConfig getHoodieClientConfig(String hoodieClientCfgPath) throws Exception {
-        // TODO(vc): Double check all the options can be passed in like this. CompactionConfig, IndexConfig everything.
         return HoodieWriteConfig.newBuilder()
                 .combineInput(true, true)
                 .withPath(cfg.targetBasePath)
@@ -322,7 +321,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
         @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off a GenericRecord. " +
                 "Default: SourceWrapperPayload. Implement your own, if you want to do something other than overwriting existing value")
-        public String payloadClassName = DeltaStreamerAvroPayload.class.getName();
+        public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
 
         @Parameter(names = {"--schemaprovider-class"}, description = "subclass of com.uber.hoodie.utilities.schema.SchemaProvider " +
                 "to attach schemas to input & target table data, built in options: FilebasedSchemaProvider")
@@ -349,7 +348,6 @@ public class HoodieDeltaStreamer implements Serializable {
     public static void main(String[] args) throws Exception {
         final Config cfg = new Config();
         JCommander cmd = new JCommander(cfg, args);
-        // TODO(vc): Do proper validation
         if (cfg.help || args.length == 0) {
             cmd.usage();
             System.exit(1);

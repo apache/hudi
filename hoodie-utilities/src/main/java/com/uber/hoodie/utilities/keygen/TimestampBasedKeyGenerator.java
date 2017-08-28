@@ -18,9 +18,10 @@
 
 package com.uber.hoodie.utilities.keygen;
 
+import com.uber.hoodie.DataSourceUtils;
+import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import com.uber.hoodie.utilities.UtilHelpers;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 
 import org.apache.avro.generic.GenericRecord;
@@ -30,7 +31,6 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.TimeZone;
 
@@ -65,12 +65,12 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
     public TimestampBasedKeyGenerator(PropertiesConfiguration config) {
         super(config);
-        UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
+        DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
         this.timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
         this.outputDateFormat = config.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
 
         if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-            UtilHelpers.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
+            DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
             this.inputDateFormat = new SimpleDateFormat(config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
             this.inputDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
         }
