@@ -112,7 +112,7 @@ public class FSUtils {
     }
 
     public static long getFileSize(FileSystem fs, Path path) throws IOException {
-        return fs.listStatus(path)[0].getLen();
+        return fs.getFileStatus(path).getLen();
     }
 
     public static String getFileId(String fullFileName) {
