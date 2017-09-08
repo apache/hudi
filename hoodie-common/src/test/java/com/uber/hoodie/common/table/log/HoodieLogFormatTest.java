@@ -30,10 +30,7 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -49,7 +46,11 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
@@ -144,6 +145,43 @@ public class HoodieLogFormatTest {
         writer.getCurrentSize());
     assertEquals("Version should be rolled to 2", 2, writer.getLogFile().getLogVersion());
     writer.close();
+  }
+
+  @Test
+  public void testRolloverAndAppendToPreviousLog() throws IOException, InterruptedException, URISyntaxException {
+    Writer oldWriter = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+            .overBaseCommit("100").withFs(fs).build();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
+            getSimpleSchema());
+    // Write out a block
+    oldWriter = oldWriter.appendBlock(dataBlock);
+    // Get the size of the block
+    long size = oldWriter.getCurrentSize();
+    oldWriter.close();
+
+    // Create a writer with the size threshold as the size we just wrote - so this has to roll
+    oldWriter = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+            .overBaseCommit("100").withFs(fs).withSizeThreshold(size - 1).build();
+    records = SchemaTestUtil.generateTestRecords(0, 100);
+    dataBlock = new HoodieAvroDataBlock(records,
+            getSimpleSchema());
+    Writer newWriter = oldWriter.appendBlock(dataBlock);
+    assertEquals("This should be a new log file and hence size should be 0", 0,
+            newWriter.getCurrentSize());
+    assertEquals("Version should be rolled to 2", 2, newWriter.getLogFile().getLogVersion());
+    // Open a writer to the old log version and try to append
+    try {
+      oldWriter = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").withLogVersion(1)
+              .overBaseCommit("100").withFs(fs).build();
+      fail("should not be able to append to a sealed log file");
+    } catch(HoodieIOException he) {
+      // pass
+    }
+    newWriter.close();
   }
 
   @Test
