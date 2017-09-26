@@ -21,6 +21,7 @@ package com.uber.hoodie;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
@@ -114,6 +115,8 @@ public class DataSourceUtils {
                         HoodieIndexConfig.newBuilder()
                                 .withIndexType(HoodieIndex.IndexType.BLOOM)
                                 .build())
+                .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                        .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY())).build())
                 // override above with Hoodie configs specified as options.
                 .withProps(parameters)
                 .build();

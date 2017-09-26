@@ -88,6 +88,7 @@ public class HoodieTestUtils {
         Properties properties = new Properties();
         properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
         properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+        properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
         return HoodieTableMetaClient.initializePathAsHoodieDataset(fs, basePath, properties);
     }
 

@@ -182,10 +182,13 @@ public class HoodieTableMetaClient implements Serializable {
      * @return
      * @throws IOException
      */
-    public static HoodieTableMetaClient initTableType(FileSystem fs, String basePath, HoodieTableType tableType, String tableName) throws IOException {
+    public static HoodieTableMetaClient initTableType(FileSystem fs, String basePath, HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
         Properties properties = new Properties();
         properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
         properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+        if(tableType == HoodieTableType.MERGE_ON_READ) {
+            properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
+        }
         return HoodieTableMetaClient.initializePathAsHoodieDataset(fs, basePath, properties);
     }
 

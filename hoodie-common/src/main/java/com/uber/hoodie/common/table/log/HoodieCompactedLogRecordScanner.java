@@ -17,15 +17,17 @@
 package com.uber.hoodie.common.table.log;
 
 import com.google.common.collect.Maps;
-import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
+import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -55,13 +57,12 @@ import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.LogMetadataT
  * list of records which will be used as a lookup table when merging the base columnar file
  * with the redo log file.
  *
- * TODO(FIX) - Does not apply application specific merge logic - defaults to HoodieAvroPayload
  */
-public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<HoodieAvroPayload>> {
+public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
   private final static Logger log = LogManager.getLogger(HoodieCompactedLogRecordScanner.class);
 
   // Final list of compacted/merged records to iterate
-  private final Collection<HoodieRecord<HoodieAvroPayload>> logRecords;
+  private final Collection<HoodieRecord<? extends HoodieRecordPayload>> logRecords;
   // Reader schema for the records
   private final Schema readerSchema;
   // Total log files read - for metrics
@@ -72,16 +73,22 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
   private long totalRecordsToUpdate;
   // Latest valid instant time
   private String latestInstantTime;
+  private HoodieTableMetaClient hoodieTableMetaClient;
+  // Merge strategy to use when combining records from log
+  private String payloadClassFQN;
+  // Store only the last log blocks (needed to implement rollback)
+  Deque<HoodieLogBlock> lastBlocks = new ArrayDeque<>();
 
-  public HoodieCompactedLogRecordScanner(FileSystem fs, List<String> logFilePaths,
+  public HoodieCompactedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
                                          Schema readerSchema, String latestInstantTime) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
+    this.hoodieTableMetaClient =  new HoodieTableMetaClient(fs, basePath);
+    // load class from the payload fully qualified class name
+    this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
 
-    // Store only the last log blocks (needed to implement rollback)
-    Deque<HoodieLogBlock> lastBlocks = new ArrayDeque<>();
     // Store merged records for all versions for this log file
-    Map<String, HoodieRecord<HoodieAvroPayload>> records = Maps.newHashMap();
+    Map<String, HoodieRecord<? extends HoodieRecordPayload>> records = Maps.newHashMap();
     // iterate over the paths
     Iterator<String> logFilePathsItr = logFilePaths.iterator();
     while(logFilePathsItr.hasNext()) {
@@ -132,7 +139,7 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
                   // the rollback operation itself
                   HoodieLogBlock lastBlock = lastBlocks.peek();
                   if (lastBlock != null && lastBlock.getBlockType() != CORRUPT_BLOCK &&
-                        targetInstantForCommandBlock.contentEquals(lastBlock.getLogMetadata().get(INSTANT_TIME))) {
+                          targetInstantForCommandBlock.contentEquals(lastBlock.getLogMetadata().get(INSTANT_TIME))) {
                     log.info("Rolling back the last log block read in " + logFile.getPath());
                     lastBlocks.pop();
                   } else if(lastBlock != null && lastBlock.getBlockType() == CORRUPT_BLOCK) {
@@ -169,29 +176,30 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
 
   /**
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path
-   * and merge with the HoodieAvroPayload if the same key was found before
+   * and merge with the application specific payload if the same key was found before
+   * Sufficient to just merge the log records since the base data is merged on previous compaction
    *
    * @param dataBlock
    */
-  private Map<String, HoodieRecord<HoodieAvroPayload>> loadRecordsFromBlock(HoodieAvroDataBlock dataBlock) {
-    Map<String, HoodieRecord<HoodieAvroPayload>> recordsFromLastBlock = Maps.newHashMap();
+  private Map<String, HoodieRecord<? extends HoodieRecordPayload>> loadRecordsFromBlock(HoodieAvroDataBlock dataBlock) {
+    Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock = Maps.newHashMap();
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
     recs.forEach(rec -> {
       String key = ((GenericRecord) rec).get(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .toString();
-      String partitionPath =
-          ((GenericRecord) rec).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
               .toString();
-      HoodieRecord<HoodieAvroPayload> hoodieRecord = new HoodieRecord<>(
-          new HoodieKey(key, partitionPath),
-          new HoodieAvroPayload(Optional.of(((GenericRecord) rec))));
+      String partitionPath =
+              ((GenericRecord) rec).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+                      .toString();
+      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
+              new HoodieKey(key, partitionPath),
+              ReflectionUtils.loadPayload(this.payloadClassFQN, new Object[]{Optional.of(rec)}, Optional.class));
       if (recordsFromLastBlock.containsKey(key)) {
         // Merge and store the merged record
-        HoodieAvroPayload combinedValue = recordsFromLastBlock.get(key).getData()
-          .preCombine(hoodieRecord.getData());
+        HoodieRecordPayload combinedValue = recordsFromLastBlock.get(key).getData()
+                .preCombine(hoodieRecord.getData());
         recordsFromLastBlock
-          .put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
+                .put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
                         combinedValue));
       } else {
         // Put the record as is
@@ -207,8 +215,8 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
    * @param records
    * @param lastBlocks
    */
-  private void merge(Map<String, HoodieRecord<HoodieAvroPayload>> records,
-      Deque<HoodieLogBlock> lastBlocks) {
+  private void merge(Map<String, HoodieRecord<? extends HoodieRecordPayload>> records,
+                     Deque<HoodieLogBlock> lastBlocks) {
     while (!lastBlocks.isEmpty()) {
       HoodieLogBlock lastBlock = lastBlocks.pop();
       switch (lastBlock.getBlockType()) {
@@ -230,15 +238,15 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
    * @param records
    * @param recordsFromLastBlock
    */
-  private void merge(Map<String, HoodieRecord<HoodieAvroPayload>> records,
-      Map<String, HoodieRecord<HoodieAvroPayload>> recordsFromLastBlock) {
+  private void merge(Map<String, HoodieRecord<? extends HoodieRecordPayload>> records,
+                     Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock) {
     recordsFromLastBlock.forEach((key, hoodieRecord) -> {
       if (records.containsKey(key)) {
         // Merge and store the merged record
-        HoodieAvroPayload combinedValue = records.get(key).getData()
-          .preCombine(hoodieRecord.getData());
+        HoodieRecordPayload combinedValue = records.get(key).getData()
+                .preCombine(hoodieRecord.getData());
         records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
-          combinedValue));
+                combinedValue));
       } else {
         // Put the record as is
         records.put(key, hoodieRecord);
@@ -247,7 +255,7 @@ public class HoodieCompactedLogRecordScanner implements Iterable<HoodieRecord<Ho
   }
 
   @Override
-  public Iterator<HoodieRecord<HoodieAvroPayload>> iterator() {
+  public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
     return logRecords.iterator();
   }
 

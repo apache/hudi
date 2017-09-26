@@ -24,7 +24,9 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.HoodieWriteClient;
+import com.uber.hoodie.KeyGenerator;
 import com.uber.hoodie.OverwriteWithLatestAvroPayload;
+import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -33,20 +35,18 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.utilities.HiveIncrementalPuller;
 import com.uber.hoodie.utilities.UtilHelpers;
-import com.uber.hoodie.SimpleKeyGenerator;
-import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
-import com.uber.hoodie.utilities.sources.DFSSource;
-import com.uber.hoodie.KeyGenerator;
-import com.uber.hoodie.utilities.schema.SchemaProvider;
-import com.uber.hoodie.utilities.sources.Source;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
+import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
+import com.uber.hoodie.utilities.schema.SchemaProvider;
+import com.uber.hoodie.utilities.sources.DFSSource;
+import com.uber.hoodie.utilities.sources.Source;
 import com.uber.hoodie.utilities.sources.SourceDataFormat;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.configuration.PropertiesConfiguration;
@@ -58,6 +58,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.collection.JavaConversions;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -66,8 +67,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
-
-import scala.collection.JavaConversions;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target dataset.
@@ -252,6 +251,8 @@ public class HoodieDeltaStreamer implements Serializable {
                 .combineInput(true, true)
                 .withPath(cfg.targetBasePath)
                 .withAutoCommit(false)
+                .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                        .withPayloadClass(OverwriteWithLatestAvroPayload.class.getName()).build())
                 .withSchema(schemaProvider.getTargetSchema().toString())
                 .forTable(cfg.targetTableName)
                 .withIndexConfig(

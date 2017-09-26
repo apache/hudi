@@ -19,6 +19,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableConfig;
@@ -84,7 +85,7 @@ public class HoodieClientExample {
         Path path = new Path(tablePath);
         FileSystem fs = FSUtils.getFs();
         if (!fs.exists(path)) {
-            HoodieTableMetaClient.initTableType(fs, tablePath, HoodieTableType.valueOf(tableType), tableName);
+            HoodieTableMetaClient.initTableType(fs, tablePath, HoodieTableType.valueOf(tableType), tableName, HoodieAvroPayload.class.getName());
         }
 
         // Create the write client to write some records in

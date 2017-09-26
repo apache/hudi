@@ -113,7 +113,7 @@ public class HoodieRealtimeRecordReaderTest {
         //create a split with baseFile (parquet file written earlier) and new log file(s)
         String logFilePath = writer.getLogFile().getPath().toString();
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(new FileSplit(new Path(partitionDir
-                + "/fileid0_1_" + commitTime + ".parquet"),0,1,jobConf), Arrays.asList(logFilePath), newCommitTime);
+                + "/fileid0_1_" + commitTime + ".parquet"),0,1,jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
 
         //create a RecordReader to be used by HoodieRealtimeRecordReader
         RecordReader<Void, ArrayWritable> reader =
@@ -167,7 +167,7 @@ public class HoodieRealtimeRecordReaderTest {
         //create a split with baseFile (parquet file written earlier) and new log file(s)
         String logFilePath = writer.getLogFile().getPath().toString();
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(new FileSplit(new Path(partitionDir
-          + "/fileid0_1_" + commitTime + ".parquet"),0,1,jobConf), Arrays.asList(logFilePath), newCommitTime);
+          + "/fileid0_1_" + commitTime + ".parquet"),0,1,jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
 
         //create a RecordReader to be used by HoodieRealtimeRecordReader
         RecordReader<Void, ArrayWritable> reader =
