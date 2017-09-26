@@ -20,6 +20,9 @@ import com.google.common.collect.Maps;
 import com.uber.hoodie.common.minicluster.MiniClusterUtil;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.common.model.HoodieTestUtils;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Reader;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
@@ -66,6 +69,7 @@ public class HoodieLogFormatTest {
 
   private FileSystem fs;
   private Path partitionPath;
+  private String basePath;
 
   @BeforeClass
   public static void setUpClass() throws IOException, InterruptedException {
@@ -76,6 +80,7 @@ public class HoodieLogFormatTest {
   @AfterClass
   public static void tearDownClass() {
     MiniClusterUtil.shutdown();
+    HoodieTestUtils.resetFS();
   }
 
   @Before
@@ -85,6 +90,9 @@ public class HoodieLogFormatTest {
     folder.create();
     assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
     this.partitionPath = new Path(folder.getRoot().getPath());
+    this.basePath = folder.getRoot().getParent();
+    HoodieTestUtils.fs = fs;
+    HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @After
@@ -430,7 +438,8 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+        schema, "100");
     assertEquals("", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -484,9 +493,9 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
-    assertEquals("We only read 200 records, since 200 of them are valid", 200,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+        schema, "100");
+    assertEquals("We only read 200 records, but only 200 of them are valid", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
@@ -552,7 +561,8 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+        schema, "100");
     assertEquals("We would read 200 records", 200,
         scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -607,7 +617,8 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+        schema, "100");
     assertEquals("We still would read 200 records", 200,
         scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(200);
@@ -625,7 +636,7 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(commandBlock);
 
     readKeys.clear();
-    scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema, "100");
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records after rollback of delete", 200, readKeys.size());
   }
@@ -684,7 +695,8 @@ public class HoodieLogFormatTest {
             .map(s -> s.getPath().toString())
             .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+            schema, "100");
     assertEquals("We would read 100 records", 100,
             scanner.getTotalLogRecords());
 
@@ -734,7 +746,8 @@ public class HoodieLogFormatTest {
             .map(s -> s.getPath().toString())
             .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+            allLogFiles, schema, "100");
     assertEquals("We would read 0 records", 0,
             scanner.getTotalLogRecords());
   }
@@ -766,7 +779,8 @@ public class HoodieLogFormatTest {
             .map(s -> s.getPath().toString())
             .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, allLogFiles, schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+            allLogFiles, schema, "100");
     assertEquals("We still would read 100 records", 100,
             scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(100);

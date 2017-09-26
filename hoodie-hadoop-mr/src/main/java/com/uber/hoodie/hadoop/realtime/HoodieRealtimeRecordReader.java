@@ -20,8 +20,10 @@ package com.uber.hoodie.hadoop.realtime;
 
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.avro.Schema;
@@ -122,14 +124,12 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
         LOG.info(
             String.format("About to read compacted logs %s for base split %s, projecting cols %s",
                 split.getDeltaFilePaths(), split.getPath(), projectionFields));
-
         HoodieCompactedLogRecordScanner compactedLogRecordScanner =
-            new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getDeltaFilePaths(),
+            new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getBasePath(), split.getDeltaFilePaths(),
                 readerSchema, split.getMaxCommitTime());
-
         // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
         // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)
-        for (HoodieRecord<HoodieAvroPayload> hoodieRecord : compactedLogRecordScanner) {
+        for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {
             GenericRecord rec = (GenericRecord) hoodieRecord.getData().getInsertValue(readerSchema)
                 .get();
             String key = hoodieRecord.getRecordKey();

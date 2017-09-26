@@ -127,7 +127,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
                                         HoodieTimeline.DELTA_COMMIT_ACTION))
                                 .filterCompletedInstants().lastInstant().get().getTimestamp();
                             rtSplits.add(
-                                new HoodieRealtimeFileSplit(split, logFilePaths, maxCommitTime));
+                                new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
                         } catch (IOException e) {
                             throw new HoodieIOException("Error creating hoodie real time split ", e);
                         }

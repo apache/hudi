@@ -23,6 +23,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.CompactionWriteStat;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
+import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -155,14 +156,15 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                             HoodieTimeline.DELTA_COMMIT_ACTION))
             .filterCompletedInstants().lastInstant().get().getTimestamp();
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, operation.getDeltaFilePaths(), readerSchema, maxInstantTime);
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, metaClient.getBasePath(),
+            operation.getDeltaFilePaths(), readerSchema, maxInstantTime);
     if (!scanner.iterator().hasNext()) {
       return Lists.newArrayList();
     }
 
     // Compacting is very similar to applying updates to existing file
-    HoodieCopyOnWriteTable<HoodieAvroPayload> table =
-        new HoodieCopyOnWriteTable<>(config, metaClient);
+    HoodieCopyOnWriteTable table =
+        new HoodieCopyOnWriteTable(config, metaClient);
     Iterator<List<WriteStatus>> result = table
         .handleUpdate(commitTime, operation.getFileId(), scanner.iterator());
     Iterable<List<WriteStatus>> resultIterable = () -> result;

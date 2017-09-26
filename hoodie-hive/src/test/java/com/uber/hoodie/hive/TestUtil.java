@@ -24,6 +24,7 @@ import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.minicluster.ZookeeperTestService;
 import com.uber.hoodie.common.model.CompactionWriteStat;
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -120,7 +121,7 @@ public class TestUtil {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
     HoodieTableMetaClient
         .initTableType(fileSystem, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-            hiveSyncConfig.tableName);
+            hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
 
     HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(),
         fileSystem);
@@ -156,7 +157,7 @@ public class TestUtil {
     FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient
         .initTableType(fileSystem, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-            hiveSyncConfig.tableName);
+            hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
     DateTime dateTime = DateTime.now();
@@ -171,7 +172,7 @@ public class TestUtil {
     FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient
         .initTableType(fileSystem, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
-            hiveSyncConfig.tableName);
+            hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);

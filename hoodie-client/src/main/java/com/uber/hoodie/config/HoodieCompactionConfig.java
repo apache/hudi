@@ -17,10 +17,12 @@
 package com.uber.hoodie.config;
 
 import com.google.common.base.Preconditions;
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
-
+import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
+
 import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
@@ -92,6 +94,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     public static final String COMPACTION_STRATEGY_PROP = "hoodie.compaction.strategy";
     // 200GB of target IO per compaction
     public static final String DEFAULT_COMPACTION_STRATEGY = LogFileSizeBasedCompactionStrategy.class.getName();
+
+    // used to merge records written to log file
+    public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
+    public static final String PAYLOAD_CLASS = "hoodie.compaction.payload.class";
 
     private HoodieCompactionConfig(Properties props) {
         super(props);
@@ -187,6 +193,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
             return this;
         }
 
+        public Builder withPayloadClass(String payloadClassName) {
+            props.setProperty(PAYLOAD_CLASS, payloadClassName);
+            return this;
+        }
+
         public Builder withTargetIOPerCompactionInMB(long targetIOPerCompactionInMB) {
             props.setProperty(TARGET_IO_PER_COMPACTION_IN_MB_PROP, String.valueOf(targetIOPerCompactionInMB));
             return this;
@@ -222,6 +233,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
                 CLEANER_PARALLELISM, DEFAULT_CLEANER_PARALLELISM);
             setDefaultOnCondition(props, !props.containsKey(COMPACTION_STRATEGY_PROP),
                 COMPACTION_STRATEGY_PROP, DEFAULT_COMPACTION_STRATEGY);
+            setDefaultOnCondition(props, !props.containsKey(PAYLOAD_CLASS),
+                    PAYLOAD_CLASS, DEFAULT_PAYLOAD_CLASS);
             setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_COMPACTION_IN_MB_PROP),
                 TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
 
