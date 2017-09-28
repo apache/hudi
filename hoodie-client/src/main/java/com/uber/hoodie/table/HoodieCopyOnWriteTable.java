@@ -38,6 +38,7 @@ import com.uber.hoodie.io.HoodieCleanHelper;
 import com.uber.hoodie.io.HoodieMergeHandle;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -360,8 +361,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
                 // pick the target bucket to use based on the weights.
                 double totalWeight = 0.0;
                 final long totalInserts = Math.max(1, globalStat.getNumInserts());
-                final double r = 1.0 * Math.floorMod(Hashing.md5().hashUnencodedChars(keyLocation._1().getRecordKey()).asLong(),
-                    totalInserts) / totalInserts;
+                final long hashOfKey = Hashing.md5().hashString(keyLocation._1().getRecordKey(), StandardCharsets.UTF_8).asLong();
+                final double r = 1.0 * Math.floorMod(hashOfKey, totalInserts) / totalInserts;
                 for (InsertBucket insertBucket: targetBuckets) {
                     totalWeight += insertBucket.weight;
                     if (r <= totalWeight) {
