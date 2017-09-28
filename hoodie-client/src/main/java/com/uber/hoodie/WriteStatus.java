@@ -119,6 +119,8 @@ public class WriteStatus implements Serializable {
         return totalRecords;
     }
 
+    public long getTotalErrorRecords() { return totalErrorRecords; }
+
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder("WriteStatus {");

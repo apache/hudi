@@ -50,6 +50,8 @@ import scala.Tuple2;
  *  - Could increase write amplification on copy-on-write storage since inserts always rewrite files
  *  - Not global.
  *
+ *
+ *
  */
 public class BucketedIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
@@ -86,6 +88,37 @@ public class BucketedIndex<T extends HoodieRecordPayload> extends HoodieIndex<T>
     @Override
     public boolean rollbackCommit(String commitTime) {
         // nothing to rollback in the index.
+        return true;
+    }
+
+    /**
+     * Bucketing is still done within each partition.
+     *
+     * @return
+     */
+    @Override
+    public boolean isGlobal() {
+        return false;
+    }
+
+    /**
+     * Since indexing is just a deterministic hash, we can identify file group correctly even without an index
+     * on the actual log file.
+     *
+     * @return
+     */
+    @Override
+    public boolean canIndexLogFiles() {
+        return true;
+    }
+
+    /**
+     * Indexing is just a hash function.
+     *
+     * @return
+     */
+    @Override
+    public boolean isImplicitWithStorage() {
         return true;
     }
 }
