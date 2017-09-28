@@ -88,6 +88,35 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
      */
     public abstract boolean rollbackCommit(String commitTime);
 
+    /**
+     * An index is `global` if {@link HoodieKey} to fileID mapping, does not depend on the `partitionPath`.
+     * Such an implementation is able to obtain the same mapping, for two hoodie keys with same `recordKey`
+     * but different `partitionPath`
+     *
+     * @return whether or not, the index implementation is global in nature
+     */
+    public abstract boolean isGlobal();
+
+    /**
+     * This is used by storage to determine, if its safe to send inserts, straight to the log,
+     * i.e having a {@link com.uber.hoodie.common.model.FileSlice}, with no data file.
+     *
+     * @return Returns true/false depending on whether the impl has this capability
+     */
+    public abstract boolean canIndexLogFiles();
+
+
+    /**
+     *
+     * An index is "implicit" with respect to storage, if just writing new data to a file slice,
+     * updates the index as well. This is used by storage, to save memory footprint in
+     * certain cases.
+     *
+     * @return
+     */
+    public abstract boolean isImplicitWithStorage();
+
+
     public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(
             HoodieWriteConfig config, JavaSparkContext jsc) throws HoodieIndexException {
         switch (config.getIndexType()) {

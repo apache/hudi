@@ -110,7 +110,36 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
     @Override
     public boolean rollbackCommit(String commitTime) {
-        // TODO (weiy)
         return true;
+    }
+
+    /**
+     * Only looks up by recordKey
+     *
+     * @return
+     */
+    @Override
+    public boolean isGlobal() {
+        return true;
+    }
+
+    /**
+     * Mapping is available in HBase already.
+     *
+     * @return
+     */
+    @Override
+    public boolean canIndexLogFiles() {
+        return true;
+    }
+
+    /**
+     * Index needs to be explicitly updated after storage write.
+     *
+     * @return
+     */
+    @Override
+    public boolean isImplicitWithStorage() {
+        return false;
     }
 }

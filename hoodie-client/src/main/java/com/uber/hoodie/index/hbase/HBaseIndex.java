@@ -241,4 +241,34 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         // not the other way around
         return true;
     }
+
+    /**
+     * Only looks up by recordKey
+     *
+     * @return
+     */
+    @Override
+    public boolean isGlobal() {
+        return true;
+    }
+
+    /**
+     * Mapping is available in HBase already.
+     *
+     * @return
+     */
+    @Override
+    public boolean canIndexLogFiles() {
+        return true;
+    }
+
+    /**
+     * Index needs to be explicitly updated after storage write.
+     *
+     * @return
+     */
+    @Override
+    public boolean isImplicitWithStorage() {
+        return false;
+    }
 }

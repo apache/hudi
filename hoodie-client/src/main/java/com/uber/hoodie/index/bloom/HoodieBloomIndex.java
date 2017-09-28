@@ -265,6 +265,36 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     }
 
     /**
+     * This is not global, since we depend on the partitionPath to do the lookup
+     *
+     * @return
+     */
+    @Override
+    public boolean isGlobal() {
+        return false;
+    }
+
+    /**
+     * No indexes into log files yet.
+     *
+     * @return
+     */
+    @Override
+    public boolean canIndexLogFiles() {
+        return false;
+    }
+
+    /**
+     * Bloom filters are stored, into the same data files.
+     *
+     * @return
+     */
+    @Override
+    public boolean isImplicitWithStorage() {
+        return true;
+    }
+
+    /**
      * if we dont have key ranges, then also we need to compare against the file. no other choice
      * if we do, then only compare the file if the record key falls in range.
 
