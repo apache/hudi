@@ -17,7 +17,6 @@
 package com.uber.hoodie.common.table.log;
 
 import com.google.common.base.Preconditions;
-
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
@@ -126,7 +125,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     }
 
     try {
-      readMagic();
+      readMarkers();
       // all good - either we found the sync marker or EOF. Reset position and continue
       return false;
     } catch (CorruptedLogFileException e) {
@@ -141,7 +140,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     while(true) {
       long currentPos = inputStream.getPos();
       try {
-        boolean isEOF = readMagic();
+        boolean isEOF = readMarkers();
         return isEOF ? inputStream.getPos() : currentPos;
       } catch (CorruptedLogFileException e) {
         // No luck - advance and try again
@@ -161,7 +160,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
    */
   public boolean hasNext() {
     try {
-      boolean isEOF = readMagic();
+      boolean isEOF = readMarkers();
       if (isEOF) {
         return false;
       }
@@ -172,19 +171,33 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     }
   }
 
-  private boolean readMagic() throws IOException {
+  // TODO : separate reading of markers once idempotency is resolved.
+  private boolean readMarkers() throws IOException {
     try {
-      // 1. Read magic header from the start of the block
+      // 1. Read end marker from end of log file or 2. Read magic header from the start of the block
       inputStream.readFully(magicBuffer, 0, 4);
-      if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
-        throw new CorruptedLogFileException(
-            logFile + "could not be read. Did not find the magic bytes at the start of the block");
-      }
-      return false;
+      if(checkEndMarker())
+        return true;
+      return checkMagic();
     } catch (EOFException e) {
       // We have reached the EOF
       return true;
     }
+  }
+
+  private boolean checkEndMarker() {
+    if (Arrays.equals(magicBuffer, HoodieLogFormat.END_MARKER)) {
+      return true;
+    }
+    return false;
+  }
+
+  private boolean checkMagic() {
+    if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
+      throw new CorruptedLogFileException(
+          logFile + "could not be read. Did not find the magic bytes at the start of the block");
+    }
+    return false;
   }
 
   @Override

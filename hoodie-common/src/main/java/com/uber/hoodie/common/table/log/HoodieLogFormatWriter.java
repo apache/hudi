@@ -16,15 +16,14 @@
 
 package com.uber.hoodie.common.table.log;
 
-import com.google.common.base.Preconditions;
-
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
-import java.io.IOException;
+import com.uber.hoodie.exception.HoodieIOException;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -33,6 +32,8 @@ import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * HoodieLogFormatWriter can be used to append blocks to a log file
@@ -48,6 +49,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Integer bufferSize;
   private final Short replication;
   private FSDataOutputStream output;
+  private static final byte[] magicBuffer = new byte[4];
 
   /**
    *
@@ -71,6 +73,10 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       log.info(logFile + " exists. Appending to existing file");
       try {
         this.output = fs.append(path, bufferSize);
+        if(isLogFileSealed(path)) {
+          this.output.close();
+          throw new HoodieIOException("Cannot append to a sealed log file " + path.toString());
+        }
       } catch (RemoteException e) {
         // this happens when either another task executor writing to this file died or data node is going down
         if (e.getClassName().equals(AlreadyBeingCreatedException.class.getName())
@@ -127,16 +133,35 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     return rolloverIfNeeded();
   }
 
+  private boolean isLogFileSealed(Path path) throws IOException {
+    long currentOffset = this.output.getPos();
+    FSDataInputStream input = null;
+    try {
+      input = fs.open(path);
+      input.readFully(currentOffset - magicBuffer.length, magicBuffer);
+      if (Arrays.equals(magicBuffer, HoodieLogFormat.END_MARKER)) {
+        return true;
+      }
+      return false;
+    } finally {
+      input.close();
+    }
+  }
+
   private Writer rolloverIfNeeded() throws IOException, InterruptedException {
     // Roll over if the size is past the threshold
     if (getCurrentSize() > sizeThreshold) {
-      //TODO - make an end marker which seals the old log file (no more appends possible to that file).
       log.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
           + ". Rolling over to the next version");
       HoodieLogFile newLogFile = logFile.rollOver(fs);
+      // Create the new writer
+      Writer newWriter = new HoodieLogFormatWriter(fs, newLogFile, bufferSize, replication, sizeThreshold);
+      // End marker which seals the old log file (no more appends possible to this file)
+      // TODO : Auto-correct old log files in case failed to write END_MARKER
+      this.output.write(HoodieLogFormat.END_MARKER);
       // close this writer and return the new writer
       close();
-      return new HoodieLogFormatWriter(fs, newLogFile, bufferSize, replication, sizeThreshold);
+      return newWriter;
     }
     return this;
   }

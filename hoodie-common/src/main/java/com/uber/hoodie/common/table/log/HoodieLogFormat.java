@@ -33,7 +33,7 @@ import org.apache.log4j.Logger;
  * The File Format consists of blocks each seperated with a MAGIC sync marker.
  * A Block can either be a Data block, Command block or Delete Block.
  * Data Block - Contains log records serialized as Avro Binary Format
- * Command Block - Specific commands like RoLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block
+ * Command Block - Specific commands like ROLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block
  * Delete Block - List of keys to delete - tombstone for keys
  */
 public interface HoodieLogFormat {
@@ -42,6 +42,11 @@ public interface HoodieLogFormat {
    * We could make this file specific (generate a random 4 byte magic and stick it in the file header), but this I think is suffice for now - PR
    */
   byte [] MAGIC = new byte [] {'H', 'U', 'D', 'I'};
+
+  /**
+   * Magic 4 bytes we put at the end of the log file. End marker, this seals a log file.
+   */
+  byte [] END_MARKER = new byte [] {'I', 'D', 'U', 'H'};
 
   /**
    * Writer interface to allow appending block to this file format
