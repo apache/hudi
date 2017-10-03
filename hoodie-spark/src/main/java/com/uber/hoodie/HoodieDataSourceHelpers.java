@@ -49,7 +49,6 @@ public class HoodieDataSourceHelpers {
      * Get a list of instant times that have occurred, from the given instant timestamp.
      *
      * @param instantTimestamp
-     * @return
      */
     public static List<String> listCommitsSince(FileSystem fs, String basePath, String instantTimestamp) {
         HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
@@ -71,7 +70,6 @@ public class HoodieDataSourceHelpers {
      *
      * @param fs
      * @param basePath
-     * @return
      */
     public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
         HoodieTable table = HoodieTable

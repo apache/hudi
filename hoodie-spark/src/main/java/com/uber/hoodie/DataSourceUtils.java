@@ -59,7 +59,8 @@ public class DataSourceUtils {
             if (i == parts.length - 1) {
                 return val.toString();
             } else {
-                if (val instanceof GenericRecord) {
+                // VC: Need a test here
+                if (!(val instanceof GenericRecord)) {
                     throw new HoodieException("Cannot find a record at part value :" + part);
                 }
                 valueNode = (GenericRecord) val;
@@ -80,7 +81,7 @@ public class DataSourceUtils {
     }
 
     /**
-     * Create a payload class via reflection, passing in an ordering/precombine value value.
+     * Create a payload class via reflection, passing in an ordering/precombine value.
      */
     public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal) throws IOException {
         try {

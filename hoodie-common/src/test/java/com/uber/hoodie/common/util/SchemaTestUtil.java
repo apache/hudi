@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.util;
 
+import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.net.URI;
@@ -117,5 +118,12 @@ public class SchemaTestUtil {
     public static Schema getComplexEvolvedSchema() throws IOException {
         return new Schema.Parser()
             .parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avro"));
+    }
+
+    public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber,
+                                                           String commitTime, String fileId) throws IOException {
+        TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
+        MercifulJsonConverter converter = new MercifulJsonConverter(schema);
+        return converter.convert(record.toJsonString());
     }
 }

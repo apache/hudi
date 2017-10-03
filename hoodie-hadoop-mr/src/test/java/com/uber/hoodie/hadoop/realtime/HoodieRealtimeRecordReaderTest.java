@@ -78,7 +78,7 @@ public class HoodieRealtimeRecordReaderTest {
                 .overBaseCommit(baseCommit).withFs(FSUtils.getFs()).build();
         List<IndexedRecord> records = new ArrayList<>();
         for(int i=0; i < numberOfRecords; i++) {
-            records.add(InputFormatTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
+            records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
         }
         Schema writeSchema = records.get(0).getSchema();
         HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, writeSchema);
