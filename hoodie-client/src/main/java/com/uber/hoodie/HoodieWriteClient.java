@@ -157,6 +157,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
             // perform index loop up to get existing location of records
             JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, table);
+
+            if (index.getLatestFileByPartition().isPresent()) {
+                table.setLatestFileByPartition(index.getLatestFileByPartition().get());
+            }
             return upsertRecordsInternal(taggedRecords, commitTime, table, true);
         } catch (Throwable e) {
             if (e instanceof HoodieUpsertException) {

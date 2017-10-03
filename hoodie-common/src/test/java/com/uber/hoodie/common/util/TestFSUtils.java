@@ -60,4 +60,13 @@ public class TestFSUtils {
         String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
         assertTrue(FSUtils.getFileId(fullFileName).equals(fileName));
     }
+
+    @Test
+    public void testGetTaskPartitionId() {
+        String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        int taskPartitionId = 2;
+        String fileName = UUID.randomUUID().toString();
+        String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
+        assertTrue(FSUtils.getTaskPartitionId(fullFileName).equals(String.valueOf(taskPartitionId)));
+    }
 }
