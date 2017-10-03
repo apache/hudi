@@ -66,9 +66,6 @@ public class HoodieJavaApp {
         cli.run();
     }
 
-
-
-
     public void run() throws Exception {
 
         // Spark session setup..
@@ -103,6 +100,7 @@ public class HoodieJavaApp {
                 .mode(SaveMode.Overwrite) // This will remove any existing data at path below, and create a new dataset if needed
                 .save(tablePath); // ultimately where the dataset will be placed
         String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+        logger.info("First commit at instant time :" + commitInstantTime1);
 
         /**
          * Commit that updates records
@@ -120,6 +118,7 @@ public class HoodieJavaApp {
                 .mode(SaveMode.Append)
                 .save(tablePath);
         String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+        logger.info("Second commit at instant time :" + commitInstantTime1);
 
         /**
          * Read & do some queries
@@ -142,7 +141,7 @@ public class HoodieJavaApp {
                 .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), commitInstantTime1) // Only changes in write 2 above
                 .load(tablePath); // For incremental view, pass in the root/base path of dataset
 
-        System.out.println("You will only see records from : " + commitInstantTime2);
+        logger.info("You will only see records from : " + commitInstantTime2);
         hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
     }
 }

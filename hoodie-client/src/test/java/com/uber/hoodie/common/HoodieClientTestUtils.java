@@ -107,9 +107,9 @@ public class HoodieClientTestUtils {
         return HoodieReadClient.addHoodieSupport(sparkConf);
     }
 
-    public static HashMap<String, String> getLatestFileIsToFullPath(String basePath,
-                                                                    HoodieTimeline commitTimeline,
-                                                                    List<HoodieInstant> commitsToReturn) throws IOException {
+    public static HashMap<String, String> getLatestFileIDsToFullPath(String basePath,
+                                                                     HoodieTimeline commitTimeline,
+                                                                     List<HoodieInstant> commitsToReturn) throws IOException {
         HashMap<String, String> fileIdToFullPath = new HashMap<>();
         for (HoodieInstant commit : commitsToReturn) {
             HoodieCommitMetadata metadata =
@@ -129,7 +129,7 @@ public class HoodieClientTestUtils {
             new HoodieException("No commit exists at " + commitTime);
         }
         try {
-            HashMap<String, String> paths = getLatestFileIsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
+            HashMap<String, String> paths = getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
             return sqlContext.read()
                     .parquet(paths.values().toArray(new String[paths.size()]))
                     .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
@@ -150,7 +150,7 @@ public class HoodieClientTestUtils {
                         .getInstants().collect(Collectors.toList());
         try {
             // Go over the commit metadata, and obtain the new files that need to be read.
-            HashMap<String, String> fileIdToFullPath = getLatestFileIsToFullPath(basePath, commitTimeline, commitsToReturn);
+            HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
             return sqlContext.read()
                     .parquet(fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]))
                     .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));

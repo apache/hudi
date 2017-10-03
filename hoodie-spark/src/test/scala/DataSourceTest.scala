@@ -21,7 +21,7 @@ import com.uber.hoodie.common.util.FSUtils
 import com.uber.hoodie.config.HoodieWriteConfig
 import com.uber.hoodie.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
+import org.apache.spark.sql._
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.junit.rules.TemporaryFolder
@@ -127,9 +127,9 @@ class DataSourceTest extends AssertionsForJUnit {
     try {
       val hoodieROViewDF1 = spark.read.format("com.uber.hoodie")
         .load(basePath + "/*/*/*/*")
-      fail() // we would error out, since no compaction has yet occurred.
+      fail("we should error out, since no compaction has yet occurred.")
     } catch {
-      case e: Exception => {
+      case e: AnalysisException => {
         // do nothing
       }
     };

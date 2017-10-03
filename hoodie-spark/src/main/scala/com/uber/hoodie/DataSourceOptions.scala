@@ -38,9 +38,9 @@ object DataSourceReadOptions {
     * Default: READ_OPTIMIZED
     */
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
-  val VIEW_TYPE_READ_OPTIMIZED_OPT_VAL = "READ_OPTIMIZED"
-  val VIEW_TYPE_INCREMENTAL_OPT_VAL = "INCREMENTAL"
-  val VIEW_TYPE_REALTIME_OPT_VAL = "REALTIME"
+  val VIEW_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
+  val VIEW_TYPE_INCREMENTAL_OPT_VAL = "incremental"
+  val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
 
 
@@ -82,6 +82,7 @@ object DataSourceWriteOptions {
 
   /**
     * The storage type for the underlying data, for this write.
+    * Note that this can't change across writes.
     *
     * Default: COPY_ON_WRITE
     */

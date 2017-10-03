@@ -20,6 +20,7 @@ import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.TestRecord;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -120,29 +121,9 @@ public class InputFormatTestUtil {
     private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords, String commitTime, String fileId) throws IOException {
         List<GenericRecord> records = new ArrayList<>(numberOfRecords);
         for(int i=0;i<numberOfRecords;i++) {
-            records.add(generateAvroRecordFromJson(schema, i, commitTime, fileId));
+            records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, commitTime, fileId));
         }
         return records;
-    }
-
-    public static GenericRecord generateAvroRecord(Schema schema, int recordNumber,
-        String commitTime, String fileId) {
-        GenericRecord record = new GenericData.Record(schema);
-        record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
-        record.put("field1", "field" + recordNumber);
-        record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, "key_" + recordNumber);
-        record.put("field2", "field" + recordNumber);
-        record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, commitTime);
-        record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileId);
-        record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitTime + "_" + recordNumber);
-        return record;
-    }
-
-    public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber,
-        String commitTime, String fileId) throws IOException {
-        TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
-        MercifulJsonConverter converter = new MercifulJsonConverter(schema);
-        return converter.convert(record.toJsonString());
     }
 
     public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,

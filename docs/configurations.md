@@ -97,7 +97,7 @@ summary: "Here we list all possible configurations and what they mean"
         - [OPERATION_OPT_KEY](#OPERATION_OPT_KEY) (Default: upsert) <br/>
         <span style="color:grey">whether to do upsert, insert or bulkinsert for the write operation</span>
         - [STORAGE_TYPE_OPT_KEY](#STORAGE_TYPE_OPT_KEY) (Default: COPY_ON_WRITE) <br/>
-        <span style="color:grey">The storage type for the underlying data, for this write.</span>
+        <span style="color:grey">The storage type for the underlying data, for this write. This can't change between writes.</span>
         - [TABLE_NAME_OPT_KEY](#TABLE_NAME_OPT_KEY) (Default: None (mandatory)) <br/>
         <span style="color:grey">Hive table name, to register the dataset into.</span>
         - [PRECOMBINE_FIELD_OPT_KEY](#PRECOMBINE_FIELD_OPT_KEY) (Default: ts) <br/>
@@ -121,7 +121,7 @@ summary: "Here we list all possible configurations and what they mean"
 
     - [read options](#readoptions) (read.format.option(...)) <br/>
     <span style="color:grey">Options useful for reading datasets</span>
-        - [VIEW_TYPE_OPT_KEY](#VIEW_TYPE_OPT_KEY) (Default:  = READ_OPTIMIZED) <br/>
+        - [VIEW_TYPE_OPT_KEY](#VIEW_TYPE_OPT_KEY) (Default:  = read_optimized) <br/>
         <span style="color:grey">Whether data needs to be read, in incremental mode (new data since an instantTime)
         (or) Read Optimized mode (obtain latest view, based on columnar data)
         (or) Real time mode (obtain latest view, based on row & columnar data)</span>
