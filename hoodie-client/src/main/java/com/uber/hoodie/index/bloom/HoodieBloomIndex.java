@@ -76,7 +76,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
         // Step 0: cache the input record RDD
         if (config.getBloomIndexUseCaching()) {
-            recordRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
+            recordRDD.persist(config.getInputRecordStorageLevel());
         }
 
         // Step 1: Extract out thinner JavaPairRDD of (partitionPath, recordKey)
