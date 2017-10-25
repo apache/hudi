@@ -87,6 +87,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                 .getLatestFileSlices(partitionPath)
                 .map(s -> new CompactionOperation(s.getDataFile().get(),
                     partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
+                .filter(c -> !c.getDeltaFilePaths().isEmpty())
                 .collect(toList()).iterator()).collect();
     log.info("Total of " + operations.size() + " compactions are retrieved");
 

@@ -128,7 +128,7 @@ public class TestHoodieCompactor {
         compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
     String basePath = table.getMetaClient().getBasePath();
     assertTrue("If there is nothing to compact, result will be empty",
-        result.getFileIdAndFullPaths(basePath).isEmpty());
+        result == null || result.getFileIdAndFullPaths(basePath).isEmpty());
   }
 
   @Test
