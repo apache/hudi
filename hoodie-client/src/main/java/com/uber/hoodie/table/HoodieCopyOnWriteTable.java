@@ -51,6 +51,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import com.uber.hoodie.io.cache.LatestFileByPartitionInfo;
+import com.uber.hoodie.io.cache.TableFileSystemViewCacheUtil;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -97,6 +100,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
 
     private static Logger logger = LogManager.getLogger(HoodieCopyOnWriteTable.class);
+
+    private LatestFileByPartitionInfo latestFileByPartition;
 
     enum BucketType {
         UPDATE,
@@ -576,6 +581,26 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
                 .forEach(activeTimeline::deleteInflight);
         logger.info("Deleted inflight commits " + commits);
         return stats;
+    }
+
+    @Override
+    public String getLatestFileForPartition(String partition, String fileId) {
+        if (latestFileByPartition == null || latestFileByPartition.getLatestFileByPartition() == null) {
+            return null;
+        }
+
+        final Map<String, String> latestFiles = latestFileByPartition.getLatestFileByPartition();
+        final String fileIdPartition = TableFileSystemViewCacheUtil.generateCacheKey(partition, fileId);
+        if (!latestFiles.containsKey(fileIdPartition)) {
+            return null;
+        }
+
+        return TableFileSystemViewCacheUtil.generateCacheFileName(fileId, latestFiles.get(fileIdPartition));
+    }
+
+    @Override
+    public void setLatestFileByPartition(LatestFileByPartitionInfo latestFileByPartition) {
+        this.latestFileByPartition = latestFileByPartition;
     }
 
     private static class PartitionCleanStat implements Serializable {

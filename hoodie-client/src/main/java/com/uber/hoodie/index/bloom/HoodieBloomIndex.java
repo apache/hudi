@@ -33,6 +33,7 @@ import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.MetadataNotFoundException;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.io.cache.TableFileSystemViewCacheBuilder;
 import com.uber.hoodie.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -75,7 +76,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
         // Step 0: cache the input record RDD
         if (config.getBloomIndexUseCaching()) {
-            recordRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
+            recordRDD.persist(config.getInputRecordStorageLevel());
         }
 
         // Step 1: Extract out thinner JavaPairRDD of (partitionPath, recordKey)
@@ -237,6 +238,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
                     }
                     return filteredFiles.iterator();
                 }).collect();
+
+        if (config.shoudCachePartitionMetadata()) {
+            latestFileByPartitionInfo = new TableFileSystemViewCacheBuilder(dataFilesList).build();
+            logger.info("Fetched latest files by partition, total size latestFileByPartitionInfo:" + latestFileByPartitionInfo.getLatestFileByPartition().size());
+        }
 
         if (config.getBloomIndexPruneByRanges()) {
             // also obtain file ranges, if range pruning is enabled

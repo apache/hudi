@@ -44,6 +44,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.uber.hoodie.io.cache.LatestFileByPartitionInfo;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -342,4 +343,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
      * @throws HoodieRollbackException
      */
     public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits) throws IOException;
+
+    /**
+     * Get the latest file name for the given partition and fileId
+     *
+     * @param partition partition string
+     * @param fileId file ID string
+     */
+    public abstract String getLatestFileForPartition(String partition, String fileId);
+
+    /**
+     * Store the latest file by partition for later use
+     *
+     * @param latestFileByPartition LatestFileByPartitionInfo to store
+     */
+    public abstract void setLatestFileByPartition(LatestFileByPartitionInfo latestFileByPartition);
 }

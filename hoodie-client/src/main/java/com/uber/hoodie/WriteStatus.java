@@ -32,11 +32,11 @@ import java.util.Optional;
  */
 public class WriteStatus implements Serializable {
 
-    private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
+    protected final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-    private final List<HoodieRecord> writtenRecords = new ArrayList<>();
+    protected final List<HoodieRecord> writtenRecords = new ArrayList<>();
 
-    private final List<HoodieRecord> failedRecords  = new ArrayList<>();
+    protected final List<HoodieRecord> failedRecords  = new ArrayList<>();
 
     private Throwable globalError = null;
 
@@ -46,8 +46,8 @@ public class WriteStatus implements Serializable {
 
     private HoodieWriteStat stat = null;
 
-    private long totalRecords = 0;
-    private long totalErrorRecords = 0;
+    protected long totalRecords = 0;
+    protected long totalErrorRecords = 0;
 
     /**
      * Mark write as success, optionally using given parameters for the purpose of calculating

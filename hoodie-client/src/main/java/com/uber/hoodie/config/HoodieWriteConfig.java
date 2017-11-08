@@ -58,6 +58,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
     private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
     private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
+    private static final String HOODIE_LATEST_PARTITION_FILE_CACHE = "hoodie.latest.partition.file.cache";
+    private static final String DEFAULT_HOODIE_LATEST_PARTITION_FILE_CACHE = "false";
+    private static final String INPUT_RECORD_STORAGE_LEVEL = "hoodie.input.record.storage.level";
+    private static final String DEFAULT_INPUT_RECORD_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
     private HoodieWriteConfig(Properties props) {
         super(props);
@@ -112,6 +116,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public String getWriteStatusClassName() {
         return props.getProperty(HOODIE_WRITE_STATUS_CLASS_PROP);
+    }
+
+    public boolean shoudCachePartitionMetadata() {
+        return Boolean.parseBoolean(props.getProperty(HOODIE_LATEST_PARTITION_FILE_CACHE));
+    }
+
+    public StorageLevel getInputRecordStorageLevel() {
+        return StorageLevel.fromString(props.getProperty(INPUT_RECORD_STORAGE_LEVEL));
     }
 
     /**
@@ -230,8 +242,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     /**
      * storage properties
      **/
-    public int getParquetMaxFileSize() {
-        return Integer.parseInt(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
+    public long getParquetMaxFileSize() {
+        return Long.parseLong(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
     }
 
     public int getParquetBlockSize() {
@@ -380,7 +392,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             return this;
         }
 
-        public HoodieWriteConfig build() {
+        public Builder withPartitionMetadataCache(boolean partitionMetadataCache) {
+            props.setProperty(HOODIE_LATEST_PARTITION_FILE_CACHE, String.valueOf(partitionMetadataCache));
+            return this;
+        }
+
+        public Builder withInputRecordStorageLevel(String level) {
+            props.setProperty(INPUT_RECORD_STORAGE_LEVEL, level);
+            return this;
+        }
+
+      public HoodieWriteConfig build() {
             HoodieWriteConfig config = new HoodieWriteConfig(props);
             // Check for mandatory properties
             Preconditions.checkArgument(config.getBasePath() != null);
@@ -402,6 +424,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
                     HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
             setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
                     HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
+            setDefaultOnCondition(props, !props.containsKey(HOODIE_LATEST_PARTITION_FILE_CACHE),
+                    HOODIE_LATEST_PARTITION_FILE_CACHE, DEFAULT_HOODIE_LATEST_PARTITION_FILE_CACHE);
+            setDefaultOnCondition(props, !props.containsKey(INPUT_RECORD_STORAGE_LEVEL),
+                INPUT_RECORD_STORAGE_LEVEL, DEFAULT_INPUT_RECORD_STORAGE_LEVEL);
 
             // Make sure the props is propagated
             setDefaultOnCondition(props, !isIndexConfigSet,

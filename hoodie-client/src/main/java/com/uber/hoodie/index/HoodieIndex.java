@@ -28,6 +28,7 @@ import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
 import com.uber.hoodie.index.bucketed.BucketedIndex;
 import com.uber.hoodie.index.hbase.HBaseIndex;
+import com.uber.hoodie.io.cache.LatestFileByPartitionInfo;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -41,6 +42,7 @@ import java.io.Serializable;
  */
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
     protected transient JavaSparkContext jsc = null;
+    protected transient LatestFileByPartitionInfo latestFileByPartitionInfo;
 
     public enum IndexType {
         HBASE,
@@ -130,5 +132,12 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
                 return new BucketedIndex<>(config, jsc);
         }
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
+    }
+
+    /**
+     * Get latest file per partition, which is reused to reduce repeated lookup.
+     */
+    public Optional<LatestFileByPartitionInfo> getLatestFileByPartition() {
+        return Optional.fromNullable(latestFileByPartitionInfo);
     }
 }

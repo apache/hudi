@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.io;
 
+import com.google.common.base.Joiner;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -78,11 +79,20 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
                 HoodieRecord<T> record = newRecordsItr.next();
                 // If the first record, we need to extract some info out
                 if (oldFilePath == null) {
-                    String latestValidFilePath = fileSystemView
+                    String latestValidFilePath;
+
+                    if (hoodieTable.getConfig().shoudCachePartitionMetadata()) {
+                        latestValidFilePath = hoodieTable.getLatestFileForPartition(record.getPartitionPath(), fileId);
+                        logger.info(Joiner.on(",").join("Fetched cached latest valid file", latestValidFilePath));
+                    } else {
+                        latestValidFilePath = fileSystemView
                             .getLatestDataFiles(record.getPartitionPath())
                             .filter(dataFile -> dataFile.getFileId().equals(fileId))
                             .findFirst()
                             .get().getFileName();
+                        logger.info(Joiner.on(",").join("Fetched latest valid file", latestValidFilePath));
+                    }
+
                     writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
                     HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,

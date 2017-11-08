@@ -119,6 +119,12 @@ public class FSUtils {
         return fullFileName.split("_")[0];
     }
 
+    /**
+     * Gets task partition ID from file name.
+     */
+    public static String getTaskPartitionId(String fullFileName) {
+        return fullFileName.split("_")[1];
+    }
 
     /**
      * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
