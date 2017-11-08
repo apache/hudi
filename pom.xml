@@ -31,7 +31,9 @@
         <module>hoodie-client</module>
         <module>hoodie-cli</module>
         <module>hoodie-hadoop-mr</module>
+        <module>hoodie-hadoop-mr-hive2</module>
         <module>hoodie-hive</module>
+        <module>hoodie-hive2</module>
         <module>hoodie-utilities</module>
         <module>hoodie-spark</module>
     </modules>
@@ -121,6 +123,7 @@
         <cdh.version>5.7.2</cdh.version>
         <hadoop.version>2.6.0</hadoop.version>
         <hive.version>1.1.0</hive.version>
+        <hive2.version>2.1.0</hive2.version>
         <metrics.version>3.1.1</metrics.version>
         <spark.version>2.1.0</spark.version>
         <scala.version>2.11.8</scala.version>
@@ -403,7 +406,7 @@
             <dependency>
                 <groupId>org.apache.hive</groupId>
                 <artifactId>hive-exec</artifactId>
-                <version>1.1.0-cdh5.7.2</version>
+                <version>${hive.version}-cdh${cdh.version}</version>
                 <scope>provided</scope>
             </dependency>
             <dependency>
