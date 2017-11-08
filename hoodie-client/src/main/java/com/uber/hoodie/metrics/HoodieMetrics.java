@@ -21,8 +21,9 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieCompactionMetadata;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.config.HoodieWriteConfig;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -79,6 +80,18 @@ public class HoodieMetrics {
 
     public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata) {
         if (config.isMetricsOn()) {
+            String actionType = HoodieActiveTimeline.COMMIT_ACTION;
+            if(metadata instanceof HoodieCompactionMetadata) {
+                actionType = HoodieActiveTimeline.COMPACTION_ACTION;
+                registerGauge(getMetricsName(actionType, "compactionCommitTime"),
+                        ((HoodieCompactionMetadata)metadata).getCompactionCommit());
+                long totalLogRecordsScannedCompacted = ((HoodieCompactionMetadata)metadata).getTotalLogRecordsCompacted();
+                long totalLogFilesScannedCompacted = ((HoodieCompactionMetadata)metadata).getTotalLogFilesCompacted();
+                long totalCompactedRecordsUpdated = ((HoodieCompactionMetadata)metadata).getTotalCompactedRecordsToBeUpdated();
+                registerGauge(getMetricsName(actionType, "totalLogRecordsScannedCompacted"), totalLogRecordsScannedCompacted);
+                registerGauge(getMetricsName(actionType, "totalLogFilesScannedCompacted"), totalLogFilesScannedCompacted);
+                registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
+            }
             long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
             long totalFilesInsert = metadata.fetchTotalFilesInsert();
             long totalFilesUpdate = metadata.fetchTotalFilesUpdated();
@@ -86,16 +99,22 @@ public class HoodieMetrics {
             long totalUpdateRecordsWritten = metadata.fetchTotalUpdateRecordsWritten();
             long totalInsertRecordsWritten = metadata.fetchTotalInsertRecordsWritten();
             long totalBytesWritten = metadata.fetchTotalBytesWritten();
-            registerGauge(getMetricsName("commit", "duration"), durationInMs);
-            registerGauge(getMetricsName("commit", "totalPartitionsWritten"), totalPartitionsWritten);
-            registerGauge(getMetricsName("commit", "totalFilesInsert"), totalFilesInsert);
-            registerGauge(getMetricsName("commit", "totalFilesUpdate"), totalFilesUpdate);
-            registerGauge(getMetricsName("commit", "totalRecordsWritten"), totalRecordsWritten);
-            registerGauge(getMetricsName("commit", "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
-            registerGauge(getMetricsName("commit", "totalInsertRecordsWritten"), totalInsertRecordsWritten);
-            registerGauge(getMetricsName("commit", "totalBytesWritten"), totalBytesWritten);
-            registerGauge(getMetricsName("commit", "commitTime"), commitEpochTimeInMs);
+            long totalUnCompactedBytes = metadata.fetchTotalUnCompactedBytes();
+            registerGauge(getMetricsName(actionType, "duration"), durationInMs);
+            registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
+            registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
+            registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
+            registerGauge(getMetricsName(actionType, "totalRecordsWritten"), totalRecordsWritten);
+            registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
+            registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
+            registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
+            registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
+            registerGauge(getMetricsName(actionType, "totalUnCompactedBytes"), totalUnCompactedBytes);
         }
+    }
+
+    public void updateCompactionMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCompactionMetadata metadata) {
+        updateCommitMetrics(commitEpochTimeInMs, durationInMs, metadata);
     }
 
     public void updateRollbackMetrics(long durationInMs, long numFilesDeleted) {

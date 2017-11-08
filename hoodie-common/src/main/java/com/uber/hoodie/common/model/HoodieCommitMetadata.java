@@ -19,6 +19,7 @@ package com.uber.hoodie.common.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -184,6 +185,20 @@ public class HoodieCommitMetadata implements Serializable {
             }
         }
         return totalBytesWritten;
+    }
+
+    public long fetchTotalUnCompactedBytes() {
+        long totaBytesInLogFiles = 0;
+        for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
+            for (HoodieWriteStat stat : stats) {
+                if (stat instanceof HoodieDeltaWriteStat) {
+                    long bytesFromPreviousLogVersions = (((HoodieDeltaWriteStat) stat).getLogVersion() - 1) *
+                            HoodieLogFormat.WriterBuilder.DEFAULT_SIZE_THRESHOLD;
+                    totaBytesInLogFiles += bytesFromPreviousLogVersions + ((HoodieDeltaWriteStat) stat).getLogOffset();
+                }
+            }
+        }
+        return totaBytesInLogFiles;
     }
 
     public long fetchTotalWriteErrors() {
