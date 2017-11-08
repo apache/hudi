@@ -21,9 +21,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.CompactionWriteStat;
-import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
-import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -33,12 +31,10 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
-import java.util.Collection;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -48,11 +44,15 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
-import static java.util.stream.Collectors.*;
+import static java.util.stream.Collectors.toList;
 
 /**
  * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage.
@@ -116,6 +116,14 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     HoodieCompactionMetadata metadata = new HoodieCompactionMetadata();
     for (CompactionWriteStat stat : updateStatusMap) {
       metadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+    try {
+      metadata.setCompactionCommit(HoodieActiveTimeline.COMMIT_FORMATTER
+              .parse(compactionCommit).getTime());
+    } catch (ParseException e) {
+      throw new HoodieCommitException(
+              "Commit time is not of valid format.Failed to compaction commit " + config.getBasePath()
+                      + " at time " + compactionCommit, e);
     }
 
     log.info("Compaction finished with result " + metadata);

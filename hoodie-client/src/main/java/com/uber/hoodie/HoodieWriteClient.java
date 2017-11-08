@@ -50,8 +50,8 @@ import com.uber.hoodie.func.BulkInsertMapFunction;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCommitArchiveLog;
 import com.uber.hoodie.metrics.HoodieMetrics;
-import com.uber.hoodie.table.UserDefinedBulkInsertPartitioner;
 import com.uber.hoodie.table.HoodieTable;
+import com.uber.hoodie.table.UserDefinedBulkInsertPartitioner;
 import com.uber.hoodie.table.WorkloadProfile;
 import com.uber.hoodie.table.WorkloadStat;
 import org.apache.hadoop.fs.FileSystem;
@@ -409,7 +409,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                             new Tuple2<>(writeStatus.getPartitionPath(), writeStatus.getStat()))
                     .collect();
 
+        String actionType = table.getCommitActionType();
         HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+
         for (Tuple2<String, HoodieWriteStat> stat : stats) {
             metadata.addWriteStat(stat._1(), stat._2());
         }
@@ -419,23 +421,15 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         }
 
         try {
-            String actionType = table.getCommitActionType();
             activeTimeline.saveAsComplete(
                 new HoodieInstant(true, actionType, commitTime),
                 Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
             // Save was a success
             // Do a inline compaction if enabled
             if (config.isInlineCompaction()) {
-                Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc);
-                if (compactionMetadata.isPresent()) {
-                    logger.info("Compacted successfully on commit " + commitTime);
-                    metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
-                } else {
-                    logger.info("Compaction did not run for commit " + commitTime);
-                    metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
-                }
+                metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
+                compact();
             }
-
             // We cannot have unbounded commit files. Archive commits if we have to archive
             archiveLog.archiveIfRequired();
             if(config.isAutoClean()) {
@@ -789,6 +783,45 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         } catch (IOException e) {
             throw new HoodieIOException("Failed to clean up after commit", e);
         }
+    }
+
+    /**
+     * Performs a compaction operation on a MergeOnRead type of dataset. Depending on the CompactionStrategy,
+     * this operation will re-write log files(Avro) into parquet files.
+     * WARNING: Compaction operation cannot be executed asynchronously. Please always use this serially
+     * before or after an insert/upsert action.
+     * @param compactionTime
+     * @throws IOException
+     */
+    public void compact(String compactionTime) throws IOException {
+        // Create a Hoodie table which encapsulated the commits and files visible
+        HoodieTable<T> table = HoodieTable
+                .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        HoodieMetrics compactionMetrics = new HoodieMetrics(config, config.getTableName());
+        Timer.Context compactionWriteContext = compactionMetrics.getCommitCtx();
+        Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc);
+        if (compactionMetadata.isPresent()) {
+            logger.info("Compacted successfully on commit " + compactionTime);
+            if(compactionWriteContext != null) {
+                long durationInMs = compactionMetrics.getDurationInMs(compactionWriteContext.stop());
+                compactionMetrics.updateCompactionMetrics(compactionMetadata.get().getCompactionCommit(),
+                        durationInMs, compactionMetadata.get());
+            }
+        } else {
+            logger.info("Compaction did not run for commit " + compactionTime);
+        }
+    }
+
+    /**
+     * Performs a compaction operation on a MergeOnRead type of dataset. Depending on the CompactionStrategy,
+     * this operation will re-write log files(Avro) into parquet files.
+     * WARNING: Compaction operation cannot be executed asynchronously. Please always use this serially
+     * before or after an insert/upsert action.
+     * @throws IOException
+     */
+    public void compact() throws IOException {
+        String startCompactionTime = HoodieActiveTimeline.createNewCommitTime();
+        compact(startCompactionTime);
     }
 
     /**

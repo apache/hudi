@@ -38,6 +38,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 public class HoodieCompactionMetadata extends HoodieCommitMetadata {
   private static volatile Logger log = LogManager.getLogger(HoodieCompactionMetadata.class);
   protected HashMap<String, List<CompactionWriteStat>> partitionToCompactionWriteStats;
+  protected long compactionCommit;
 
   public HoodieCompactionMetadata() {
     partitionToCompactionWriteStats = new HashMap<>();
@@ -51,12 +52,50 @@ public class HoodieCompactionMetadata extends HoodieCommitMetadata {
     partitionToCompactionWriteStats.get(partitionPath).add(stat);
   }
 
+  public void setCompactionCommit(long compactionCommit) {
+    this.compactionCommit = compactionCommit;
+  }
+
+  public long getCompactionCommit() {
+    return this.compactionCommit;
+  }
+
   public List<CompactionWriteStat> getCompactionWriteStats(String partitionPath) {
     return partitionToCompactionWriteStats.get(partitionPath);
   }
 
   public Map<String, List<CompactionWriteStat>> getPartitionToCompactionWriteStats() {
     return partitionToCompactionWriteStats;
+  }
+
+  public Long getTotalLogRecordsCompacted() {
+    Long totalLogRecords = 0L;
+    for(Map.Entry<String, List<CompactionWriteStat>> entry : partitionToCompactionWriteStats.entrySet()) {
+      for (CompactionWriteStat cWriteStat : entry.getValue()) {
+        totalLogRecords += cWriteStat.getTotalLogRecords();
+      }
+    }
+    return totalLogRecords;
+  }
+
+  public Long getTotalLogFilesCompacted() {
+    Long totalLogFiles = 0L;
+    for(Map.Entry<String, List<CompactionWriteStat>> entry : partitionToCompactionWriteStats.entrySet()) {
+      for (CompactionWriteStat cWriteStat : entry.getValue()) {
+        totalLogFiles += cWriteStat.getTotalLogFiles();
+      }
+    }
+    return totalLogFiles;
+  }
+
+  public Long getTotalCompactedRecordsToBeUpdated() {
+    Long totalUpdateRecords = 0L;
+    for (Map.Entry<String, List<CompactionWriteStat>> entry : partitionToCompactionWriteStats.entrySet()) {
+      for (CompactionWriteStat cWriteStat : entry.getValue()) {
+        totalUpdateRecords += cWriteStat.getTotalRecordsToBeUpdate();
+      }
+    }
+    return totalUpdateRecords;
   }
 
   public String toJsonString() throws IOException {
