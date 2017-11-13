@@ -19,15 +19,15 @@
 package com.uber.hoodie.utilities.exception;
 
 import com.uber.hoodie.exception.HoodieException;
-
 import java.sql.SQLException;
 
 public class HoodieIncrementalPullException extends HoodieException {
-    public HoodieIncrementalPullException(String msg, SQLException e) {
-        super(msg, e);
-    }
 
-    public HoodieIncrementalPullException(String msg) {
-        super(msg);
-    }
+  public HoodieIncrementalPullException(String msg, SQLException e) {
+    super(msg, e);
+  }
+
+  public HoodieIncrementalPullException(String msg) {
+    super(msg);
+  }
 }

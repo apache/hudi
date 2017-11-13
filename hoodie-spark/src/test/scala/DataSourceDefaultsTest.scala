@@ -16,9 +16,9 @@
  *
  */
 
-import com.uber.hoodie.{DataSourceWriteOptions, OverwriteWithLatestAvroPayload, SimpleKeyGenerator}
 import com.uber.hoodie.common.util.SchemaTestUtil
 import com.uber.hoodie.exception.HoodieException
+import com.uber.hoodie.{DataSourceWriteOptions, OverwriteWithLatestAvroPayload, SimpleKeyGenerator}
 import org.apache.avro.generic.GenericRecord
 import org.apache.commons.configuration.PropertiesConfiguration
 import org.junit.Assert._
@@ -31,7 +31,7 @@ import org.scalatest.junit.AssertionsForJUnit
 class DataSourceDefaultsTest extends AssertionsForJUnit {
 
   val schema = SchemaTestUtil.getComplexEvolvedSchema
-  var baseRecord : GenericRecord = null
+  var baseRecord: GenericRecord = null
 
   @Before def initialize(): Unit = {
     baseRecord = SchemaTestUtil
@@ -39,12 +39,13 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
   }
 
 
-  private def getKeyConfig(recordKeyFieldName: String, paritionPathField: String): PropertiesConfiguration  = {
+  private def getKeyConfig(recordKeyFieldName: String, paritionPathField: String): PropertiesConfiguration = {
     val props = new PropertiesConfiguration()
     props.addProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, recordKeyFieldName)
     props.addProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, paritionPathField)
     props
   }
+
   @Test def testSimpleKeyGenerator() = {
     // top level, valid fields
     val hk1 = new SimpleKeyGenerator(getKeyConfig("field1", "name")).getKey(baseRecord)

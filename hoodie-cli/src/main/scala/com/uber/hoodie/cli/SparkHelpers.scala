@@ -17,9 +17,9 @@
 package com.uber.hoodie.cli
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport
-import com.uber.hoodie.common.{BloomFilter, HoodieJsonPayload}
 import com.uber.hoodie.common.model.HoodieRecord
 import com.uber.hoodie.common.util.ParquetUtils
+import com.uber.hoodie.common.{BloomFilter, HoodieJsonPayload}
 import com.uber.hoodie.config.{HoodieIndexConfig, HoodieStorageConfig}
 import com.uber.hoodie.io.storage.{HoodieParquetConfig, HoodieParquetWriter}
 import org.apache.avro.Schema
@@ -107,7 +107,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @param file
     * @param sqlContext
     */
-  def getKeyCount(file: String, sqlContext: org.apache.spark.sql.SQLContext) ={
+  def getKeyCount(file: String, sqlContext: org.apache.spark.sql.SQLContext) = {
     println(getRowKeyDF(file).collect().size)
   }
 
@@ -122,7 +122,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @param file
     * @return
     */
-  def fileKeysAgainstBF(conf: Configuration, sqlContext: SQLContext, file: String) : Boolean = {
+  def fileKeysAgainstBF(conf: Configuration, sqlContext: SQLContext, file: String): Boolean = {
     val bfStr = SparkHelpers.getBloomFilter(file, conf)
     val bf = new com.uber.hoodie.common.BloomFilter(bfStr)
     val foundCount = sqlContext.parquetFile(file)
@@ -134,7 +134,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     totalCount == foundCount
   }
 
-  def getDistinctKeyDF(paths: List[String]) : DataFrame = {
-    sqlContext.read.parquet(paths:_*).select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`").distinct()
+  def getDistinctKeyDF(paths: List[String]): DataFrame = {
+    sqlContext.read.parquet(paths: _*).select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`").distinct()
   }
 }

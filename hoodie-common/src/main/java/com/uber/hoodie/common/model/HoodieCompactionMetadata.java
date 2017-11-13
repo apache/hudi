@@ -16,15 +16,12 @@
 
 package com.uber.hoodie.common.model;
 
-import com.google.common.collect.Maps;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BinaryOperator;
-import java.util.function.Supplier;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.annotate.JsonAutoDetect;
@@ -33,9 +30,11 @@ import org.codehaus.jackson.map.DeserializationConfig.Feature;
 import org.codehaus.jackson.map.ObjectMapper;
 
 /**
- * Place holder for the compaction specific meta-data, uses all the details used in a normal HoodieCommitMetadata
+ * Place holder for the compaction specific meta-data, uses all the details used in a normal
+ * HoodieCommitMetadata
  */
 public class HoodieCompactionMetadata extends HoodieCommitMetadata {
+
   private static volatile Logger log = LogManager.getLogger(HoodieCompactionMetadata.class);
   protected HashMap<String, List<CompactionWriteStat>> partitionToCompactionWriteStats;
 
@@ -60,7 +59,7 @@ public class HoodieCompactionMetadata extends HoodieCommitMetadata {
   }
 
   public String toJsonString() throws IOException {
-    if(partitionToCompactionWriteStats.containsKey(null)) {
+    if (partitionToCompactionWriteStats.containsKey(null)) {
       log.info("partition path is null for " + partitionToCompactionWriteStats.get(null));
       partitionToCompactionWriteStats.remove(null);
     }

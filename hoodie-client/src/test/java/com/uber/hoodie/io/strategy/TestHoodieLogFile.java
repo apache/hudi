@@ -18,7 +18,6 @@ package com.uber.hoodie.io.strategy;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
 import java.util.Optional;
-
 import org.apache.hadoop.fs.Path;
 
 public class TestHoodieLogFile extends HoodieLogFile {

@@ -18,7 +18,6 @@ package com.uber.hoodie.metrics;
 
 import com.codahale.metrics.MetricRegistry;
 import com.uber.hoodie.config.HoodieWriteConfig;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -26,23 +25,24 @@ import org.apache.log4j.Logger;
  * Factory class for creating MetricsReporter.
  */
 public class MetricsReporterFactory {
-    private static Logger logger = LogManager.getLogger(MetricsReporterFactory.class);
 
-    public static MetricsReporter createReporter(HoodieWriteConfig config,
-                                                 MetricRegistry registry) {
-        MetricsReporterType type = config.getMetricsReporterType();
-        MetricsReporter reporter = null;
-        switch (type) {
-            case GRAPHITE:
-                reporter = new MetricsGraphiteReporter(config, registry);
-                break;
-            case INMEMORY:
-                reporter = new InMemoryMetricsReporter();
-                break;
-            default:
-                logger.error("Reporter type[" + type + "] is not supported.");
-                break;
-        }
-        return reporter;
+  private static Logger logger = LogManager.getLogger(MetricsReporterFactory.class);
+
+  public static MetricsReporter createReporter(HoodieWriteConfig config,
+      MetricRegistry registry) {
+    MetricsReporterType type = config.getMetricsReporterType();
+    MetricsReporter reporter = null;
+    switch (type) {
+      case GRAPHITE:
+        reporter = new MetricsGraphiteReporter(config, registry);
+        break;
+      case INMEMORY:
+        reporter = new InMemoryMetricsReporter();
+        break;
+      default:
+        logger.error("Reporter type[" + type + "] is not supported.");
+        break;
     }
+    return reporter;
+  }
 }

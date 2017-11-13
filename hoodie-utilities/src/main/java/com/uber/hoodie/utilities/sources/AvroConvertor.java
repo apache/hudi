@@ -21,73 +21,71 @@ package com.uber.hoodie.utilities.sources;
 import com.twitter.bijection.Injection;
 import com.twitter.bijection.avro.GenericAvroCodecs;
 import com.uber.hoodie.avro.MercifulJsonConverter;
-
+import java.io.IOException;
+import java.io.Serializable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
-import java.io.IOException;
-import java.io.Serializable;
-
 /**
- * Convert a variety of {@link SourceDataFormat} into Avro GenericRecords. Has a bunch of lazy fields
- * to circumvent issues around serializing these objects from driver to executors
+ * Convert a variety of {@link SourceDataFormat} into Avro GenericRecords. Has a bunch of lazy
+ * fields to circumvent issues around serializing these objects from driver to executors
  */
 public class AvroConvertor implements Serializable {
 
-    /**
-     * To be lazily inited on executors
-     */
-    private transient Schema schema;
+  /**
+   * To be lazily inited on executors
+   */
+  private transient Schema schema;
 
-    private final String schemaStr;
+  private final String schemaStr;
 
-    /**
-     * To be lazily inited on executors
-     */
-    private transient MercifulJsonConverter jsonConverter;
-
-
-    /**
-     * To be lazily inited on executors
-     */
-    private transient Injection<GenericRecord, byte[]> recordInjection;
+  /**
+   * To be lazily inited on executors
+   */
+  private transient MercifulJsonConverter jsonConverter;
 
 
-    public AvroConvertor(String schemaStr) {
-        this.schemaStr = schemaStr;
+  /**
+   * To be lazily inited on executors
+   */
+  private transient Injection<GenericRecord, byte[]> recordInjection;
+
+
+  public AvroConvertor(String schemaStr) {
+    this.schemaStr = schemaStr;
+  }
+
+
+  private void initSchema() {
+    if (schema == null) {
+      Schema.Parser parser = new Schema.Parser();
+      schema = parser.parse(schemaStr);
     }
+  }
 
-
-    private void initSchema() {
-        if (schema == null) {
-            Schema.Parser parser = new Schema.Parser();
-            schema = parser.parse(schemaStr);
-        }
+  private void initInjection() {
+    if (recordInjection == null) {
+      recordInjection = GenericAvroCodecs.toBinary(schema);
     }
+  }
 
-    private void initInjection() {
-        if (recordInjection == null) {
-            recordInjection = GenericAvroCodecs.toBinary(schema);
-        }
+  private void initJsonConvertor() {
+    if (jsonConverter == null) {
+      jsonConverter = new MercifulJsonConverter(schema);
     }
-
-    private void initJsonConvertor() {
-        if (jsonConverter == null) {
-            jsonConverter = new MercifulJsonConverter(schema);
-        }
-    }
+  }
 
 
-    public GenericRecord fromJson(String json) throws IOException {
-        initSchema();
-        initJsonConvertor();
-        return jsonConverter.convert(json);
-    }
+  public GenericRecord fromJson(String json) throws IOException {
+    initSchema();
+    initJsonConvertor();
+    return jsonConverter.convert(json);
+  }
 
 
-    public GenericRecord fromAvroBinary(byte[] avroBinary) throws IOException {
-        initSchema();
-        initInjection();
-        return recordInjection.invert(avroBinary).get();
-    }
+  public GenericRecord fromAvroBinary(byte[] avroBinary) throws IOException {
+    initSchema();
+    initInjection();
+    return recordInjection.invert(avroBinary).get();
+  }
 }

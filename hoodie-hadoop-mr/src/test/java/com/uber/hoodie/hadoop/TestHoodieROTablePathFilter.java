@@ -15,63 +15,66 @@
  */
 package com.uber.hoodie.hadoop;
 
-import com.uber.hoodie.common.model.HoodieTestUtils;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import java.io.File;
+import java.io.IOException;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.io.File;
-import java.io.IOException;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 
 /**
  */
 public class TestHoodieROTablePathFilter {
 
-    @Test
-    public void testHoodiePaths() throws IOException {
-        // Create a temp folder as the base path
-        HoodieTableMetaClient metaClient = HoodieTestUtils.initOnTemp();
-        String basePath = metaClient.getBasePath();
+  @Test
+  public void testHoodiePaths() throws IOException {
+    // Create a temp folder as the base path
+    HoodieTableMetaClient metaClient = HoodieTestUtils.initOnTemp();
+    String basePath = metaClient.getBasePath();
 
-        HoodieTestUtils.createCommitFiles(basePath, "001", "002");
-        HoodieTestUtils.createInflightCommitFiles(basePath, "003");
+    HoodieTestUtils.createCommitFiles(basePath, "001", "002");
+    HoodieTestUtils.createInflightCommitFiles(basePath, "003");
 
-        HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f1");
-        HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f2");
-        HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f3");
-        HoodieTestUtils.createDataFile(basePath, "2017/01/01", "002", "f2");
-        HoodieTestUtils.createDataFile(basePath, "2017/01/01", "003", "f3");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f1");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f2");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f3");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "002", "f2");
+    HoodieTestUtils.createDataFile(basePath, "2017/01/01", "003", "f3");
 
-        HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
-        Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
-        assertTrue("Directories should be accepted", pathFilter.accept(partitionPath));
+    HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
+    Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
+    assertTrue("Directories should be accepted", pathFilter.accept(partitionPath));
 
-        assertTrue(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
-        assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
-        assertTrue(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
-        assertTrue(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
-        assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
-    }
+    assertTrue(pathFilter.accept(new Path(
+        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
+    assertFalse(pathFilter.accept(new Path(
+        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
+    assertTrue(pathFilter.accept(new Path(
+        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
+    assertTrue(pathFilter.accept(new Path(
+        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
+    assertFalse(pathFilter.accept(new Path(
+        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+  }
 
-    @Test
-    public void testNonHoodiePaths() throws IOException {
-        TemporaryFolder folder = new TemporaryFolder();
-        folder.create();
-        String basePath = folder.getRoot().getAbsolutePath();
-        HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
+  @Test
+  public void testNonHoodiePaths() throws IOException {
+    TemporaryFolder folder = new TemporaryFolder();
+    folder.create();
+    String basePath = folder.getRoot().getAbsolutePath();
+    HoodieROTablePathFilter pathFilter = new HoodieROTablePathFilter();
 
-        String path = basePath + File.separator + "nonhoodiefolder";
-        new File(path).mkdirs();
-        assertTrue(pathFilter.accept(new Path("file:///" + path)));
+    String path = basePath + File.separator + "nonhoodiefolder";
+    new File(path).mkdirs();
+    assertTrue(pathFilter.accept(new Path("file:///" + path)));
 
-        path = basePath + File.separator + "nonhoodiefolder/somefile";
-        new File(path).createNewFile();
-        assertTrue(pathFilter.accept(new Path("file:///" + path)));
-    }
+    path = basePath + File.separator + "nonhoodiefolder/somefile";
+    new File(path).createNewFile();
+    assertTrue(pathFilter.accept(new Path("file:///" + path)));
+  }
 }

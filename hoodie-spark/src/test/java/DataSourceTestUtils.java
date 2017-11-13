@@ -18,9 +18,6 @@
 
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
-
-import org.apache.spark.api.java.JavaRDD;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -31,20 +28,21 @@ import java.util.stream.Collectors;
  */
 public class DataSourceTestUtils {
 
-    public static Optional<String> convertToString(HoodieRecord record) {
-        try {
-            String str = ((TestRawTripPayload) record.getData()).getJsonData();
-            str = "{" + str.substring(str.indexOf("\"timestamp\":"));
-            return Optional.of(str.replaceAll("}", ", \"partition\": \"" + record.getPartitionPath() + "\"}"));
-        } catch (IOException e) {
-            return Optional.empty();
-        }
+  public static Optional<String> convertToString(HoodieRecord record) {
+    try {
+      String str = ((TestRawTripPayload) record.getData()).getJsonData();
+      str = "{" + str.substring(str.indexOf("\"timestamp\":"));
+      return Optional
+          .of(str.replaceAll("}", ", \"partition\": \"" + record.getPartitionPath() + "\"}"));
+    } catch (IOException e) {
+      return Optional.empty();
     }
+  }
 
-    public static List<String> convertToStringList(List<HoodieRecord> records) {
-        return records.stream().map(hr -> convertToString(hr))
-                .filter(os -> os.isPresent())
-                .map(os -> os.get())
-                .collect(Collectors.toList());
-    }
+  public static List<String> convertToStringList(List<HoodieRecord> records) {
+    return records.stream().map(hr -> convertToString(hr))
+        .filter(os -> os.isPresent())
+        .map(os -> os.get())
+        .collect(Collectors.toList());
+  }
 }

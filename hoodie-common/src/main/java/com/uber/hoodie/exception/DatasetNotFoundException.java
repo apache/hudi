@@ -16,43 +16,40 @@
 
 package com.uber.hoodie.exception;
 
+import java.io.IOException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-import java.io.IOException;
-
 /**
- * <p>
- * Exception thrown to indicate that a hoodie dataset was not found on the path provided
- * <p>
+ * <p> Exception thrown to indicate that a hoodie dataset was not found on the path provided <p>
  */
 public class DatasetNotFoundException extends HoodieException {
-    public DatasetNotFoundException(String basePath) {
-        super(getErrorMessage(basePath));
-    }
 
-    private static String getErrorMessage(String basePath) {
-        return "Hoodie dataset not found in path " + basePath;
-    }
+  public DatasetNotFoundException(String basePath) {
+    super(getErrorMessage(basePath));
+  }
 
-    public static void checkValidDataset(FileSystem fs, Path basePathDir, Path metaPathDir)
-        throws DatasetNotFoundException {
-        // Check if the base path is found
-        try {
-            if (!fs.exists(basePathDir) || !fs.isDirectory(basePathDir)) {
-                throw new DatasetNotFoundException(basePathDir.toString());
-            }
-            // Check if the meta path is found
-            if (!fs.exists(metaPathDir) || !fs.isDirectory(metaPathDir)) {
-                throw new DatasetNotFoundException(metaPathDir.toString());
-            }
-        } catch (IllegalArgumentException e) {
-            // if the base path is file:///, then we have a IllegalArgumentException
-            throw new DatasetNotFoundException(metaPathDir.toString());
-        }
-        catch (IOException e) {
-            throw new HoodieIOException(
-                "Could not check if dataset " + basePathDir + " is valid dataset", e);
-        }
+  private static String getErrorMessage(String basePath) {
+    return "Hoodie dataset not found in path " + basePath;
+  }
+
+  public static void checkValidDataset(FileSystem fs, Path basePathDir, Path metaPathDir)
+      throws DatasetNotFoundException {
+    // Check if the base path is found
+    try {
+      if (!fs.exists(basePathDir) || !fs.isDirectory(basePathDir)) {
+        throw new DatasetNotFoundException(basePathDir.toString());
+      }
+      // Check if the meta path is found
+      if (!fs.exists(metaPathDir) || !fs.isDirectory(metaPathDir)) {
+        throw new DatasetNotFoundException(metaPathDir.toString());
+      }
+    } catch (IllegalArgumentException e) {
+      // if the base path is file:///, then we have a IllegalArgumentException
+      throw new DatasetNotFoundException(metaPathDir.toString());
+    } catch (IOException e) {
+      throw new HoodieIOException(
+          "Could not check if dataset " + basePathDir + " is valid dataset", e);
     }
+  }
 }

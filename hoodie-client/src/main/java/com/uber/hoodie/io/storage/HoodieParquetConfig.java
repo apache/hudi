@@ -17,50 +17,50 @@
 package com.uber.hoodie.io.storage;
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 public class HoodieParquetConfig {
-    private HoodieAvroWriteSupport writeSupport;
-    private CompressionCodecName compressionCodecName;
-    private int blockSize;
-    private int pageSize;
-    private int maxFileSize;
-    private Configuration hadoopConf;
 
-    public HoodieParquetConfig(HoodieAvroWriteSupport writeSupport,
-        CompressionCodecName compressionCodecName, int blockSize, int pageSize, int maxFileSize,
-        Configuration hadoopConf) {
-        this.writeSupport = writeSupport;
-        this.compressionCodecName = compressionCodecName;
-        this.blockSize = blockSize;
-        this.pageSize = pageSize;
-        this.maxFileSize = maxFileSize;
-        this.hadoopConf = hadoopConf;
-    }
+  private HoodieAvroWriteSupport writeSupport;
+  private CompressionCodecName compressionCodecName;
+  private int blockSize;
+  private int pageSize;
+  private int maxFileSize;
+  private Configuration hadoopConf;
 
-    public HoodieAvroWriteSupport getWriteSupport() {
-        return writeSupport;
-    }
+  public HoodieParquetConfig(HoodieAvroWriteSupport writeSupport,
+      CompressionCodecName compressionCodecName, int blockSize, int pageSize, int maxFileSize,
+      Configuration hadoopConf) {
+    this.writeSupport = writeSupport;
+    this.compressionCodecName = compressionCodecName;
+    this.blockSize = blockSize;
+    this.pageSize = pageSize;
+    this.maxFileSize = maxFileSize;
+    this.hadoopConf = hadoopConf;
+  }
 
-    public CompressionCodecName getCompressionCodecName() {
-        return compressionCodecName;
-    }
+  public HoodieAvroWriteSupport getWriteSupport() {
+    return writeSupport;
+  }
 
-    public int getBlockSize() {
-        return blockSize;
-    }
+  public CompressionCodecName getCompressionCodecName() {
+    return compressionCodecName;
+  }
 
-    public int getPageSize() {
-        return pageSize;
-    }
+  public int getBlockSize() {
+    return blockSize;
+  }
 
-    public int getMaxFileSize() {
-        return maxFileSize;
-    }
+  public int getPageSize() {
+    return pageSize;
+  }
 
-    public Configuration getHadoopConf() {
-        return hadoopConf;
-    }
+  public int getMaxFileSize() {
+    return maxFileSize;
+  }
+
+  public Configuration getHadoopConf() {
+    return hadoopConf;
+  }
 }

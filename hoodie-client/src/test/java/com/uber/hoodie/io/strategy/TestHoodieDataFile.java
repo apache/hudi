@@ -17,9 +17,7 @@
 package com.uber.hoodie.io.strategy;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.util.FSUtils;
 import java.util.UUID;
-import org.apache.hadoop.fs.FileStatus;
 
 public class TestHoodieDataFile extends HoodieDataFile {
 

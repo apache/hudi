@@ -18,8 +18,8 @@
 
 package com.uber.hoodie;
 
-import org.apache.avro.generic.GenericRecord;
 import java.io.Serializable;
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field
@@ -27,23 +27,23 @@ import java.io.Serializable;
 public abstract class BaseAvroPayload implements Serializable {
 
 
-    /**
-     * Avro data extracted from the source
-     */
-    protected final GenericRecord record;
+  /**
+   * Avro data extracted from the source
+   */
+  protected final GenericRecord record;
 
-    /**
-     * For purposes of preCombining
-     */
-    protected final Comparable orderingVal;
+  /**
+   * For purposes of preCombining
+   */
+  protected final Comparable orderingVal;
 
-    /**
-     *
-     * @param record
-     * @param orderingVal
-     */
-    public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
-        this.record = record;
-        this.orderingVal = orderingVal;
-    }
+  /**
+   *
+   * @param record
+   * @param orderingVal
+   */
+  public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
+    this.record = record;
+    this.orderingVal = orderingVal;
+  }
 }

@@ -17,18 +17,17 @@
 package com.uber.hoodie.cli;
 
 import dnl.utils.text.table.TextTable;
-
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.Charset;
 
 public class HoodiePrintHelper {
 
-    public static String print(String[] header, String[][] rows) {
-        TextTable textTable = new TextTable(header, rows);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream ps = new PrintStream(baos);
-        textTable.printTable(ps, 4);
-        return new String(baos.toByteArray(), Charset.forName("utf-8"));
-    }
+  public static String print(String[] header, String[][] rows) {
+    TextTable textTable = new TextTable(header, rows);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    PrintStream ps = new PrintStream(baos);
+    textTable.printTable(ps, 4);
+    return new String(baos.toByteArray(), Charset.forName("utf-8"));
+  }
 }

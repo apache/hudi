@@ -20,15 +20,11 @@ package com.uber.hoodie.table;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.PairFunction;
-
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-
+import org.apache.spark.api.java.JavaRDD;
 import scala.Option;
 import scala.Tuple2;
 
@@ -40,73 +36,76 @@ import scala.Tuple2;
  */
 public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializable {
 
-    /**
-     * Input workload
-     */
-    private final JavaRDD<HoodieRecord<T>> taggedRecords;
+  /**
+   * Input workload
+   */
+  private final JavaRDD<HoodieRecord<T>> taggedRecords;
 
-    /**
-     * Computed workload profile
-     */
-    private final HashMap<String, WorkloadStat> partitionPathStatMap;
-
-
-    private final WorkloadStat globalStat;
+  /**
+   * Computed workload profile
+   */
+  private final HashMap<String, WorkloadStat> partitionPathStatMap;
 
 
-    public WorkloadProfile(JavaRDD<HoodieRecord<T>> taggedRecords) {
-        this.taggedRecords = taggedRecords;
-        this.partitionPathStatMap = new HashMap<>();
-        this.globalStat = new WorkloadStat();
-        buildProfile();
+  private final WorkloadStat globalStat;
+
+
+  public WorkloadProfile(JavaRDD<HoodieRecord<T>> taggedRecords) {
+    this.taggedRecords = taggedRecords;
+    this.partitionPathStatMap = new HashMap<>();
+    this.globalStat = new WorkloadStat();
+    buildProfile();
+  }
+
+  private void buildProfile() {
+
+    Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = taggedRecords
+        .mapToPair(record ->
+            new Tuple2<>(
+                new Tuple2<>(record.getPartitionPath(), Option.apply(record.getCurrentLocation())),
+                record))
+        .countByKey();
+
+    for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts
+        .entrySet()) {
+      String partitionPath = e.getKey()._1();
+      Long count = e.getValue();
+      Option<HoodieRecordLocation> locOption = e.getKey()._2();
+
+      if (!partitionPathStatMap.containsKey(partitionPath)) {
+        partitionPathStatMap.put(partitionPath, new WorkloadStat());
+      }
+
+      if (locOption.isDefined()) {
+        // update
+        partitionPathStatMap.get(partitionPath).addUpdates(locOption.get(), count);
+        globalStat.addUpdates(locOption.get(), count);
+      } else {
+        // insert
+        partitionPathStatMap.get(partitionPath).addInserts(count);
+        globalStat.addInserts(count);
+      }
     }
+  }
 
-    private void buildProfile() {
+  public WorkloadStat getGlobalStat() {
+    return globalStat;
+  }
 
-        Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = taggedRecords
-                .mapToPair(record ->
-                        new Tuple2<>(new Tuple2<>(record.getPartitionPath(), Option.apply(record.getCurrentLocation())), record))
-                .countByKey();
+  public Set<String> getPartitionPaths() {
+    return partitionPathStatMap.keySet();
+  }
 
-        for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e: partitionLocationCounts.entrySet()) {
-            String partitionPath = e.getKey()._1();
-            Long count = e.getValue();
-            Option<HoodieRecordLocation> locOption = e.getKey()._2();
+  public WorkloadStat getWorkloadStat(String partitionPath) {
+    return partitionPathStatMap.get(partitionPath);
+  }
 
-            if (!partitionPathStatMap.containsKey(partitionPath)){
-                partitionPathStatMap.put(partitionPath, new WorkloadStat());
-            }
-
-            if (locOption.isDefined()) {
-                // update
-                partitionPathStatMap.get(partitionPath).addUpdates(locOption.get(), count);
-                globalStat.addUpdates(locOption.get(), count);
-            } else {
-                // insert
-                partitionPathStatMap.get(partitionPath).addInserts(count);
-                globalStat.addInserts(count);
-            }
-        }
-    }
-
-    public WorkloadStat getGlobalStat() {
-        return globalStat;
-    }
-
-    public Set<String> getPartitionPaths() {
-        return partitionPathStatMap.keySet();
-    }
-
-    public WorkloadStat getWorkloadStat(String partitionPath){
-        return partitionPathStatMap.get(partitionPath);
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("WorkloadProfile {");
-        sb.append("globalStat=").append(globalStat).append(", ");
-        sb.append("partitionStat=").append(partitionPathStatMap);
-        sb.append('}');
-        return sb.toString();
-    }
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("WorkloadProfile {");
+    sb.append("globalStat=").append(globalStat).append(", ");
+    sb.append("partitionStat=").append(partitionPathStatMap);
+    sb.append('}');
+    return sb.toString();
+  }
 }

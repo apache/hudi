@@ -19,13 +19,6 @@ package com.uber.hoodie.common;
 import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.exception.HoodieException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.commons.io.IOUtils;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.map.ObjectMapper;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -34,75 +27,85 @@ import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.commons.io.IOUtils;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.map.ObjectMapper;
 
 public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload> {
-    private byte[] jsonDataCompressed;
-    private int dataSize;
 
-    public HoodieJsonPayload(String json) throws IOException {
-        this.jsonDataCompressed = compressData(json);
-        this.dataSize = json.length();
+  private byte[] jsonDataCompressed;
+  private int dataSize;
+
+  public HoodieJsonPayload(String json) throws IOException {
+    this.jsonDataCompressed = compressData(json);
+    this.dataSize = json.length();
+  }
+
+  @Override
+  public HoodieJsonPayload preCombine(HoodieJsonPayload another) {
+    return this;
+  }
+
+  @Override
+  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema)
+      throws IOException {
+    return getInsertValue(schema);
+  }
+
+  @Override
+  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
+    return Optional.of(jsonConverter.convert(getJsonData()));
+  }
+
+  private String getJsonData() throws IOException {
+    return unCompressData(jsonDataCompressed);
+  }
+
+  private byte[] compressData(String jsonData) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
+    DeflaterOutputStream dos =
+        new DeflaterOutputStream(baos, deflater, true);
+    try {
+      dos.write(jsonData.getBytes());
+    } finally {
+      dos.flush();
+      dos.close();
+      // Its important to call this.
+      // Deflater takes off-heap native memory and does not release until GC kicks in
+      deflater.end();
     }
+    return baos.toByteArray();
+  }
 
-    @Override public HoodieJsonPayload preCombine(HoodieJsonPayload another) {
-        return this;
+
+  private String unCompressData(byte[] data) throws IOException {
+    InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data));
+    try {
+      StringWriter sw = new StringWriter(dataSize);
+      IOUtils.copy(iis, sw);
+      return sw.toString();
+    } finally {
+      iis.close();
     }
+  }
 
-    @Override public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
-        return getInsertValue(schema);
+  private String getFieldFromJsonOrFail(String field) throws IOException {
+    JsonNode node = new ObjectMapper().readTree(getJsonData());
+    if (!node.has(field)) {
+      throw new HoodieException("Field :" + field + " not found in payload => " + node.toString());
     }
+    return node.get(field).getTextValue();
+  }
 
-    @Override public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-        MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-        return Optional.of(jsonConverter.convert(getJsonData()));
-    }
+  public String getRowKey(String keyColumnField) throws IOException {
+    return getFieldFromJsonOrFail(keyColumnField);
+  }
 
-    private String getJsonData() throws IOException {
-        return unCompressData(jsonDataCompressed);
-    }
-
-    private byte[] compressData(String jsonData) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
-        DeflaterOutputStream dos =
-            new DeflaterOutputStream(baos, deflater, true);
-        try {
-            dos.write(jsonData.getBytes());
-        } finally {
-            dos.flush();
-            dos.close();
-            // Its important to call this.
-            // Deflater takes off-heap native memory and does not release until GC kicks in
-            deflater.end();
-        }
-        return baos.toByteArray();
-    }
-
-
-    private String unCompressData(byte[] data) throws IOException {
-        InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data));
-        try {
-            StringWriter sw = new StringWriter(dataSize);
-            IOUtils.copy(iis, sw);
-            return sw.toString();
-        } finally {
-            iis.close();
-        }
-    }
-
-    private String getFieldFromJsonOrFail(String field) throws IOException {
-        JsonNode node = new ObjectMapper().readTree(getJsonData());
-        if(!node.has(field)) {
-            throw new HoodieException("Field :" + field + " not found in payload => " + node.toString());
-        }
-        return node.get(field).getTextValue();
-    }
-
-    public String getRowKey(String keyColumnField) throws IOException {
-        return getFieldFromJsonOrFail(keyColumnField);
-    }
-
-    public String getPartitionPath(String partitionPathField) throws IOException {
-        return getFieldFromJsonOrFail(partitionPathField);
-    }
+  public String getPartitionPath(String partitionPathField) throws IOException {
+    return getFieldFromJsonOrFail(partitionPathField);
+  }
 }

@@ -18,7 +18,6 @@ package com.uber.hoodie.io.compact;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
-
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import java.io.Serializable;
@@ -27,8 +26,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Encapsulates all the needed information about a compaction
- * and make a decision whether this compaction is effective or not
+ * Encapsulates all the needed information about a compaction and make a decision whether this
+ * compaction is effective or not
  *
  * @see CompactionStrategy
  */

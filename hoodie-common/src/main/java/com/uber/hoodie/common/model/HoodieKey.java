@@ -17,57 +17,58 @@
 package com.uber.hoodie.common.model;
 
 import com.google.common.base.Objects;
-
 import java.io.Serializable;
 
 /**
  * HoodieKey consists of
  *
- * - recordKey     : a recordKey that acts as primary key for a record
- * - partitionPath : path to the partition that contains the record
+ * - recordKey     : a recordKey that acts as primary key for a record - partitionPath : path to the
+ * partition that contains the record
  */
 public class HoodieKey implements Serializable {
 
 
-    private final String recordKey;
+  private final String recordKey;
 
-    private final String partitionPath;
+  private final String partitionPath;
 
-    public HoodieKey(String recordKey, String partitionPath) {
-        this.recordKey = recordKey;
-        this.partitionPath = partitionPath;
+  public HoodieKey(String recordKey, String partitionPath) {
+    this.recordKey = recordKey;
+    this.partitionPath = partitionPath;
+  }
+
+  public String getRecordKey() {
+    return recordKey;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
     }
-
-    public String getRecordKey() {
-        return recordKey;
+    if (o == null || getClass() != o.getClass()) {
+      return false;
     }
+    HoodieKey otherKey = (HoodieKey) o;
+    return Objects.equal(recordKey, otherKey.recordKey) &&
+        Objects.equal(partitionPath, otherKey.partitionPath);
+  }
 
-    public String getPartitionPath() {
-        return partitionPath;
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(recordKey, partitionPath);
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        HoodieKey otherKey = (HoodieKey) o;
-        return Objects.equal(recordKey, otherKey.recordKey) &&
-                Objects.equal(partitionPath, otherKey.partitionPath);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(recordKey, partitionPath);
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("HoodieKey {");
-        sb.append(" recordKey=").append(recordKey);
-        sb.append(" partitionPath=").append(partitionPath);
-        sb.append('}');
-        return sb.toString();
-    }
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("HoodieKey {");
+    sb.append(" recordKey=").append(recordKey);
+    sb.append(" partitionPath=").append(partitionPath);
+    sb.append('}');
+    return sb.toString();
+  }
 }

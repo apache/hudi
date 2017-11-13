@@ -20,6 +20,8 @@ import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -30,79 +32,76 @@ import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.TaskContext;
 
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicLong;
-
 /**
- * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file.
- * Provides a way to check if the current file can take more records with the <code>canWrite()</code>
- *
- * @param <T>
+ * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides
+ * a way to check if the current file can take more records with the <code>canWrite()</code>
  */
 public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
     extends ParquetWriter<IndexedRecord> implements HoodieStorageWriter<R> {
-    private static double STREAM_COMPRESSION_RATIO = 0.1;
-    private static AtomicLong recordIndex = new AtomicLong(1);
+
+  private static double STREAM_COMPRESSION_RATIO = 0.1;
+  private static AtomicLong recordIndex = new AtomicLong(1);
 
 
-    private final Path file;
-    private final HoodieWrapperFileSystem fs;
-    private final long maxFileSize;
-    private final HoodieAvroWriteSupport writeSupport;
-    private final String commitTime;
-    private final Schema schema;
+  private final Path file;
+  private final HoodieWrapperFileSystem fs;
+  private final long maxFileSize;
+  private final HoodieAvroWriteSupport writeSupport;
+  private final String commitTime;
+  private final Schema schema;
 
 
-    private static Configuration registerFileSystem(Configuration conf) {
-        Configuration returnConf = new Configuration(conf);
-        String scheme = FileSystem.getDefaultUri(conf).getScheme();
-        returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
-            HoodieWrapperFileSystem.class.getName());
-        return returnConf;
-    }
+  private static Configuration registerFileSystem(Configuration conf) {
+    Configuration returnConf = new Configuration(conf);
+    String scheme = FileSystem.getDefaultUri(conf).getScheme();
+    returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
+        HoodieWrapperFileSystem.class.getName());
+    return returnConf;
+  }
 
-    public HoodieParquetWriter(String commitTime, Path file,
-        HoodieParquetConfig parquetConfig, Schema schema) throws IOException {
-        super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-            ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(),
-            parquetConfig.getCompressionCodecName(), parquetConfig.getBlockSize(),
-            parquetConfig.getPageSize(), parquetConfig.getPageSize(),
-            ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
-            ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION,
-            registerFileSystem(parquetConfig.getHadoopConf()));
-        this.file =
-            HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
-        this.fs = (HoodieWrapperFileSystem) this.file
-            .getFileSystem(registerFileSystem(parquetConfig.getHadoopConf()));
-        // We cannot accurately measure the snappy compressed output file size. We are choosing a conservative 10%
-        // TODO - compute this compression ratio dynamically by looking at the bytes written to the stream and the actual file size reported by HDFS
-        this.maxFileSize = parquetConfig.getMaxFileSize() + Math
-            .round(parquetConfig.getMaxFileSize() * STREAM_COMPRESSION_RATIO);
-        this.writeSupport = parquetConfig.getWriteSupport();
-        this.commitTime = commitTime;
-        this.schema = schema;
-    }
+  public HoodieParquetWriter(String commitTime, Path file,
+      HoodieParquetConfig parquetConfig, Schema schema) throws IOException {
+    super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
+        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(),
+        parquetConfig.getCompressionCodecName(), parquetConfig.getBlockSize(),
+        parquetConfig.getPageSize(), parquetConfig.getPageSize(),
+        ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
+        ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION,
+        registerFileSystem(parquetConfig.getHadoopConf()));
+    this.file =
+        HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
+    this.fs = (HoodieWrapperFileSystem) this.file
+        .getFileSystem(registerFileSystem(parquetConfig.getHadoopConf()));
+    // We cannot accurately measure the snappy compressed output file size. We are choosing a conservative 10%
+    // TODO - compute this compression ratio dynamically by looking at the bytes written to the stream and the actual file size reported by HDFS
+    this.maxFileSize = parquetConfig.getMaxFileSize() + Math
+        .round(parquetConfig.getMaxFileSize() * STREAM_COMPRESSION_RATIO);
+    this.writeSupport = parquetConfig.getWriteSupport();
+    this.commitTime = commitTime;
+    this.schema = schema;
+  }
 
 
-    @Override
-    public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-        String seqId = HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(),
-                recordIndex.getAndIncrement());
-        HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord,
-                record.getRecordKey(),
-                record.getPartitionPath(),
-                file.getName());
-        HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, commitTime, seqId);
-        super.write(avroRecord);
-        writeSupport.add(record.getRecordKey());
-    }
+  @Override
+  public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
+    String seqId = HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(),
+        recordIndex.getAndIncrement());
+    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord,
+        record.getRecordKey(),
+        record.getPartitionPath(),
+        file.getName());
+    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, commitTime, seqId);
+    super.write(avroRecord);
+    writeSupport.add(record.getRecordKey());
+  }
 
-    public boolean canWrite() {
-        return fs.getBytesWritten(file) < maxFileSize;
-    }
+  public boolean canWrite() {
+    return fs.getBytesWritten(file) < maxFileSize;
+  }
 
-    @Override public void writeAvro(String key, IndexedRecord object) throws IOException {
-        super.write(object);
-        writeSupport.add(key);
-    }
+  @Override
+  public void writeAvro(String key, IndexedRecord object) throws IOException {
+    super.write(object);
+    writeSupport.add(key);
+  }
 }

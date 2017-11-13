@@ -16,32 +16,31 @@
 
 package com.uber.hoodie.index;
 
-import com.uber.hoodie.config.HoodieWriteConfig;
+import static org.junit.Assert.assertTrue;
 
 import com.uber.hoodie.config.HoodieIndexConfig;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
 import com.uber.hoodie.index.hbase.HBaseIndex;
-
 import org.junit.Test;
 
-import static org.junit.Assert.*;
-
 public class TestHoodieIndex {
-    @Test
-    public void testCreateIndex() throws Exception {
-        HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
-        HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
-        // Different types
-        HoodieWriteConfig config = clientConfigBuilder.withPath("")
-            .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE).build())
-            .build();
-        assertTrue(HoodieIndex.createIndex(config, null) instanceof HBaseIndex);
-        config = clientConfigBuilder.withPath("").withIndexConfig(
-            indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
-        assertTrue(HoodieIndex.createIndex(config, null) instanceof InMemoryHashIndex);
-        config = clientConfigBuilder.withPath("")
-            .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .build();
-        assertTrue(HoodieIndex.createIndex(config, null) instanceof HoodieBloomIndex);
-    }
+
+  @Test
+  public void testCreateIndex() throws Exception {
+    HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
+    HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
+    // Different types
+    HoodieWriteConfig config = clientConfigBuilder.withPath("")
+        .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE).build())
+        .build();
+    assertTrue(HoodieIndex.createIndex(config, null) instanceof HBaseIndex);
+    config = clientConfigBuilder.withPath("").withIndexConfig(
+        indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+    assertTrue(HoodieIndex.createIndex(config, null) instanceof InMemoryHashIndex);
+    config = clientConfigBuilder.withPath("")
+        .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .build();
+    assertTrue(HoodieIndex.createIndex(config, null) instanceof HoodieBloomIndex);
+  }
 }

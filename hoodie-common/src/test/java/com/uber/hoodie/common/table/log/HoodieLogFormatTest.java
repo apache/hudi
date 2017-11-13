@@ -16,13 +16,18 @@
 
 package com.uber.hoodie.common.table.log;
 
+import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.minicluster.MiniClusterUtil;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Reader;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
@@ -35,6 +40,15 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -47,22 +61,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @SuppressWarnings("Duplicates")
 public class HoodieLogFormatTest {
@@ -140,7 +138,7 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
-            getSimpleSchema(), metadata);
+        getSimpleSchema(), metadata);
     // Write out a block
     writer = writer.appendBlock(dataBlock);
     // Get the size of the block
@@ -170,7 +168,7 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
-            getSimpleSchema(), metadata);
+        getSimpleSchema(), metadata);
     writer = writer.appendBlock(dataBlock);
     long size1 = writer.getCurrentSize();
     writer.close();
@@ -222,7 +220,7 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
-            getSimpleSchema(), metadata);
+        getSimpleSchema(), metadata);
     writer = writer.appendBlock(dataBlock);
     long size1 = writer.getCurrentSize();
     // do not close this writer - this simulates a data note appending to a log dying without closing the file
@@ -254,11 +252,12 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
-            getSimpleSchema(), metadata);
+        getSimpleSchema(), metadata);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
+    Reader reader = HoodieLogFormat
+        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
     assertTrue("We wrote a block, we should be able to read it", reader.hasNext());
     HoodieLogBlock nextBlock = reader.next();
     assertEquals("The next block should be a data block", HoodieLogBlockType.AVRO_DATA_BLOCK,
@@ -281,7 +280,7 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            getSimpleSchema(), metadata);
+        getSimpleSchema(), metadata);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
@@ -304,7 +303,8 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
+    Reader reader = HoodieLogFormat
+        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
     assertTrue("First block should be available", reader.hasNext());
     HoodieLogBlock nextBlock = reader.next();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) nextBlock;
@@ -338,7 +338,7 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
-            getSimpleSchema(), metadata);
+        getSimpleSchema(), metadata);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
@@ -358,7 +358,8 @@ public class HoodieLogFormatTest {
     outputStream.close();
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
+    Reader reader = HoodieLogFormat
+        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
     assertTrue("First block should be available", reader.hasNext());
     reader.next();
     assertTrue("We should have corrupted block next", reader.hasNext());
@@ -393,7 +394,8 @@ public class HoodieLogFormatTest {
     writer.close();
 
     // Second round of reads - we should be able to read the first and last block
-    reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
+    reader = HoodieLogFormat
+        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), true);
     assertTrue("First block should be available", reader.hasNext());
     reader.next();
     assertTrue("We should get the 1st corrupted block next", reader.hasNext());
@@ -424,7 +426,7 @@ public class HoodieLogFormatTest {
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
 
     // Write 2
@@ -438,7 +440,8 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+        allLogFiles,
         schema, "100");
     assertEquals("", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -469,7 +472,7 @@ public class HoodieLogFormatTest {
     metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, "100");
 
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
 
     // Write 2
@@ -493,9 +496,11 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+        allLogFiles,
         schema, "100");
-    assertEquals("We only read 200 records, but only 200 of them are valid", 200, scanner.getTotalLogRecords());
+    assertEquals("We only read 200 records, but only 200 of them are valid", 200,
+        scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
@@ -523,7 +528,7 @@ public class HoodieLogFormatTest {
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
@@ -561,7 +566,8 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+        allLogFiles,
         schema, "100");
     assertEquals("We would read 200 records", 200,
         scanner.getTotalLogRecords());
@@ -592,7 +598,7 @@ public class HoodieLogFormatTest {
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
 
     // Write 2
@@ -609,7 +615,8 @@ public class HoodieLogFormatTest {
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
 
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), metadata);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
+        metadata);
     writer = writer.appendBlock(deleteBlock);
 
     List<String> allLogFiles = FSUtils
@@ -617,7 +624,8 @@ public class HoodieLogFormatTest {
         .map(s -> s.getPath().toString())
         .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+        allLogFiles,
         schema, "100");
     assertEquals("We still would read 200 records", 200,
         scanner.getTotalLogRecords());
@@ -632,25 +640,26 @@ public class HoodieLogFormatTest {
 
     // Rollback the last block
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(
-            HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
+        HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
     writer = writer.appendBlock(commandBlock);
 
     readKeys.clear();
     scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema, "100");
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 200 records after rollback of delete", 200, readKeys.size());
+    assertEquals("Stream collect should return all 200 records after rollback of delete", 200,
+        readKeys.size());
   }
 
   @Test
   public void testAvroLogRecordReaderWithFailedRollbacks()
-          throws IOException, URISyntaxException, InterruptedException {
+      throws IOException, URISyntaxException, InterruptedException {
 
     // Write a Data block and Delete block with same InstantTime (written in same batch)
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-            .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs).build();
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -658,7 +667,7 @@ public class HoodieLogFormatTest {
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
 
     // Write 2
@@ -667,23 +676,24 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(dataBlock);
 
     List<String> originalKeys = records1.stream()
-            .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-            .collect(
-                    Collectors.toList());
+        .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
+        .collect(
+            Collectors.toList());
 
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), metadata);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
+        metadata);
     writer = writer.appendBlock(deleteBlock);
 
     // Attemp 1 : Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(
-            HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
+        HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
     try {
       writer = writer.appendBlock(commandBlock);
       // Say job failed, retry writing 2 rollback in the next rollback(..) attempt
       throw new Exception("simulating failure");
-    } catch(Exception e) {
+    } catch (Exception e) {
       // it's okay
     }
     // Attempt 2 : Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
@@ -691,14 +701,15 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(commandBlock);
 
     List<String> allLogFiles = FSUtils
-            .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-            .map(s -> s.getPath().toString())
-            .collect(Collectors.toList());
+        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        .map(s -> s.getPath().toString())
+        .collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles,
-            schema, "100");
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+        allLogFiles,
+        schema, "100");
     assertEquals("We would read 100 records", 100,
-            scanner.getTotalLogRecords());
+        scanner.getTotalLogRecords());
 
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -707,14 +718,14 @@ public class HoodieLogFormatTest {
 
   @Test
   public void testAvroLogRecordReaderWithInsertDeleteAndRollback()
-    throws IOException, URISyntaxException, InterruptedException {
+      throws IOException, URISyntaxException, InterruptedException {
 
     // Write a Data block and Delete block with same InstantTime (written in same batch)
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-            .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs).build();
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -722,43 +733,45 @@ public class HoodieLogFormatTest {
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, "100");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
 
     List<String> originalKeys = records1.stream()
-            .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-            .collect(
-                    Collectors.toList());
+        .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
+        .collect(
+            Collectors.toList());
 
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), metadata);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
+        metadata);
     writer = writer.appendBlock(deleteBlock);
 
     // Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(
-            HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
+        HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
     writer = writer.appendBlock(commandBlock);
     writer = writer.appendBlock(commandBlock);
 
     List<String> allLogFiles = FSUtils
-            .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-            .map(s -> s.getPath().toString())
-            .collect(Collectors.toList());
+        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        .map(s -> s.getPath().toString())
+        .collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-            allLogFiles, schema, "100");
+        allLogFiles, schema, "100");
     assertEquals("We would read 0 records", 0,
-            scanner.getTotalLogRecords());
+        scanner.getTotalLogRecords());
   }
 
   @Test
-  public void testAvroLogRecordReaderWithInvalidRollback() throws IOException, URISyntaxException, InterruptedException {
+  public void testAvroLogRecordReaderWithInvalidRollback()
+      throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-            .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs).build();
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -766,23 +779,23 @@ public class HoodieLogFormatTest {
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
     metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, "101");
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1,
-            schema, metadata);
+        schema, metadata);
     writer = writer.appendBlock(dataBlock);
 
     // Write invalid rollback for a failed write (possible for in-flight commits)
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(
-            HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
+        HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK, metadata);
     writer = writer.appendBlock(commandBlock);
 
     List<String> allLogFiles = FSUtils
-            .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-            .map(s -> s.getPath().toString())
-            .collect(Collectors.toList());
+        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
+        .map(s -> s.getPath().toString())
+        .collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-            allLogFiles, schema, "100");
+        allLogFiles, schema, "100");
     assertEquals("We still would read 100 records", 100,
-            scanner.getTotalLogRecords());
+        scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 150 records", 100, readKeys.size());

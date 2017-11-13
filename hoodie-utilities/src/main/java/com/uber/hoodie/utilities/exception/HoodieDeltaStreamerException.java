@@ -21,11 +21,12 @@ package com.uber.hoodie.utilities.exception;
 import com.uber.hoodie.exception.HoodieException;
 
 public class HoodieDeltaStreamerException extends HoodieException {
-    public HoodieDeltaStreamerException(String msg, Throwable e) {
-        super(msg, e);
-    }
 
-    public HoodieDeltaStreamerException(String msg) {
-        super(msg);
-    }
+  public HoodieDeltaStreamerException(String msg, Throwable e) {
+    super(msg, e);
+  }
+
+  public HoodieDeltaStreamerException(String msg) {
+    super(msg);
+  }
 }

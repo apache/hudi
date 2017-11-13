@@ -22,34 +22,39 @@ import org.springframework.shell.plugin.support.DefaultBannerProvider;
 import org.springframework.shell.support.util.OsUtils;
 import org.springframework.stereotype.Component;
 
-@Component @Order(Ordered.HIGHEST_PRECEDENCE) public class HoodieSplashScreen
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class HoodieSplashScreen
     extends DefaultBannerProvider {
-    private static String screen =  "============================================" + OsUtils.LINE_SEPARATOR +
-        "*                                          *" + OsUtils.LINE_SEPARATOR +
-        "*     _    _                 _ _           *" + OsUtils.LINE_SEPARATOR +
-        "*    | |  | |               | (_)          *" + OsUtils.LINE_SEPARATOR +
-        "*    | |__| | ___   ___   __| |_  ___      *" + OsUtils.LINE_SEPARATOR +
-        "*    |  __  |/ _ \\ / _ \\ / _` | |/ _ \\     *" +
-    OsUtils.LINE_SEPARATOR +
-        "*    | |  | | (_) | (_) | (_| | |  __/     *" + OsUtils.LINE_SEPARATOR +
-        "*    |_|  |_|\\___/ \\___/ \\__,_|_|\\___|     *" +
-    OsUtils.LINE_SEPARATOR +
-        "*                                          *" + OsUtils.LINE_SEPARATOR +
-        "============================================" + OsUtils.LINE_SEPARATOR;
 
-    public String getBanner() {
-        return screen;
-    }
+  private static String screen =
+      "============================================" + OsUtils.LINE_SEPARATOR +
+          "*                                          *" + OsUtils.LINE_SEPARATOR +
+          "*     _    _                 _ _           *" + OsUtils.LINE_SEPARATOR +
+          "*    | |  | |               | (_)          *" + OsUtils.LINE_SEPARATOR +
+          "*    | |__| | ___   ___   __| |_  ___      *" + OsUtils.LINE_SEPARATOR +
+          "*    |  __  |/ _ \\ / _ \\ / _` | |/ _ \\     *" +
+          OsUtils.LINE_SEPARATOR +
+          "*    | |  | | (_) | (_) | (_| | |  __/     *" + OsUtils.LINE_SEPARATOR +
+          "*    |_|  |_|\\___/ \\___/ \\__,_|_|\\___|     *" +
+          OsUtils.LINE_SEPARATOR +
+          "*                                          *" + OsUtils.LINE_SEPARATOR +
+          "============================================" + OsUtils.LINE_SEPARATOR;
 
-    public String getVersion() {
-        return "1.0";
-    }
+  public String getBanner() {
+    return screen;
+  }
 
-    public String getWelcomeMessage() {
-        return "Welcome to Hoodie CLI. Please type help if you are looking for help. ";
-    }
+  public String getVersion() {
+    return "1.0";
+  }
 
-    @Override public String getProviderName() {
-        return "Hoodie Banner";
-    }
+  public String getWelcomeMessage() {
+    return "Welcome to Hoodie CLI. Please type help if you are looking for help. ";
+  }
+
+  @Override
+  public String getProviderName() {
+    return "Hoodie Banner";
+  }
 }

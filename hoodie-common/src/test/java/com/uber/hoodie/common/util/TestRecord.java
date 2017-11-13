@@ -17,82 +17,87 @@
 package com.uber.hoodie.common.util;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import org.codehaus.jackson.annotate.JsonAutoDetect;
-import org.codehaus.jackson.annotate.JsonMethod;
-import org.codehaus.jackson.map.ObjectMapper;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.codehaus.jackson.annotate.JsonAutoDetect;
+import org.codehaus.jackson.annotate.JsonMethod;
+import org.codehaus.jackson.map.ObjectMapper;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @SuppressWarnings({"unused", "FieldCanBeLocal", "MismatchedQueryAndUpdateOfCollection"})
 public class TestRecord implements Serializable {
-    class TestMapItemRecord implements Serializable {
-        private String item1;
-        private String item2;
 
-        TestMapItemRecord(String item1, String item2) {
-            this.item1 = item1;
-            this.item2 = item2;
-        }
+  class TestMapItemRecord implements Serializable {
+
+    private String item1;
+    private String item2;
+
+    TestMapItemRecord(String item1, String item2) {
+      this.item1 = item1;
+      this.item2 = item2;
     }
+  }
 
-    class TestNestedRecord implements Serializable {
-        private boolean isAdmin;
-        private String userId;
+  class TestNestedRecord implements Serializable {
 
-        TestNestedRecord(boolean isAdmin, String userId) {
-            this.isAdmin = isAdmin;
-            this.userId = userId;
-        }
+    private boolean isAdmin;
+    private String userId;
+
+    TestNestedRecord(boolean isAdmin, String userId) {
+      this.isAdmin = isAdmin;
+      this.userId = userId;
     }
+  }
 
-    private String _hoodie_commit_time;
-    private String _hoodie_record_key;
-    private String _hoodie_partition_path;
-    private String _hoodie_file_name;
-    private String _hoodie_commit_seqno;
+  private String _hoodie_commit_time;
+  private String _hoodie_record_key;
+  private String _hoodie_partition_path;
+  private String _hoodie_file_name;
+  private String _hoodie_commit_seqno;
 
-    private String field1;
-    private String field2;
-    private String name;
-    private Integer favoriteIntNumber;
-    private Long favoriteNumber;
-    private Float favoriteFloatNumber;
-    private Double favoriteDoubleNumber;
-    private Map<String, TestMapItemRecord> tags;
-    private TestNestedRecord testNestedRecord;
-    private String[] stringArray;
+  private String field1;
+  private String field2;
+  private String name;
+  private Integer favoriteIntNumber;
+  private Long favoriteNumber;
+  private Float favoriteFloatNumber;
+  private Double favoriteDoubleNumber;
+  private Map<String, TestMapItemRecord> tags;
+  private TestNestedRecord testNestedRecord;
+  private String[] stringArray;
 
-    public TestRecord(String commitTime, int recordNumber, String fileId) {
-        this._hoodie_commit_time = commitTime;
-        this._hoodie_record_key = "key" + recordNumber;
-        this._hoodie_partition_path = commitTime;
-        this._hoodie_file_name = fileId;
-        this._hoodie_commit_seqno = commitTime + recordNumber;
+  public TestRecord(String commitTime, int recordNumber, String fileId) {
+    this._hoodie_commit_time = commitTime;
+    this._hoodie_record_key = "key" + recordNumber;
+    this._hoodie_partition_path = commitTime;
+    this._hoodie_file_name = fileId;
+    this._hoodie_commit_seqno = commitTime + recordNumber;
 
-        String commitTimeSuffix = "@" + commitTime;
-        int commitHashCode = commitTime.hashCode();
+    String commitTimeSuffix = "@" + commitTime;
+    int commitHashCode = commitTime.hashCode();
 
-        this.field1 = "field" + recordNumber;
-        this.field2 = "field" + recordNumber + commitTimeSuffix;
-        this.name = "name" + recordNumber;
-        this.favoriteIntNumber = recordNumber + commitHashCode;
-        this.favoriteNumber = (long)(recordNumber + commitHashCode);
-        this.favoriteFloatNumber = (float)((recordNumber + commitHashCode) / 1024.0);
-        this.favoriteDoubleNumber = (recordNumber + commitHashCode) / 1024.0;
-        this.tags = new HashMap<>();
-        this.tags.put("mapItem1", new TestMapItemRecord("item" + recordNumber, "item" + recordNumber + commitTimeSuffix));
-        this.tags.put("mapItem2", new TestMapItemRecord("item2" + recordNumber, "item2" + recordNumber + commitTimeSuffix));
-        this.testNestedRecord = new TestNestedRecord(false, "UserId" + recordNumber + commitTimeSuffix);
-        this.stringArray = new String[]{"stringArray0" + commitTimeSuffix, "stringArray1" + commitTimeSuffix};
-    }
+    this.field1 = "field" + recordNumber;
+    this.field2 = "field" + recordNumber + commitTimeSuffix;
+    this.name = "name" + recordNumber;
+    this.favoriteIntNumber = recordNumber + commitHashCode;
+    this.favoriteNumber = (long) (recordNumber + commitHashCode);
+    this.favoriteFloatNumber = (float) ((recordNumber + commitHashCode) / 1024.0);
+    this.favoriteDoubleNumber = (recordNumber + commitHashCode) / 1024.0;
+    this.tags = new HashMap<>();
+    this.tags.put("mapItem1",
+        new TestMapItemRecord("item" + recordNumber, "item" + recordNumber + commitTimeSuffix));
+    this.tags.put("mapItem2",
+        new TestMapItemRecord("item2" + recordNumber, "item2" + recordNumber + commitTimeSuffix));
+    this.testNestedRecord = new TestNestedRecord(false, "UserId" + recordNumber + commitTimeSuffix);
+    this.stringArray = new String[]{"stringArray0" + commitTimeSuffix,
+        "stringArray1" + commitTimeSuffix};
+  }
 
-    public String toJsonString() throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.setVisibility(JsonMethod.FIELD, JsonAutoDetect.Visibility.ANY);
-        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this);
-    }
+  public String toJsonString() throws IOException {
+    ObjectMapper mapper = new ObjectMapper();
+    mapper.setVisibility(JsonMethod.FIELD, JsonAutoDetect.Visibility.ANY);
+    return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this);
+  }
 }

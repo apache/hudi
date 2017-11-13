@@ -17,7 +17,6 @@
 package com.uber.hoodie.table;
 
 import com.uber.hoodie.common.model.HoodieRecordLocation;
-
 import java.io.Serializable;
 import java.util.HashMap;
 
@@ -25,43 +24,44 @@ import java.util.HashMap;
  * Wraps stats about a single partition path.
  */
 public class WorkloadStat implements Serializable {
-    private long numInserts = 0L;
 
-    private long numUpdates = 0L;
+  private long numInserts = 0L;
 
-    private HashMap<String, Long> updateLocationToCount;
+  private long numUpdates = 0L;
 
-    public WorkloadStat() {
-        updateLocationToCount = new HashMap<>();
-    }
+  private HashMap<String, Long> updateLocationToCount;
 
-    long addInserts(long numInserts) {
-        return this.numInserts += numInserts;
-    }
+  public WorkloadStat() {
+    updateLocationToCount = new HashMap<>();
+  }
 
-    long addUpdates(HoodieRecordLocation location, long numUpdates) {
-        updateLocationToCount.put(location.getFileId(), numUpdates);
-        return this.numUpdates += numUpdates;
-    }
+  long addInserts(long numInserts) {
+    return this.numInserts += numInserts;
+  }
 
-    public long getNumUpdates() {
-        return numUpdates;
-    }
+  long addUpdates(HoodieRecordLocation location, long numUpdates) {
+    updateLocationToCount.put(location.getFileId(), numUpdates);
+    return this.numUpdates += numUpdates;
+  }
 
-    public long getNumInserts() {
-        return numInserts;
-    }
+  public long getNumUpdates() {
+    return numUpdates;
+  }
 
-    public HashMap<String, Long> getUpdateLocationToCount() {
-        return updateLocationToCount;
-    }
+  public long getNumInserts() {
+    return numInserts;
+  }
 
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("WorkloadStat {");
-        sb.append("numInserts=").append(numInserts).append(", ");
-        sb.append("numUpdates=").append(numUpdates);
-        sb.append('}');
-        return sb.toString();
-    }
+  public HashMap<String, Long> getUpdateLocationToCount() {
+    return updateLocationToCount;
+  }
+
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("WorkloadStat {");
+    sb.append("numInserts=").append(numInserts).append(", ");
+    sb.append("numUpdates=").append(numUpdates);
+    sb.append('}');
+    return sb.toString();
+  }
 }

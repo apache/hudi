@@ -25,13 +25,13 @@ import org.springframework.stereotype.Component;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class HoodieHistoryFileNameProvider extends DefaultHistoryFileNameProvider {
 
-    public String getHistoryFileName() {
-        return "hoodie-cmd.log";
-    }
+  public String getHistoryFileName() {
+    return "hoodie-cmd.log";
+  }
 
-    @Override
-    public String getProviderName() {
-        return "Hoodie file name provider";
-    }
+  @Override
+  public String getProviderName() {
+    return "Hoodie file name provider";
+  }
 
 }

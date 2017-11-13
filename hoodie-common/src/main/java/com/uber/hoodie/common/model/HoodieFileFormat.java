@@ -17,15 +17,15 @@
 package com.uber.hoodie.common.model;
 
 public enum HoodieFileFormat {
-    PARQUET(".parquet"), HOODIE_LOG(".log");
+  PARQUET(".parquet"), HOODIE_LOG(".log");
 
-    private final String extension;
+  private final String extension;
 
-    HoodieFileFormat(String extension) {
-        this.extension = extension;
-    }
+  HoodieFileFormat(String extension) {
+    this.extension = extension;
+  }
 
-    public String getFileExtension() {
-        return extension;
-    }
+  public String getFileExtension() {
+    return extension;
+  }
 }

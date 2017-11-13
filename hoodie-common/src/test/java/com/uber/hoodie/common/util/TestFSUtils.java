@@ -16,48 +16,47 @@
 
 package com.uber.hoodie.common.util;
 
-import org.junit.Test;
+import static org.junit.Assert.assertTrue;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
-
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 public class TestFSUtils {
 
-    @Test
-    public void testMakeDataFileName() {
-        String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        int taskPartitionId = 2;
-        String fileName = UUID.randomUUID().toString();
-        assertTrue(FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName)
-                .equals(fileName + "_" + taskPartitionId + "_" + commitTime + ".parquet"));
-    }
+  @Test
+  public void testMakeDataFileName() {
+    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    int taskPartitionId = 2;
+    String fileName = UUID.randomUUID().toString();
+    assertTrue(FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName)
+        .equals(fileName + "_" + taskPartitionId + "_" + commitTime + ".parquet"));
+  }
 
-    @Test
-    public void testMaskFileName() {
-        String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        int taskPartitionId = 2;
-        assertTrue(FSUtils.maskWithoutFileId(commitTime, taskPartitionId)
-                .equals("*_" + taskPartitionId + "_" + commitTime + ".parquet"));
-    }
+  @Test
+  public void testMaskFileName() {
+    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    int taskPartitionId = 2;
+    assertTrue(FSUtils.maskWithoutFileId(commitTime, taskPartitionId)
+        .equals("*_" + taskPartitionId + "_" + commitTime + ".parquet"));
+  }
 
-    @Test
-    public void testGetCommitTime() {
-        String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        int taskPartitionId = 2;
-        String fileName = UUID.randomUUID().toString();
-        String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
-        assertTrue(FSUtils.getCommitTime(fullFileName).equals(commitTime));
-    }
+  @Test
+  public void testGetCommitTime() {
+    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    int taskPartitionId = 2;
+    String fileName = UUID.randomUUID().toString();
+    String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
+    assertTrue(FSUtils.getCommitTime(fullFileName).equals(commitTime));
+  }
 
-    @Test
-    public void testGetFileNameWithoutMeta() {
-        String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        int taskPartitionId = 2;
-        String fileName = UUID.randomUUID().toString();
-        String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
-        assertTrue(FSUtils.getFileId(fullFileName).equals(fileName));
-    }
+  @Test
+  public void testGetFileNameWithoutMeta() {
+    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    int taskPartitionId = 2;
+    String fileName = UUID.randomUUID().toString();
+    String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
+    assertTrue(FSUtils.getFileId(fullFileName).equals(fileName));
+  }
 }

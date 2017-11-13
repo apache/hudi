@@ -20,7 +20,6 @@ package com.uber.hoodie.utilities;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.HoodieTableConfig;
@@ -30,7 +29,12 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
-
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
@@ -39,140 +43,154 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
-
 import scala.Tuple2;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Stream;
-
 /**
- * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
+ * Hoodie snapshot copy job which copies latest files from all partitions to another place, for
+ * snapshot backup.
  */
 public class HoodieSnapshotCopier implements Serializable {
-    private static Logger logger = LogManager.getLogger(HoodieSnapshotCopier.class);
 
-    static class Config implements Serializable {
-        @Parameter(names = {"--base-path", "-bp"}, description = "Hoodie table base path", required = true)
-        String basePath = null;
+  private static Logger logger = LogManager.getLogger(HoodieSnapshotCopier.class);
 
-        @Parameter(names = {"--output-path", "-op"}, description = "The snapshot output path", required = true)
-        String outputPath = null;
+  static class Config implements Serializable {
 
-        @Parameter(names = {"--date-partitioned", "-dp"}, description = "Can we assume date partitioning?")
-        boolean shouldAssumeDatePartitioning = false;
+    @Parameter(names = {"--base-path",
+        "-bp"}, description = "Hoodie table base path", required = true)
+    String basePath = null;
+
+    @Parameter(names = {"--output-path",
+        "-op"}, description = "The snapshot output path", required = true)
+    String outputPath = null;
+
+    @Parameter(names = {"--date-partitioned",
+        "-dp"}, description = "Can we assume date partitioning?")
+    boolean shouldAssumeDatePartitioning = false;
+  }
+
+  public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
+      final boolean shouldAssumeDatePartitioning) throws IOException {
+    FileSystem fs = FSUtils.getFs();
+    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
+    final TableFileSystemView.ReadOptimizedView fsView = new HoodieTableFileSystemView(
+        tableMetadata,
+        tableMetadata.getActiveTimeline().getCommitsAndCompactionsTimeline()
+            .filterCompletedInstants());
+    // Get the latest commit
+    Optional<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline()
+        .getCommitsAndCompactionsTimeline().filterCompletedInstants().lastInstant();
+    if (!latestCommit.isPresent()) {
+      logger.warn("No commits present. Nothing to snapshot");
+      return;
     }
+    final String latestCommitTimestamp = latestCommit.get().getTimestamp();
+    logger.info(String
+        .format("Starting to snapshot latest version files which are also no-late-than %s.",
+            latestCommitTimestamp));
 
-    public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir, final boolean shouldAssumeDatePartitioning) throws IOException {
-        FileSystem fs = FSUtils.getFs();
-        final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
-        final TableFileSystemView.ReadOptimizedView fsView = new HoodieTableFileSystemView(tableMetadata,
-            tableMetadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants());
-        // Get the latest commit
-        Optional<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline()
-                .getCommitsAndCompactionsTimeline().filterCompletedInstants().lastInstant();
-        if(!latestCommit.isPresent()) {
-            logger.warn("No commits present. Nothing to snapshot");
-            return;
-        }
-        final String latestCommitTimestamp = latestCommit.get().getTimestamp();
-        logger.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.", latestCommitTimestamp));
+    List<String> partitions = FSUtils
+        .getAllPartitionPaths(fs, baseDir, shouldAssumeDatePartitioning);
+    if (partitions.size() > 0) {
+      logger.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
-        List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir, shouldAssumeDatePartitioning);
-        if (partitions.size() > 0) {
-            logger.info(String.format("The job needs to copy %d partitions.", partitions.size()));
+      // Make sure the output directory is empty
+      Path outputPath = new Path(outputDir);
+      if (fs.exists(outputPath)) {
+        logger.warn(
+            String.format("The output path %targetBasePath already exists, deleting", outputPath));
+        fs.delete(new Path(outputDir), true);
+      }
 
-            // Make sure the output directory is empty
-            Path outputPath = new Path(outputDir);
-            if (fs.exists(outputPath)) {
-                logger.warn(String.format("The output path %targetBasePath already exists, deleting", outputPath));
-                fs.delete(new Path(outputDir), true);
+      jsc.parallelize(partitions, partitions.size())
+          .flatMap(partition -> {
+            // Only take latest version files <= latestCommit.
+            FileSystem fs1 = FSUtils.getFs();
+            List<Tuple2<String, String>> filePaths = new ArrayList<>();
+            Stream<HoodieDataFile> dataFiles = fsView
+                .getLatestDataFilesBeforeOrOn(partition, latestCommitTimestamp);
+            dataFiles.forEach(
+                hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
+
+            // also need to copy over partition metadata
+            Path partitionMetaFile = new Path(new Path(baseDir, partition),
+                HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+            if (fs1.exists(partitionMetaFile)) {
+              filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
             }
 
-            jsc.parallelize(partitions, partitions.size())
-                    .flatMap(partition -> {
-                        // Only take latest version files <= latestCommit.
-                        FileSystem fs1 = FSUtils.getFs();
-                        List<Tuple2<String, String>> filePaths = new ArrayList<>();
-                        Stream<HoodieDataFile> dataFiles = fsView.getLatestDataFilesBeforeOrOn(partition, latestCommitTimestamp);
-                        dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
+            return filePaths.iterator();
+          }).foreach(tuple -> {
+        String partition = tuple._1();
+        Path sourceFilePath = new Path(tuple._2());
+        Path toPartitionPath = new Path(outputDir, partition);
+        FileSystem fs1 = FSUtils.getFs();
 
-                        // also need to copy over partition metadata
-                        Path partitionMetaFile = new Path(new Path(baseDir, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
-                        if (fs1.exists(partitionMetaFile)) {
-                            filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
-                        }
+        if (!fs1.exists(toPartitionPath)) {
+          fs1.mkdirs(toPartitionPath);
+        }
+        FileUtil.copy(fs1, sourceFilePath, fs1,
+            new Path(toPartitionPath, sourceFilePath.getName()), false, fs1.getConf());
+      });
 
-                        return filePaths.iterator();
-                    }).foreach(tuple -> {
-                        String partition = tuple._1();
-                        Path sourceFilePath = new Path(tuple._2());
-                        Path toPartitionPath = new Path(outputDir, partition);
-                        FileSystem fs1 = FSUtils.getFs();
-
-                        if (!fs1.exists(toPartitionPath)) {
-                          fs1.mkdirs(toPartitionPath);
-                        }
-                        FileUtil.copy(fs1, sourceFilePath, fs1,
-                                new Path(toPartitionPath, sourceFilePath.getName()), false, fs1.getConf());
-            });
-
-            // Also copy the .commit files
-            logger.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
-            FileStatus[] commitFilesToCopy = fs.listStatus(
-                    new Path(baseDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME), (commitFilePath) -> {
-                        if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
-                            return true;
-                        } else {
-                            String commitTime =
-                                    FSUtils.getCommitFromCommitFile(commitFilePath.getName());
-                            return HoodieTimeline.compareTimestamps(commitTime, latestCommitTimestamp, HoodieTimeline.LESSER_OR_EQUAL);
-                        }
-                    });
-            for (FileStatus commitStatus : commitFilesToCopy) {
-                Path targetFilePath = new Path(
-                    outputDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitStatus
-                        .getPath().getName());
-                if (! fs.exists(targetFilePath.getParent())) {
-                    fs.mkdirs(targetFilePath.getParent());
-                }
-                if (fs.exists(targetFilePath)) {
-                    logger.error(String.format("The target output commit file (%targetBasePath) already exists.", targetFilePath));
-                }
-                FileUtil.copy(fs, commitStatus.getPath(), fs, targetFilePath, false, fs.getConf());
+      // Also copy the .commit files
+      logger.info(
+          String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
+      FileStatus[] commitFilesToCopy = fs.listStatus(
+          new Path(baseDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME), (commitFilePath) -> {
+            if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
+              return true;
+            } else {
+              String commitTime =
+                  FSUtils.getCommitFromCommitFile(commitFilePath.getName());
+              return HoodieTimeline.compareTimestamps(commitTime, latestCommitTimestamp,
+                  HoodieTimeline.LESSER_OR_EQUAL);
             }
-        } else {
-            logger.info("The job has 0 partition to copy.");
+          });
+      for (FileStatus commitStatus : commitFilesToCopy) {
+        Path targetFilePath = new Path(
+            outputDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitStatus
+                .getPath().getName());
+        if (!fs.exists(targetFilePath.getParent())) {
+          fs.mkdirs(targetFilePath.getParent());
         }
-
-        // Create the _SUCCESS tag
-        Path successTagPath = new Path(outputDir + "/_SUCCESS");
-        if (!fs.exists(successTagPath)) {
-            logger.info("Creating _SUCCESS under targetBasePath: " + outputDir);
-            fs.createNewFile(successTagPath);
+        if (fs.exists(targetFilePath)) {
+          logger.error(String
+              .format("The target output commit file (%targetBasePath) already exists.",
+                  targetFilePath));
         }
+        FileUtil.copy(fs, commitStatus.getPath(), fs, targetFilePath, false, fs.getConf());
+      }
+    } else {
+      logger.info("The job has 0 partition to copy.");
     }
 
-    public static void main(String[] args) throws IOException {
-        // Take input configs
-        final Config cfg = new Config();
-        new JCommander(cfg, args);
-        logger.info(String.format("Snapshot hoodie table from %targetBasePath to %targetBasePath", cfg.basePath, cfg.outputPath));
-
-        // Create a spark job to do the snapshot copy
-        SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-copier");
-        sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-        JavaSparkContext jsc = new JavaSparkContext(sparkConf);
-        logger.info("Initializing spark job.");
-
-        // Copy
-        HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-        copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning);
-
-        // Stop the job
-        jsc.stop();
+    // Create the _SUCCESS tag
+    Path successTagPath = new Path(outputDir + "/_SUCCESS");
+    if (!fs.exists(successTagPath)) {
+      logger.info("Creating _SUCCESS under targetBasePath: " + outputDir);
+      fs.createNewFile(successTagPath);
     }
+  }
+
+  public static void main(String[] args) throws IOException {
+    // Take input configs
+    final Config cfg = new Config();
+    new JCommander(cfg, args);
+    logger.info(String
+        .format("Snapshot hoodie table from %targetBasePath to %targetBasePath", cfg.basePath,
+            cfg.outputPath));
+
+    // Create a spark job to do the snapshot copy
+    SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-copier");
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    logger.info("Initializing spark job.");
+
+    // Copy
+    HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
+    copier.snapshot(jsc, cfg.basePath, cfg.outputPath, cfg.shouldAssumeDatePartitioning);
+
+    // Stop the job
+    jsc.stop();
+  }
 }

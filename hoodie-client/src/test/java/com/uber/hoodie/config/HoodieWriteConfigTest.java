@@ -16,7 +16,7 @@
 
 package com.uber.hoodie.config;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.Maps;
 import com.uber.hoodie.config.HoodieWriteConfig.Builder;
@@ -29,6 +29,7 @@ import java.util.Properties;
 import org.junit.Test;
 
 public class HoodieWriteConfigTest {
+
   @Test
   public void testPropertyLoading() throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
@@ -46,9 +47,10 @@ public class HoodieWriteConfigTest {
     HoodieWriteConfig config = builder.build();
     assertEquals(config.getMaxCommitsToKeep(), 5);
     assertEquals(config.getMinCommitsToKeep(), 2);
-}
+  }
 
-  private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {
+  private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params)
+      throws IOException {
     Properties properties = new Properties();
     properties.putAll(params);
     ByteArrayOutputStream outStream = new ByteArrayOutputStream();

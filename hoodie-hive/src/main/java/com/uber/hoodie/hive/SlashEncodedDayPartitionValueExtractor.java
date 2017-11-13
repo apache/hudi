@@ -23,9 +23,11 @@ import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+
 /**
- * HDFS Path contain hive partition values for the keys it is partitioned on.
- * This mapping is not straight forward and requires a pluggable implementation to extract the partition value from HDFS path.
+ * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not
+ * straight forward and requires a pluggable implementation to extract the partition value from HDFS
+ * path.
  *
  * This implementation extracts datestr=yyyy-mm-dd from path of type /yyyy/mm/dd
  */

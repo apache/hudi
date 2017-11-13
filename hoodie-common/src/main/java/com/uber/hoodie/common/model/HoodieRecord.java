@@ -17,7 +17,6 @@
 package com.uber.hoodie.common.model;
 
 import com.google.common.base.Objects;
-
 import java.io.Serializable;
 import java.util.Optional;
 
@@ -26,129 +25,131 @@ import java.util.Optional;
  */
 public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
 
-    public static String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
-    public static String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
-    public static String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
-    public static String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
-    public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
+  public static String COMMIT_TIME_METADATA_FIELD = "_hoodie_commit_time";
+  public static String COMMIT_SEQNO_METADATA_FIELD = "_hoodie_commit_seqno";
+  public static String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
+  public static String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
+  public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
 
-    /**
-     * Identifies the record across the table
-     */
-    private HoodieKey key;
+  /**
+   * Identifies the record across the table
+   */
+  private HoodieKey key;
 
-    /**
-     * Actual payload of the record
-     */
-    private T data;
+  /**
+   * Actual payload of the record
+   */
+  private T data;
 
-    /**
-     * Current location of record on storage. Filled in by looking up index
-     */
-    private HoodieRecordLocation currentLocation;
+  /**
+   * Current location of record on storage. Filled in by looking up index
+   */
+  private HoodieRecordLocation currentLocation;
 
-    /**
-     * New location of record on storage, after written
-     */
-    private HoodieRecordLocation newLocation;
+  /**
+   * New location of record on storage, after written
+   */
+  private HoodieRecordLocation newLocation;
 
-    public HoodieRecord(HoodieKey key, T data) {
-        this.key = key;
-        this.data = data;
-        this.currentLocation = null;
-        this.newLocation = null;
+  public HoodieRecord(HoodieKey key, T data) {
+    this.key = key;
+    this.data = data;
+    this.currentLocation = null;
+    this.newLocation = null;
+  }
+
+  public HoodieKey getKey() {
+    return key;
+  }
+
+  public T getData() {
+    if (data == null) {
+      throw new IllegalStateException("Payload already deflated for record.");
     }
+    return data;
+  }
 
-    public HoodieKey getKey() {
-        return key;
+  /**
+   * Release the actual payload, to ease memory pressure. To be called after the record has been
+   * written to storage. Once deflated, cannot be inflated.
+   */
+  public void deflate() {
+    this.data = null;
+  }
+
+
+  /**
+   * Sets the current currentLocation of the record. This should happen exactly-once
+   */
+  public HoodieRecord setCurrentLocation(HoodieRecordLocation location) {
+    assert currentLocation == null;
+    this.currentLocation = location;
+    return this;
+  }
+
+  public HoodieRecordLocation getCurrentLocation() {
+    return currentLocation;
+  }
+
+  /**
+   * Sets the new currentLocation of the record, after being written. This again should happen
+   * exactly-once.
+   */
+  public HoodieRecord setNewLocation(HoodieRecordLocation location) {
+    assert newLocation == null;
+    this.newLocation = location;
+    return this;
+  }
+
+  public Optional<HoodieRecordLocation> getNewLocation() {
+    return Optional.of(this.newLocation);
+  }
+
+  public boolean isCurrentLocationKnown() {
+    return this.currentLocation != null;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
     }
-
-    public T getData() {
-        if (data == null) {
-            throw new IllegalStateException("Payload already deflated for record.");
-        }
-        return data;
+    if (o == null || getClass() != o.getClass()) {
+      return false;
     }
+    HoodieRecord that = (HoodieRecord) o;
+    return Objects.equal(key, that.key) &&
+        Objects.equal(data, that.data) &&
+        Objects.equal(currentLocation, that.currentLocation) &&
+        Objects.equal(newLocation, that.newLocation);
+  }
 
-    /**
-     * Release the actual payload, to ease memory pressure. To be called after the record
-     * has been written to storage. Once deflated, cannot be inflated.
-     */
-    public void deflate() {
-        this.data = null;
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(key, data, currentLocation, newLocation);
+  }
 
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("HoodieRecord{");
+    sb.append("key=").append(key);
+    sb.append(", currentLocation='").append(currentLocation).append('\'');
+    sb.append(", newLocation='").append(newLocation).append('\'');
+    sb.append('}');
+    return sb.toString();
+  }
 
-    /**
-     * Sets the current currentLocation of the record. This should happen exactly-once
-     */
-    public HoodieRecord setCurrentLocation(HoodieRecordLocation location) {
-        assert currentLocation == null;
-        this.currentLocation = location;
-        return this;
-    }
+  public static String generateSequenceId(String commitTime, int partitionId, long recordIndex) {
+    return commitTime + "_" + partitionId + "_" + recordIndex;
+  }
 
-    public HoodieRecordLocation getCurrentLocation() {
-        return currentLocation;
-    }
+  public String getPartitionPath() {
+    assert key != null;
+    return key.getPartitionPath();
+  }
 
-    /**
-     * Sets the new currentLocation of the record, after being written. This again should happen
-     * exactly-once.
-     */
-    public HoodieRecord setNewLocation(HoodieRecordLocation location) {
-        assert newLocation == null;
-        this.newLocation = location;
-        return this;
-    }
-
-    public Optional<HoodieRecordLocation> getNewLocation() {
-        return Optional.of(this.newLocation);
-    }
-
-    public boolean isCurrentLocationKnown() {
-        return this.currentLocation != null;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        HoodieRecord that = (HoodieRecord) o;
-        return Objects.equal(key, that.key) &&
-                Objects.equal(data, that.data) &&
-                Objects.equal(currentLocation, that.currentLocation) &&
-                Objects.equal(newLocation, that.newLocation);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(key, data, currentLocation, newLocation);
-    }
-
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("HoodieRecord{");
-        sb.append("key=").append(key);
-        sb.append(", currentLocation='").append(currentLocation).append('\'');
-        sb.append(", newLocation='").append(newLocation).append('\'');
-        sb.append('}');
-        return sb.toString();
-    }
-
-    public static String generateSequenceId(String commitTime, int partitionId, long recordIndex) {
-        return commitTime + "_" + partitionId + "_" + recordIndex;
-    }
-
-    public String getPartitionPath() {
-        assert key != null;
-        return key.getPartitionPath();
-    }
-
-    public String getRecordKey() {
-        assert key != null;
-        return key.getRecordKey();
-    }
+  public String getRecordKey() {
+    assert key != null;
+    return key.getRecordKey();
+  }
 }

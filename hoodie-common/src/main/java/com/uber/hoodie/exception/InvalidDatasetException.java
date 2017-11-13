@@ -17,16 +17,15 @@
 package com.uber.hoodie.exception;
 
 /**
- * <p>
- * Exception thrown to indicate that a hoodie dataset is invalid
- * <p>
+ * <p> Exception thrown to indicate that a hoodie dataset is invalid <p>
  */
 public class InvalidDatasetException extends HoodieException {
-    public InvalidDatasetException(String basePath) {
-        super(getErrorMessage(basePath));
-    }
 
-    private static String getErrorMessage(String basePath) {
-        return "Invalid Hoodie Dataset. " + basePath;
-    }
+  public InvalidDatasetException(String basePath) {
+    super(getErrorMessage(basePath));
+  }
+
+  private static String getErrorMessage(String basePath) {
+    return "Invalid Hoodie Dataset. " + basePath;
+  }
 }

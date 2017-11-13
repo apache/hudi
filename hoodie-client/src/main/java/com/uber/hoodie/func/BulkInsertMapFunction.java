@@ -16,16 +16,14 @@
 
 package com.uber.hoodie.func;
 
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.spark.api.java.function.Function2;
-
 import java.util.Iterator;
 import java.util.List;
+import org.apache.spark.api.java.function.Function2;
 
 
 /**
@@ -34,20 +32,21 @@ import java.util.List;
 public class BulkInsertMapFunction<T extends HoodieRecordPayload>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
-    private String commitTime;
-    private HoodieWriteConfig config;
-    private HoodieTable<T> hoodieTable;
+  private String commitTime;
+  private HoodieWriteConfig config;
+  private HoodieTable<T> hoodieTable;
 
-    public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config,
-        HoodieTable<T> hoodieTable) {
-        this.commitTime = commitTime;
-        this.config = config;
-        this.hoodieTable = hoodieTable;
-    }
+  public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config,
+      HoodieTable<T> hoodieTable) {
+    this.commitTime = commitTime;
+    this.config = config;
+    this.hoodieTable = hoodieTable;
+  }
 
-    @Override
-    public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr)
-        throws Exception {
-        return new LazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable);
-    }
+  @Override
+  public Iterator<List<WriteStatus>> call(Integer partition,
+      Iterator<HoodieRecord<T>> sortedRecordItr)
+      throws Exception {
+    return new LazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable);
+  }
 }

@@ -17,7 +17,6 @@
 package com.uber.hoodie.common.table.log;
 
 import com.google.common.base.Preconditions;
-
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
@@ -38,11 +37,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Scans a log file and provides block level iterator on the log file
- * Loads the entire block contents in memory
- * Can emit either a DataBlock, CommandBlock, DeleteBlock or CorruptBlock (if one is found)
+ * Scans a log file and provides block level iterator on the log file Loads the entire block
+ * contents in memory Can emit either a DataBlock, CommandBlock, DeleteBlock or CorruptBlock (if one
+ * is found)
  */
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
+
   private static final int DEFAULT_BUFFER_SIZE = 4096;
   private final static Logger log = LogManager.getLogger(HoodieLogFormatReader.class);
 
@@ -53,14 +53,16 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private HoodieLogBlock nextBlock = null;
   private boolean readMetadata = true;
 
-  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean readMetadata) throws IOException {
+  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
+      boolean readMetadata) throws IOException {
     this.inputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
     this.readerSchema = readerSchema;
     this.readMetadata = readMetadata;
   }
 
-  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readMetadata) throws IOException {
+  HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
+      boolean readMetadata) throws IOException {
     this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, readMetadata);
   }
 
@@ -83,7 +85,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     // Skip blocksize in the stream and we should either find a sync marker (start of the next block) or EOF
     // If we did not find either of it, then this block is a corrupted block.
     boolean isCorrupted = isBlockCorrupt(blocksize);
-    if(isCorrupted) {
+    if (isCorrupted) {
       return createCorruptBlock();
     }
 
@@ -140,7 +142,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   }
 
   private long scanForNextAvailableBlockOffset() throws IOException {
-    while(true) {
+    while (true) {
       long currentPos = inputStream.getPos();
       try {
         boolean isEOF = readMagic();
@@ -191,7 +193,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   public HoodieLogBlock next() {
-    if(nextBlock == null) {
+    if (nextBlock == null) {
       // may be hasNext is not called
       hasNext();
     }

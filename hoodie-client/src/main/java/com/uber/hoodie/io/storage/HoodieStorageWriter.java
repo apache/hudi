@@ -17,13 +17,16 @@
 package com.uber.hoodie.io.storage;
 
 import com.uber.hoodie.common.model.HoodieRecord;
+import java.io.IOException;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.IOException;
-
 public interface HoodieStorageWriter<R extends IndexedRecord> {
-    void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
-    boolean canWrite();
-    void close() throws IOException;
-    void writeAvro(String key, R oldRecord) throws IOException;
+
+  void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;
+
+  boolean canWrite();
+
+  void close() throws IOException;
+
+  void writeAvro(String key, R oldRecord) throws IOException;
 }

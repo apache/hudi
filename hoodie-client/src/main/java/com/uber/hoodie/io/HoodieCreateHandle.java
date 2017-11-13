@@ -29,116 +29,111 @@ import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.io.storage.HoodieStorageWriter;
 import com.uber.hoodie.io.storage.HoodieStorageWriterFactory;
 import com.uber.hoodie.table.HoodieTable;
+import java.io.IOException;
+import java.util.Optional;
+import java.util.UUID;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
-import java.io.IOException;
-import java.util.Optional;
-import java.util.UUID;
-
 public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
-    private static Logger logger = LogManager.getLogger(HoodieCreateHandle.class);
 
-    private final WriteStatus status;
-    private final HoodieStorageWriter<IndexedRecord> storageWriter;
-    private final Path path;
-    private long recordsWritten = 0;
-    private long recordsDeleted = 0;
+  private static Logger logger = LogManager.getLogger(HoodieCreateHandle.class);
 
-    public HoodieCreateHandle(HoodieWriteConfig config, String commitTime,
-                              HoodieTable<T> hoodieTable, String partitionPath) {
-        super(config, commitTime, hoodieTable);
-        this.status = ReflectionUtils.loadClass(config.getWriteStatusClassName());
-        status.setFileId(UUID.randomUUID().toString());
-        status.setPartitionPath(partitionPath);
+  private final WriteStatus status;
+  private final HoodieStorageWriter<IndexedRecord> storageWriter;
+  private final Path path;
+  private long recordsWritten = 0;
+  private long recordsDeleted = 0;
 
-        this.path = makeNewPath(partitionPath, TaskContext.getPartitionId(), status.getFileId());
-        try {
-            HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
-                                       commitTime,
-                                       new Path(config.getBasePath()),
-                                       new Path(config.getBasePath(), partitionPath));
-            partitionMetadata.trySave(TaskContext.getPartitionId());
-            this.storageWriter =
-                HoodieStorageWriterFactory.getStorageWriter(commitTime, path, hoodieTable, config, schema);
-        } catch (IOException e) {
-            throw new HoodieInsertException(
-                "Failed to initialize HoodieStorageWriter for path " + path, e);
-        }
-        logger.info("New InsertHandle for partition :" + partitionPath);
+  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime,
+      HoodieTable<T> hoodieTable, String partitionPath) {
+    super(config, commitTime, hoodieTable);
+    this.status = ReflectionUtils.loadClass(config.getWriteStatusClassName());
+    status.setFileId(UUID.randomUUID().toString());
+    status.setPartitionPath(partitionPath);
+
+    this.path = makeNewPath(partitionPath, TaskContext.getPartitionId(), status.getFileId());
+    try {
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
+          commitTime,
+          new Path(config.getBasePath()),
+          new Path(config.getBasePath(), partitionPath));
+      partitionMetadata.trySave(TaskContext.getPartitionId());
+      this.storageWriter =
+          HoodieStorageWriterFactory
+              .getStorageWriter(commitTime, path, hoodieTable, config, schema);
+    } catch (IOException e) {
+      throw new HoodieInsertException(
+          "Failed to initialize HoodieStorageWriter for path " + path, e);
     }
+    logger.info("New InsertHandle for partition :" + partitionPath);
+  }
 
-    /**
-     * Determines whether we can accept the incoming records, into the current file, depending on
-     *
-     * - Whether it belongs to the same partitionPath as existing records
-     * - Whether the current file written bytes lt max file size
-     *
-     * @return
-     */
-    public boolean canWrite(HoodieRecord record) {
-        return storageWriter.canWrite() && record.getPartitionPath()
-            .equals(status.getPartitionPath());
+  /**
+   * Determines whether we can accept the incoming records, into the current file, depending on
+   *
+   * - Whether it belongs to the same partitionPath as existing records - Whether the current file
+   * written bytes lt max file size
+   */
+  public boolean canWrite(HoodieRecord record) {
+    return storageWriter.canWrite() && record.getPartitionPath()
+        .equals(status.getPartitionPath());
+  }
+
+  /**
+   * Perform the actual writing of the given record into the backing file.
+   */
+  public void write(HoodieRecord record) {
+    Optional recordMetadata = record.getData().getMetadata();
+    try {
+      Optional<IndexedRecord> avroRecord = record.getData().getInsertValue(schema);
+
+      if (avroRecord.isPresent()) {
+        storageWriter.writeAvroWithMetadata(avroRecord.get(), record);
+        // update the new location of record, so we know where to find it next
+        record.setNewLocation(new HoodieRecordLocation(commitTime, status.getFileId()));
+        recordsWritten++;
+      } else {
+        recordsDeleted++;
+      }
+      record.deflate();
+      status.markSuccess(record, recordMetadata);
+    } catch (Throwable t) {
+      // Not throwing exception from here, since we don't want to fail the entire job
+      // for a single record
+      status.markFailure(record, t, recordMetadata);
+      logger.error("Error writing record " + record, t);
     }
+  }
 
-    /**
-     * Perform the actual writing of the given record into the backing file.
-     *
-     * @param record
-     */
-    public void write(HoodieRecord record) {
-        Optional recordMetadata = record.getData().getMetadata();
-        try {
-            Optional<IndexedRecord> avroRecord = record.getData().getInsertValue(schema);
+  /**
+   * Performs actions to durably, persist the current changes and returns a WriteStatus object
+   */
+  public WriteStatus close() {
+    logger.info(
+        "Closing the file " + status.getFileId() + " as we are done with all the records "
+            + recordsWritten);
+    try {
+      storageWriter.close();
 
-            if(avroRecord.isPresent()) {
-                storageWriter.writeAvroWithMetadata(avroRecord.get(), record);
-                // update the new location of record, so we know where to find it next
-                record.setNewLocation(new HoodieRecordLocation(commitTime, status.getFileId()));
-                recordsWritten++;
-            } else {
-                recordsDeleted++;
-            }
-            record.deflate();
-            status.markSuccess(record, recordMetadata);
-        } catch (Throwable t) {
-            // Not throwing exception from here, since we don't want to fail the entire job
-            // for a single record
-            status.markFailure(record, t, recordMetadata);
-            logger.error("Error writing record " + record, t);
-        }
+      HoodieWriteStat stat = new HoodieWriteStat();
+      stat.setNumWrites(recordsWritten);
+      stat.setNumDeletes(recordsDeleted);
+      stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+      stat.setFileId(status.getFileId());
+      String relativePath = path.toString().replace(new Path(config.getBasePath()) + "/", "");
+      stat.setPath(relativePath);
+      stat.setTotalWriteBytes(FSUtils.getFileSize(fs, path));
+      stat.setTotalWriteErrors(status.getFailedRecords().size());
+      status.setStat(stat);
+
+      return status;
+    } catch (IOException e) {
+      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path,
+          e);
     }
-
-    /**
-     * Performs actions to durably, persist the current changes and returns a WriteStatus object
-     *
-     * @return
-     */
-    public WriteStatus close() {
-        logger.info(
-            "Closing the file " + status.getFileId() + " as we are done with all the records "
-                + recordsWritten);
-        try {
-            storageWriter.close();
-
-            HoodieWriteStat stat = new HoodieWriteStat();
-            stat.setNumWrites(recordsWritten);
-            stat.setNumDeletes(recordsDeleted);
-            stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-            stat.setFileId(status.getFileId());
-            String relativePath = path.toString().replace(new Path(config.getBasePath()) + "/", "");
-            stat.setPath(relativePath);
-            stat.setTotalWriteBytes(FSUtils.getFileSize(fs, path));
-            stat.setTotalWriteErrors(status.getFailedRecords().size());
-            status.setStat(stat);
-
-            return status;
-        } catch (IOException e) {
-            throw new HoodieInsertException("Failed to close the Insert Handle for path " + path,
-                e);
-        }
-    }
+  }
 }

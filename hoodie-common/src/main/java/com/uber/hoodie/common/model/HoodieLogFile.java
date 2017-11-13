@@ -19,13 +19,13 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.FSUtils;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Optional;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 /**
  * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and
@@ -34,73 +34,74 @@ import java.util.Optional;
  * Also contains logic to roll-over the log file
  */
 public class HoodieLogFile implements Serializable {
-    public static final String DELTA_EXTENSION = ".log";
 
-    private final Path path;
-    private Optional<FileStatus> fileStatus;
+  public static final String DELTA_EXTENSION = ".log";
 
-    public HoodieLogFile(FileStatus fileStatus) {
-        this(fileStatus.getPath());
-        this.fileStatus = Optional.of(fileStatus);
-    }
+  private final Path path;
+  private Optional<FileStatus> fileStatus;
 
-    public HoodieLogFile(Path logPath) {
-        this.path = logPath;
-        this.fileStatus = Optional.empty();
-    }
+  public HoodieLogFile(FileStatus fileStatus) {
+    this(fileStatus.getPath());
+    this.fileStatus = Optional.of(fileStatus);
+  }
 
-    public String getFileId() {
-        return FSUtils.getFileIdFromLogPath(path);
-    }
+  public HoodieLogFile(Path logPath) {
+    this.path = logPath;
+    this.fileStatus = Optional.empty();
+  }
 
-    public String getBaseCommitTime() {
-        return FSUtils.getBaseCommitTimeFromLogPath(path);
-    }
+  public String getFileId() {
+    return FSUtils.getFileIdFromLogPath(path);
+  }
 
-    public int getLogVersion() {
-        return FSUtils.getFileVersionFromLog(path);
-    }
+  public String getBaseCommitTime() {
+    return FSUtils.getBaseCommitTimeFromLogPath(path);
+  }
 
-    public String getFileExtension() {
-        return FSUtils.getFileExtensionFromLog(path);
-    }
+  public int getLogVersion() {
+    return FSUtils.getFileVersionFromLog(path);
+  }
 
-    public Path getPath() {
-        return path;
-    }
+  public String getFileExtension() {
+    return FSUtils.getFileExtensionFromLog(path);
+  }
 
-    public String getFileName() {
-        return path.getName();
-    }
+  public Path getPath() {
+    return path;
+  }
 
-    public Optional<FileStatus> getFileStatus() {
-        return fileStatus;
-    }
+  public String getFileName() {
+    return path.getName();
+  }
 
-    public Optional<Long> getFileSize() {
-        return fileStatus.map(FileStatus::getLen);
-    }
+  public Optional<FileStatus> getFileStatus() {
+    return fileStatus;
+  }
 
-    public HoodieLogFile rollOver(FileSystem fs) throws IOException {
-        String fileId = getFileId();
-        String baseCommitTime = getBaseCommitTime();
-        String extension = "." + FSUtils.getFileExtensionFromLog(path);
-        int newVersion = FSUtils
-            .computeNextLogVersion(fs, path.getParent(), fileId,
-                    extension, baseCommitTime);
-        return new HoodieLogFile(new Path(path.getParent(),
-            FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion)));
-    }
+  public Optional<Long> getFileSize() {
+    return fileStatus.map(FileStatus::getLen);
+  }
 
-    public static Comparator<HoodieLogFile> getLogVersionComparator() {
-        return (o1, o2) -> {
-            // reverse the order
-            return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
-        };
-    }
+  public HoodieLogFile rollOver(FileSystem fs) throws IOException {
+    String fileId = getFileId();
+    String baseCommitTime = getBaseCommitTime();
+    String extension = "." + FSUtils.getFileExtensionFromLog(path);
+    int newVersion = FSUtils
+        .computeNextLogVersion(fs, path.getParent(), fileId,
+            extension, baseCommitTime);
+    return new HoodieLogFile(new Path(path.getParent(),
+        FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion)));
+  }
 
-    @Override
-    public String toString() {
-        return "HoodieLogFile {" + path + '}';
-    }
+  public static Comparator<HoodieLogFile> getLogVersionComparator() {
+    return (o1, o2) -> {
+      // reverse the order
+      return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
+    };
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieLogFile {" + path + '}';
+  }
 }

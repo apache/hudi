@@ -198,8 +198,8 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Iterate over the storage partitions and find if there are any new partitions that need
-   * to be added or updated. Generate a list of PartitionEvent based on the changes required.
+   * Iterate over the storage partitions and find if there are any new partitions that need to be
+   * added or updated. Generate a list of PartitionEvent based on the changes required.
    */
   List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions,
       List<String> partitionStoragePartitions) {
@@ -297,9 +297,9 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Gets the schema for a hoodie dataset.
-   * Depending on the type of table, read from any file written in the latest commit.
-   * We will assume that the schema has not changed within a single atomic write.
+   * Gets the schema for a hoodie dataset. Depending on the type of table, read from any file
+   * written in the latest commit. We will assume that the schema has not changed within a single
+   * atomic write.
    *
    * @return Parquet schema for this dataset
    */
@@ -313,7 +313,8 @@ public class HoodieHiveClient {
               .orElseThrow(() -> new InvalidDatasetException(syncConfig.basePath));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(activeTimeline.getInstantDetails(lastCommit).get());
-          String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
+          String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
+              .stream().findAny()
               .orElseThrow(() -> new IllegalArgumentException(
                   "Could not find any data file written for commit " + lastCommit
                       + ", could not get schema for dataset " + metaClient.getBasePath()));
@@ -330,7 +331,8 @@ public class HoodieHiveClient {
             lastDeltaCommitAfterCompaction = metaClient.getActiveTimeline()
                 .getDeltaCommitTimeline()
                 .filterCompletedInstants()
-                .findInstantsAfter(lastCompactionCommit.get().getTimestamp(), Integer.MAX_VALUE).lastInstant();
+                .findInstantsAfter(lastCompactionCommit.get().getTimestamp(), Integer.MAX_VALUE)
+                .lastInstant();
           }
           LOG.info("Found the last delta commit after last compaction as "
               + lastDeltaCommitAfterCompaction);
@@ -340,8 +342,9 @@ public class HoodieHiveClient {
             // read from the log file wrote
             commitMetadata = HoodieCommitMetadata
                 .fromBytes(activeTimeline.getInstantDetails(lastDeltaCommit).get());
-            filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().filter(s -> s.contains(
-                HoodieLogFile.DELTA_EXTENSION)).findAny()
+            filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
+                .stream().filter(s -> s.contains(
+                    HoodieLogFile.DELTA_EXTENSION)).findAny()
                 .orElseThrow(() -> new IllegalArgumentException(
                     "Could not find any data file written for commit " + lastDeltaCommit
                         + ", could not get schema for dataset " + metaClient.getBasePath()));
@@ -361,10 +364,6 @@ public class HoodieHiveClient {
 
   /**
    * Read schema from a data file from the last compaction commit done.
-   *
-   * @param lastCompactionCommitOpt
-   * @return
-   * @throws IOException
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private MessageType readSchemaFromLastCompaction(Optional<HoodieInstant> lastCompactionCommitOpt)
@@ -377,7 +376,8 @@ public class HoodieHiveClient {
     // Read from the compacted file wrote
     HoodieCompactionMetadata compactionMetadata = HoodieCompactionMetadata
         .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get());
-    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
+    String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
+        .stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException(
             "Could not find any data file written for compaction " + lastCompactionCommit
                 + ", could not get schema for dataset " + metaClient.getBasePath()));
@@ -386,11 +386,6 @@ public class HoodieHiveClient {
 
   /**
    * Read the schema from the log file on path
-   *
-   * @param lastCompactionCommitOpt
-   * @param path
-   * @return
-   * @throws IOException
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private MessageType readSchemaFromLogFile(Optional<HoodieInstant> lastCompactionCommitOpt,
@@ -422,7 +417,8 @@ public class HoodieHiveClient {
               + ". File does not exist.");
     }
     ParquetMetadata fileFooter =
-        ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
+        ParquetFileReader
+            .readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
     return fileFooter.getFileMetaData().getSchema();
   }
 
@@ -530,7 +526,7 @@ public class HoodieHiveClient {
       if (connection != null) {
         connection.close();
       }
-      if(client != null) {
+      if (client != null) {
         client.close();
       }
     } catch (SQLException e) {

@@ -19,7 +19,8 @@ package com.uber.hoodie.exception;
 import org.apache.hadoop.fs.Path;
 
 public class InvalidHoodiePathException extends HoodieException {
-    public InvalidHoodiePathException(Path path, String type) {
-        super("Invalid path " + path + " of type " + type);
-    }
+
+  public InvalidHoodiePathException(Path path, String type) {
+    super("Invalid path " + path + " of type " + type);
+  }
 }

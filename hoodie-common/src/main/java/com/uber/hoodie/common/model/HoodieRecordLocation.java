@@ -17,7 +17,6 @@
 package com.uber.hoodie.common.model;
 
 import com.google.common.base.Objects;
-
 import java.io.Serializable;
 
 /**
@@ -26,44 +25,46 @@ import java.io.Serializable;
  */
 public class HoodieRecordLocation implements Serializable {
 
-    private final String commitTime;
-    private final String fileId;
+  private final String commitTime;
+  private final String fileId;
 
-    public HoodieRecordLocation(String commitTime, String fileId) {
-        this.commitTime = commitTime;
-        this.fileId = fileId;
-    }
+  public HoodieRecordLocation(String commitTime, String fileId) {
+    this.commitTime = commitTime;
+    this.fileId = fileId;
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-        return Objects.equal(commitTime, otherLoc.commitTime) &&
-                Objects.equal(fileId, otherLoc.fileId);
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
     }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
+    return Objects.equal(commitTime, otherLoc.commitTime) &&
+        Objects.equal(fileId, otherLoc.fileId);
+  }
 
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(commitTime, fileId);
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(commitTime, fileId);
+  }
 
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("HoodieRecordLocation {");
-        sb.append("commitTime=").append(commitTime).append(", ");
-        sb.append("fileId=").append(fileId);
-        sb.append('}');
-        return sb.toString();
-    }
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("HoodieRecordLocation {");
+    sb.append("commitTime=").append(commitTime).append(", ");
+    sb.append("fileId=").append(fileId);
+    sb.append('}');
+    return sb.toString();
+  }
 
-    public String getCommitTime() {
-        return commitTime;
-    }
+  public String getCommitTime() {
+    return commitTime;
+  }
 
-    public String getFileId() {
-        return fileId;
-    }
+  public String getFileId() {
+    return fileId;
+  }
 }

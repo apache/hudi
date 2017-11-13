@@ -26,6 +26,10 @@ import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import com.uber.hoodie.hive.util.SchemaUtil;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -35,20 +39,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parquet.schema.MessageType;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
 
 /**
- * Tool to sync a hoodie HDFS dataset with a hive metastore table.
- * Either use it as a api HiveSyncTool.syncHoodieTable(HiveSyncConfig)
- * or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
+ * Tool to sync a hoodie HDFS dataset with a hive metastore table. Either use it as a api
+ * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar
+ * HiveSyncTool [args]
  *
- * This utility will get the schema from the latest commit and will sync hive table schema
- * Also this will sync the partitions incrementally
- * (all the partitions modified since the last commit)
+ * This utility will get the schema from the latest commit and will sync hive table schema Also this
+ * will sync the partitions incrementally (all the partitions modified since the last commit)
  */
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
@@ -64,7 +62,7 @@ public class HiveSyncTool {
   }
 
   public void syncHoodieTable() {
-    switch(hoodieHiveClient.getTableType()) {
+    switch (hoodieHiveClient.getTableType()) {
       case COPY_ON_WRITE:
         syncHoodieTable(false);
         break;
@@ -125,15 +123,15 @@ public class HiveSyncTool {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Table " + cfg.tableName + " is not found. Creating it");
-      if(!isRealTime) {
+      if (!isRealTime) {
         // TODO - RO Table for MOR only after major compaction (UnboundedCompaction is default for now)
         hoodieHiveClient.createTable(schema, HoodieInputFormat.class.getName(),
-                MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
+            MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
       } else {
-          // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
-          // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive/ql/exec/DDLTask.java#L3488
-          hoodieHiveClient.createTable(schema, HoodieRealtimeInputFormat.class.getName(),
-                  MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
+        // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
+        // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive/ql/exec/DDLTask.java#L3488
+        hoodieHiveClient.createTable(schema, HoodieRealtimeInputFormat.class.getName(),
+            MapredParquetOutputFormat.class.getName(), ParquetHiveSerDe.class.getName());
       }
     } else {
       // Check if the dataset schema has evolved

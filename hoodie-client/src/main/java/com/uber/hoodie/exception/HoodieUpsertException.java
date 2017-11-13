@@ -17,16 +17,16 @@
 package com.uber.hoodie.exception;
 
 /**
- * <p>
- * Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a incremental upsert
- * </p>
+ * <p> Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a
+ * incremental upsert </p>
  */
-public class HoodieUpsertException  extends HoodieException {
-    public HoodieUpsertException(String msg, Throwable e) {
-        super(msg, e);
-    }
+public class HoodieUpsertException extends HoodieException {
 
-    public HoodieUpsertException(String msg) {
-        super(msg);
-    }
+  public HoodieUpsertException(String msg, Throwable e) {
+    super(msg, e);
+  }
+
+  public HoodieUpsertException(String msg) {
+    super(msg);
+  }
 }

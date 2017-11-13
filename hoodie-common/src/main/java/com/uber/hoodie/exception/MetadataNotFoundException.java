@@ -22,11 +22,12 @@ package com.uber.hoodie.exception;
  * Thrown when expected metadata is not found
  */
 public class MetadataNotFoundException extends HoodieException {
-    public MetadataNotFoundException(String msg) {
-        super(msg);
-    }
 
-    public MetadataNotFoundException(String msg, Throwable e) {
-        super(msg, e);
-    }
+  public MetadataNotFoundException(String msg) {
+    super(msg);
+  }
+
+  public MetadataNotFoundException(String msg, Throwable e) {
+    super(msg, e);
+  }
 }

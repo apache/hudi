@@ -19,7 +19,6 @@
 package com.uber.hoodie.index.bucketed;
 
 import com.google.common.base.Optional;
-
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -29,96 +28,86 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-
 import scala.Tuple2;
 
 /**
- * An `stateless` index implementation that will using a deterministic mapping function to
- * determine the fileID for a given record.
+ * An `stateless` index implementation that will using a deterministic mapping function to determine
+ * the fileID for a given record.
  *
- * Pros:
- *  - Fast
+ * Pros: - Fast
  *
- * Cons :
- *  - Need to tune the number of buckets per partition path manually (FIXME: Need to autotune this)
- *  - Could increase write amplification on copy-on-write storage since inserts always rewrite files
- *  - Not global.
- *
- *
- *
+ * Cons : - Need to tune the number of buckets per partition path manually (FIXME: Need to autotune
+ * this) - Could increase write amplification on copy-on-write storage since inserts always rewrite
+ * files - Not global.
  */
 public class BucketedIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
-    private static Logger logger = LogManager.getLogger(BucketedIndex.class);
+  private static Logger logger = LogManager.getLogger(BucketedIndex.class);
 
-    public BucketedIndex(HoodieWriteConfig config, JavaSparkContext jsc) {
-        super(config, jsc);
-    }
+  public BucketedIndex(HoodieWriteConfig config, JavaSparkContext jsc) {
+    super(config, jsc);
+  }
 
-    private String getBucket(String recordKey) {
-        return String.valueOf(recordKey.hashCode() % config.getNumBucketsPerPartition());
-    }
+  private String getBucket(String recordKey) {
+    return String.valueOf(recordKey.hashCode() % config.getNumBucketsPerPartition());
+  }
 
-    @Override
-    public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys, HoodieTable<T> table) {
-        return hoodieKeys.mapToPair(hk -> new Tuple2<>(hk, Optional.of(getBucket(hk.getRecordKey()))));
-    }
+  @Override
+  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+      HoodieTable<T> table) {
+    return hoodieKeys.mapToPair(hk -> new Tuple2<>(hk, Optional.of(getBucket(hk.getRecordKey()))));
+  }
 
-    @Override
-    public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, HoodieTable<T> hoodieTable) throws HoodieIndexException {
-        return recordRDD.map(record -> {
-            String bucket = getBucket(record.getRecordKey());
-            //HACK(vc) a non-existent commit is provided here.
-            record.setCurrentLocation(new HoodieRecordLocation("000", bucket));
-            return record;
-        });
-    }
+  @Override
+  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
+      HoodieTable<T> hoodieTable) throws HoodieIndexException {
+    return recordRDD.map(record -> {
+      String bucket = getBucket(record.getRecordKey());
+      //HACK(vc) a non-existent commit is provided here.
+      record.setCurrentLocation(new HoodieRecordLocation("000", bucket));
+      return record;
+    });
+  }
 
-    @Override
-    public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, HoodieTable<T> hoodieTable) throws HoodieIndexException {
-        return writeStatusRDD;
-    }
+  @Override
+  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
+      HoodieTable<T> hoodieTable) throws HoodieIndexException {
+    return writeStatusRDD;
+  }
 
-    @Override
-    public boolean rollbackCommit(String commitTime) {
-        // nothing to rollback in the index.
-        return true;
-    }
+  @Override
+  public boolean rollbackCommit(String commitTime) {
+    // nothing to rollback in the index.
+    return true;
+  }
 
-    /**
-     * Bucketing is still done within each partition.
-     *
-     * @return
-     */
-    @Override
-    public boolean isGlobal() {
-        return false;
-    }
+  /**
+   * Bucketing is still done within each partition.
+   */
+  @Override
+  public boolean isGlobal() {
+    return false;
+  }
 
-    /**
-     * Since indexing is just a deterministic hash, we can identify file group correctly even without an index
-     * on the actual log file.
-     *
-     * @return
-     */
-    @Override
-    public boolean canIndexLogFiles() {
-        return true;
-    }
+  /**
+   * Since indexing is just a deterministic hash, we can identify file group correctly even without
+   * an index on the actual log file.
+   */
+  @Override
+  public boolean canIndexLogFiles() {
+    return true;
+  }
 
-    /**
-     * Indexing is just a hash function.
-     *
-     * @return
-     */
-    @Override
-    public boolean isImplicitWithStorage() {
-        return true;
-    }
+  /**
+   * Indexing is just a hash function.
+   */
+  @Override
+  public boolean isImplicitWithStorage() {
+    return true;
+  }
 }

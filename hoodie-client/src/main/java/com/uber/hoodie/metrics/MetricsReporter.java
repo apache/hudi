@@ -22,15 +22,16 @@ import java.io.Closeable;
  * Interface for implementing a Reporter.
  */
 public abstract class MetricsReporter {
-    /**
-     * Push out metrics at scheduled intervals
-     */
-    public abstract void start();
 
-    /**
-     * Deterministically push out metrics
-     */
-    public abstract void report();
+  /**
+   * Push out metrics at scheduled intervals
+   */
+  public abstract void start();
 
-    public abstract Closeable getReporter();
+  /**
+   * Deterministically push out metrics
+   */
+  public abstract void report();
+
+  public abstract Closeable getReporter();
 }

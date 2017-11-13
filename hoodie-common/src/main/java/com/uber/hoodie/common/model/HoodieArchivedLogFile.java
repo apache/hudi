@@ -23,18 +23,18 @@ import org.apache.hadoop.fs.Path;
 
 public class HoodieArchivedLogFile extends HoodieLogFile {
 
-    public static final String ARCHIVE_EXTENSION = ".archive";
+  public static final String ARCHIVE_EXTENSION = ".archive";
 
-    public HoodieArchivedLogFile(FileStatus fileStatus) {
-        super(fileStatus);
-    }
+  public HoodieArchivedLogFile(FileStatus fileStatus) {
+    super(fileStatus);
+  }
 
-    public HoodieArchivedLogFile(Path logPath) {
-        super(logPath);
-    }
+  public HoodieArchivedLogFile(Path logPath) {
+    super(logPath);
+  }
 
-    @Override
-    public String toString() {
-        return "HoodieArchivedLogFile {" + super.getPath() + '}';
-    }
+  @Override
+  public String toString() {
+    return "HoodieArchivedLogFile {" + super.getPath() + '}';
+  }
 }

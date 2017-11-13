@@ -25,12 +25,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Strategy for compaction. Pluggable implementation of define how compaction should be done.
- * The implementations of this interface can capture the relevant metrics to order and filter
- * the final list of compaction operation to run in a single compaction.
+ * Strategy for compaction. Pluggable implementation of define how compaction should be done. The
+ * implementations of this interface can capture the relevant metrics to order and filter the final
+ * list of compaction operation to run in a single compaction.
  *
- * Implementation of CompactionStrategy cannot hold any state.
- * Difference instantiations can be passed in every time
+ * Implementation of CompactionStrategy cannot hold any state. Difference instantiations can be
+ * passed in every time
  *
  * @see com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor
  * @see CompactionOperation
@@ -38,8 +38,8 @@ import java.util.Map;
 public interface CompactionStrategy extends Serializable {
 
   /**
-   * Callback hook when a CompactionOperation is created. Individual strategies can
-   * capture the metrics they need to decide on the priority.
+   * Callback hook when a CompactionOperation is created. Individual strategies can capture the
+   * metrics they need to decide on the priority.
    *
    * @param dataFile - Base file to compact
    * @param partitionPath - Partition path
@@ -50,8 +50,8 @@ public interface CompactionStrategy extends Serializable {
       List<HoodieLogFile> logFiles);
 
   /**
-   * Order and Filter the list of compactions. Use the metrics captured with the
-   * captureMetrics to order and filter out compactions
+   * Order and Filter the list of compactions. Use the metrics captured with the captureMetrics to
+   * order and filter out compactions
    *
    * @param writeConfig - HoodieWriteConfig - config for this compaction is passed in
    * @param operations - list of compactions collected

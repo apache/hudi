@@ -22,13 +22,12 @@ import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
-import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
-
+import java.util.List;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -36,7 +35,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import java.util.List;
 
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic
@@ -44,75 +42,77 @@ import java.util.List;
  */
 public class HoodieClientExample {
 
-    @Parameter(names={"--table-path", "-p"}, description = "path for Hoodie sample table")
-    private String tablePath = "file:///tmp/hoodie/sample-table";
+  @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
+  private String tablePath = "file:///tmp/hoodie/sample-table";
 
-    @Parameter(names={"--table-name", "-n"}, description = "table name for Hoodie sample table")
-    private String tableName =  "hoodie_rt";
+  @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
+  private String tableName = "hoodie_rt";
 
-    @Parameter(names={"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
-    private String tableType =  HoodieTableType.COPY_ON_WRITE.name();
+  @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
+  private String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
+  @Parameter(names = {"--help", "-h"}, help = true)
+  public Boolean help = false;
 
-    private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
+  private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
 
-    public static void main(String[] args) throws Exception {
-        HoodieClientExample cli = new HoodieClientExample();
-        JCommander cmd = new JCommander(cli, args);
+  public static void main(String[] args) throws Exception {
+    HoodieClientExample cli = new HoodieClientExample();
+    JCommander cmd = new JCommander(cli, args);
 
-        if (cli.help) {
-            cmd.usage();
-            System.exit(1);
-        }
-        cli.run();
+    if (cli.help) {
+      cmd.usage();
+      System.exit(1);
+    }
+    cli.run();
+  }
+
+
+  public void run() throws Exception {
+
+    SparkConf sparkConf = new SparkConf().setAppName("hoodie-client-example");
+    sparkConf.setMaster("local[1]");
+    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+    sparkConf.set("spark.kryoserializer.buffer.max", "512m");
+    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+
+    // Generator of some records to be loaded in.
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    // initialize the table, if not done already
+    Path path = new Path(tablePath);
+    FileSystem fs = FSUtils.getFs();
+    if (!fs.exists(path)) {
+      HoodieTableMetaClient
+          .initTableType(fs, tablePath, HoodieTableType.valueOf(tableType), tableName,
+              HoodieAvroPayload.class.getName());
     }
 
+    // Create the write client to write some records in
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .forTable(tableName).withIndexConfig(
+            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .build();
+    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
-    public void run() throws Exception {
+    /**
+     * Write 1 (only inserts)
+     */
+    String newCommitTime = client.startCommit();
+    logger.info("Starting commit " + newCommitTime);
 
-        SparkConf sparkConf = new SparkConf().setAppName("hoodie-client-example");
-        sparkConf.setMaster("local[1]");
-        sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-        sparkConf.set("spark.kryoserializer.buffer.max", "512m");
-        JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> writeRecords = jsc.<HoodieRecord>parallelize(records, 1);
+    client.upsert(writeRecords, newCommitTime);
 
-        // Generator of some records to be loaded in.
-        HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-
-        // initialize the table, if not done already
-        Path path = new Path(tablePath);
-        FileSystem fs = FSUtils.getFs();
-        if (!fs.exists(path)) {
-            HoodieTableMetaClient.initTableType(fs, tablePath, HoodieTableType.valueOf(tableType), tableName, HoodieAvroPayload.class.getName());
-        }
-
-        // Create the write client to write some records in
-        HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-                        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-                        .forTable(tableName).withIndexConfig(
-                        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-                        .build();
-        HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
-
-        /**
-         * Write 1 (only inserts)
-         */
-        String newCommitTime = client.startCommit();
-        logger.info("Starting commit " + newCommitTime);
-
-        List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-        JavaRDD<HoodieRecord> writeRecords = jsc.<HoodieRecord>parallelize(records, 1);
-        client.upsert(writeRecords, newCommitTime);
-
-        /**
-         * Write 2 (updates)
-         */
-        newCommitTime = client.startCommit();
-        logger.info("Starting commit " + newCommitTime);
-        records.addAll(dataGen.generateUpdates(newCommitTime, 100));
-        writeRecords = jsc.<HoodieRecord>parallelize(records, 1);
-        client.upsert(writeRecords, newCommitTime);
-    }
+    /**
+     * Write 2 (updates)
+     */
+    newCommitTime = client.startCommit();
+    logger.info("Starting commit " + newCommitTime);
+    records.addAll(dataGen.generateUpdates(newCommitTime, 100));
+    writeRecords = jsc.<HoodieRecord>parallelize(records, 1);
+    client.upsert(writeRecords, newCommitTime);
+  }
 }

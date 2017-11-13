@@ -17,40 +17,37 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-
+import java.io.IOException;
 import java.util.Optional;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.IOException;
-
 /**
- * This is a payload to wrap a existing Hoodie Avro Record.
- * Useful to create a HoodieRecord over existing GenericRecords in a hoodie datasets (useful in compactions)
- *
+ * This is a payload to wrap a existing Hoodie Avro Record. Useful to create a HoodieRecord over
+ * existing GenericRecords in a hoodie datasets (useful in compactions)
  */
 public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload> {
-    private final Optional<GenericRecord> record;
 
-    public HoodieAvroPayload(Optional<GenericRecord> record) {
-        this.record = record;
-    }
+  private final Optional<GenericRecord> record;
 
-    @Override
-    public HoodieAvroPayload preCombine(HoodieAvroPayload another) {
-        return this;
-    }
+  public HoodieAvroPayload(Optional<GenericRecord> record) {
+    this.record = record;
+  }
 
-    @Override
-    public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
-            throws IOException {
-        return getInsertValue(schema);
-    }
+  @Override
+  public HoodieAvroPayload preCombine(HoodieAvroPayload another) {
+    return this;
+  }
 
-    @Override
-    public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-        return record.map(r -> HoodieAvroUtils.rewriteRecord(r, schema));
-    }
+  @Override
+  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+      throws IOException {
+    return getInsertValue(schema);
+  }
+
+  @Override
+  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    return record.map(r -> HoodieAvroUtils.rewriteRecord(r, schema));
+  }
 }

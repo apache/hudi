@@ -17,7 +17,8 @@
 package com.uber.hoodie.exception;
 
 public class HoodieNotSupportedException extends HoodieException {
-    public HoodieNotSupportedException(String errorMsg) {
-        super(errorMsg);
-    }
+
+  public HoodieNotSupportedException(String errorMsg) {
+    super(errorMsg);
+  }
 }

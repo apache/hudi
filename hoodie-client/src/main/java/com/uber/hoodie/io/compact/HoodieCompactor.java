@@ -22,29 +22,28 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.spark.api.java.JavaSparkContext;
-
 import java.io.Serializable;
 import java.util.Date;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * A HoodieCompactor runs compaction on a hoodie table
  */
 public interface HoodieCompactor extends Serializable {
-    /**
-     * Compact the delta files with the data files
-     * @throws Exception
-     */
-    HoodieCompactionMetadata compact(JavaSparkContext jsc, final HoodieWriteConfig config,
-        HoodieTable hoodieTable) throws Exception;
+
+  /**
+   * Compact the delta files with the data files
+   */
+  HoodieCompactionMetadata compact(JavaSparkContext jsc, final HoodieWriteConfig config,
+      HoodieTable hoodieTable) throws Exception;
 
 
-    // Helper methods
-    default String startCompactionCommit(HoodieTable hoodieTable) {
-        String commitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
-        HoodieActiveTimeline activeTimeline = hoodieTable.getActiveTimeline();
-        activeTimeline
-            .createInflight(new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, commitTime));
-        return commitTime;
-    }
+  // Helper methods
+  default String startCompactionCommit(HoodieTable hoodieTable) {
+    String commitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+    HoodieActiveTimeline activeTimeline = hoodieTable.getActiveTimeline();
+    activeTimeline
+        .createInflight(new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, commitTime));
+    return commitTime;
+  }
 }

@@ -29,31 +29,36 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * File Format for Hoodie Log Files.
- * The File Format consists of blocks each seperated with a MAGIC sync marker.
- * A Block can either be a Data block, Command block or Delete Block.
- * Data Block - Contains log records serialized as Avro Binary Format
- * Command Block - Specific commands like RoLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block
- * Delete Block - List of keys to delete - tombstone for keys
+ * File Format for Hoodie Log Files. The File Format consists of blocks each seperated with a MAGIC
+ * sync marker. A Block can either be a Data block, Command block or Delete Block. Data Block -
+ * Contains log records serialized as Avro Binary Format Command Block - Specific commands like
+ * RoLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block Delete Block - List of keys
+ * to delete - tombstone for keys
  */
 public interface HoodieLogFormat {
+
   /**
-   * Magic 4 bytes we put at the start of every block in the log file. Sync marker.
-   * We could make this file specific (generate a random 4 byte magic and stick it in the file header), but this I think is suffice for now - PR
+   * Magic 4 bytes we put at the start of every block in the log file. Sync marker. We could make
+   * this file specific (generate a random 4 byte magic and stick it in the file header), but this I
+   * think is suffice for now - PR
    */
-  byte [] MAGIC = new byte [] {'H', 'U', 'D', 'I'};
+  byte[] MAGIC = new byte[]{'H', 'U', 'D', 'I'};
 
   /**
    * Writer interface to allow appending block to this file format
    */
   interface Writer extends Closeable {
-    /** @return the path to this {@link HoodieLogFormat} */
+
+    /**
+     * @return the path to this {@link HoodieLogFormat}
+     */
     HoodieLogFile getLogFile();
 
     /**
      * Append Block returns a new Writer if the log is rolled
      */
     Writer appendBlock(HoodieLogBlock block) throws IOException, InterruptedException;
+
     long getCurrentSize() throws IOException;
   }
 
@@ -61,7 +66,10 @@ public interface HoodieLogFormat {
    * Reader interface which is an Iterator of HoodieLogBlock
    */
   interface Reader extends Closeable, Iterator<HoodieLogBlock> {
-    /** @return the path to this {@link HoodieLogFormat} */
+
+    /**
+     * @return the path to this {@link HoodieLogFormat}
+     */
     HoodieLogFile getLogFile();
   }
 
@@ -70,6 +78,7 @@ public interface HoodieLogFormat {
    * Builder class to construct the default log format writer
    */
   class WriterBuilder {
+
     private final static Logger log = LogManager.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
@@ -187,7 +196,8 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean readMetadata)
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
+      boolean readMetadata)
       throws IOException {
     return new HoodieLogFormatReader(fs, logFile, readerSchema, readMetadata);
   }

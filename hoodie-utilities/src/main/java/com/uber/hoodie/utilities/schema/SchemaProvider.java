@@ -18,22 +18,22 @@
 
 package com.uber.hoodie.utilities.schema;
 
+import java.io.Serializable;
 import org.apache.avro.Schema;
 import org.apache.commons.configuration.PropertiesConfiguration;
-import java.io.Serializable;
 
 /**
  * Class to provide schema for reading data and also writing into a Hoodie table
  */
 public abstract class SchemaProvider implements Serializable {
 
-    protected PropertiesConfiguration config;
+  protected PropertiesConfiguration config;
 
-    protected SchemaProvider(PropertiesConfiguration config) {
-        this.config = config;
-    }
+  protected SchemaProvider(PropertiesConfiguration config) {
+    this.config = config;
+  }
 
-    public abstract Schema getSourceSchema();
+  public abstract Schema getSourceSchema();
 
-    public abstract Schema getTargetSchema();
+  public abstract Schema getTargetSchema();
 }
