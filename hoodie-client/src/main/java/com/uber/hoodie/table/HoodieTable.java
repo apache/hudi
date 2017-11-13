@@ -279,7 +279,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data
    * access
    */
-  public abstract Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc);
+  public abstract Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc,
+                                                             String commitCompactionTime);
 
   /**
    * Clean partition paths according to cleaning policy and returns the number of files cleaned.

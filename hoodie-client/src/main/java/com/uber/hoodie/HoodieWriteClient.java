@@ -436,14 +436,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             // Save was a success
             // Do a inline compaction if enabled
             if (config.isInlineCompaction()) {
-                Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc);
-                if (compactionMetadata.isPresent()) {
-                    logger.info("Compacted successfully on commit " + commitTime);
-                    metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
-                } else {
-                    logger.info("Compaction did not run for commit " + commitTime);
-                    metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
-                }
+                metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
+                forceCompact();
+            } else {
+                metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
             }
 
             // We cannot have unbounded commit files. Archive commits if we have to archive
@@ -820,6 +816,37 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         String commitActionType = table.getCommitActionType();
         activeTimeline.createInflight(
             new HoodieInstant(true, commitActionType, commitTime));
+    }
+
+    /**
+     * Performs a compaction operation on a dataset.
+     * WARNING: Compaction operation cannot be executed asynchronously. Please always use this serially
+     * before or after an insert/upsert action.
+     * @param compactionCommitTime
+     * @throws IOException
+     */
+    private void compact(String compactionCommitTime) throws IOException {
+        // Create a Hoodie table which encapsulated the commits and files visible
+        HoodieTable<T> table = HoodieTable
+                .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc, compactionCommitTime);
+        if (compactionMetadata.isPresent()) {
+            logger.info("Compacted successfully on commit " + compactionCommitTime);
+        } else {
+            logger.info("Compaction did not run for commit " + compactionCommitTime);
+        }
+    }
+
+    /**
+     * Performs a compaction operation on a dataset.
+     * WARNING: Compaction operation cannot be executed asynchronously. Please always use this serially
+     * before or after an insert/upsert action.
+     * @throws IOException
+     */
+    public String forceCompact() throws IOException {
+        String compactionCommitTime = HoodieActiveTimeline.createNewCommitTime();
+        compact(compactionCommitTime);
+        return compactionCommitTime;
     }
 
     public static SparkConf registerClasses(SparkConf conf) {

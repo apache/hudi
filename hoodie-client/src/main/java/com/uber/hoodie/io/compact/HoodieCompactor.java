@@ -24,6 +24,8 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.Optional;
+
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
@@ -35,7 +37,7 @@ public interface HoodieCompactor extends Serializable {
    * Compact the delta files with the data files
    */
   HoodieCompactionMetadata compact(JavaSparkContext jsc, final HoodieWriteConfig config,
-      HoodieTable hoodieTable) throws Exception;
+      HoodieTable hoodieTable, String compactionCommitTime) throws Exception;
 
 
   // Helper methods

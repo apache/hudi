@@ -486,7 +486,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc) {
+  public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc, String commitCompactionTime) {
     logger.info("Nothing to compact in COW storage format");
     return Optional.empty();
   }
