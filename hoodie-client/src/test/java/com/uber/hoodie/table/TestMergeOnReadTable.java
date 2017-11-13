@@ -19,11 +19,6 @@
 package com.uber.hoodie.table;
 
 
-import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieClientTestUtils;
@@ -39,6 +34,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
@@ -49,14 +45,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -72,6 +60,20 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class TestMergeOnReadTable {
 
@@ -218,7 +220,7 @@ public class TestMergeOnReadTable {
     HoodieCompactor compactor = new HoodieRealtimeTableCompactor();
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(true));
 
-    compactor.compact(jsc, getConfig(true), table);
+    compactor.compact(jsc, getConfig(true), table, HoodieActiveTimeline.createNewCommitTime());
 
     allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());
     roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(),
@@ -517,7 +519,7 @@ public class TestMergeOnReadTable {
     metaClient = new HoodieTableMetaClient(fs, cfg.getBasePath());
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(true));
 
-    compactor.compact(jsc, getConfig(true), table);
+    compactor.compact(jsc, getConfig(true), table, HoodieActiveTimeline.createNewCommitTime());
 
     allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     metaClient = new HoodieTableMetaClient(fs, cfg.getBasePath());

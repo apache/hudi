@@ -64,7 +64,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
   @Override
   public HoodieCompactionMetadata compact(JavaSparkContext jsc, HoodieWriteConfig config,
-      HoodieTable hoodieTable) throws IOException {
+      HoodieTable hoodieTable, String compactionCommitTime) throws IOException {
     Preconditions.checkArgument(
         hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "HoodieRealtimeTableCompactor can only compact table of type "
@@ -74,8 +74,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // TODO - rollback any compactions in flight
 
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    String compactionCommit = startCompactionCommit(hoodieTable);
-    log.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommit);
+    log.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommitTime);
     List<String> partitionPaths =
         FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
             config.shouldAssumeDatePartitioning());
@@ -101,7 +100,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     log.info("After filtering, Compacting " + operations + " files");
     List<CompactionWriteStat> updateStatusMap =
         jsc.parallelize(operations, operations.size())
-            .map(s -> executeCompaction(metaClient, config, s, compactionCommit))
+            .map(s -> executeCompaction(metaClient, config, s, compactionCommitTime))
             .flatMap(new FlatMapFunction<List<CompactionWriteStat>, CompactionWriteStat>() {
               @Override
               public Iterator<CompactionWriteStat> call(
@@ -120,10 +119,10 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
     //noinspection ConstantConditions
     if (isCompactionSucceeded(metadata)) {
-      log.info("Compaction succeeded " + compactionCommit);
-      commitCompaction(compactionCommit, metaClient, metadata);
+      log.info("Compaction succeeded " + compactionCommitTime);
+      commitCompaction(compactionCommitTime, metaClient, metadata);
     } else {
-      log.info("Compaction failed " + compactionCommit);
+      log.info("Compaction failed " + compactionCommitTime);
     }
     return metadata;
   }

@@ -39,6 +39,13 @@ import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.io.HoodieAppendHandle;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
@@ -49,12 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 
 
 /**
@@ -92,7 +93,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc) {
+  public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc, String compactionCommitTime) {
     logger.info("Checking if compaction needs to be run on " + config.getBasePath());
     Optional<HoodieInstant> lastCompaction = getActiveTimeline().getCompactionTimeline()
         .filterCompletedInstants().lastInstant();
@@ -113,7 +114,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     logger.info("Compacting merge on read table " + config.getBasePath());
     HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
     try {
-      return Optional.of(compactor.compact(jsc, config, this));
+      return Optional.of(compactor.compact(jsc, config, this, compactionCommitTime));
     } catch (IOException e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
