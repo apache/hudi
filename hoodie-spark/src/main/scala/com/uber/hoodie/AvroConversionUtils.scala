@@ -115,12 +115,12 @@ object AvroConversionUtils {
 
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
-                                    recordNamespace: String) : Schema = {
+                                    recordNamespace: String): Schema = {
     val builder = SchemaBuilder.record(structName).namespace(recordNamespace)
     SchemaConverters.convertStructToAvro(structType, builder, recordNamespace)
   }
 
-  def convertAvroSchemaToStructType(avroSchema: Schema) : StructType = {
+  def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType];
   }
 }

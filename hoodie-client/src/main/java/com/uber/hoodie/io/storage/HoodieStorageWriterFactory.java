@@ -16,42 +16,42 @@
 
 package com.uber.hoodie.io.storage;
 
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
+import java.io.IOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
-import java.io.IOException;
-
 public class HoodieStorageWriterFactory {
-    public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
-            String commitTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema)
-        throws IOException {
-        //TODO - based on the metadata choose the implementation of HoodieStorageWriter
-        // Currently only parquet is supported
-        return newParquetStorageWriter(commitTime, path, config, schema);
-    }
 
-    private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
-            String commitTime, Path path, HoodieWriteConfig config, Schema schema) throws IOException {
-        BloomFilter filter =
-            new BloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP());
-        HoodieAvroWriteSupport writeSupport =
-            new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
+  public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
+      String commitTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config,
+      Schema schema)
+      throws IOException {
+    //TODO - based on the metadata choose the implementation of HoodieStorageWriter
+    // Currently only parquet is supported
+    return newParquetStorageWriter(commitTime, path, config, schema);
+  }
 
-        HoodieParquetConfig parquetConfig =
-            new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
-                config.getParquetBlockSize(), config.getParquetPageSize(),
-                config.getParquetMaxFileSize(), FSUtils.getFs().getConf());
+  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
+      String commitTime, Path path, HoodieWriteConfig config, Schema schema) throws IOException {
+    BloomFilter filter =
+        new BloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP());
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
 
-        return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
-    }
+    HoodieParquetConfig parquetConfig =
+        new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
+            config.getParquetBlockSize(), config.getParquetPageSize(),
+            config.getParquetMaxFileSize(), FSUtils.getFs().getConf());
+
+    return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
+  }
 }

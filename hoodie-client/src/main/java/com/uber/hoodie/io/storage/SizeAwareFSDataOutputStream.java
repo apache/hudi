@@ -16,44 +16,47 @@
 
 package com.uber.hoodie.io.storage;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
-
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.hadoop.fs.FSDataOutputStream;
 
 /**
- * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes.
- * This gives a cheap way to check on the underlying file size.
+ * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This
+ * gives a cheap way to check on the underlying file size.
  */
 public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
-    // A callback to call when the output stream is closed.
-    private final Runnable closeCallback;
-    // Keep track of the bytes written
-    private final AtomicLong bytesWritten = new AtomicLong(0L);
 
-    public SizeAwareFSDataOutputStream(FSDataOutputStream out, Runnable closeCallback)
-        throws IOException {
-        super(out);
-        this.closeCallback = closeCallback;
-    }
+  // A callback to call when the output stream is closed.
+  private final Runnable closeCallback;
+  // Keep track of the bytes written
+  private final AtomicLong bytesWritten = new AtomicLong(0L);
 
-    @Override public synchronized void write(byte[] b, int off, int len) throws IOException {
-        bytesWritten.addAndGet(len);
-        super.write(b, off, len);
-    }
+  public SizeAwareFSDataOutputStream(FSDataOutputStream out, Runnable closeCallback)
+      throws IOException {
+    super(out);
+    this.closeCallback = closeCallback;
+  }
 
-    @Override public void write(byte[] b) throws IOException {
-        bytesWritten.addAndGet(b.length);
-        super.write(b);
-    }
+  @Override
+  public synchronized void write(byte[] b, int off, int len) throws IOException {
+    bytesWritten.addAndGet(len);
+    super.write(b, off, len);
+  }
 
-    @Override public void close() throws IOException {
-        super.close();
-        closeCallback.run();
-    }
+  @Override
+  public void write(byte[] b) throws IOException {
+    bytesWritten.addAndGet(b.length);
+    super.write(b);
+  }
 
-    public long getBytesWritten() {
-        return bytesWritten.get();
-    }
+  @Override
+  public void close() throws IOException {
+    super.close();
+    closeCallback.run();
+  }
+
+  public long getBytesWritten() {
+    return bytesWritten.get();
+  }
 
 }

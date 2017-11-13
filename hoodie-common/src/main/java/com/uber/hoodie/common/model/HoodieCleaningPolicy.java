@@ -17,6 +17,6 @@
 package com.uber.hoodie.common.model;
 
 public enum HoodieCleaningPolicy {
-    KEEP_LATEST_FILE_VERSIONS,
-    KEEP_LATEST_COMMITS
+  KEEP_LATEST_FILE_VERSIONS,
+  KEEP_LATEST_COMMITS
 }

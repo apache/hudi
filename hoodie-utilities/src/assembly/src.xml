@@ -15,8 +15,8 @@
   -->
 
 <assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3"
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3 http://maven.apache.org/xsd/assembly-1.1.3.xsd">
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3 http://maven.apache.org/xsd/assembly-1.1.3.xsd">
   <id>bin</id>
   <formats>
     <format>jar</format>
@@ -40,9 +40,9 @@
       </excludes>
       <unpackOptions>
         <!--<excludes>-->
-          <!--<exclude>-->
-            <!--**/slf4j/**-->
-          <!--</exclude>-->
+        <!--<exclude>-->
+        <!--**/slf4j/**-->
+        <!--</exclude>-->
         <!--</excludes>-->
       </unpackOptions>
     </dependencySet>

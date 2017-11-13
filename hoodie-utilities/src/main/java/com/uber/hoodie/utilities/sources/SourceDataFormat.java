@@ -22,8 +22,8 @@ package com.uber.hoodie.utilities.sources;
  * Format of the data within source.
  */
 public enum SourceDataFormat {
-    AVRO, // No conversion needed explicitly to avro
-    JSON, // we will try to convert to avro
-    ROW, // Will be added later, so we can plug/play with spark sources.
-    CUSTOM // the source is responsible for conversion to avro.
+  AVRO, // No conversion needed explicitly to avro
+  JSON, // we will try to convert to avro
+  ROW, // Will be added later, so we can plug/play with spark sources.
+  CUSTOM // the source is responsible for conversion to avro.
 }

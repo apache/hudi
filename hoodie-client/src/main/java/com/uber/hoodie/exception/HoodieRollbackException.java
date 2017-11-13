@@ -18,11 +18,11 @@ package com.uber.hoodie.exception;
 
 public class HoodieRollbackException extends HoodieException {
 
-    public HoodieRollbackException(String msg, Throwable e) {
-        super(msg, e);
-    }
+  public HoodieRollbackException(String msg, Throwable e) {
+    super(msg, e);
+  }
 
-    public HoodieRollbackException(String msg) {
-        super(msg);
-    }
+  public HoodieRollbackException(String msg) {
+    super(msg);
+  }
 }

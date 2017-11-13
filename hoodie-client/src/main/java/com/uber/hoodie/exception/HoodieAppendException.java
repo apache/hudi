@@ -17,16 +17,16 @@
 package com.uber.hoodie.exception;
 
 /**
- * <p>
- * Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a delta commit
- * </p>
+ * <p> Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a delta
+ * commit </p>
  */
 public class HoodieAppendException extends HoodieException {
-    public HoodieAppendException(String msg, Throwable e) {
-        super(msg, e);
-    }
 
-    public HoodieAppendException(String msg) {
-        super(msg);
-    }
+  public HoodieAppendException(String msg, Throwable e) {
+    super(msg, e);
+  }
+
+  public HoodieAppendException(String msg) {
+    super(msg);
+  }
 }

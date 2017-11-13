@@ -20,6 +20,7 @@ package com.uber.hoodie
 import org.apache.spark.sql.{DataFrame, DataFrameReader, DataFrameWriter}
 
 package object hoodie {
+
   /**
     * Adds a method, `hoodie`, to DataFrameWriter
     */
@@ -33,4 +34,5 @@ package object hoodie {
   implicit class AvroDataFrameReader(reader: DataFrameReader) {
     def avro: String => DataFrame = reader.format("com.uber.hoodie").load
   }
+
 }

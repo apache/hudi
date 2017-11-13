@@ -32,7 +32,8 @@ public class HoodieCommandBlock extends HoodieLogBlock {
 
   public enum HoodieCommandBlockTypeEnum {ROLLBACK_PREVIOUS_BLOCK}
 
-  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type, Map<LogMetadataType, String> metadata) {
+  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type,
+      Map<LogMetadataType, String> metadata) {
     super(metadata);
     this.type = type;
   }
@@ -46,7 +47,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
-    if(super.getLogMetadata() != null) {
+    if (super.getLogMetadata() != null) {
       output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
     }
     output.writeInt(type.ordinal());
@@ -66,7 +67,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
     Map<LogMetadataType, String> metadata = null;
-    if(readMetadata) {
+    if (readMetadata) {
       metadata = HoodieLogBlock.getLogMetadata(dis);
     }
     int ordinal = dis.readInt();

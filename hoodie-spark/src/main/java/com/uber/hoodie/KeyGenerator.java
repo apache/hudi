@@ -19,11 +19,9 @@
 package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieKey;
-
+import java.io.Serializable;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.configuration.PropertiesConfiguration;
-
-import java.io.Serializable;
 
 /**
  * Abstract class to extend for plugging in extraction of {@link com.uber.hoodie.common.model.HoodieKey}
@@ -31,17 +29,14 @@ import java.io.Serializable;
  */
 public abstract class KeyGenerator implements Serializable {
 
-    protected transient PropertiesConfiguration config;
+  protected transient PropertiesConfiguration config;
 
-    protected KeyGenerator(PropertiesConfiguration config) {
-        this.config = config;
-    }
+  protected KeyGenerator(PropertiesConfiguration config) {
+    this.config = config;
+  }
 
-    /**
-     * Generate a Hoodie Key out of provided generic record.
-     *
-     * @param record
-     * @return
-     */
-    public abstract HoodieKey getKey(GenericRecord record);
+  /**
+   * Generate a Hoodie Key out of provided generic record.
+   */
+  public abstract HoodieKey getKey(GenericRecord record);
 }

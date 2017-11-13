@@ -25,7 +25,7 @@ import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
  */
 public class HoodieParquetSerde extends ParquetHiveSerDe {
 
-    public HoodieParquetSerde() {
-        super();
-    }
+  public HoodieParquetSerde() {
+    super();
+  }
 }

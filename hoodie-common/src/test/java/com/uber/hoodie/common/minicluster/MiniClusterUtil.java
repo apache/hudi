@@ -16,38 +16,38 @@
 
 package com.uber.hoodie.common.minicluster;
 
+import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.zookeeper.server.ZooKeeperServer;
 
-import java.io.IOException;
-
 public class MiniClusterUtil {
-    private static MiniDFSCluster dfsCluster;
-    private static ZooKeeperServer zkServer;
-    public static Configuration configuration;
-    public static FileSystem fileSystem;
 
-    public static void setUp() throws IOException, InterruptedException {
-        if (dfsCluster == null) {
-            HdfsTestService service = new HdfsTestService();
-            dfsCluster = service.start(true);
-            configuration = service.getHadoopConf();
-        }
-        if (zkServer == null) {
-            ZookeeperTestService zkService = new ZookeeperTestService(configuration);
-            zkServer = zkService.start();
-        }
-        fileSystem = FileSystem.get(configuration);
-    }
+  private static MiniDFSCluster dfsCluster;
+  private static ZooKeeperServer zkServer;
+  public static Configuration configuration;
+  public static FileSystem fileSystem;
 
-    public static void shutdown() {
-        if (dfsCluster != null) {
-            dfsCluster.shutdown();
-        }
-        if (zkServer != null) {
-            zkServer.shutdown();
-        }
+  public static void setUp() throws IOException, InterruptedException {
+    if (dfsCluster == null) {
+      HdfsTestService service = new HdfsTestService();
+      dfsCluster = service.start(true);
+      configuration = service.getHadoopConf();
     }
+    if (zkServer == null) {
+      ZookeeperTestService zkService = new ZookeeperTestService(configuration);
+      zkServer = zkService.start();
+    }
+    fileSystem = FileSystem.get(configuration);
+  }
+
+  public static void shutdown() {
+    if (dfsCluster != null) {
+      dfsCluster.shutdown();
+    }
+    if (zkServer != null) {
+      zkServer.shutdown();
+    }
+  }
 }

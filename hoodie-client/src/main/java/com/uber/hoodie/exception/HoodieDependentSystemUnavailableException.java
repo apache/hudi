@@ -18,18 +18,17 @@ package com.uber.hoodie.exception;
 
 
 /**
- * <p>
- * Exception thrown when dependent system is not available
- * </p>
+ * <p> Exception thrown when dependent system is not available </p>
  */
 public class HoodieDependentSystemUnavailableException extends HoodieException {
-    public static final String HBASE = "HBASE";
 
-    public HoodieDependentSystemUnavailableException(String system, String connectURL) {
-        super(getLogMessage(system, connectURL));
-    }
+  public static final String HBASE = "HBASE";
 
-    private static String getLogMessage(String system, String connectURL) {
-        return "System " + system + " unavailable. Tried to connect to " + connectURL;
-    }
+  public HoodieDependentSystemUnavailableException(String system, String connectURL) {
+    super(getLogMessage(system, connectURL));
+  }
+
+  private static String getLogMessage(String system, String connectURL) {
+    return "System " + system + " unavailable. Tried to connect to " + connectURL;
+  }
 }

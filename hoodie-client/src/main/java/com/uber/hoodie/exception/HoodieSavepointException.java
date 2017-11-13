@@ -18,11 +18,11 @@ package com.uber.hoodie.exception;
 
 public class HoodieSavepointException extends HoodieException {
 
-    public HoodieSavepointException(String msg, Throwable e) {
-        super(msg, e);
-    }
+  public HoodieSavepointException(String msg, Throwable e) {
+    super(msg, e);
+  }
 
-    public HoodieSavepointException(String msg) {
-        super(msg);
-    }
+  public HoodieSavepointException(String msg) {
+    super(msg);
+  }
 }

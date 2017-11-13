@@ -17,22 +17,23 @@
 package com.uber.hoodie.hadoop;
 
 
-import org.junit.Test;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
+
 import java.lang.annotation.Annotation;
+import org.junit.Test;
 
 public class AnnotationTest {
 
-    @Test
-    public void testAnnotation() {
-        assertTrue(HoodieInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
-        Annotation[] annotations = HoodieInputFormat.class.getAnnotations();
-        boolean found = false;
-        for (Annotation annotation : annotations) {
-            if ("UseFileSplitsFromInputFormat".equals(annotation.annotationType().getSimpleName())){
-                found = true;
-            }
-        }
-        assertTrue(found);
+  @Test
+  public void testAnnotation() {
+    assertTrue(HoodieInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
+    Annotation[] annotations = HoodieInputFormat.class.getAnnotations();
+    boolean found = false;
+    for (Annotation annotation : annotations) {
+      if ("UseFileSplitsFromInputFormat".equals(annotation.annotationType().getSimpleName())) {
+        found = true;
+      }
     }
+    assertTrue(found);
+  }
 }

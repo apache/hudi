@@ -25,9 +25,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * UnBoundedCompactionStrategy will not change ordering or filter any compaction.
- * It is a pass-through and will compact all the base files which has a log file.
- * This usually means no-intelligence on compaction.
+ * UnBoundedCompactionStrategy will not change ordering or filter any compaction. It is a
+ * pass-through and will compact all the base files which has a log file. This usually means
+ * no-intelligence on compaction.
  *
  * @see CompactionStrategy
  */

@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.cli;
 
-import com.uber.hoodie.common.table.HoodieTableConfig;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.shell.plugin.support.DefaultPromptProvider;
@@ -26,27 +25,27 @@ import org.springframework.stereotype.Component;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class HoodiePrompt extends DefaultPromptProvider {
 
-    @Override
-    public String getPrompt() {
-        if (HoodieCLI.tableMetadata != null) {
-            String tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
-            switch (HoodieCLI.state) {
-                case INIT:
-                    return "hoodie->";
-                case DATASET:
-                    return "hoodie:" + tableName + "->";
-                case SYNC:
-                    return "hoodie:" + tableName + " <==> "
-                        + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
-            }
-            return "hoodie:" + tableName + "->";
-        }
-        return "hoodie->";
+  @Override
+  public String getPrompt() {
+    if (HoodieCLI.tableMetadata != null) {
+      String tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
+      switch (HoodieCLI.state) {
+        case INIT:
+          return "hoodie->";
+        case DATASET:
+          return "hoodie:" + tableName + "->";
+        case SYNC:
+          return "hoodie:" + tableName + " <==> "
+              + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
+      }
+      return "hoodie:" + tableName + "->";
     }
+    return "hoodie->";
+  }
 
-    @Override
-    public String getProviderName() {
-        return "Hoodie provider";
-    }
+  @Override
+  public String getProviderName() {
+    return "Hoodie provider";
+  }
 
 }

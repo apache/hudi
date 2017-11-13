@@ -16,105 +16,103 @@
 
 package com.uber.hoodie.func;
 
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import static org.junit.Assert.fail;
+
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieTestUtils;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
-
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import static org.junit.Assert.fail;
-
 public class TestUpdateMapFunction {
-    private String basePath = null;
 
-    @Before
-    public void init() throws Exception {
-        // Create a temp folder as the base path
-        TemporaryFolder folder = new TemporaryFolder();
-        folder.create();
-        this.basePath = folder.getRoot().getAbsolutePath();
-        HoodieTestUtils.init(basePath);
+  private String basePath = null;
+
+  @Before
+  public void init() throws Exception {
+    // Create a temp folder as the base path
+    TemporaryFolder folder = new TemporaryFolder();
+    folder.create();
+    this.basePath = folder.getRoot().getAbsolutePath();
+    HoodieTestUtils.init(basePath);
+  }
+
+  @Test
+  public void testSchemaEvolutionOnUpdate() throws Exception {
+    // Create a bunch of records with a old version of schema
+    HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+
+    String recordStr1 =
+        "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 =
+        "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 =
+        "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    List<HoodieRecord> records = new ArrayList<>();
+    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+    records.add(
+        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
+            rowChange1));
+    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+    records.add(
+        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()),
+            rowChange2));
+    TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+    records.add(
+        new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
+            rowChange3));
+    Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
+    Path commitFile =
+        new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
+    FSUtils.getFs().create(commitFile);
+
+    // Now try an update with an evolved schema
+    // Evolved schema does not have guarantee on preserving the original field ordering
+    config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
+    metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    String fileId = insertResult.next().get(0).getFileId();
+    System.out.println(fileId);
+
+    table = new HoodieCopyOnWriteTable(config, metadata);
+    // New content with values for the newly added field
+    recordStr1 =
+        "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
+    records = new ArrayList<>();
+    rowChange1 = new TestRawTripPayload(recordStr1);
+    HoodieRecord record1 =
+        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
+            rowChange1);
+    record1.setCurrentLocation(new HoodieRecordLocation("100", fileId));
+    records.add(record1);
+
+    try {
+      table.handleUpdate("101", fileId, records.iterator());
+    } catch (ClassCastException e) {
+      fail(
+          "UpdateFunction could not read records written with exampleSchema.txt using the exampleEvolvedSchema.txt");
     }
+  }
 
-    @Test
-    public void testSchemaEvolutionOnUpdate() throws Exception {
-        // Create a bunch of records with a old version of schema
-        HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-        HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
-        HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
-
-        String recordStr1 =
-            "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-        String recordStr2 =
-            "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-        String recordStr3 =
-            "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-        List<HoodieRecord> records = new ArrayList<>();
-        TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-        records.add(
-            new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
-                rowChange1));
-        TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
-        records.add(
-            new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()),
-                rowChange2));
-        TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
-        records.add(
-            new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
-                rowChange3));
-        Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
-        Path commitFile =
-            new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
-        FSUtils.getFs().create(commitFile);
-
-        // Now try an update with an evolved schema
-        // Evolved schema does not have guarantee on preserving the original field ordering
-        config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-        metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
-        String fileId = insertResult.next().get(0).getFileId();
-        System.out.println(fileId);
-
-
-        table = new HoodieCopyOnWriteTable(config, metadata);
-        // New content with values for the newly added field
-        recordStr1 =
-            "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
-        records = new ArrayList<>();
-        rowChange1 = new TestRawTripPayload(recordStr1);
-        HoodieRecord record1 =
-            new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
-                rowChange1);
-        record1.setCurrentLocation(new HoodieRecordLocation("100", fileId));
-        records.add(record1);
-
-        try {
-            table.handleUpdate("101", fileId, records.iterator());
-        } catch (ClassCastException e) {
-            fail(
-                "UpdateFunction could not read records written with exampleSchema.txt using the exampleEvolvedSchema.txt");
-        }
-    }
-
-    private HoodieWriteConfig makeHoodieClientConfig(String schema) throws Exception {
-        // Prepare the AvroParquetIO
-        String schemaStr = IOUtils.toString(getClass().getResourceAsStream(schema), "UTF-8");
-        return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr).build();
-    }
+  private HoodieWriteConfig makeHoodieClientConfig(String schema) throws Exception {
+    // Prepare the AvroParquetIO
+    String schemaStr = IOUtils.toString(getClass().getResourceAsStream(schema), "UTF-8");
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr).build();
+  }
 
 }

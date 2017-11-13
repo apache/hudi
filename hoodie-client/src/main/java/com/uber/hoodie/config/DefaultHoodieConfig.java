@@ -17,33 +17,35 @@
 package com.uber.hoodie.config;
 
 import java.io.Serializable;
-import java.util.Map;
 import java.util.Properties;
 
 /**
  * Default Way to load Hoodie config through a java.util.Properties
  */
 public class DefaultHoodieConfig implements Serializable {
-    protected final Properties props;
-    public DefaultHoodieConfig(Properties props) {
-        this.props = props;
-    }
 
-    public Properties getProps() {
-        return props;
-    }
+  protected final Properties props;
 
-    public static void setDefaultOnCondition(Properties props, boolean condition, String propName,
-        String defaultValue) {
-        if (condition) {
-            props.setProperty(propName, defaultValue);
-        }
-    }
+  public DefaultHoodieConfig(Properties props) {
+    this.props = props;
+  }
 
-    public static void setDefaultOnCondition(Properties props, boolean condition, DefaultHoodieConfig config) {
-        if (condition) {
-            props.putAll(config.getProps());
-        }
+  public Properties getProps() {
+    return props;
+  }
+
+  public static void setDefaultOnCondition(Properties props, boolean condition, String propName,
+      String defaultValue) {
+    if (condition) {
+      props.setProperty(propName, defaultValue);
     }
+  }
+
+  public static void setDefaultOnCondition(Properties props, boolean condition,
+      DefaultHoodieConfig config) {
+    if (condition) {
+      props.putAll(config.getProps());
+    }
+  }
 
 }

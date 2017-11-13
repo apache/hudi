@@ -19,7 +19,6 @@ package com.uber.hoodie.common.table.string;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.function.Function;
@@ -27,18 +26,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class MockHoodieTimeline extends HoodieActiveTimeline {
-    public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights)
-        throws IOException {
-        super();
-        this.instants = Stream.concat(completed
-                .map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
-            inflights.map(
-                s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
-            .sorted(Comparator.comparing(new Function<HoodieInstant, String>() {
-                @Override
-                public String apply(HoodieInstant hoodieInstant) {
-                    return hoodieInstant.getFileName();
-                }
-            })).collect(Collectors.toList());
-    }
+
+  public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights)
+      throws IOException {
+    super();
+    this.instants = Stream.concat(completed
+            .map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
+        inflights.map(
+            s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
+        .sorted(Comparator.comparing(new Function<HoodieInstant, String>() {
+          @Override
+          public String apply(HoodieInstant hoodieInstant) {
+            return hoodieInstant.getFileName();
+          }
+        })).collect(Collectors.toList());
+  }
 }

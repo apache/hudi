@@ -20,11 +20,11 @@ import com.uber.hoodie.common.HoodieTestDataGenerator
 import com.uber.hoodie.common.util.FSUtils
 import com.uber.hoodie.config.HoodieWriteConfig
 import com.uber.hoodie.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql._
 import org.junit.Assert._
-import org.junit.{Before, Test}
 import org.junit.rules.TemporaryFolder
+import org.junit.{Before, Test}
 import org.scalatest.junit.AssertionsForJUnit
 
 import scala.collection.JavaConversions._
@@ -44,8 +44,8 @@ class DataSourceTest extends AssertionsForJUnit {
     DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
     HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
   )
-  var basePath : String = null
-  var fs : FileSystem = null
+  var basePath: String = null
+  var fs: FileSystem = null
 
   @Before def initialize() {
     spark = SparkSession.builder

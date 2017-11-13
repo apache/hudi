@@ -16,30 +16,30 @@
 
 package com.uber.hoodie.common;
 
+import java.io.IOException;
 import org.junit.Test;
-
-import java.io.*;
 
 public class
 
 TestBloomFilter {
-    @Test
-    public void testAddKey() {
-        BloomFilter filter = new BloomFilter(100, 0.0000001);
-        filter.add("key1");
-        assert (filter.mightContain("key1"));
-    }
 
-    @Test
-    public void testSerialize() throws IOException, ClassNotFoundException {
-        BloomFilter filter = new BloomFilter(1000, 0.0000001);
-        filter.add("key1");
-        filter.add("key2");
-        String filterStr = filter.serializeToString();
+  @Test
+  public void testAddKey() {
+    BloomFilter filter = new BloomFilter(100, 0.0000001);
+    filter.add("key1");
+    assert (filter.mightContain("key1"));
+  }
 
-        // Rebuild
-        BloomFilter newFilter = new BloomFilter(filterStr);
-        assert (newFilter.mightContain("key1"));
-        assert (newFilter.mightContain("key2"));
-    }
+  @Test
+  public void testSerialize() throws IOException, ClassNotFoundException {
+    BloomFilter filter = new BloomFilter(1000, 0.0000001);
+    filter.add("key1");
+    filter.add("key2");
+    String filterStr = filter.serializeToString();
+
+    // Rebuild
+    BloomFilter newFilter = new BloomFilter(filterStr);
+    assert (newFilter.mightContain("key1"));
+    assert (newFilter.mightContain("key2"));
+  }
 }

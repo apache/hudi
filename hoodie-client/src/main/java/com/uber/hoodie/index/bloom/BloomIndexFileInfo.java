@@ -19,7 +19,6 @@
 package com.uber.hoodie.index.bloom;
 
 import com.google.common.base.Objects;
-
 import java.io.Serializable;
 
 /**
@@ -27,73 +26,75 @@ import java.io.Serializable;
  */
 public class BloomIndexFileInfo implements Serializable {
 
-    private final String fileName;
+  private final String fileName;
 
-    private final String minRecordKey;
+  private final String minRecordKey;
 
-    private final String maxRecordKey;
+  private final String maxRecordKey;
 
-    public BloomIndexFileInfo(String fileName, String minRecordKey, String maxRecordKey) {
-        this.fileName = fileName;
-        this.minRecordKey = minRecordKey;
-        this.maxRecordKey = maxRecordKey;
+  public BloomIndexFileInfo(String fileName, String minRecordKey, String maxRecordKey) {
+    this.fileName = fileName;
+    this.minRecordKey = minRecordKey;
+    this.maxRecordKey = maxRecordKey;
+  }
+
+  public BloomIndexFileInfo(String fileName) {
+    this.fileName = fileName;
+    this.minRecordKey = null;
+    this.maxRecordKey = null;
+  }
+
+  public String getFileName() {
+    return fileName;
+  }
+
+  public String getMinRecordKey() {
+    return minRecordKey;
+  }
+
+  public String getMaxRecordKey() {
+    return maxRecordKey;
+  }
+
+  public boolean hasKeyRanges() {
+    return minRecordKey != null && maxRecordKey != null;
+  }
+
+  /**
+   * Does the given key fall within the range (inclusive)
+   */
+  public boolean isKeyInRange(String recordKey) {
+    return minRecordKey.compareTo(recordKey) <= 0 &&
+        maxRecordKey.compareTo(recordKey) >= 0;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
     }
 
-    public BloomIndexFileInfo(String fileName) {
-        this.fileName = fileName;
-        this.minRecordKey = null;
-        this.maxRecordKey = null;
-    }
+    BloomIndexFileInfo that = (BloomIndexFileInfo) o;
+    return Objects.equal(that.fileName, fileName) &&
+        Objects.equal(that.minRecordKey, minRecordKey) &&
+        Objects.equal(that.maxRecordKey, maxRecordKey);
 
-    public String getFileName() {
-        return fileName;
-    }
+  }
 
-    public String getMinRecordKey() {
-        return minRecordKey;
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(fileName, minRecordKey, maxRecordKey);
+  }
 
-    public String getMaxRecordKey() {
-        return maxRecordKey;
-    }
-
-    public boolean hasKeyRanges()  {
-        return minRecordKey != null && maxRecordKey != null;
-    }
-
-    /**
-     * Does the given key fall within the range (inclusive)
-     * @param recordKey
-     * @return
-     */
-    public boolean isKeyInRange(String recordKey) {
-        return minRecordKey.compareTo(recordKey) <= 0 &&
-                maxRecordKey.compareTo(recordKey) >= 0;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-        return Objects.equal(that.fileName, fileName) &&
-                Objects.equal(that.minRecordKey, minRecordKey) &&
-                Objects.equal(that.maxRecordKey, maxRecordKey);
-
-    }
-
-    @Override
-    public int hashCode() {
-       return Objects.hashCode(fileName, minRecordKey, maxRecordKey);
-    }
-
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
-        sb.append(" fileName=").append(fileName);
-        sb.append(" minRecordKey=").append(minRecordKey);
-        sb.append(" maxRecordKey=").append(maxRecordKey);
-        sb.append('}');
-        return sb.toString();
-    }
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
+    sb.append(" fileName=").append(fileName);
+    sb.append(" minRecordKey=").append(minRecordKey);
+    sb.append(" maxRecordKey=").append(maxRecordKey);
+    sb.append('}');
+    return sb.toString();
+  }
 }

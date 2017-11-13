@@ -17,6 +17,7 @@
 package com.uber.hoodie.exception;
 
 public class HoodieCompactionException extends HoodieException {
+
   public HoodieCompactionException(String msg) {
     super(msg);
   }

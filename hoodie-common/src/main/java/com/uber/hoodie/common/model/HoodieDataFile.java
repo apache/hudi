@@ -17,56 +17,54 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.FSUtils;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-
 import java.io.Serializable;
 import java.util.Comparator;
+import org.apache.hadoop.fs.FileStatus;
 
 public class HoodieDataFile implements Serializable {
-    private FileStatus fileStatus;
 
-    public HoodieDataFile(FileStatus fileStatus) {
-        this.fileStatus = fileStatus;
-    }
+  private FileStatus fileStatus;
 
-    public String getFileId() {
-        return FSUtils.getFileId(fileStatus.getPath().getName());
-    }
+  public HoodieDataFile(FileStatus fileStatus) {
+    this.fileStatus = fileStatus;
+  }
 
-    public String getCommitTime() {
-        return FSUtils.getCommitTime(fileStatus.getPath().getName());
-    }
+  public String getFileId() {
+    return FSUtils.getFileId(fileStatus.getPath().getName());
+  }
 
-    public String getPath() {
-        return fileStatus.getPath().toString();
-    }
+  public String getCommitTime() {
+    return FSUtils.getCommitTime(fileStatus.getPath().getName());
+  }
 
-    public String getFileName() {
-        return fileStatus.getPath().getName();
-    }
+  public String getPath() {
+    return fileStatus.getPath().toString();
+  }
 
-    public FileStatus getFileStatus() {
-        return fileStatus;
-    }
+  public String getFileName() {
+    return fileStatus.getPath().getName();
+  }
 
-    public static Comparator<HoodieDataFile> getCommitTimeComparator() {
-        return (o1, o2) -> {
-            // reverse the order
-            return o2.getCommitTime().compareTo(o1.getCommitTime());
-        };
-    }
+  public FileStatus getFileStatus() {
+    return fileStatus;
+  }
 
-    public long getFileSize() {
-        return fileStatus.getLen();
-    }
+  public static Comparator<HoodieDataFile> getCommitTimeComparator() {
+    return (o1, o2) -> {
+      // reverse the order
+      return o2.getCommitTime().compareTo(o1.getCommitTime());
+    };
+  }
 
-    @Override
-    public String toString() {
-        final StringBuilder sb = new StringBuilder("HoodieDataFile {");
-        sb.append("fileStatus=").append(fileStatus);
-        sb.append('}');
-        return sb.toString();
-    }
+  public long getFileSize() {
+    return fileStatus.getLen();
+  }
+
+  @Override
+  public String toString() {
+    final StringBuilder sb = new StringBuilder("HoodieDataFile {");
+    sb.append("fileStatus=").append(fileStatus);
+    sb.append('}');
+    return sb.toString();
+  }
 }

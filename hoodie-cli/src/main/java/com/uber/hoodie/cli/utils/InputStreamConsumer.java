@@ -23,34 +23,37 @@ import java.io.InputStreamReader;
 import java.util.logging.Logger;
 
 public class InputStreamConsumer extends Thread {
-    protected final static Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
-    private InputStream is;
-    public InputStreamConsumer(InputStream is) {
-        this.is = is;
-    }
 
-    @Override
-    public void run() {
-        try {
-            InputStreamReader isr = new InputStreamReader(is);
-            BufferedReader br = new BufferedReader(isr);
-            String line;
-            while ( (line = br.readLine()) != null)
-                LOG.info(line);
-        } catch (IOException ioe) {
-            LOG.severe(ioe.toString());
-            ioe.printStackTrace();
-        }
-    }
+  protected final static Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
+  private InputStream is;
 
-    public static void captureOutput(Process p) {
-        InputStreamConsumer stdout;
-        InputStreamConsumer errout;
-        errout = new InputStreamConsumer(p.getErrorStream());
-        stdout = new InputStreamConsumer(p.getInputStream());
-        errout.start();
-        stdout.start();
+  public InputStreamConsumer(InputStream is) {
+    this.is = is;
+  }
+
+  @Override
+  public void run() {
+    try {
+      InputStreamReader isr = new InputStreamReader(is);
+      BufferedReader br = new BufferedReader(isr);
+      String line;
+      while ((line = br.readLine()) != null) {
+        LOG.info(line);
+      }
+    } catch (IOException ioe) {
+      LOG.severe(ioe.toString());
+      ioe.printStackTrace();
     }
+  }
+
+  public static void captureOutput(Process p) {
+    InputStreamConsumer stdout;
+    InputStreamConsumer errout;
+    errout = new InputStreamConsumer(p.getErrorStream());
+    stdout = new InputStreamConsumer(p.getInputStream());
+    errout.start();
+    stdout.start();
+  }
 
 
 }

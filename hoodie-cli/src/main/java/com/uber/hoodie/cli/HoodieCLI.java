@@ -17,38 +17,38 @@
 package com.uber.hoodie.cli;
 
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
-import java.io.IOException;
-
 public class HoodieCLI {
-    public static Configuration conf;
-    public static FileSystem fs;
-    public static CLIState state = CLIState.INIT;
-    public static HoodieTableMetaClient tableMetadata;
-    public static HoodieTableMetaClient syncTableMetadata;
+
+  public static Configuration conf;
+  public static FileSystem fs;
+  public static CLIState state = CLIState.INIT;
+  public static HoodieTableMetaClient tableMetadata;
+  public static HoodieTableMetaClient syncTableMetadata;
 
 
-    public enum CLIState {
-        INIT, DATASET, SYNC
+  public enum CLIState {
+    INIT, DATASET, SYNC
+  }
+
+  public static boolean initConf() {
+    if (HoodieCLI.conf == null) {
+      HoodieCLI.conf = new Configuration();
+      return true;
     }
+    return false;
+  }
 
-    public static boolean initConf() {
-        if (HoodieCLI.conf == null) {
-            HoodieCLI.conf = new Configuration();
-            return true;
-        }
-        return false;
+  public static void initFS(boolean force) throws IOException {
+    if (fs == null || force) {
+      fs = FileSystem.get(conf);
     }
+  }
 
-    public static void initFS(boolean force) throws IOException {
-        if(fs == null || force) {
-            fs = FileSystem.get(conf);
-        }
-    }
-
-    public static void setTableMetadata(HoodieTableMetaClient tableMetadata) {
-        HoodieCLI.tableMetadata = tableMetadata;
-    }
+  public static void setTableMetadata(HoodieTableMetaClient tableMetadata) {
+    HoodieCLI.tableMetadata = tableMetadata;
+  }
 }

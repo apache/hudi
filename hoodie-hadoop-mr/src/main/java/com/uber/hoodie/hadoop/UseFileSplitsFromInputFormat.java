@@ -24,13 +24,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * When annotated on a InputFormat, informs the query engines,
- * that they should use the FileSplits provided by the input format
- * to execute the queries
+ * When annotated on a InputFormat, informs the query engines, that they should use the FileSplits
+ * provided by the input format to execute the queries
  */
 @Inherited
 @Documented
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface UseFileSplitsFromInputFormat {
+
 }

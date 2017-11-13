@@ -17,16 +17,15 @@
 package com.uber.hoodie.exception;
 
 /**
- * <p>
- * Exception thrown for HoodieIndex related errors.
- * </p>
+ * <p> Exception thrown for HoodieIndex related errors. </p>
  */
 public class HoodieIndexException extends HoodieException {
-    public HoodieIndexException(String msg) {
-        super(msg);
-    }
 
-    public HoodieIndexException(String msg, Throwable e) {
-        super(msg, e);
-    }
+  public HoodieIndexException(String msg) {
+    super(msg);
+  }
+
+  public HoodieIndexException(String msg, Throwable e) {
+    super(msg, e);
+  }
 }

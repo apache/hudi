@@ -21,11 +21,12 @@ package com.uber.hoodie.utilities.exception;
 import java.sql.SQLException;
 
 public class HoodieIncrementalPullSQLException extends HoodieIncrementalPullException {
-    public HoodieIncrementalPullSQLException(String msg, SQLException e) {
-        super(msg, e);
-    }
 
-    public HoodieIncrementalPullSQLException(String msg) {
-        super(msg);
-    }
+  public HoodieIncrementalPullSQLException(String msg, SQLException e) {
+    super(msg, e);
+  }
+
+  public HoodieIncrementalPullSQLException(String msg) {
+    super(msg);
+  }
 }

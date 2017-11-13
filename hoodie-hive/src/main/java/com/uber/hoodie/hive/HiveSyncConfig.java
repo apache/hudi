@@ -19,7 +19,6 @@
 package com.uber.hoodie.hive;
 
 import com.beust.jcommander.Parameter;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;

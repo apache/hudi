@@ -44,7 +44,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
   public byte[] getBytes() throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
-    if(super.getLogMetadata() != null) {
+    if (super.getLogMetadata() != null) {
       output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
     }
     output.write(corruptedBytes);
@@ -60,20 +60,21 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
     return corruptedBytes;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, int blockSize, boolean readMetadata) throws IOException {
+  public static HoodieLogBlock fromBytes(byte[] content, int blockSize, boolean readMetadata)
+      throws IOException {
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
     Map<LogMetadataType, String> metadata = null;
     int bytesRemaining = blockSize;
-    if(readMetadata) {
+    if (readMetadata) {
       try { //attempt to read metadata
         metadata = HoodieLogBlock.getLogMetadata(dis);
         bytesRemaining = blockSize - HoodieLogBlock.getLogMetadataBytes(metadata).length;
-      } catch(IOException e) {
+      } catch (IOException e) {
         // unable to read metadata, possibly corrupted
         metadata = null;
       }
     }
-    byte [] corruptedBytes = new byte[bytesRemaining];
+    byte[] corruptedBytes = new byte[bytesRemaining];
     dis.readFully(corruptedBytes);
     return new HoodieCorruptBlock(corruptedBytes, metadata);
   }

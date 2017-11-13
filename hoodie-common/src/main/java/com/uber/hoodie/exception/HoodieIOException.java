@@ -19,23 +19,22 @@ package com.uber.hoodie.exception;
 import java.io.IOException;
 
 /**
- * <p>
- * Exception thrown for dataset IO-related failures.
- * </p>
+ * <p> Exception thrown for dataset IO-related failures. </p>
  */
 public class HoodieIOException extends HoodieException {
-    private IOException ioException;
 
-    public HoodieIOException(String msg, IOException t) {
-        super(msg, t);
-        this.ioException = t;
-    }
+  private IOException ioException;
 
-    public HoodieIOException(String msg) {
-        super(msg);
-    }
+  public HoodieIOException(String msg, IOException t) {
+    super(msg, t);
+    this.ioException = t;
+  }
 
-    public IOException getIOException() {
-        return ioException;
-    }
+  public HoodieIOException(String msg) {
+    super(msg);
+  }
+
+  public IOException getIOException() {
+    return ioException;
+  }
 }

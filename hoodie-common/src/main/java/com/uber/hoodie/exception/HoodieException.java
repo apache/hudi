@@ -19,39 +19,34 @@ package com.uber.hoodie.exception;
 import java.io.Serializable;
 
 /**
- * <p>
- * Exception thrown for Hoodie failures. The root of
- * the exception hierarchy.
- * </p>
- * <p>
- * Hoodie Write/Read clients will throw this exception if
- * any of its operations fail. This is a runtime (unchecked) exception.
- * </p>
- *
+ * <p> Exception thrown for Hoodie failures. The root of the exception hierarchy. </p> <p> Hoodie
+ * Write/Read clients will throw this exception if any of its operations fail. This is a runtime
+ * (unchecked) exception. </p>
  */
 public class HoodieException extends RuntimeException implements Serializable {
-    public HoodieException() {
-        super();
-    }
 
-    public HoodieException(String message) {
-        super(message);
-    }
+  public HoodieException() {
+    super();
+  }
 
-    public HoodieException(String message, Throwable t) {
-        super(message, t);
-    }
+  public HoodieException(String message) {
+    super(message);
+  }
 
-    public HoodieException(Throwable t) {
-        super(t);
-    }
+  public HoodieException(String message, Throwable t) {
+    super(message, t);
+  }
 
-    protected static String format(String message, Object... args) {
-        String[] argStrings = new String[args.length];
-        for (int i = 0; i < args.length; i += 1) {
-            argStrings[i] = String.valueOf(args[i]);
-        }
-        return String.format(String.valueOf(message), (Object[]) argStrings);
+  public HoodieException(Throwable t) {
+    super(t);
+  }
+
+  protected static String format(String message, Object... args) {
+    String[] argStrings = new String[args.length];
+    for (int i = 0; i < args.length; i += 1) {
+      argStrings[i] = String.valueOf(args[i]);
     }
+    return String.format(String.valueOf(message), (Object[]) argStrings);
+  }
 
 }

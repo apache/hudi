@@ -17,32 +17,32 @@
 package com.uber.hoodie.hive.util;
 
 import com.google.common.collect.Maps;
-
 import java.util.Iterator;
 import java.util.Map;
 
 public class ColumnNameXLator {
-    private static Map<String, String> xformMap = Maps.newHashMap();
 
-    public static String translateNestedColumn(String colName) {
-        Map.Entry entry;
-        for (Iterator i$ = xformMap.entrySet().iterator(); i$.hasNext();
-             colName = colName.replaceAll((String) entry.getKey(), (String) entry.getValue())) {
-            entry = (Map.Entry) i$.next();
-        }
+  private static Map<String, String> xformMap = Maps.newHashMap();
 
-        return colName;
+  public static String translateNestedColumn(String colName) {
+    Map.Entry entry;
+    for (Iterator i$ = xformMap.entrySet().iterator(); i$.hasNext();
+        colName = colName.replaceAll((String) entry.getKey(), (String) entry.getValue())) {
+      entry = (Map.Entry) i$.next();
     }
 
-    public static String translateColumn(String colName) {
-        return colName;
-    }
+    return colName;
+  }
 
-    public static String translate(String colName, boolean nestedColumn) {
-        return !nestedColumn ? translateColumn(colName) : translateNestedColumn(colName);
-    }
+  public static String translateColumn(String colName) {
+    return colName;
+  }
 
-    static {
-        xformMap.put("\\$", "_dollar_");
-    }
+  public static String translate(String colName, boolean nestedColumn) {
+    return !nestedColumn ? translateColumn(colName) : translateNestedColumn(colName);
+  }
+
+  static {
+    xformMap.put("\\$", "_dollar_");
+  }
 }

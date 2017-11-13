@@ -25,21 +25,21 @@ import java.util.List;
  */
 public class IndexLookupResult {
 
-    private String fileName;
+  private String fileName;
 
 
-    private List<String> matchingRecordKeys;
+  private List<String> matchingRecordKeys;
 
-    public IndexLookupResult(String fileName, List<String> matchingRecordKeys) {
-        this.fileName = fileName;
-        this.matchingRecordKeys = matchingRecordKeys;
-    }
+  public IndexLookupResult(String fileName, List<String> matchingRecordKeys) {
+    this.fileName = fileName;
+    this.matchingRecordKeys = matchingRecordKeys;
+  }
 
-    public String getFileName() {
-        return fileName;
-    }
+  public String getFileName() {
+    return fileName;
+  }
 
-    public List<String> getMatchingRecordKeys() {
-        return matchingRecordKeys;
-    }
+  public List<String> getMatchingRecordKeys() {
+    return matchingRecordKeys;
+  }
 }

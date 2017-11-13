@@ -16,75 +16,77 @@
 
 package com.uber.hoodie.config;
 
-import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
+import javax.annotation.concurrent.Immutable;
 
 /**
  * Storage related config
  */
 @Immutable
 public class HoodieStorageConfig extends DefaultHoodieConfig {
-    public static final String PARQUET_FILE_MAX_BYTES = "hoodie.parquet.max.file.size";
-    public static final String DEFAULT_PARQUET_FILE_MAX_BYTES = String.valueOf(120 * 1024 * 1024);
-    public static final String PARQUET_BLOCK_SIZE_BYTES = "hoodie.parquet.block.size";
-    public static final String DEFAULT_PARQUET_BLOCK_SIZE_BYTES = DEFAULT_PARQUET_FILE_MAX_BYTES;
-    public static final String PARQUET_PAGE_SIZE_BYTES = "hoodie.parquet.page.size";
-    public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
 
-    private HoodieStorageConfig(Properties props) {
-        super(props);
+  public static final String PARQUET_FILE_MAX_BYTES = "hoodie.parquet.max.file.size";
+  public static final String DEFAULT_PARQUET_FILE_MAX_BYTES = String.valueOf(120 * 1024 * 1024);
+  public static final String PARQUET_BLOCK_SIZE_BYTES = "hoodie.parquet.block.size";
+  public static final String DEFAULT_PARQUET_BLOCK_SIZE_BYTES = DEFAULT_PARQUET_FILE_MAX_BYTES;
+  public static final String PARQUET_PAGE_SIZE_BYTES = "hoodie.parquet.page.size";
+  public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
+
+  private HoodieStorageConfig(Properties props) {
+    super(props);
+  }
+
+  public static HoodieStorageConfig.Builder newBuilder() {
+    return new Builder();
+  }
+
+  public static class Builder {
+
+    private final Properties props = new Properties();
+
+    public Builder fromFile(File propertiesFile) throws IOException {
+      FileReader reader = new FileReader(propertiesFile);
+      try {
+        this.props.load(reader);
+        return this;
+      } finally {
+        reader.close();
+      }
     }
 
-    public static HoodieStorageConfig.Builder newBuilder() {
-        return new Builder();
+    public Builder fromProperties(Properties props) {
+      this.props.putAll(props);
+      return this;
     }
 
-    public static class Builder {
-        private final Properties props = new Properties();
-
-        public Builder fromFile(File propertiesFile) throws IOException {
-            FileReader reader = new FileReader(propertiesFile);
-            try {
-                this.props.load(reader);
-                return this;
-            } finally {
-                reader.close();
-            }
-        }
-
-        public Builder fromProperties(Properties props) {
-            this.props.putAll(props);
-            return this;
-        }
-
-        public Builder limitFileSize(int maxFileSize) {
-            props.setProperty(PARQUET_FILE_MAX_BYTES, String.valueOf(maxFileSize));
-            return this;
-        }
-
-        public Builder parquetBlockSize(int blockSize) {
-            props.setProperty(PARQUET_BLOCK_SIZE_BYTES, String.valueOf(blockSize));
-            return this;
-        }
-
-        public Builder parquetPageSize(int pageSize) {
-            props.setProperty(PARQUET_PAGE_SIZE_BYTES, String.valueOf(pageSize));
-            return this;
-        }
-
-        public HoodieStorageConfig build() {
-            HoodieStorageConfig config = new HoodieStorageConfig(props);
-            setDefaultOnCondition(props, !props.containsKey(PARQUET_FILE_MAX_BYTES),
-                PARQUET_FILE_MAX_BYTES, DEFAULT_PARQUET_FILE_MAX_BYTES);
-            setDefaultOnCondition(props, !props.containsKey(PARQUET_BLOCK_SIZE_BYTES),
-                PARQUET_BLOCK_SIZE_BYTES, DEFAULT_PARQUET_BLOCK_SIZE_BYTES);
-            setDefaultOnCondition(props, !props.containsKey(PARQUET_PAGE_SIZE_BYTES),
-                PARQUET_PAGE_SIZE_BYTES, DEFAULT_PARQUET_PAGE_SIZE_BYTES);
-            return config;
-        }
+    public Builder limitFileSize(int maxFileSize) {
+      props.setProperty(PARQUET_FILE_MAX_BYTES, String.valueOf(maxFileSize));
+      return this;
     }
+
+    public Builder parquetBlockSize(int blockSize) {
+      props.setProperty(PARQUET_BLOCK_SIZE_BYTES, String.valueOf(blockSize));
+      return this;
+    }
+
+    public Builder parquetPageSize(int pageSize) {
+      props.setProperty(PARQUET_PAGE_SIZE_BYTES, String.valueOf(pageSize));
+      return this;
+    }
+
+    public HoodieStorageConfig build() {
+      HoodieStorageConfig config = new HoodieStorageConfig(props);
+      setDefaultOnCondition(props, !props.containsKey(PARQUET_FILE_MAX_BYTES),
+          PARQUET_FILE_MAX_BYTES, DEFAULT_PARQUET_FILE_MAX_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(PARQUET_BLOCK_SIZE_BYTES),
+          PARQUET_BLOCK_SIZE_BYTES, DEFAULT_PARQUET_BLOCK_SIZE_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(PARQUET_PAGE_SIZE_BYTES),
+          PARQUET_PAGE_SIZE_BYTES, DEFAULT_PARQUET_PAGE_SIZE_BYTES);
+      return config;
+    }
+  }
 
 }

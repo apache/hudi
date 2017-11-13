@@ -18,7 +18,6 @@ package com.uber.hoodie.common.table.log.block;
 
 import com.google.common.collect.Maps;
 import com.uber.hoodie.exception.HoodieException;
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -34,6 +33,7 @@ public abstract class HoodieLogBlock {
   public byte[] getBytes() throws IOException {
     throw new HoodieException("No implementation was provided");
   }
+
   public HoodieLogBlockType getBlockType() {
     throw new HoodieException("No implementation was provided");
   }
@@ -42,8 +42,8 @@ public abstract class HoodieLogBlock {
   private Map<LogMetadataType, String> logMetadata;
 
   /**
-   * Type of the log block
-   * WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
+   * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at
+   * the end.
    */
   public enum HoodieLogBlockType {
     COMMAND_BLOCK,
@@ -53,8 +53,8 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Metadata abstraction for a HoodieLogBlock
-   * WARNING : This enum is serialized as the ordinal. Only add new enums at the end.
+   * Metadata abstraction for a HoodieLogBlock WARNING : This enum is serialized as the ordinal.
+   * Only add new enums at the end.
    */
   public enum LogMetadataType {
     INSTANT_TIME,
@@ -70,21 +70,17 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert log metadata to bytes
-   * 1. Write size of metadata
-   * 2. Write enum ordinal
-   * 3. Write actual bytes
-   * @param metadata
-   * @return
-   * @throws IOException
+   * Convert log metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual
+   * bytes
    */
-  public static byte [] getLogMetadataBytes(Map<LogMetadataType, String> metadata) throws IOException {
+  public static byte[] getLogMetadataBytes(Map<LogMetadataType, String> metadata)
+      throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
     output.writeInt(metadata.size());
-    for(Map.Entry<LogMetadataType, String> entry : metadata.entrySet()) {
+    for (Map.Entry<LogMetadataType, String> entry : metadata.entrySet()) {
       output.writeInt(entry.getKey().ordinal());
-      byte [] bytes = entry.getValue().getBytes();
+      byte[] bytes = entry.getValue().getBytes();
       output.writeInt(bytes.length);
       output.write(bytes);
     }
@@ -92,13 +88,10 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert bytes to LogMetadata, follow the same order as
-   * {@link HoodieLogBlock#getLogMetadataBytes}
-   * @param dis
-   * @return
-   * @throws IOException
+   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}
    */
-  public static Map<LogMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
+  public static Map<LogMetadataType, String> getLogMetadata(DataInputStream dis)
+      throws IOException {
 
     Map<LogMetadataType, String> metadata = Maps.newHashMap();
     // 1. Read the metadata written out
@@ -113,7 +106,7 @@ public abstract class HoodieLogBlock {
         metadataCount--;
       }
       return metadata;
-    } catch(EOFException eof) {
+    } catch (EOFException eof) {
       throw new IOException("Could not read metadata fields ", eof);
     }
   }

@@ -17,10 +17,13 @@
 package com.uber.hoodie.common.util;
 
 public class NumericUtils {
-    public static String humanReadableByteCount(double bytes) {
-        if (bytes < 1024) return String.format("%.1f B", bytes);
-        int exp = (int) (Math.log(bytes) / Math.log(1024));
-        String pre = "KMGTPE".charAt(exp-1) + "";
-        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
+
+  public static String humanReadableByteCount(double bytes) {
+    if (bytes < 1024) {
+      return String.format("%.1f B", bytes);
     }
+    int exp = (int) (Math.log(bytes) / Math.log(1024));
+    String pre = "KMGTPE".charAt(exp - 1) + "";
+    return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
+  }
 }

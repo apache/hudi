@@ -18,23 +18,23 @@ package com.uber.hoodie.hive;
 
 public class HoodieHiveSyncException extends RuntimeException {
 
-    public HoodieHiveSyncException() {
-        super();
-    }
+  public HoodieHiveSyncException() {
+    super();
+  }
 
-    public HoodieHiveSyncException(String message) {
-        super(message);
-    }
+  public HoodieHiveSyncException(String message) {
+    super(message);
+  }
 
-    public HoodieHiveSyncException(String message, Throwable t) {
-        super(message, t);
-    }
+  public HoodieHiveSyncException(String message, Throwable t) {
+    super(message, t);
+  }
 
-    public HoodieHiveSyncException(Throwable t) {
-        super(t);
-    }
+  public HoodieHiveSyncException(Throwable t) {
+    super(t);
+  }
 
-    protected static String format(String message, Object... args) {
-        return String.format(String.valueOf(message), (Object[]) args);
-    }
+  protected static String format(String message, Object... args) {
+    return String.format(String.valueOf(message), (Object[]) args);
+  }
 }

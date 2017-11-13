@@ -17,15 +17,16 @@
 package com.uber.hoodie.exception;
 
 public class SchemaCompatabilityException extends HoodieException {
-    public SchemaCompatabilityException(String message) {
-        super(message);
-    }
 
-    public SchemaCompatabilityException(String message, Throwable t) {
-        super(message, t);
-    }
+  public SchemaCompatabilityException(String message) {
+    super(message);
+  }
 
-    public SchemaCompatabilityException(Throwable t) {
-        super(t);
-    }
+  public SchemaCompatabilityException(String message, Throwable t) {
+    super(message, t);
+  }
+
+  public SchemaCompatabilityException(Throwable t) {
+    super(t);
+  }
 }

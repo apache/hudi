@@ -22,16 +22,17 @@ import java.io.Closeable;
  * Used for testing.
  */
 public class InMemoryMetricsReporter extends MetricsReporter {
-    @Override
-    public void start() {
-    }
 
-    @Override
-    public void report() {
-    }
+  @Override
+  public void start() {
+  }
 
-    @Override
-    public Closeable getReporter() {
-        return null;
-    }
+  @Override
+  public void report() {
+  }
+
+  @Override
+  public Closeable getReporter() {
+    return null;
+  }
 }

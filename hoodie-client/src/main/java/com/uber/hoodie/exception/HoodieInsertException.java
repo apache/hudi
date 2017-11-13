@@ -16,15 +16,13 @@
 
 package com.uber.hoodie.exception;
 
-import java.io.IOException;
-
 /**
- * <p>
- * Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a bulk insert
- * </p>
+ * <p> Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a bulk
+ * insert </p>
  */
 public class HoodieInsertException extends HoodieException {
-    public HoodieInsertException(String msg, Throwable e) {
-        super(msg, e);
-    }
+
+  public HoodieInsertException(String msg, Throwable e) {
+    super(msg, e);
+  }
 }

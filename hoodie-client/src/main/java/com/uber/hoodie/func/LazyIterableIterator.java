@@ -31,98 +31,99 @@ import java.util.Iterator;
  * responsible for calling inputIterator.next() and doing the processing in computeNext()
  */
 public abstract class LazyIterableIterator<I, O> implements Iterable<O>, Iterator<O> {
-    protected Iterator<I> inputItr = null;
-    private boolean consumed = false;
-    private boolean startCalled = false;
-    private boolean endCalled = false;
 
-    public LazyIterableIterator(Iterator<I> in) {
-        inputItr = in;
+  protected Iterator<I> inputItr = null;
+  private boolean consumed = false;
+  private boolean startCalled = false;
+  private boolean endCalled = false;
+
+  public LazyIterableIterator(Iterator<I> in) {
+    inputItr = in;
+  }
+
+  /**
+   * Called once, before any elements are processed
+   */
+  protected abstract void start();
+
+  /**
+   * Block computation to be overwritten by sub classes.
+   */
+  protected abstract O computeNext();
+
+
+  /**
+   * Called once, after all elements are processed.
+   */
+  protected abstract void end();
+
+  //////////////////
+  // iterable implementation
+
+  private void invokeStartIfNeeded() {
+    if (!startCalled) {
+      startCalled = true;
+      try {
+        start();
+      } catch (Exception e) {
+        throw new RuntimeException("Error in start()");
+      }
+    }
+  }
+
+  private void invokeEndIfNeeded() {
+    // make the calls out to begin() & end()
+    if (!endCalled) {
+      endCalled = true;
+      // if we are out of elements, and end has not been called yet
+      try {
+        end();
+      } catch (Exception e) {
+        throw new RuntimeException("Error in end()");
+      }
+    }
+  }
+
+  @Override
+  public Iterator<O> iterator() {
+    //check for consumed inputItr
+    if (consumed) {
+      throw new RuntimeException("Invalid repeated inputItr consumption.");
     }
 
-    /**
-     * Called once, before any elements are processed
-     */
-    protected abstract void start();
+    //hand out self as inputItr exactly once (note: do not hand out the input
+    //inputItr since it is consumed by the self inputItr implementation)
+    consumed = true;
+    return this;
+  }
 
-    /**
-     * Block computation to be overwritten by sub classes.
-     */
-    protected abstract O computeNext();
+  //////////////////
+  // inputItr implementation
 
-
-    /**
-     * Called once, after all elements are processed.
-     */
-    protected abstract void end();
-
-
-    //////////////////
-    // iterable implementation
-
-    private void invokeStartIfNeeded() {
-        if (!startCalled) {
-            startCalled = true;
-            try {
-                start();
-            } catch (Exception e) {
-                throw new RuntimeException("Error in start()");
-            }
-        }
+  @Override
+  public boolean hasNext() {
+    boolean ret = inputItr.hasNext();
+    // make sure, there is exactly one call to start()
+    invokeStartIfNeeded();
+    if (!ret) {
+      // if we are out of elements, and end has not been called yet
+      invokeEndIfNeeded();
     }
 
-    private void invokeEndIfNeeded() {
-        // make the calls out to begin() & end()
-        if (!endCalled) {
-            endCalled = true;
-            // if we are out of elements, and end has not been called yet
-            try {
-                end();
-            } catch (Exception e) {
-                throw new RuntimeException("Error in end()");
-            }
-        }
+    return ret;
+  }
+
+  @Override
+  public O next() {
+    try {
+      return computeNext();
+    } catch (Exception ex) {
+      throw new RuntimeException(ex);
     }
+  }
 
-    @Override
-    public Iterator<O> iterator() {
-        //check for consumed inputItr
-        if (consumed)
-            throw new RuntimeException("Invalid repeated inputItr consumption.");
-
-        //hand out self as inputItr exactly once (note: do not hand out the input
-        //inputItr since it is consumed by the self inputItr implementation)
-        consumed = true;
-        return this;
-    }
-
-    //////////////////
-    // inputItr implementation
-
-    @Override
-    public boolean hasNext() {
-        boolean ret = inputItr.hasNext();
-        // make sure, there is exactly one call to start()
-        invokeStartIfNeeded();
-        if (!ret) {
-            // if we are out of elements, and end has not been called yet
-            invokeEndIfNeeded();
-        }
-
-        return ret;
-    }
-
-    @Override
-    public O next() {
-        try {
-            return computeNext();
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    @Override
-    public void remove() {
-        throw new RuntimeException("Unsupported remove operation.");
-    }
+  @Override
+  public void remove() {
+    throw new RuntimeException("Unsupported remove operation.");
+  }
 }

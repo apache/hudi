@@ -17,12 +17,10 @@
 package com.uber.hoodie.io.strategy;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import com.beust.jcommander.internal.Lists;
 import com.google.common.collect.Maps;
-
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.CompactionOperation;

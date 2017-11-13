@@ -17,13 +17,7 @@
 package com.uber.hoodie.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.uber.hoodie.common.util.FSUtils;
 import java.io.Serializable;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
-import org.apache.hadoop.fs.Path;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CompactionWriteStat implements Serializable {
@@ -34,7 +28,8 @@ public class CompactionWriteStat implements Serializable {
   private long totalLogFiles;
   private long totalRecordsToBeUpdate;
 
-  public CompactionWriteStat(HoodieWriteStat writeStat, String partitionPath, long totalLogFiles, long totalLogRecords,
+  public CompactionWriteStat(HoodieWriteStat writeStat, String partitionPath, long totalLogFiles,
+      long totalLogRecords,
       long totalRecordsToUpdate) {
     this.writeStat = writeStat;
     this.partitionPath = partitionPath;
@@ -58,6 +53,7 @@ public class CompactionWriteStat implements Serializable {
   public long getTotalRecordsToBeUpdate() {
     return totalRecordsToBeUpdate;
   }
+
   public HoodieWriteStat getHoodieWriteStat() {
     return writeStat;
   }

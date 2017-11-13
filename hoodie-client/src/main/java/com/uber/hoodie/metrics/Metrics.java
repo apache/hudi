@@ -19,65 +19,64 @@ package com.uber.hoodie.metrics;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.io.Closeables;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.config.HoodieMetricsConfig;
 import com.uber.hoodie.exception.HoodieException;
-import org.apache.commons.configuration.ConfigurationException;
-
 import java.io.Closeable;
+import org.apache.commons.configuration.ConfigurationException;
 
 /**
  * This is the main class of the metrics system.
  */
 public class Metrics {
-    private static volatile boolean initialized = false;
-    private static Metrics metrics = null;
-    private final MetricRegistry registry;
-    private MetricsReporter reporter = null;
 
-    private Metrics(HoodieWriteConfig metricConfig) throws ConfigurationException {
-        registry = new MetricRegistry();
+  private static volatile boolean initialized = false;
+  private static Metrics metrics = null;
+  private final MetricRegistry registry;
+  private MetricsReporter reporter = null;
 
-        reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
-        if (reporter == null) {
-            throw new RuntimeException("Cannot initialize Reporter.");
-        }
+  private Metrics(HoodieWriteConfig metricConfig) throws ConfigurationException {
+    registry = new MetricRegistry();
+
+    reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
+    if (reporter == null) {
+      throw new RuntimeException("Cannot initialize Reporter.");
+    }
 //        reporter.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    reporter.report();
-                    Closeables.close(reporter.getReporter(), true);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-    }
-
-    public static Metrics getInstance() {
-        assert initialized;
-        return metrics;
-    }
-
-    public static synchronized void init(HoodieWriteConfig metricConfig) {
-        if (initialized) {
-            return;
-        }
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
         try {
-            metrics = new Metrics(metricConfig);
-        } catch (ConfigurationException e) {
-            throw new HoodieException(e);
+          reporter.report();
+          Closeables.close(reporter.getReporter(), true);
+        } catch (Exception e) {
+          e.printStackTrace();
         }
-        initialized = true;
-    }
+      }
+    });
+  }
 
-    public MetricRegistry getRegistry() {
-        return registry;
-    }
+  public static Metrics getInstance() {
+    assert initialized;
+    return metrics;
+  }
 
-    public Closeable getReporter() {
-        return reporter.getReporter();
+  public static synchronized void init(HoodieWriteConfig metricConfig) {
+    if (initialized) {
+      return;
     }
+    try {
+      metrics = new Metrics(metricConfig);
+    } catch (ConfigurationException e) {
+      throw new HoodieException(e);
+    }
+    initialized = true;
+  }
+
+  public MetricRegistry getRegistry() {
+    return registry;
+  }
+
+  public Closeable getReporter() {
+    return reporter.getReporter();
+  }
 }

@@ -24,22 +24,22 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieDeltaWriteStat extends HoodieWriteStat {
 
-    private int logVersion;
-    private long logOffset;
+  private int logVersion;
+  private long logOffset;
 
-    public void setLogVersion(int logVersion) {
-        this.logVersion = logVersion;
-    }
+  public void setLogVersion(int logVersion) {
+    this.logVersion = logVersion;
+  }
 
-    public int getLogVersion() {
-        return logVersion;
-    }
+  public int getLogVersion() {
+    return logVersion;
+  }
 
-    public void setLogOffset(long logOffset) {
-        this.logOffset = logOffset;
-    }
+  public void setLogOffset(long logOffset) {
+    this.logOffset = logOffset;
+  }
 
-    public long getLogOffset() {
-        return logOffset;
-    }
+  public long getLogOffset() {
+    return logOffset;
+  }
 }

@@ -17,22 +17,18 @@
 package com.uber.hoodie.common.util;
 
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-
 import com.uber.hoodie.exception.HoodieException;
-import org.apache.avro.generic.GenericRecord;
-
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 public class ReflectionUtils {
+
   private static Map<String, Class<?>> clazzCache = new HashMap<>();
 
   public static <T> T loadClass(String fqcn) {
     try {
-      if(clazzCache.get(fqcn) == null) {
+      if (clazzCache.get(fqcn) == null) {
         Class<?> clazz = Class.<HoodieRecordPayload>forName(fqcn);
         clazzCache.put(fqcn, clazz);
       }
@@ -48,21 +44,17 @@ public class ReflectionUtils {
 
   /**
    * Instantiate a given class with a generic record payload
-   *
-   * @param recordPayloadClass
-   * @param payloadArgs
-   * @param <T>
-   * @return
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
-                                                              Object [] payloadArgs,
-                                                              Class<?> ... constructorArgTypes) {
+      Object[] payloadArgs,
+      Class<?>... constructorArgTypes) {
     try {
-      if(clazzCache.get(recordPayloadClass) == null) {
+      if (clazzCache.get(recordPayloadClass) == null) {
         Class<?> clazz = Class.<HoodieRecordPayload>forName(recordPayloadClass);
         clazzCache.put(recordPayloadClass, clazz);
       }
-      return (T) clazzCache.get(recordPayloadClass).getConstructor(constructorArgTypes).newInstance(payloadArgs);
+      return (T) clazzCache.get(recordPayloadClass).getConstructor(constructorArgTypes)
+          .newInstance(payloadArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     } catch (ClassNotFoundException e) {

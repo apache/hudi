@@ -16,14 +16,14 @@
 
 package com.uber.hoodie.io.compact;
 
+import static java.util.stream.Collectors.toList;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.CompactionWriteStat;
-import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
-import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -36,7 +36,12 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
@@ -46,18 +51,10 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-
-import static java.util.stream.Collectors.*;
-
 /**
- * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage.
- * Computes all possible compactions, passes it through a CompactionFilter and executes
- * all the compactions and writes a new version of base files and make a normal commit
+ * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage. Computes all
+ * possible compactions, passes it through a CompactionFilter and executes all the compactions and
+ * writes a new version of base files and make a normal commit
  *
  * @see HoodieCompactor
  */
@@ -80,7 +77,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     String compactionCommit = startCompactionCommit(hoodieTable);
     log.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommit);
     List<String> partitionPaths =
-        FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), config.shouldAssumeDatePartitioning());
+        FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
+            config.shouldAssumeDatePartitioning());
 
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<CompactionOperation> operations =
@@ -89,7 +87,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                 .getRTFileSystemView()
                 .getLatestFileSlices(partitionPath)
                 .map(s -> new CompactionOperation(s.getDataFile().get(),
-                        partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
+                    partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
                 .collect(toList()).iterator()).collect();
     log.info("Total of " + operations.size() + " compactions are retrieved");
 
@@ -150,14 +148,15 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // Since a DeltaCommit is not defined yet, reading all the records. revisit this soon.
 
     String maxInstantTime = metaClient.getActiveTimeline()
-            .getTimelineOfActions(
-                    Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
-                            HoodieTimeline.COMPACTION_ACTION,
-                            HoodieTimeline.DELTA_COMMIT_ACTION))
-            .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .getTimelineOfActions(
+            Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
+                HoodieTimeline.COMPACTION_ACTION,
+                HoodieTimeline.DELTA_COMMIT_ACTION))
+        .filterCompletedInstants().lastInstant().get().getTimestamp();
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, metaClient.getBasePath(),
-            operation.getDeltaFilePaths(), readerSchema, maxInstantTime);
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
+        metaClient.getBasePath(),
+        operation.getDeltaFilePaths(), readerSchema, maxInstantTime);
     if (!scanner.iterator().hasNext()) {
       return Lists.newArrayList();
     }

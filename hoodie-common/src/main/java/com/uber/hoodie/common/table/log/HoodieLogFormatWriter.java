@@ -16,8 +16,6 @@
 
 package com.uber.hoodie.common.table.log;
 
-import com.google.common.base.Preconditions;
-
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
@@ -35,8 +33,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * HoodieLogFormatWriter can be used to append blocks to a log file
- * Use HoodieLogFormat.WriterBuilder to construct
+ * HoodieLogFormatWriter can be used to append blocks to a log file Use
+ * HoodieLogFormat.WriterBuilder to construct
  */
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
@@ -58,7 +56,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    * @param sizeThreshold
    */
   HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize,
-                        Short replication, Long sizeThreshold)
+      Short replication, Long sizeThreshold)
       throws IOException, InterruptedException {
     this.fs = fs;
     this.logFile = logFile;
@@ -157,8 +155,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   public long getCurrentSize() throws IOException {
-    if(output == null) {
-      throw new IllegalStateException("Cannot get current size as the underlying stream has been closed already");
+    if (output == null) {
+      throw new IllegalStateException(
+          "Cannot get current size as the underlying stream has been closed already");
     }
     return output.getPos();
   }
