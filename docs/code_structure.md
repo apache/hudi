@@ -11,7 +11,6 @@ permalink: code_structure.html
  * hoodie-common     : Common code shared between different artifacts of Hoodie
 
 
- We have embraced the [Google Java code style](https://google.github.io/styleguide/javaguide.html). Please setup your IDE accordingly with style files from [here] (https://github.com/google/styleguide)
 
 
 
