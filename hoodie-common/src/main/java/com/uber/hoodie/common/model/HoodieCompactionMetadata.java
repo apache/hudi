@@ -58,6 +58,36 @@ public class HoodieCompactionMetadata extends HoodieCommitMetadata {
     return partitionToCompactionWriteStats;
   }
 
+  public Long getTotalLogRecordsCompacted() {
+    Long totalLogRecords = 0L;
+    for(Map.Entry<String, List<CompactionWriteStat>> entry : partitionToCompactionWriteStats.entrySet()) {
+      for (CompactionWriteStat cWriteStat : entry.getValue()) {
+        totalLogRecords += cWriteStat.getTotalLogRecords();
+      }
+    }
+    return totalLogRecords;
+  }
+
+  public Long getTotalLogFilesCompacted() {
+    Long totalLogFiles = 0L;
+    for(Map.Entry<String, List<CompactionWriteStat>> entry : partitionToCompactionWriteStats.entrySet()) {
+      for (CompactionWriteStat cWriteStat : entry.getValue()) {
+        totalLogFiles += cWriteStat.getTotalLogFiles();
+      }
+    }
+    return totalLogFiles;
+  }
+
+  public Long getTotalCompactedRecordsToBeUpdated() {
+    Long totalUpdateRecords = 0L;
+    for (Map.Entry<String, List<CompactionWriteStat>> entry : partitionToCompactionWriteStats.entrySet()) {
+      for (CompactionWriteStat cWriteStat : entry.getValue()) {
+        totalUpdateRecords += cWriteStat.getTotalRecordsToBeUpdate();
+      }
+    }
+    return totalUpdateRecords;
+  }
+
   public String toJsonString() throws IOException {
     if (partitionToCompactionWriteStats.containsKey(null)) {
       log.info("partition path is null for " + partitionToCompactionWriteStats.get(null));
