@@ -250,4 +250,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     return allRollbackStats;
   }
 
+  @Override
+  public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
+    // do nothing for MOR tables
+    return Optional.empty();
+  }
 }

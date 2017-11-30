@@ -37,9 +37,11 @@ public class HoodieMetrics {
   public String rollbackTimerName = null;
   public String cleanTimerName = null;
   public String commitTimerName = null;
+  public String finalizeTimerName = null;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
   private Timer commitTimer = null;
+  private Timer finalizeTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
     this.config = config;
@@ -49,6 +51,7 @@ public class HoodieMetrics {
       this.rollbackTimerName = getMetricsName("timer", "rollback");
       this.cleanTimerName = getMetricsName("timer", "clean");
       this.commitTimerName = getMetricsName("timer", "commit");
+      this.finalizeTimerName = getMetricsName("timer", "finalize");
     }
   }
 
@@ -75,6 +78,13 @@ public class HoodieMetrics {
       commitTimer = createTimer(commitTimerName);
     }
     return commitTimer == null ? null : commitTimer.time();
+  }
+
+  public Timer.Context getFinalizeCtx() {
+    if (config.isMetricsOn() && finalizeTimer == null) {
+      finalizeTimer = createTimer(finalizeTimerName);
+    }
+    return finalizeTimer == null ? null : finalizeTimer.time();
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs,
@@ -116,6 +126,15 @@ public class HoodieMetrics {
           durationInMs, numFilesDeleted));
       registerGauge(getMetricsName("clean", "duration"), durationInMs);
       registerGauge(getMetricsName("clean", "numFilesDeleted"), numFilesDeleted);
+    }
+  }
+
+  public void updateFinalizeWriteMetrics(long durationInMs, int numFilesFinalized) {
+    if (config.isMetricsOn()) {
+      logger.info(String.format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)",
+          durationInMs, numFilesFinalized));
+      registerGauge(getMetricsName("finalize", "duration"), durationInMs);
+      registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
     }
   }
 

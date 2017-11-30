@@ -57,6 +57,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -64,7 +65,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -416,14 +419,30 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
 
         List<Tuple2<String, HoodieWriteStat>> stats = writeStatuses
-            .mapToPair((PairFunction<WriteStatus, String, HoodieWriteStat>) writeStatus ->
-                new Tuple2<>(writeStatus.getPartitionPath(), writeStatus.getStat()))
-            .collect();
+                    .mapToPair((PairFunction<WriteStatus, String, HoodieWriteStat>) writeStatus ->
+                            new Tuple2<>(writeStatus.getPartitionPath(), writeStatus.getStat()))
+                    .collect();
 
         HoodieCommitMetadata metadata = new HoodieCommitMetadata();
         for (Tuple2<String, HoodieWriteStat> stat : stats) {
             metadata.addWriteStat(stat._1(), stat._2());
         }
+
+        // Finalize write
+        final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
+        final Optional<Integer> result = table.finalizeWrite(jsc, stats);
+        if (finalizeCtx != null && result.isPresent()) {
+            Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
+            durationInMs.ifPresent(duration -> {
+                    logger.info("Finalize write elapsed time (Seconds): " + duration / 1000);
+                    metrics.updateFinalizeWriteMetrics(duration, result.get());
+                }
+            );
+        }
+
+        // Clean temp files
+        cleanTemporaryDataFiles();
+
         // add in extra metadata
         if (extraMetadata.isPresent()) {
             extraMetadata.get().forEach((k, v) -> metadata.addMetadata(k, v));
@@ -679,6 +698,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             }
         });
 
+        // clean data files in temporary folder
+        cleanTemporaryDataFiles();
+
         try {
             if (commitTimeline.empty() && inflightTimeline.empty()) {
                 // nothing to rollback
@@ -741,6 +763,35 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
     }
 
+  private void cleanTemporaryDataFiles() {
+    if (!config.shouldFinalizeWrite()) {
+      return;
+    }
+
+    final Path temporaryFolder = new Path(config.getBasePath(), HoodieTableMetaClient.TEMPFOLDER_NAME);
+    try {
+      if (!fs.exists(temporaryFolder)) {
+        return;
+      }
+      List<FileStatus> fileStatusesList = Arrays.asList(fs.listStatus(temporaryFolder));
+      List<Tuple2<String, Boolean>> results = jsc.parallelize(fileStatusesList, config.getFinalizeParallelism())
+          .map(fileStatus -> {
+            FileSystem fs1 = FSUtils.getFs();
+            boolean success = fs1.delete(fileStatus.getPath(), false);
+            logger.info("Deleting file in temporary folder" + fileStatus.getPath() + "\t" + success);
+            return new Tuple2<>(fileStatus.getPath().toString(), success);
+          }).collect();
+
+      for (Tuple2<String, Boolean> result : results) {
+        if (!result._2()) {
+          logger.info("Failed to delete file: " + result._1());
+          throw new HoodieIOException("Failed to delete file in temporary folder: " + result._1());
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to clean data files in temporary folder: " + temporaryFolder);
+    }
+  }
     /**
      * Releases any resources used by the client.
      */
@@ -826,6 +877,18 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         String commitActionType = table.getCommitActionType();
         activeTimeline.createInflight(
             new HoodieInstant(true, commitActionType, commitTime));
+
+      // create temporary folder if needed
+      if (config.shouldFinalizeWrite()) {
+        final Path temporaryFolder = new Path(config.getBasePath(), HoodieTableMetaClient.TEMPFOLDER_NAME);
+        try {
+          if (!fs.exists(temporaryFolder)) {
+            fs.mkdirs(temporaryFolder);
+          }
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to create temporary folder: " + temporaryFolder);
+        }
+      }
     }
 
     /**

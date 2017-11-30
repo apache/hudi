@@ -45,6 +45,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private final WriteStatus status;
   private final HoodieStorageWriter<IndexedRecord> storageWriter;
   private final Path path;
+  private final Path tempPath;
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
 
@@ -55,7 +56,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     status.setFileId(UUID.randomUUID().toString());
     status.setPartitionPath(partitionPath);
 
-    this.path = makeNewPath(partitionPath, TaskContext.getPartitionId(), status.getFileId());
+    final int sparkPartitionId = TaskContext.getPartitionId();
+    this.path = makeNewPath(partitionPath, sparkPartitionId, status.getFileId());
+    if (config.shouldFinalizeWrite()) {
+      this.tempPath = makeTempPath(partitionPath, sparkPartitionId, status.getFileId(), TaskContext.get().stageId(), TaskContext.get().taskAttemptId());
+    } else {
+      this.tempPath = null;
+    }
+
     try {
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
           commitTime,
@@ -64,10 +72,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       partitionMetadata.trySave(TaskContext.getPartitionId());
       this.storageWriter =
           HoodieStorageWriterFactory
-              .getStorageWriter(commitTime, path, hoodieTable, config, schema);
+              .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
     } catch (IOException e) {
       throw new HoodieInsertException(
-          "Failed to initialize HoodieStorageWriter for path " + path, e);
+          "Failed to initialize HoodieStorageWriter for path " + getStorageWriterPath(), e);
     }
     logger.info("New InsertHandle for partition :" + partitionPath);
   }
@@ -126,7 +134,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       stat.setFileId(status.getFileId());
       String relativePath = path.toString().replace(new Path(config.getBasePath()) + "/", "");
       stat.setPath(relativePath);
-      stat.setTotalWriteBytes(FSUtils.getFileSize(fs, path));
+      if (tempPath != null) {
+        stat.setTempPath(tempPath.toString().replace(new Path(config.getBasePath()) + "/", ""));
+      }
+      stat.setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
       stat.setTotalWriteErrors(status.getFailedRecords().size());
       status.setStat(stat);
 
@@ -135,5 +146,13 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       throw new HoodieInsertException("Failed to close the Insert Handle for path " + path,
           e);
     }
+  }
+
+  private Path getStorageWriterPath() {
+    // Use tempPath for storage writer if possible
+    if (this.tempPath != null) {
+      return this.tempPath;
+    }
+    return this.path;
   }
 }

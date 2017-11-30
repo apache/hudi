@@ -23,6 +23,7 @@ import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -46,6 +47,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.Tuple2;
 
 /**
  * Abstract implementation of a HoodieTable
@@ -270,4 +272,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits)
       throws IOException;
+
+  /**
+   * Finalize the written data files
+   *
+   * @param writeStatuses List of WriteStatus
+   * @return number of files finalized
+   */
+  public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc, List<Tuple2<String, HoodieWriteStat>> writeStatuses);
 }
