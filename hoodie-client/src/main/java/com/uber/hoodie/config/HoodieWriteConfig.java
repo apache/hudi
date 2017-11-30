@@ -58,6 +58,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
   private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
   private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
+  private static final String HOODIE_FINALIZE_WRITE_BEFORE_COMMIT = "hoodie.finalize.write.before.commit";
+  private static final String DEFAULT_HOODIE_FINALIZE_WRITE_BEFORE_COMMIT = "false";
+  private static final String FINALIZE_PARALLELISM = "hoodie.finalize.parallelism";
+  private static final String DEFAULT_FINALIZE_PARALLELISM = "5";
 
   private HoodieWriteConfig(Properties props) {
     super(props);
@@ -112,6 +116,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getWriteStatusClassName() {
     return props.getProperty(HOODIE_WRITE_STATUS_CLASS_PROP);
+  }
+
+  public boolean shouldFinalizeWrite() {
+    return Boolean.parseBoolean(props.getProperty(HOODIE_FINALIZE_WRITE_BEFORE_COMMIT));
+  }
+
+  public int getFinalizeParallelism() {
+    return Integer.parseInt(props.getProperty(FINALIZE_PARALLELISM));
   }
 
   /**
@@ -385,6 +397,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withFinalizeWrite(boolean shouldFinalizeWrite) {
+      props.setProperty(HOODIE_FINALIZE_WRITE_BEFORE_COMMIT, String.valueOf(shouldFinalizeWrite));
+      return this;
+    }
+
+    public Builder withFinalizeParallelism(int parallelism) {
+      props.setProperty(FINALIZE_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       // Check for mandatory properties
@@ -408,6 +430,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
           HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_FINALIZE_WRITE_BEFORE_COMMIT),
+          HOODIE_FINALIZE_WRITE_BEFORE_COMMIT, DEFAULT_HOODIE_FINALIZE_WRITE_BEFORE_COMMIT);
+      setDefaultOnCondition(props, !props.containsKey(FINALIZE_PARALLELISM),
+          FINALIZE_PARALLELISM, DEFAULT_FINALIZE_PARALLELISM);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,

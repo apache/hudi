@@ -71,6 +71,12 @@ public class HoodieWriteStat implements Serializable {
   private long totalWriteErrors;
 
   /**
+   * Relative path to the temporary file from the base path.
+   */
+  @Nullable
+  private String tempPath;
+
+  /**
    * Following properties are associated only with the result of a Compaction Operation
    */
 
@@ -198,11 +204,20 @@ public class HoodieWriteStat implements Serializable {
     this.totalRecordsToBeUpdate = totalRecordsToBeUpdate;
   }
 
+  public void setTempPath(String tempPath) {
+    this.tempPath = tempPath;
+  }
+
+  public String getTempPath() {
+    return this.tempPath;
+  }
+
   @Override
   public String toString() {
     return new StringBuilder()
         .append("HoodieWriteStat {")
         .append("path=" + path)
+        .append(", tempPath=" + tempPath)
         .append(", prevCommit='" + prevCommit + '\'')
         .append(", numWrites=" + numWrites)
         .append(", numDeletes=" + numDeletes)
