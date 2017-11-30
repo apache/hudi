@@ -94,6 +94,10 @@ public class FSUtils {
     return String.format("%s_%d_%s.parquet", fileId, taskPartitionId, commitTime);
   }
 
+  public static String makeTempDataFileName(String partitionPath, String commitTime, int taskPartitionId, String fileId, int stageId, long taskAttemptId) {
+    return String.format("%s_%s_%d_%s_%d_%d.parquet", partitionPath.replace("/", "-"), fileId, taskPartitionId, commitTime, stageId, taskAttemptId);
+  }
+
   public static String maskWithoutFileId(String commitTime, int taskPartitionId) {
     return String.format("*_%s_%s.parquet", taskPartitionId, commitTime);
   }

@@ -44,6 +44,18 @@ public class TestFSUtils {
   }
 
   @Test
+  public void testMakeTempDataFileName() {
+    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    String partitionPath = "2017/12/31";
+    int taskPartitionId = Integer.MAX_VALUE;
+    int stageId = Integer.MAX_VALUE;
+    long taskAttemptId = Long.MAX_VALUE;
+    String fileName = UUID.randomUUID().toString();
+    assertTrue(FSUtils.makeTempDataFileName(partitionPath, commitTime, taskPartitionId, fileName, stageId, taskAttemptId)
+        .equals(partitionPath.replace("/", "-") + "_" + fileName + "_" + taskPartitionId + "_" + commitTime + "_" + stageId + "_" + taskAttemptId + ".parquet"));
+  }
+
+  @Test
   public void testMaskFileName() {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     int taskPartitionId = 2;

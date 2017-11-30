@@ -27,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
@@ -572,6 +573,41 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         .forEach(activeTimeline::deleteInflight);
     logger.info("Deleted inflight commits " + commits);
     return stats;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
+    if (!config.shouldFinalizeWrite()) {
+      return Optional.empty();
+    }
+
+    List<Tuple2<String, Boolean>> results = jsc.parallelize(writeStatuses, config.getFinalizeParallelism())
+        .map(writeStatus -> {
+          Tuple2<String, HoodieWriteStat> writeStatTuple2 = (Tuple2<String, HoodieWriteStat>) writeStatus;
+          HoodieWriteStat writeStat = writeStatTuple2._2();
+          final FileSystem fs = FSUtils.getFs();
+          final Path finalPath = new Path(config.getBasePath(), writeStat.getPath());
+
+          if (writeStat.getTempPath() != null) {
+            final Path tempPath = new Path(config.getBasePath(), writeStat.getTempPath());
+            boolean success;
+            try {
+              logger.info("Renaming temporary file: " + tempPath + " to " + finalPath);
+              success = fs.rename(tempPath, finalPath);
+            } catch (IOException e) {
+              throw new HoodieIOException("Failed to rename file: " + tempPath + " to " + finalPath);
+            }
+
+            if (!success) {
+              throw new HoodieIOException("Failed to rename file: " + tempPath + " to " + finalPath);
+            }
+          }
+
+          return new Tuple2<>(writeStat.getPath(), true);
+        }).collect();
+
+    return Optional.of(results.size());
   }
 
   private static class PartitionCleanStat implements Serializable {
