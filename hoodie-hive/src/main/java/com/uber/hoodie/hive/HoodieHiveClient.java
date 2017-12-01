@@ -326,27 +326,32 @@ public class HoodieHiveClient {
               .getCompactionTimeline().filterCompletedInstants().lastInstant();
           LOG.info("Found the last compaction commit as " + lastCompactionCommit);
 
-          Optional<HoodieInstant> lastDeltaCommitAfterCompaction = Optional.empty();
+          Optional<HoodieInstant> lastDeltaCommit;
           if (lastCompactionCommit.isPresent()) {
-            lastDeltaCommitAfterCompaction = metaClient.getActiveTimeline()
+            lastDeltaCommit = metaClient.getActiveTimeline()
                 .getDeltaCommitTimeline()
                 .filterCompletedInstants()
                 .findInstantsAfter(lastCompactionCommit.get().getTimestamp(), Integer.MAX_VALUE)
                 .lastInstant();
+          } else {
+            lastDeltaCommit = metaClient.getActiveTimeline()
+                    .getDeltaCommitTimeline()
+                    .filterCompletedInstants()
+                    .lastInstant();
           }
-          LOG.info("Found the last delta commit after last compaction as "
-              + lastDeltaCommitAfterCompaction);
+          LOG.info("Found the last delta commit "
+              + lastDeltaCommit);
 
-          if (lastDeltaCommitAfterCompaction.isPresent()) {
-            HoodieInstant lastDeltaCommit = lastDeltaCommitAfterCompaction.get();
+          if (lastDeltaCommit.isPresent()) {
+            HoodieInstant lastDeltaInstant = lastDeltaCommit.get();
             // read from the log file wrote
             commitMetadata = HoodieCommitMetadata
-                .fromBytes(activeTimeline.getInstantDetails(lastDeltaCommit).get());
+                .fromBytes(activeTimeline.getInstantDetails(lastDeltaInstant).get());
             filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
                 .stream().filter(s -> s.contains(
                     HoodieLogFile.DELTA_EXTENSION)).findAny()
                 .orElseThrow(() -> new IllegalArgumentException(
-                    "Could not find any data file written for commit " + lastDeltaCommit
+                    "Could not find any data file written for commit " + lastDeltaInstant
                         + ", could not get schema for dataset " + metaClient.getBasePath()));
             return readSchemaFromLogFile(lastCompactionCommit, new Path(filePath));
           } else {
