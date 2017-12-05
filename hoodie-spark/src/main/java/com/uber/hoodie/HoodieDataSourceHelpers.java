@@ -70,11 +70,10 @@ public class HoodieDataSourceHelpers {
         .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
     if (table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return table.getActiveTimeline().getTimelineOfActions(
-          Sets.newHashSet(HoodieActiveTimeline.COMPACTION_ACTION,
-              HoodieActiveTimeline.DELTA_COMMIT_ACTION)
-      );
+          Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
+                  HoodieActiveTimeline.DELTA_COMMIT_ACTION));
     } else {
-      return table.getCompletedCompactionCommitTimeline();
+      return table.getCommitTimeline().filterCompletedInstants();
     }
   }
 }

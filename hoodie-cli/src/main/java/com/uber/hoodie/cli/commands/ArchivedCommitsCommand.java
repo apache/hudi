@@ -94,12 +94,6 @@ public class ArchivedCommitsCommand implements CommandMarker {
           commitDetails.add(record.get("hoodieCommitMetadata").toString());
           break;
         }
-        case HoodieTimeline.COMPACTION_ACTION: {
-          commitDetails.add(record.get("commitTime").toString());
-          commitDetails.add(record.get("actionType").toString());
-          commitDetails.add(record.get("hoodieCompactionMetadata").toString());
-          break;
-        }
         case HoodieTimeline.DELTA_COMMIT_ACTION: {
           commitDetails.add(record.get("commitTime").toString());
           commitDetails.add(record.get("actionType").toString());

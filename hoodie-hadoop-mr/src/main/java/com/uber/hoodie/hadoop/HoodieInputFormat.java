@@ -100,7 +100,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat
       String tableName = metadata.getTableConfig().getTableName();
       String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
       // Get all commits, delta commits, compactions, as all of them produce a base parquet file today
-      HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsAndCompactionsTimeline()
+      HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsTimeline()
           .filterCompletedInstants();
       TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metadata,
           timeline, statuses);

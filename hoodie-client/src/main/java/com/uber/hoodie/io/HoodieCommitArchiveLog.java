@@ -26,7 +26,6 @@ import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.model.ActionType;
 import com.uber.hoodie.common.model.HoodieArchivedLogFile;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
@@ -39,18 +38,19 @@ import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Archiver to bound the growth of <action>.commit files
@@ -228,14 +228,6 @@ public class HoodieCommitArchiveLog {
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
-      case HoodieTimeline.COMPACTION_ACTION: {
-        com.uber.hoodie.common.model.HoodieCompactionMetadata compactionMetadata = com.uber.hoodie.common.model.HoodieCompactionMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get());
-        archivedMetaWrapper
-            .setHoodieCompactionMetadata(compactionMetadataConverter(compactionMetadata));
-        archivedMetaWrapper.setActionType(ActionType.compaction.name());
-        break;
-      }
       case HoodieTimeline.ROLLBACK_ACTION: {
         archivedMetaWrapper.setHoodieRollbackMetadata(AvroUtils
             .deserializeAvroMetadata(commitTimeline.getInstantDetails(hoodieInstant).get(),
@@ -269,16 +261,6 @@ public class HoodieCommitArchiveLog {
     com.uber.hoodie.avro.model.HoodieCommitMetadata avroMetaData =
         mapper.convertValue(hoodieCommitMetadata,
             com.uber.hoodie.avro.model.HoodieCommitMetadata.class);
-    return avroMetaData;
-  }
-
-  private com.uber.hoodie.avro.model.HoodieCompactionMetadata compactionMetadataConverter(
-      HoodieCompactionMetadata hoodieCompactionMetadata) {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    com.uber.hoodie.avro.model.HoodieCompactionMetadata avroMetaData = mapper
-        .convertValue(hoodieCompactionMetadata,
-            com.uber.hoodie.avro.model.HoodieCompactionMetadata.class);
     return avroMetaData;
   }
 }

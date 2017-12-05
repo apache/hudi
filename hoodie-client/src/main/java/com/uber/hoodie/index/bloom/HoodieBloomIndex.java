@@ -239,7 +239,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         .parallelize(partitions, Math.max(partitions.size(), 1))
         .flatMapToPair(partitionPath -> {
           java.util.Optional<HoodieInstant> latestCommitTime =
-              hoodieTable.getCommitTimeline().filterCompletedInstants().lastInstant();
+              hoodieTable.getCommitsTimeline().filterCompletedInstants().lastInstant();
           List<Tuple2<String, HoodieDataFile>> filteredFiles = new ArrayList<>();
           if (latestCommitTime.isPresent()) {
             filteredFiles =

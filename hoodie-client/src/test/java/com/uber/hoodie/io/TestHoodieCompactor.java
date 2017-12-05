@@ -21,7 +21,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.FileSlice;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
@@ -49,7 +49,6 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
@@ -124,7 +123,7 @@ public class TestHoodieCompactor {
     JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
     writeClient.insert(recordsRDD, newCommitTime).collect();
 
-    HoodieCompactionMetadata result =
+    HoodieCommitMetadata result =
         compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
     String basePath = table.getMetaClient().getBasePath();
     assertTrue("If there is nothing to compact, result will be empty",
@@ -178,7 +177,7 @@ public class TestHoodieCompactor {
     metaClient = new HoodieTableMetaClient(fs, basePath);
     table = HoodieTable.getHoodieTable(metaClient, config);
 
-    HoodieCompactionMetadata result =
+    HoodieCommitMetadata result =
         compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
 
     // Verify that recently written compacted data file has no log file
@@ -199,7 +198,7 @@ public class TestHoodieCompactor {
             "After compaction there should be no log files visiable on a Realtime view",
             slice.getLogFiles().collect(Collectors.toList()).isEmpty());
       }
-      assertTrue(result.getPartitionToCompactionWriteStats().containsKey(partitionPath));
+      assertTrue(result.getPartitionToWriteStats().containsKey(partitionPath));
     }
   }
 

@@ -44,6 +44,22 @@
                      {
                         "name":"totalWriteErrors",
                         "type":["null","long"]
+                     },
+                     {
+                        "name":"partitionPath",
+                        "type":["null","string"]
+                     },
+                     {
+                        "name":"totalLogRecords",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalLogFiles",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalRecordsToBeUpdate",
+                        "type":["null","long"]
                      }
                   ]
                }

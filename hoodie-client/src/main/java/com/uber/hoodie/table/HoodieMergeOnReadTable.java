@@ -21,7 +21,6 @@ import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -93,9 +92,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc, String compactionCommitTime) {
+  public Optional<HoodieCommitMetadata> compact(JavaSparkContext jsc, String compactionCommitTime) {
     logger.info("Checking if compaction needs to be run on " + config.getBasePath());
-    Optional<HoodieInstant> lastCompaction = getActiveTimeline().getCompactionTimeline()
+    Optional<HoodieInstant> lastCompaction = getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
     String deltaCommitsSinceTs = "0";
     if (lastCompaction.isPresent()) {
@@ -130,8 +129,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     }
     Map<String, HoodieInstant> commitsAndCompactions =
         this.getActiveTimeline()
-            .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
-                HoodieActiveTimeline.COMPACTION_ACTION, HoodieActiveTimeline.DELTA_COMMIT_ACTION))
+            .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION, HoodieActiveTimeline.DELTA_COMMIT_ACTION))
             .getInstants()
             .filter(i -> commits.contains(i.getTimestamp()))
             .collect(Collectors.toMap(i -> i.getTimestamp(), i -> i));
@@ -149,11 +147,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       List<HoodieRollbackStat> stats = null;
       switch (instant.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
-        case HoodieTimeline.COMPACTION_ACTION:
           try {
             logger.info("Starting to rollback Commit/Compaction " + instant);
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(this.getCommitTimeline().getInstantDetails(
+                .fromBytes(this.getCommitsTimeline().getInstantDetails(
                     new HoodieInstant(true, instant.getAction(), instant.getTimestamp())).get());
 
             stats = jsc.parallelize(commitMetadata.getPartitionToWriteStats().keySet().stream()
@@ -174,7 +171,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
             logger.info("Starting to rollback delta commit " + instant);
 
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(this.getCommitTimeline().getInstantDetails(
+                .fromBytes(this.getCommitsTimeline().getInstantDetails(
                     new HoodieInstant(true, instant.getAction(), instant.getTimestamp())).get());
 
             stats = jsc.parallelize(commitMetadata.getPartitionToWriteStats().keySet().stream()

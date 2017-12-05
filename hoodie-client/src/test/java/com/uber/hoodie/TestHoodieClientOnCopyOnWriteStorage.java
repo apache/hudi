@@ -649,7 +649,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
       HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
       table = HoodieTable.getHoodieTable(metadata, getConfig());
-      timeline = table.getCommitTimeline();
+      timeline = table.getCommitsTimeline();
 
       TableFileSystemView fsView = table.getFileSystemView();
       // Need to ensure the following
@@ -1493,10 +1493,10 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         HoodieTestUtils.doesCommitExist(basePath, commitTime));
 
     // Get parquet file paths from commit metadata
-    String actionType = table.getCompactedCommitActionType();
+    String actionType = table.getCommitActionType();
     HoodieInstant commitInstant =
         new HoodieInstant(false, actionType, commitTime);
-    HoodieTimeline commitTimeline = table.getCompletedCompactionCommitTimeline();
+    HoodieTimeline commitTimeline = table.getCommitTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata =
         HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commitInstant).get());
     String basePath = table.getMetaClient().getBasePath();

@@ -94,10 +94,6 @@ public class HoodieInstant implements Serializable {
       return isInflight ?
           HoodieTimeline.makeInflightSavePointFileName(timestamp) :
           HoodieTimeline.makeSavePointFileName(timestamp);
-    } else if (HoodieTimeline.COMPACTION_ACTION.equals(action)) {
-      return isInflight ?
-          HoodieTimeline.makeInflightCompactionFileName(timestamp) :
-          HoodieTimeline.makeCompactionFileName(timestamp);
     } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
       return isInflight ?
           HoodieTimeline.makeInflightDeltaFileName(timestamp) :

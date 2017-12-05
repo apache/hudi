@@ -16,9 +16,6 @@
 
 package com.uber.hoodie.hive;
 
-import static com.uber.hoodie.common.model.HoodieTestUtils.DEFAULT_TASK_PARTITIONID;
-import static org.junit.Assert.fail;
-
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -26,10 +23,8 @@ import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.minicluster.ZookeeperTestService;
-import com.uber.hoodie.common.model.CompactionWriteStat;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
 import com.uber.hoodie.common.model.HoodieLogFile;
@@ -44,15 +39,6 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.hive.util.HiveTestService;
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.commons.io.FileUtils;
@@ -71,6 +57,19 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.junit.runners.model.InitializationError;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.UUID;
+
+import static com.uber.hoodie.common.model.HoodieTestUtils.DEFAULT_TASK_PARTITIONID;
+import static org.junit.Assert.fail;
 
 @SuppressWarnings("SameParameterValue")
 public class TestUtil {
@@ -182,9 +181,9 @@ public class TestUtil {
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName
         + HiveSyncTool.SUFFIX_REALTIME_TABLE);
-    HoodieCompactionMetadata compactionMetadata = new HoodieCompactionMetadata();
+    HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
     commitMetadata.getPartitionToWriteStats()
-        .forEach((key, value) -> value.stream().map(k -> new CompactionWriteStat(k, key, 0, 0, 0))
+        .forEach((key, value) -> value.stream()
             .forEach(l -> compactionMetadata.addWriteStat(key, l)));
     createCompactionCommitFile(compactionMetadata, commitTime);
     // Write a delta commit
@@ -211,9 +210,9 @@ public class TestUtil {
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName
         + HiveSyncTool.SUFFIX_REALTIME_TABLE);
-    HoodieCompactionMetadata compactionMetadata = new HoodieCompactionMetadata();
+    HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
     commitMetadata.getPartitionToWriteStats()
-        .forEach((key, value) -> value.stream().map(k -> new CompactionWriteStat(k, key, 0, 0, 0))
+        .forEach((key, value) -> value.stream()
             .forEach(l -> compactionMetadata.addWriteStat(key, l)));
     createCompactionCommitFile(compactionMetadata, commitTime);
     HoodieCommitMetadata deltaMetadata = createLogFiles(commitMetadata.getPartitionToWriteStats(),
@@ -342,12 +341,12 @@ public class TestUtil {
   }
 
   private static void createCompactionCommitFile(
-      HoodieCompactionMetadata commitMetadata, String commitTime)
+      HoodieCommitMetadata commitMetadata, String commitTime)
       throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
         hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-            .makeCompactionFileName(commitTime));
+            .makeCommitFileName(commitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();

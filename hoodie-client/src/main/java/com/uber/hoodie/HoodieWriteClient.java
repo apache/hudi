@@ -25,7 +25,6 @@ import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -54,17 +53,6 @@ import com.uber.hoodie.table.HoodieTable;
 import com.uber.hoodie.table.UserDefinedBulkInsertPartitioner;
 import com.uber.hoodie.table.WorkloadProfile;
 import com.uber.hoodie.table.WorkloadStat;
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -76,6 +64,18 @@ import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.storage.StorageLevel;
 import scala.Option;
 import scala.Tuple2;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient
@@ -605,7 +605,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         HoodieTable<T> table = HoodieTable
             .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
         HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-        HoodieTimeline commitTimeline = table.getCommitTimeline();
+        HoodieTimeline commitTimeline = table.getCommitsTimeline();
 
         HoodieInstant savePoint =
             new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
@@ -624,7 +624,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
         // Make sure the rollback was successful
         Optional<HoodieInstant> lastInstant =
-            activeTimeline.reload().getCommitsAndCompactionsTimeline().filterCompletedInstants()
+            activeTimeline.reload().getCommitsTimeline().filterCompletedInstants()
                 .lastInstant();
         Preconditions.checkArgument(lastInstant.isPresent());
         Preconditions.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
@@ -829,7 +829,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         // Create a Hoodie table which encapsulated the commits and files visible
         HoodieTable<T> table = HoodieTable
                 .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
-        Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc, compactionCommitTime);
+        Optional<HoodieCommitMetadata> compactionMetadata = table.compact(jsc, compactionCommitTime);
         if (compactionMetadata.isPresent()) {
             logger.info("Compacted successfully on commit " + compactionCommitTime);
         } else {
@@ -878,7 +878,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     private void rollbackInflightCommits() {
         HoodieTable<T> table = HoodieTable
             .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
-        HoodieTimeline inflightTimeline = table.getCommitTimeline().filterInflights();
+        HoodieTimeline inflightTimeline = table.getCommitsTimeline().filterInflights();
         List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
             .collect(Collectors.toList());
         Collections.reverse(commits);

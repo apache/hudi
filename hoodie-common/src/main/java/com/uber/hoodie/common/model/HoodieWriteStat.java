@@ -17,6 +17,8 @@
 package com.uber.hoodie.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import javax.annotation.Nullable;
 import java.io.Serializable;
 
 /**
@@ -67,6 +69,34 @@ public class HoodieWriteStat implements Serializable {
    * Total number of records, that were n't able to be written due to errors.
    */
   private long totalWriteErrors;
+
+  /**
+   * Following properties are associated only with the result of a Compaction Operation
+   */
+
+  /**
+   * Partition Path associated with this writeStat
+   */
+  @Nullable
+  private String partitionPath;
+
+  /**
+   * Total number of log records that were compacted by a compaction operation
+   */
+  @Nullable
+  private Long totalLogRecords;
+
+  /**
+   * Total number of log files that were compacted by a compaction operation
+   */
+  @Nullable
+  private Long totalLogFiles;
+
+  /**
+   * Total number of records updated by a compaction operation
+   */
+  @Nullable
+  private Long totalRecordsToBeUpdate;
 
   public HoodieWriteStat() {
     // called by jackson json lib
@@ -136,6 +166,37 @@ public class HoodieWriteStat implements Serializable {
     return path;
   }
 
+  public String getPartitionPath() {
+    return partitionPath;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
+  }
+
+  public Long getTotalLogRecords() {
+    return totalLogRecords;
+  }
+
+  public void setTotalLogRecords(Long totalLogRecords) {
+    this.totalLogRecords = totalLogRecords;
+  }
+
+  public Long getTotalLogFiles() {
+    return totalLogFiles;
+  }
+
+  public void setTotalLogFiles(Long totalLogFiles) {
+    this.totalLogFiles = totalLogFiles;
+  }
+
+  public Long getTotalRecordsToBeUpdate() {
+    return totalRecordsToBeUpdate;
+  }
+
+  public void setTotalRecordsToBeUpdate(Long totalRecordsToBeUpdate) {
+    this.totalRecordsToBeUpdate = totalRecordsToBeUpdate;
+  }
 
   @Override
   public String toString() {

@@ -69,7 +69,7 @@ public class CommitsCommand implements CommandMarker {
           "limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "10")
       final Integer limit) throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsAndCompactionsTimeline()
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline()
         .filterCompletedInstants();
     List<HoodieInstant> commits = timeline.getInstants().collect(Collectors.toList());
     String[][] rows = new String[commits.size()][];
@@ -108,7 +108,7 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path")
       final String sparkPropertiesPath) throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsAndCompactionsTimeline()
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline()
         .filterCompletedInstants();
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION,
         commitTime);
@@ -137,7 +137,7 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"commit"}, help = "Commit to show")
       final String commitTime) throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsAndCompactionsTimeline()
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline()
         .filterCompletedInstants();
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION,
         commitTime);
@@ -187,7 +187,7 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"commit"}, help = "Commit to show")
       final String commitTime) throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
-    HoodieTimeline timeline = activeTimeline.getCommitsAndCompactionsTimeline()
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline()
         .filterCompletedInstants();
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION,
         commitTime);
@@ -225,11 +225,11 @@ public class CommitsCommand implements CommandMarker {
       @CliOption(key = {"path"}, help = "Path of the dataset to compare to")
       final String path) throws Exception {
     HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.fs, path);
-    HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsAndCompactionsTimeline()
+    HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants();
     ;
     HoodieTableMetaClient source = HoodieCLI.tableMetadata;
-    HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsAndCompactionsTimeline()
+    HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants();
     ;
     String targetLatestCommit =

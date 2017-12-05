@@ -294,7 +294,7 @@ public class HiveIncrementalPuller {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, targetDataPath);
 
     Optional<HoodieInstant>
-        lastCommit = metadata.getActiveTimeline().getCommitsAndCompactionsTimeline()
+        lastCommit = metadata.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
     if (lastCommit.isPresent()) {
       return lastCommit.get().getTimestamp();
@@ -332,14 +332,14 @@ public class HiveIncrementalPuller {
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation)
       throws IOException {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, sourceTableLocation);
-    List<String> commitsToSync = metadata.getActiveTimeline().getCommitsAndCompactionsTimeline()
+    List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants()
         .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants()
         .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
       log.warn("Nothing to sync. All commits in " + config.sourceTable + " are " + metadata
-          .getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants()
+          .getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
           .getInstants()
           .collect(Collectors.toList()) + " and from commit time is "
           + config.fromCommitTime);
