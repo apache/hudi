@@ -94,8 +94,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public HoodieActiveTimeline(FileSystem fs, String metaPath) {
     this(fs, metaPath,
         new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
-            INFLIGHT_DELTA_COMMIT_EXTENSION, COMPACTION_EXTENSION,
-            INFLIGHT_COMPACTION_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
+            INFLIGHT_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
             CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION});
   }
 
@@ -119,21 +118,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits, compactions) that produce new data, in the active
+   * Get all instants (commits, delta commits) that produce new data, in the active
    * timeline *
    */
-  public HoodieTimeline getCommitsAndCompactionsTimeline() {
+  public HoodieTimeline getCommitsTimeline() {
     return getTimelineOfActions(
-        Sets.newHashSet(COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION));
+        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
   }
 
   /**
-   * Get all instants (commits, delta commits, compactions, clean, savepoint, rollback) that result
+   * Get all instants (commits, delta commits, clean, savepoint, rollback) that result
    * in actions, in the active timeline *
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(
-        Sets.newHashSet(COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION,
+        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION,
             SAVEPOINT_ACTION, ROLLBACK_ACTION));
   }
 
@@ -149,14 +148,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getDeltaCommitTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(DELTA_COMMIT_ACTION),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
-  }
-
-  /**
-   * Get only the commits (inflight and completed) in the compaction timeline
-   */
-  public HoodieTimeline getCompactionTimeline() {
-    return new HoodieDefaultTimeline(filterInstantsByAction(COMPACTION_ACTION),
         (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
   }
 

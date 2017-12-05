@@ -22,7 +22,6 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -486,7 +485,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc, String commitCompactionTime) {
+  public Optional<HoodieCommitMetadata> compact(JavaSparkContext jsc, String commitCompactionTime) {
     logger.info("Nothing to compact in COW storage format");
     return Optional.empty();
   }
@@ -544,7 +543,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits)
       throws IOException {
-    String actionType = this.getCompactedCommitActionType();
+    String actionType = this.getCommitActionType();
     HoodieActiveTimeline activeTimeline = this.getActiveTimeline();
     List<String> inflights = this.getInflightCommitTimeline().getInstants()
         .map(HoodieInstant::getTimestamp)

@@ -40,12 +40,19 @@ public class HoodieCommitMetadata implements Serializable {
 
   private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
+  protected Boolean compacted;
 
   private Map<String, String> extraMetadataMap;
 
+  // for ser/deser
   public HoodieCommitMetadata() {
+    this(false);
+  }
+
+  public HoodieCommitMetadata(boolean compacted) {
     extraMetadataMap = new HashMap<>();
     partitionToWriteStats = new HashMap<>();
+    this.compacted = compacted;
   }
 
   public void addWriteStat(String partitionPath, HoodieWriteStat stat) {
@@ -73,6 +80,14 @@ public class HoodieCommitMetadata implements Serializable {
 
   public String getMetadata(String metaKey) {
     return extraMetadataMap.get(metaKey);
+  }
+
+  public Boolean getCompacted() {
+    return compacted;
+  }
+
+  public void setCompacted(Boolean compacted) {
+    this.compacted = compacted;
   }
 
   public HashMap<String, String> getFileIdAndRelativePaths() {
@@ -200,24 +215,21 @@ public class HoodieCommitMetadata implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
 
     HoodieCommitMetadata that = (HoodieCommitMetadata) o;
 
-    return partitionToWriteStats != null ?
-        partitionToWriteStats.equals(that.partitionToWriteStats) :
-        that.partitionToWriteStats == null;
+    if (!partitionToWriteStats.equals(that.partitionToWriteStats)) return false;
+    return compacted.equals(that.compacted);
 
   }
 
   @Override
   public int hashCode() {
-    return partitionToWriteStats != null ? partitionToWriteStats.hashCode() : 0;
+    int result = partitionToWriteStats.hashCode();
+    result = 31 * result + compacted.hashCode();
+    return result;
   }
 
   public static HoodieCommitMetadata fromBytes(byte[] bytes) throws IOException {

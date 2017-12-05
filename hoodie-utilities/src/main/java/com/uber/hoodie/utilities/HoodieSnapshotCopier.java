@@ -74,11 +74,11 @@ public class HoodieSnapshotCopier implements Serializable {
     final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
     final TableFileSystemView.ReadOptimizedView fsView = new HoodieTableFileSystemView(
         tableMetadata,
-        tableMetadata.getActiveTimeline().getCommitsAndCompactionsTimeline()
+        tableMetadata.getActiveTimeline().getCommitsTimeline()
             .filterCompletedInstants());
     // Get the latest commit
     Optional<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline()
-        .getCommitsAndCompactionsTimeline().filterCompletedInstants().lastInstant();
+        .getCommitsTimeline().filterCompletedInstants().lastInstant();
     if (!latestCommit.isPresent()) {
       logger.warn("No commits present. Nothing to snapshot");
       return;

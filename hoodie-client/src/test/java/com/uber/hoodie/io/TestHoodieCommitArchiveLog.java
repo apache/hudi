@@ -84,7 +84,7 @@ public class TestHoodieCommitArchiveLog {
 
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
     HoodieTimeline timeline =
-        metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
+        metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
@@ -155,13 +155,13 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "103");
 
     HoodieTimeline timeline =
-        metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
+        metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
     assertEquals("Loaded 4 commits and the count should match", 4, timeline.countInstants());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
     timeline =
-        metadata.getActiveTimeline().reload().getCommitsAndCompactionsTimeline()
+        metadata.getActiveTimeline().reload().getCommitsTimeline()
             .filterCompletedInstants();
     assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4,
         timeline.countInstants());
@@ -183,12 +183,12 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
     HoodieTimeline timeline =
-        metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
+        metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
     timeline =
-        metadata.getActiveTimeline().reload().getCommitsAndCompactionsTimeline()
+        metadata.getActiveTimeline().reload().getCommitsTimeline()
             .filterCompletedInstants();
     assertTrue("Archived commits should always be safe",
         timeline.containsOrBeforeTimelineStarts("100"));
@@ -217,12 +217,12 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
     HoodieTimeline timeline =
-        metadata.getActiveTimeline().getCommitsAndCompactionsTimeline().filterCompletedInstants();
+        metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
     timeline =
-        metadata.getActiveTimeline().reload().getCommitsAndCompactionsTimeline()
+        metadata.getActiveTimeline().reload().getCommitsTimeline()
             .filterCompletedInstants();
     assertEquals(
         "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)",

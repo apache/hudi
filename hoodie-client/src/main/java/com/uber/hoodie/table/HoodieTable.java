@@ -16,12 +16,11 @@
 
 package com.uber.hoodie.table;
 
-import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
-import com.uber.hoodie.common.model.HoodieCompactionMetadata;
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -35,6 +34,12 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieSavepointException;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaSparkContext;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
@@ -42,11 +47,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
-import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * Abstract implementation of a HoodieTable
@@ -116,21 +116,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the completed (commit + compaction) view of the file system for this table
    */
   public TableFileSystemView getCompletedFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCommitTimeline());
+    return new HoodieTableFileSystemView(metaClient, getCommitsTimeline());
   }
 
   /**
    * Get only the completed (no-inflights) commit timeline
    */
   public HoodieTimeline getCompletedCommitTimeline() {
-    return getCommitTimeline().filterCompletedInstants();
+    return getCommitsTimeline().filterCompletedInstants();
   }
 
   /**
    * Get only the inflights (no-completed) commit timeline
    */
   public HoodieTimeline getInflightCommitTimeline() {
-    return getCommitTimeline().filterInflights();
+    return getCommitsTimeline().filterInflights();
   }
 
 
@@ -185,38 +185,28 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Get the commit timeline visible for this table
    */
-  public HoodieTimeline getCommitTimeline() {
+  public HoodieTimeline getCommitsTimeline() {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         return getActiveTimeline().getCommitTimeline();
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits
         // Include commit action to be able to start doing a MOR over a COW dataset - no migration required
-        return getActiveTimeline().getCommitsAndCompactionsTimeline();
+        return getActiveTimeline().getCommitsTimeline();
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
   }
 
   /**
-   * Get only the completed (no-inflights) compaction commit timeline
-   */
-  public HoodieTimeline getCompletedCompactionCommitTimeline() {
-    return getCompactionCommitTimeline().filterCompletedInstants();
-  }
-
-
-  /**
    * Get the compacted commit timeline visible for this table
    */
-  public HoodieTimeline getCompactionCommitTimeline() {
+  public HoodieTimeline getCommitTimeline() {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitsAndCompactionsTimeline();
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits in tagging
-        return getActiveTimeline().getTimelineOfActions(
-            Sets.newHashSet(HoodieActiveTimeline.COMPACTION_ACTION));
+        return getActiveTimeline().getCommitTimeline();
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
@@ -235,20 +225,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     throw new HoodieCommitException(
         "Could not commit on unknown storage type " + metaClient.getTableType());
   }
-
-  /**
-   * Gets the action type for a compaction commit
-   */
-  public String getCompactedCommitActionType() {
-    switch (metaClient.getTableType()) {
-      case COPY_ON_WRITE:
-        return HoodieTimeline.COMMIT_ACTION;
-      case MERGE_ON_READ:
-        return HoodieTimeline.COMPACTION_ACTION;
-    }
-    throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-  }
-
 
   /**
    * Perform the ultimate IO for a given upserted (RDD) partition
@@ -279,8 +255,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data
    * access
    */
-  public abstract Optional<HoodieCompactionMetadata> compact(JavaSparkContext jsc,
-                                                             String commitCompactionTime);
+  public abstract Optional<HoodieCommitMetadata> compact(JavaSparkContext jsc,
+                                                         String commitCompactionTime);
 
   /**
    * Clean partition paths according to cleaning policy and returns the number of files cleaned.

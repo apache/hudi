@@ -158,7 +158,7 @@ public class HoodieTestUtils {
     for (String commitTime : commitTimes) {
       boolean createFile = fs.createNewFile(new Path(
           basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-              .makeCompactionFileName(commitTime)));
+              .makeCommitFileName(commitTime)));
       if (!createFile) {
         throw new IOException("cannot create commit file for commit " + commitTime);
       }
