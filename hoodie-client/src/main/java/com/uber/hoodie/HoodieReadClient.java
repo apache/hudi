@@ -71,7 +71,7 @@ public class HoodieReadClient implements Serializable {
     // Create a Hoodie table which encapsulated the commits and files visible
     this.hoodieTable = HoodieTable
         .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
-    this.commitTimeline = hoodieTable.getCompletedCompactionCommitTimeline();
+    this.commitTimeline = hoodieTable.getCommitTimeline().filterCompletedInstants();
     this.index =
         new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
     this.sqlContextOpt = Optional.absent();

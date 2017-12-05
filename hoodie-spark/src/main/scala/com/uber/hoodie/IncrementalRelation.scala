@@ -53,7 +53,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read datasets")
   }
   val hoodieTable = HoodieTable.getHoodieTable(metaClient, null)
-  val commitTimeline = hoodieTable.getCompletedCompactionCommitTimeline();
+  val commitTimeline = hoodieTable.getCommitTimeline.filterCompletedInstants();
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }

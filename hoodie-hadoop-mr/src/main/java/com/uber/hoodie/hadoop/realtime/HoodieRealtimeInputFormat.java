@@ -125,7 +125,6 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
               String maxCommitTime = metaClient.getActiveTimeline()
                   .getTimelineOfActions(
                       Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
-                          HoodieTimeline.COMPACTION_ACTION,
                           HoodieTimeline.DELTA_COMMIT_ACTION))
                   .filterCompletedInstants().lastInstant().get().getTimestamp();
               rtSplits.add(
