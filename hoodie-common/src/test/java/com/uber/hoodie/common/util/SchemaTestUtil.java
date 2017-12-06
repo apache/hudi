@@ -18,6 +18,7 @@ package com.uber.hoodie.common.util;
 
 import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.net.URI;
@@ -35,6 +36,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -53,7 +55,7 @@ public class SchemaTestUtil {
   }
 
   private static List<IndexedRecord> toRecords(Schema writerSchema, Schema readerSchema, int from,
-      int limit) throws IOException, URISyntaxException {
+                                               int limit) throws IOException, URISyntaxException {
     GenericDatumReader<IndexedRecord> reader =
         new GenericDatumReader<>(writerSchema, readerSchema);
     // Required to register the necessary JAR:// file system
@@ -93,12 +95,29 @@ public class SchemaTestUtil {
   public static List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
+    String commitTime = HoodieActiveTimeline.createNewCommitTime();
     Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     return records.stream()
         .map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema))
         .map(p -> {
           p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
           p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
+          p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
+          return p;
+        }).collect(
+            Collectors.toList());
+
+  }
+
+  public static List<IndexedRecord> updateHoodieTestRecords(List<String> oldRecordKeys, List<IndexedRecord> newRecords,
+                                                            String commitTime)
+      throws IOException, URISyntaxException {
+
+    return newRecords.stream()
+        .map(p -> {
+          ((GenericRecord)p).put(HoodieRecord.RECORD_KEY_METADATA_FIELD, oldRecordKeys.remove(0));
+          ((GenericRecord)p).put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
+          ((GenericRecord)p).put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
           return p;
         }).collect(
             Collectors.toList());
@@ -121,7 +140,7 @@ public class SchemaTestUtil {
   }
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber,
-      String commitTime, String fileId) throws IOException {
+                                                         String commitTime, String fileId) throws IOException {
     TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
     MercifulJsonConverter converter = new MercifulJsonConverter(schema);
     return converter.convert(record.toJsonString());

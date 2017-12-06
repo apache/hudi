@@ -27,7 +27,8 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
-import com.uber.hoodie.common.util.ReflectionUtils;
+import com.uber.hoodie.common.util.SpillableMapUtils;
+import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -40,10 +41,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +62,7 @@ public class HoodieCompactedLogRecordScanner implements
   private final static Logger log = LogManager.getLogger(HoodieCompactedLogRecordScanner.class);
 
   // Final map of compacted/merged records
-  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> records;
+  private final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
   // Reader schema for the records
   private final Schema readerSchema;
   // Total log files read - for metrics
@@ -82,22 +80,24 @@ public class HoodieCompactedLogRecordScanner implements
   Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
 
   public HoodieCompactedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
-      Schema readerSchema, String latestInstantTime) {
+                                         Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
 
-    // Store merged records for all versions for this log file
-    this.records = Maps.newHashMap();
-    // iterate over the paths
-    Iterator<String> logFilePathsItr = logFilePaths.iterator();
-    while (logFilePathsItr.hasNext()) {
-      HoodieLogFile logFile = new HoodieLogFile(new Path(logFilePathsItr.next()));
-      log.info("Scanning log file " + logFile.getPath());
-      totalLogFiles.incrementAndGet();
-      try {
+    try {
+      // Store merged records for all versions for this log file, set the maxInMemoryMapSize to half,
+      // assign other half to the temporary map needed to read next block
+      records = new ExternalSpillableMap<>(maxMemorySizeInBytes, readerSchema,
+          payloadClassFQN, Optional.empty());
+      // iterate over the paths
+      Iterator<String> logFilePathsItr = logFilePaths.iterator();
+      while (logFilePathsItr.hasNext()) {
+        HoodieLogFile logFile = new HoodieLogFile(new Path(logFilePathsItr.next()));
+        log.info("Scanning log file " + logFile.getPath());
+        totalLogFiles.incrementAndGet();
         // Use the HoodieLogFormatReader to iterate through the blocks in the log file
         HoodieLogFormatReader reader = new HoodieLogFormatReader(fs, logFile, readerSchema, true);
         while (reader.hasNext()) {
@@ -193,17 +193,21 @@ public class HoodieCompactedLogRecordScanner implements
               break;
           }
         }
-
-      } catch (IOException e) {
-        throw new HoodieIOException("IOException when reading log file " + logFile);
+        // merge the last read block when all the blocks are done reading
+        if (!currentInstantLogBlocks.isEmpty()) {
+          log.info("Merging the final blocks in " + logFile.getPath());
+          merge(records, currentInstantLogBlocks);
+        }
       }
-      // merge the last read block when all the blocks are done reading
-      if (!currentInstantLogBlocks.isEmpty()) {
-        log.info("Merging the final data blocks in " + logFile.getPath());
-        merge(records, currentInstantLogBlocks);
-      }
+    } catch (IOException e) {
+      throw new HoodieIOException("IOException when reading compacting log files");
     }
     this.totalRecordsToUpdate = records.size();
+    log.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
+    log.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
+    log.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
+    log.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
+    log.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
   }
 
   /**
@@ -223,21 +227,15 @@ public class HoodieCompactedLogRecordScanner implements
    * the log records since the base data is merged on previous compaction
    */
   private Map<String, HoodieRecord<? extends HoodieRecordPayload>> loadRecordsFromBlock(
-      HoodieAvroDataBlock dataBlock) {
-    Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock = Maps
-        .newHashMap();
+      HoodieAvroDataBlock dataBlock) throws IOException {
+    Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock = Maps.newHashMap();
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
     recs.forEach(rec -> {
       String key = ((GenericRecord) rec).get(HoodieRecord.RECORD_KEY_METADATA_FIELD)
           .toString();
-      String partitionPath =
-          ((GenericRecord) rec).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
-              .toString();
-      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
-          new HoodieKey(key, partitionPath),
-          ReflectionUtils
-              .loadPayload(this.payloadClassFQN, new Object[]{Optional.of(rec)}, Optional.class));
+      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord =
+          SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
       if (recordsFromLastBlock.containsKey(key)) {
         // Merge and store the merged record
         HoodieRecordPayload combinedValue = recordsFromLastBlock.get(key).getData()
@@ -257,7 +255,7 @@ public class HoodieCompactedLogRecordScanner implements
    * Merge the last seen log blocks with the accumulated records
    */
   private void merge(Map<String, HoodieRecord<? extends HoodieRecordPayload>> records,
-      Deque<HoodieLogBlock> lastBlocks) {
+                     Deque<HoodieLogBlock> lastBlocks) throws IOException {
     while (!lastBlocks.isEmpty()) {
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = lastBlocks.pollLast();
@@ -280,7 +278,7 @@ public class HoodieCompactedLogRecordScanner implements
    * Merge the records read from a single data block with the accumulated records
    */
   private void merge(Map<String, HoodieRecord<? extends HoodieRecordPayload>> records,
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock) {
+                     Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock) {
     recordsFromLastBlock.forEach((key, hoodieRecord) -> {
       if (records.containsKey(key)) {
         // Merge and store the merged record
@@ -297,7 +295,7 @@ public class HoodieCompactedLogRecordScanner implements
 
   @Override
   public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
-    return records.values().iterator();
+    return records.iterator();
   }
 
   public long getTotalLogFiles() {
