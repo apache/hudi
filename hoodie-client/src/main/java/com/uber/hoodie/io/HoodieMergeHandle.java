@@ -142,6 +142,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
    */
   private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
     // Load the new records in a map
+    // TODO (NA) instantiate a ExternalSpillableMap
     this.keyToNewRecords = new HashMap<>();
     String partitionPath = null;
     while (newRecordsItr.hasNext()) {
