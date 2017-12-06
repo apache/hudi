@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -576,13 +577,32 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
+  public void initializeFinalizeWrite() {
+    if (!config.shouldUseTempFolderForCopyOnWrite()) {
+      return;
+    }
+
+    // create temporary folder if needed
+    final FileSystem fs = FSUtils.getFs();
+    final Path temporaryFolder = new Path(config.getBasePath(), HoodieTableMetaClient.TEMPFOLDER_NAME);
+    try {
+      if (!fs.exists(temporaryFolder)) {
+        fs.mkdirs(temporaryFolder);
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create temporary folder: " + temporaryFolder);
+    }
+  }
+
+  @Override
   @SuppressWarnings("unchecked")
   public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
-    if (!config.shouldFinalizeWrite()) {
+    if (!config.shouldUseTempFolderForCopyOnWrite()) {
       return Optional.empty();
     }
 
-    List<Tuple2<String, Boolean>> results = jsc.parallelize(writeStatuses, config.getFinalizeParallelism())
+    // This is to rename each data file from temporary path to its final location
+    List<Tuple2<String, Boolean>> results = jsc.parallelize(writeStatuses, config.getFinalizeWriteParallelism())
         .map(writeStatus -> {
           Tuple2<String, HoodieWriteStat> writeStatTuple2 = (Tuple2<String, HoodieWriteStat>) writeStatus;
           HoodieWriteStat writeStat = writeStatTuple2._2();
@@ -608,6 +628,44 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         }).collect();
 
     return Optional.of(results.size());
+  }
+
+  @Override
+  public void cleanTemporaryDataFiles(JavaSparkContext jsc) {
+    if (!config.shouldUseTempFolderForCopyOnWrite()) {
+      return;
+    }
+
+    final FileSystem fs = FSUtils.getFs();
+    final Path temporaryFolder = new Path(config.getBasePath(),
+        HoodieTableMetaClient.TEMPFOLDER_NAME);
+    try {
+      if (!fs.exists(temporaryFolder)) {
+        logger.info("Temporary folder does not exist: " + temporaryFolder);
+        return;
+      }
+      List<FileStatus> fileStatusesList = Arrays.asList(fs.listStatus(temporaryFolder));
+      List<Tuple2<String, Boolean>> results = jsc
+          .parallelize(fileStatusesList, config.getFinalizeWriteParallelism())
+          .map(fileStatus -> {
+            FileSystem fs1 = FSUtils.getFs();
+            boolean success = fs1.delete(fileStatus.getPath(), false);
+            logger.info("Deleting file in temporary folder" + fileStatus.getPath() + "\t"
+                + success);
+            return new Tuple2<>(fileStatus.getPath().toString(), success);
+          }).collect();
+
+      for (Tuple2<String, Boolean> result : results) {
+        if (!result._2()) {
+          logger.info("Failed to delete file: " + result._1());
+          throw new HoodieIOException(
+              "Failed to delete file in temporary folder: " + result._1());
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException(
+          "Failed to clean data files in temporary folder: " + temporaryFolder);
+    }
   }
 
   private static class PartitionCleanStat implements Serializable {

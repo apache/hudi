@@ -58,10 +58,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
   private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
   private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
-  private static final String HOODIE_FINALIZE_WRITE_BEFORE_COMMIT = "hoodie.finalize.write.before.commit";
-  private static final String DEFAULT_HOODIE_FINALIZE_WRITE_BEFORE_COMMIT = "false";
-  private static final String FINALIZE_PARALLELISM = "hoodie.finalize.parallelism";
-  private static final String DEFAULT_FINALIZE_PARALLELISM = "5";
+  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER = "hoodie.copyonwrite.use.temp.folder";
+  private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER = "false";
+  private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
+  private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = "5";
 
   private HoodieWriteConfig(Properties props) {
     super(props);
@@ -118,12 +118,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HOODIE_WRITE_STATUS_CLASS_PROP);
   }
 
-  public boolean shouldFinalizeWrite() {
-    return Boolean.parseBoolean(props.getProperty(HOODIE_FINALIZE_WRITE_BEFORE_COMMIT));
+  public boolean shouldUseTempFolderForCopyOnWrite() {
+    return Boolean.parseBoolean(props.getProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER));
   }
 
-  public int getFinalizeParallelism() {
-    return Integer.parseInt(props.getProperty(FINALIZE_PARALLELISM));
+  public int getFinalizeWriteParallelism() {
+    return Integer.parseInt(props.getProperty(FINALIZE_WRITE_PARALLELISM));
   }
 
   /**
@@ -397,13 +397,13 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withFinalizeWrite(boolean shouldFinalizeWrite) {
-      props.setProperty(HOODIE_FINALIZE_WRITE_BEFORE_COMMIT, String.valueOf(shouldFinalizeWrite));
+    public Builder withUseTempFolderCopyOnWrite(boolean shouldUseTempFolderCopyOnWrite) {
+      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER, String.valueOf(shouldUseTempFolderCopyOnWrite));
       return this;
     }
 
-    public Builder withFinalizeParallelism(int parallelism) {
-      props.setProperty(FINALIZE_PARALLELISM, String.valueOf(parallelism));
+    public Builder withFinalizeWriteParallelism(int parallelism) {
+      props.setProperty(FINALIZE_WRITE_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 
@@ -430,10 +430,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
           HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
-      setDefaultOnCondition(props, !props.containsKey(HOODIE_FINALIZE_WRITE_BEFORE_COMMIT),
-          HOODIE_FINALIZE_WRITE_BEFORE_COMMIT, DEFAULT_HOODIE_FINALIZE_WRITE_BEFORE_COMMIT);
-      setDefaultOnCondition(props, !props.containsKey(FINALIZE_PARALLELISM),
-          FINALIZE_PARALLELISM, DEFAULT_FINALIZE_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_COPYONWRITE_USE_TEMP_FOLDER),
+          HOODIE_COPYONWRITE_USE_TEMP_FOLDER, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER);
+      setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM),
+          FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,
