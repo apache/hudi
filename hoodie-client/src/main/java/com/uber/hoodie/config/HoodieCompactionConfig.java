@@ -64,7 +64,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // Turned off by default
   public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(0);
 
-
   /**
    * Configs related to specific table types
    **/
@@ -101,6 +100,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // used to merge records written to log file
   public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
   public static final String PAYLOAD_CLASS = "hoodie.compaction.payload.class";
+
+  public static final String MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP = "hoodie.compaction.spill.threshold";
+  // Default memory size per compaction, excess spills to disk
+  public static final String DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES = String.valueOf(1024*1024*1024L); //1GB
 
   private HoodieCompactionConfig(Properties props) {
     super(props);
@@ -210,6 +213,18 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMaxMemorySizePerCompactionInBytes(long maxMemorySizePerCompactionInBytes) {
+      props.setProperty(MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP,
+          String.valueOf(maxMemorySizePerCompactionInBytes));
+      return this;
+    }
+
+    public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
+      props.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP,
+          String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      return this;
+    }
+
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP),
@@ -245,6 +260,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           PAYLOAD_CLASS, DEFAULT_PAYLOAD_CLASS);
       setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_COMPACTION_IN_MB_PROP),
           TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
+      setDefaultOnCondition(props, !props.containsKey(MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP),
+          MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP, DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES);
 
       HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
       Preconditions.checkArgument(

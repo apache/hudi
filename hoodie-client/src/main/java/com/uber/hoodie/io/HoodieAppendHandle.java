@@ -47,6 +47,7 @@ import org.apache.spark.util.SizeEstimator;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -108,8 +109,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         this.writer = HoodieLogFormat.newWriterBuilder()
             .onParentPath(new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath))
             .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(fileSlice.getLogFiles()
-                .max(HoodieLogFile.getLogVersionComparator().reversed()::compare)
-                .map(logFile -> logFile.getLogVersion()).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+                .map(logFile -> logFile.getLogVersion())
+                .max(Comparator.naturalOrder()).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
             .withSizeThreshold(config.getLogFileMaxSize())
             .withFs(fs).withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
         this.currentLogFile = writer.getLogFile();

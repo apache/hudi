@@ -68,6 +68,10 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
   private final HoodieRealtimeFileSplit split;
   private final JobConf jobConf;
 
+  // Fraction of mapper/reducer task memory used for compaction of log files
+  public static final String COMPACTION_MEMORY_FRACTION_PROP = "compaction.memory.fraction";
+  public static final String DEFAULT_COMPACTION_MEMORY_FRACTION = "0.75";
+
   public static final Log LOG = LogFactory.getLog(HoodieRealtimeRecordReader.class);
 
   private final HashMap<String, ArrayWritable> deltaRecordMap;
@@ -126,7 +130,9 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
         new HoodieCompactedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
             split.getBasePath(),
             split.getDeltaFilePaths(),
-            readerSchema, split.getMaxCommitTime());
+            readerSchema, split.getMaxCommitTime(),
+            (long) Math.ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
+                *jobConf.getMemoryForMapTask()));
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)
     for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {

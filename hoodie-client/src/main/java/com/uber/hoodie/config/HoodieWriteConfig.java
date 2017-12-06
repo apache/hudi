@@ -210,6 +210,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         .parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB_PROP));
   }
 
+  public Long getMaxMemorySizePerCompactionInBytes() {
+    return Long
+        .parseLong(props.getProperty(HoodieCompactionConfig.MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP));
+  }
+
   /**
    * index properties
    **/
