@@ -274,10 +274,20 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       throws IOException;
 
   /**
+   * Initialize resources needed for finalize write.
+   */
+  public abstract void initializeFinalizeWrite();
+
+  /**
    * Finalize the written data files
    *
    * @param writeStatuses List of WriteStatus
    * @return number of files finalized
    */
   public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc, List<Tuple2<String, HoodieWriteStat>> writeStatuses);
+
+  /**
+   * Clean temporary data files after data files are finalized or commit is rolled back.
+   */
+  public abstract void cleanTemporaryDataFiles(JavaSparkContext jsc);
 }

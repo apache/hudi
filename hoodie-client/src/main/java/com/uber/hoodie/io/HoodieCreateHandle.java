@@ -45,7 +45,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private final WriteStatus status;
   private final HoodieStorageWriter<IndexedRecord> storageWriter;
   private final Path path;
-  private final Path tempPath;
+  private Path tempPath = null;
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
 
@@ -58,10 +58,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
     final int sparkPartitionId = TaskContext.getPartitionId();
     this.path = makeNewPath(partitionPath, sparkPartitionId, status.getFileId());
-    if (config.shouldFinalizeWrite()) {
+    if (config.shouldUseTempFolderForCopyOnWrite()) {
       this.tempPath = makeTempPath(partitionPath, sparkPartitionId, status.getFileId(), TaskContext.get().stageId(), TaskContext.get().taskAttemptId());
-    } else {
-      this.tempPath = null;
     }
 
     try {
