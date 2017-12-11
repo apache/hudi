@@ -40,7 +40,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 /**
@@ -57,7 +56,6 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     TableFileSystemView.RealtimeView, Serializable {
 
     protected HoodieTableMetaClient metaClient;
-    protected transient FileSystem fs;
     // This is the commits that will be visible for all views extending this view
     protected HoodieTimeline visibleActiveTimeline;
 
@@ -72,7 +70,6 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
         HoodieTimeline visibleActiveTimeline) {
         this.metaClient = metaClient;
-        this.fs = metaClient.getFs();
         this.visibleActiveTimeline = visibleActiveTimeline;
         this.fileGroupMap = new HashMap<>();
         this.partitionToFileGroupsMap = new HashMap<>();
@@ -98,7 +95,6 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     private void readObject(java.io.ObjectInputStream in)
         throws IOException, ClassNotFoundException {
         in.defaultReadObject();
-        this.fs = FSUtils.getFs();
     }
 
     private void writeObject(java.io.ObjectOutputStream out)
@@ -255,8 +251,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
         try {
             // Create the path if it does not exist already
             Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
-            FSUtils.createPathIfNotExists(fs, partitionPath);
-            FileStatus[] statuses = fs.listStatus(partitionPath);
+            FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
+            FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
             List<HoodieFileGroup> fileGroups = addFilesToView(statuses);
             return fileGroups.stream();
         } catch (IOException e) {

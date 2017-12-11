@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -79,12 +80,15 @@ public class TestParquetUtils {
 
     // Read and verify
     List<String> rowKeysInFile = new ArrayList<>(
-        ParquetUtils.readRowKeysFromParquet(new Path(filePath)));
+        ParquetUtils
+            .readRowKeysFromParquet(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
     Collections.sort(rowKeysInFile);
     Collections.sort(rowKeys);
 
     assertEquals("Did not read back the expected list of keys", rowKeys, rowKeysInFile);
-    BloomFilter filterInFile = ParquetUtils.readBloomFilterFromParquetMetadata(new Path(filePath));
+    BloomFilter filterInFile = ParquetUtils
+        .readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(),
+            new Path(filePath));
     for (String rowKey : rowKeys) {
       assertTrue("key should be found in bloom filter", filterInFile.mightContain(rowKey));
     }

@@ -69,7 +69,7 @@ public class HoodieTableFileSystemViewTest {
   }
 
   private void refreshFsView(FileStatus[] statuses) {
-    metaClient = new HoodieTableMetaClient(HoodieTestUtils.fs, basePath, true);
+    metaClient = new HoodieTableMetaClient(HoodieTestUtils.fs.getConf(), basePath, true);
     if (statuses != null) {
       fsView = new HoodieTableFileSystemView(metaClient,
           metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants(),

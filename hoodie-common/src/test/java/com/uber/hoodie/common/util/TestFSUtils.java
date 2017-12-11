@@ -16,14 +16,23 @@
 
 package com.uber.hoodie.common.util;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
+import org.apache.hadoop.conf.Configuration;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.contrib.java.lang.system.EnvironmentVariables;
 
 public class TestFSUtils {
+
+  @Rule
+  public final EnvironmentVariables environmentVariables
+      = new EnvironmentVariables();
 
   @Test
   public void testMakeDataFileName() {
@@ -58,5 +67,16 @@ public class TestFSUtils {
     String fileName = UUID.randomUUID().toString();
     String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
     assertTrue(FSUtils.getFileId(fullFileName).equals(fileName));
+  }
+
+  @Test
+  public void testEnvVarVariablesPickedup() {
+    environmentVariables.set("HOODIE_ENV_fs_DOT_key1", "value1");
+    Configuration conf = FSUtils.prepareHadoopConf(HoodieTestUtils.getDefaultHadoopConf());
+    assertEquals("value1", conf.get("fs.key1"));
+    conf.set("fs.key1", "value11");
+    conf.set("fs.key2", "value2");
+    assertEquals("value11", conf.get("fs.key1"));
+    assertEquals("value2", conf.get("fs.key2"));
   }
 }

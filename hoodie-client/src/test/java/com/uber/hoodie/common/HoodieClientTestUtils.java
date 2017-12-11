@@ -174,7 +174,7 @@ public class HoodieClientTestUtils {
     List<String> filteredPaths = new ArrayList<>();
     try {
       HoodieTable hoodieTable = HoodieTable
-          .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
+          .getHoodieTable(new HoodieTableMetaClient(fs.getConf(), basePath, true), null);
       for (String path : paths) {
         TableFileSystemView.ReadOptimizedView fileSystemView = new HoodieTableFileSystemView(
             hoodieTable.getMetaClient(),

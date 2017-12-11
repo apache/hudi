@@ -74,7 +74,7 @@ public class HoodieActiveTimelineTest {
     HoodieInstant instant5 =
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "9");
 
-    timeline = new HoodieActiveTimeline(HoodieTestUtils.fs, metaClient.getMetaPath());
+    timeline = new HoodieActiveTimeline(metaClient);
     timeline.saveAsComplete(instant1, Optional.empty());
     timeline.saveAsComplete(instant2, Optional.empty());
     timeline.saveAsComplete(instant3, Optional.empty());
@@ -98,7 +98,7 @@ public class HoodieActiveTimelineTest {
 
   @Test
   public void testTimelineOperationsBasic() throws Exception {
-    timeline = new HoodieActiveTimeline(HoodieTestUtils.fs, metaClient.getMetaPath());
+    timeline = new HoodieActiveTimeline(metaClient);
     assertTrue(timeline.empty());
     assertEquals("", 0, timeline.countInstants());
     assertEquals("", Optional.empty(), timeline.firstInstant());

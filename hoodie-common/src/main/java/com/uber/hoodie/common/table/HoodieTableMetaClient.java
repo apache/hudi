@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.table;
 
+import com.uber.hoodie.common.SerializableConfiguration;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.Properties;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -52,24 +54,28 @@ public class HoodieTableMetaClient implements Serializable {
   private String basePath;
   private transient FileSystem fs;
   private String metaPath;
+  private SerializableConfiguration hadoopConf;
   private HoodieTableType tableType;
   private HoodieTableConfig tableConfig;
   private HoodieActiveTimeline activeTimeline;
   private HoodieArchivedTimeline archivedTimeline;
 
-  public HoodieTableMetaClient(FileSystem fs, String basePath) throws DatasetNotFoundException {
+  public HoodieTableMetaClient(Configuration conf, String basePath)
+      throws DatasetNotFoundException {
     // Do not load any timeline by default
-    this(fs, basePath, false);
+    this(conf, basePath, false);
   }
 
-  public HoodieTableMetaClient(FileSystem fs, String basePath, boolean loadActiveTimelineOnLoad)
+  public HoodieTableMetaClient(Configuration conf, String basePath,
+      boolean loadActiveTimelineOnLoad)
       throws DatasetNotFoundException {
     log.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
-    this.fs = fs;
+    this.hadoopConf = new SerializableConfiguration(conf);
     Path basePathDir = new Path(this.basePath);
     this.metaPath = basePath + File.separator + METAFOLDER_NAME;
     Path metaPathDir = new Path(this.metaPath);
+    this.fs = getFs();
     DatasetNotFoundException.checkValidDataset(fs, basePathDir, metaPathDir);
     this.tableConfig = new HoodieTableConfig(fs, metaPath);
     this.tableType = tableConfig.getTableType();
@@ -96,7 +102,7 @@ public class HoodieTableMetaClient implements Serializable {
   private void readObject(java.io.ObjectInputStream in)
       throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    this.fs = FSUtils.getFs();
+    fs = null; // will be lazily inited
   }
 
   private void writeObject(java.io.ObjectOutputStream out)
@@ -136,7 +142,14 @@ public class HoodieTableMetaClient implements Serializable {
    * Get the FS implementation for this table
    */
   public FileSystem getFs() {
+    if (fs == null) {
+      fs = FSUtils.getFs(metaPath, hadoopConf.get());
+    }
     return fs;
+  }
+
+  public Configuration getHadoopConf() {
+    return hadoopConf.get();
   }
 
   /**
@@ -146,7 +159,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public synchronized HoodieActiveTimeline getActiveTimeline() {
     if (activeTimeline == null) {
-      activeTimeline = new HoodieActiveTimeline(fs, metaPath);
+      activeTimeline = new HoodieActiveTimeline(this);
     }
     return activeTimeline;
   }
@@ -159,7 +172,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public synchronized HoodieArchivedTimeline getArchivedTimeline() {
     if (archivedTimeline == null) {
-      archivedTimeline = new HoodieArchivedTimeline(fs, metaPath);
+      archivedTimeline = new HoodieArchivedTimeline(this);
     }
     return archivedTimeline;
   }
@@ -196,7 +209,7 @@ public class HoodieTableMetaClient implements Serializable {
       fs.mkdirs(metaPathDir);
     }
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType()
         + " from " + basePath);
     return metaClient;

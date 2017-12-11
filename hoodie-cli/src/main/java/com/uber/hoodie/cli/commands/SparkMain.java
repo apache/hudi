@@ -97,8 +97,8 @@ public class SparkMain {
       String repairedOutputPath,
       String basePath)
       throws Exception {
-    DedupeSparkJob job = new DedupeSparkJob(basePath,
-        duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc), FSUtils.getFs());
+    DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
+        new SQLContext(jsc), FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
     job.fixDuplicates(true);
     return 0;
   }

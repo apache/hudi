@@ -83,7 +83,7 @@ public class HoodieCompactedLogRecordScanner implements
       Schema readerSchema, String latestInstantTime) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = new HoodieTableMetaClient(fs, basePath);
+    this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
 

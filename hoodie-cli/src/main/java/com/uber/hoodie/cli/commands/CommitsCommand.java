@@ -96,7 +96,7 @@ public class CommitsCommand implements CommandMarker {
   @CliCommand(value = "commits refresh", help = "Refresh the commits")
   public String refreshCommits() throws IOException {
     HoodieTableMetaClient metadata =
-        new HoodieTableMetaClient(HoodieCLI.fs, HoodieCLI.tableMetadata.getBasePath());
+        new HoodieTableMetaClient(HoodieCLI.conf, HoodieCLI.tableMetadata.getBasePath());
     HoodieCLI.setTableMetadata(metadata);
     return "Metadata for table " + metadata.getTableConfig().getTableName() + " refreshed.";
   }
@@ -224,14 +224,13 @@ public class CommitsCommand implements CommandMarker {
   public String compareCommits(
       @CliOption(key = {"path"}, help = "Path of the dataset to compare to")
       final String path) throws Exception {
-    HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.fs, path);
+
+    HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants();
-    ;
     HoodieTableMetaClient source = HoodieCLI.tableMetadata;
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants();
-    ;
     String targetLatestCommit =
         targetTimeline.getInstants().iterator().hasNext() ? "0"
             : targetTimeline.lastInstant().get().getTimestamp();
@@ -266,7 +265,7 @@ public class CommitsCommand implements CommandMarker {
   public String syncCommits(
       @CliOption(key = {"path"}, help = "Path of the dataset to compare to")
       final String path) throws Exception {
-    HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.fs, path);
+    HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.tableMetadata.getTableConfig().getTableName()
         + " and " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName();

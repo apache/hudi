@@ -67,7 +67,7 @@ public class HoodieLogFormatTest {
 
   private FileSystem fs;
   private Path partitionPath;
-  private String basePath;
+  private static String basePath;
 
   @BeforeClass
   public static void setUpClass() throws IOException, InterruptedException {
@@ -78,7 +78,7 @@ public class HoodieLogFormatTest {
   @AfterClass
   public static void tearDownClass() {
     MiniClusterUtil.shutdown();
-    HoodieTestUtils.resetFS();
+    HoodieTestUtils.resetFS(basePath);
   }
 
   @Before
@@ -343,7 +343,7 @@ public class HoodieLogFormatTest {
     writer.close();
 
     // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
-    fs = FileSystem.get(fs.getConf());
+    fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
     outputStream.write(HoodieLogFormat.MAGIC);
@@ -533,7 +533,7 @@ public class HoodieLogFormatTest {
     writer.close();
 
     // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
-    fs = FileSystem.get(fs.getConf());
+    fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
     outputStream.write(HoodieLogFormat.MAGIC);

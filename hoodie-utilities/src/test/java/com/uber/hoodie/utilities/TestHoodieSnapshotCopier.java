@@ -44,17 +44,22 @@ public class TestHoodieSnapshotCopier {
 
   @Before
   public void init() throws IOException {
-    // Prepare directories
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    rootPath = folder.getRoot().getAbsolutePath();
-    basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
-    HoodieTestUtils.init(basePath);
-    outputPath = rootPath + "/output";
-    fs = FSUtils.getFs();
-    // Start a local Spark job
-    SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
-    jsc = new JavaSparkContext(conf);
+    try {
+      // Prepare directories
+      TemporaryFolder folder = new TemporaryFolder();
+      folder.create();
+      rootPath = "file://" + folder.getRoot().getAbsolutePath();
+      basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+      outputPath = rootPath + "/output";
+
+      fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+      HoodieTestUtils.init(basePath);
+      // Start a local Spark job
+      SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
+      jsc = new JavaSparkContext(conf);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   @Test

@@ -48,7 +48,6 @@ import org.apache.spark.streaming.kafka.KafkaCluster;
 import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.apache.spark.streaming.kafka.OffsetRange;
 import scala.Predef;
-import scala.Tuple2;
 import scala.collection.JavaConverters;
 import scala.collection.immutable.Map;
 import scala.collection.immutable.Set;
@@ -134,16 +133,16 @@ public class KafkaSource extends Source {
 
     public static <K, V> Map<K, V> toScalaMap(HashMap<K, V> m) {
       return JavaConverters.mapAsScalaMapConverter(m).asScala().toMap(
-          Predef.<Tuple2<K, V>>conforms()
+          Predef.conforms()
       );
     }
 
     public static Set<String> toScalaSet(HashSet<String> s) {
-      return JavaConverters.asScalaSetConverter(s).asScala().<String>toSet();
+      return JavaConverters.asScalaSetConverter(s).asScala().toSet();
     }
 
     public static <K, V> java.util.Map<K, V> toJavaMap(Map<K, V> m) {
-      return JavaConverters.<K, V>mapAsJavaMapConverter(m).asJava();
+      return JavaConverters.mapAsJavaMapConverter(m).asJava();
     }
   }
 

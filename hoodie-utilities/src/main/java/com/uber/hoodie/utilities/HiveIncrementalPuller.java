@@ -291,7 +291,7 @@ public class HiveIncrementalPuller {
     if (!fs.exists(new Path(targetDataPath)) || !fs.exists(new Path(targetDataPath + "/.hoodie"))) {
       return "0";
     }
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, targetDataPath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), targetDataPath);
 
     Optional<HoodieInstant>
         lastCommit = metadata.getActiveTimeline().getCommitsTimeline()
@@ -331,7 +331,7 @@ public class HiveIncrementalPuller {
 
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation)
       throws IOException {
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, sourceTableLocation);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), sourceTableLocation);
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants()
         .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants()

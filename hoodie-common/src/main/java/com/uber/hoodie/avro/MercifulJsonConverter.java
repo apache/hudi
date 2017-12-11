@@ -77,7 +77,7 @@ public class MercifulJsonConverter {
     switch (schema.getType()) {
       case BOOLEAN:
         if (value instanceof Boolean) {
-          return (Boolean) value;
+          return value;
         }
         break;
       case DOUBLE:

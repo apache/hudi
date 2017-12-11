@@ -91,7 +91,7 @@ public class HoodieHiveClient {
   HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     this.syncConfig = cfg;
     this.fs = fs;
-    this.metaClient = new HoodieTableMetaClient(fs, cfg.basePath, true);
+    this.metaClient = new HoodieTableMetaClient(fs.getConf(), cfg.basePath, true);
     this.tableType = metaClient.getTableType();
 
     LOG.info("Creating hive connection " + cfg.jdbcUrl);

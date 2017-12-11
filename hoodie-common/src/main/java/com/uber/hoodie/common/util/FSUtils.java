@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,6 +56,7 @@ public class FSUtils {
   private static final int MAX_ATTEMPTS_RECOVER_LEASE = 10;
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
+  private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
   private static FileSystem fs;
 
   /**
@@ -65,17 +67,32 @@ public class FSUtils {
     FSUtils.fs = fs;
   }
 
+  public static Configuration prepareHadoopConf(Configuration conf) {
+    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
+    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
 
-  public static FileSystem getFs() {
+    // look for all properties, prefixed to be picked up
+    for (Entry<String, String> prop : System.getenv().entrySet()) {
+      if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
+        LOG.info("Picking up value for hoodie env var :" + prop.getKey());
+        conf.set(prop.getKey()
+                .replace(HOODIE_ENV_PROPS_PREFIX, "")
+                .replaceAll("_DOT_", "."),
+            prop.getValue());
+      }
+    }
+    return conf;
+  }
+
+
+  public static FileSystem getFs(String path, Configuration conf) {
     if (fs != null) {
       return fs;
     }
-    Configuration conf = new Configuration();
-    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
     FileSystem fs;
+    conf = prepareHadoopConf(conf);
     try {
-      fs = FileSystem.get(conf);
+      fs = new Path(path).getFileSystem(conf);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(),
           e);
@@ -83,7 +100,6 @@ public class FSUtils {
     LOG.info(
         String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
             conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
-
     return fs;
   }
 

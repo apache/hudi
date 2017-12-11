@@ -51,10 +51,11 @@ public class ParquetUtils {
    * Read the rowKey list from the given parquet file.
    *
    * @param filePath The parquet file path.
+   * @param configuration configuration to build fs object
    */
-  public static Set<String> readRowKeysFromParquet(Path filePath) {
-    Configuration conf = new Configuration();
-    conf.addResource(getFs().getConf());
+  public static Set<String> readRowKeysFromParquet(Configuration configuration, Path filePath) {
+    Configuration conf = new Configuration(configuration);
+    conf.addResource(getFs(filePath.toString(), conf).getConf());
     Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
@@ -84,19 +85,12 @@ public class ParquetUtils {
     return rowKeys;
   }
 
-
-  /**
-   * Read the metadata from a parquet file
-   */
-  public static ParquetMetadata readMetadata(Path parquetFilePath) {
-    return readMetadata(new Configuration(), parquetFilePath);
-  }
-
   public static ParquetMetadata readMetadata(Configuration conf, Path parquetFilePath) {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader.readFooter(getFs().getConf(), parquetFilePath);
+      footer = ParquetFileReader
+          .readFooter(getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
           e);
@@ -108,14 +102,15 @@ public class ParquetUtils {
   /**
    * Get the schema of the given parquet file.
    */
-  public static MessageType readSchema(Path parquetFilePath) {
-    return readMetadata(parquetFilePath).getFileMetaData().getSchema();
+  public static MessageType readSchema(Configuration configuration, Path parquetFilePath) {
+    return readMetadata(configuration, parquetFilePath).getFileMetaData().getSchema();
   }
 
 
-  private static List<String> readParquetFooter(Path parquetFilePath, String... footerNames) {
+  private static List<String> readParquetFooter(Configuration configuration, Path parquetFilePath,
+      String... footerNames) {
     List<String> footerVals = new ArrayList<>();
-    ParquetMetadata footer = readMetadata(parquetFilePath);
+    ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
     for (String footerName : footerNames) {
       if (metadata.containsKey(footerName)) {
@@ -128,21 +123,22 @@ public class ParquetUtils {
     return footerVals;
   }
 
-  public static Schema readAvroSchema(Path parquetFilePath) {
-    return new AvroSchemaConverter().convert(readSchema(parquetFilePath));
+  public static Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
+    return new AvroSchemaConverter().convert(readSchema(configuration, parquetFilePath));
   }
 
   /**
    * Read out the bloom filter from the parquet file meta data.
    */
-  public static BloomFilter readBloomFilterFromParquetMetadata(Path parquetFilePath) {
-    String footerVal = readParquetFooter(parquetFilePath,
+  public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration,
+      Path parquetFilePath) {
+    String footerVal = readParquetFooter(configuration, parquetFilePath,
         HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY).get(0);
     return new BloomFilter(footerVal);
   }
 
-  public static String[] readMinMaxRecordKeys(Path parquetFilePath) {
-    List<String> minMaxKeys = readParquetFooter(parquetFilePath,
+  public static String[] readMinMaxRecordKeys(Configuration configuration, Path parquetFilePath) {
+    List<String> minMaxKeys = readParquetFooter(configuration, parquetFilePath,
         HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER,
         HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
     if (minMaxKeys.size() != 2) {
@@ -156,11 +152,11 @@ public class ParquetUtils {
   /**
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
-  public static List<GenericRecord> readAvroRecords(Path filePath) {
+  public static List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
     ParquetReader reader = null;
     List<GenericRecord> records = new ArrayList<>();
     try {
-      reader = AvroParquetReader.builder(filePath).build();
+      reader = AvroParquetReader.builder(filePath).withConf(configuration).build();
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {

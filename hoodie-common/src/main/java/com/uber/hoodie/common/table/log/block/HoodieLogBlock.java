@@ -58,7 +58,7 @@ public abstract class HoodieLogBlock {
    */
   public enum LogMetadataType {
     INSTANT_TIME,
-    TARGET_INSTANT_TIME;
+    TARGET_INSTANT_TIME
   }
 
   public HoodieLogBlock(Map<LogMetadataType, String> logMetadata) {

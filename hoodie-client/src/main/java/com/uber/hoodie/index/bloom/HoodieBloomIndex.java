@@ -155,7 +155,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     // Step 3: Obtain a RDD, for each incoming record, that already exists, with the file id, that contains it.
     int parallelism = autoComputeParallelism(recordsPerPartition, partitionToFileInfo,
         partitionRecordKeyPairRDD);
-    return findMatchingFilesForRecordKeys(partitionToFileInfo, partitionRecordKeyPairRDD,
+    return findMatchingFilesForRecordKeys(hoodieTable, partitionToFileInfo,
+        partitionRecordKeyPairRDD,
         parallelism);
   }
 
@@ -257,7 +258,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           .mapToPair(ft -> {
             try {
               String[] minMaxKeys = ParquetUtils
-                  .readMinMaxRecordKeys(ft._2().getFileStatus().getPath());
+                  .readMinMaxRecordKeys(hoodieTable.getHadoopConf(),
+                      ft._2().getFileStatus().getPath());
               return new Tuple2<>(ft._1(),
                   new BloomIndexFileInfo(ft._2().getFileName(), minMaxKeys[0], minMaxKeys[1]));
             } catch (MetadataNotFoundException me) {
@@ -358,7 +360,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * Make sure the parallelism is atleast the groupby parallelism for tagging location
    */
   @VisibleForTesting
-  JavaPairRDD<String, String> findMatchingFilesForRecordKeys(
+  JavaPairRDD<String, String> findMatchingFilesForRecordKeys(HoodieTable hoodieTable,
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD,
       int totalSubpartitions) {
@@ -372,7 +374,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         .sortByKey(true, joinParallelism);
 
     return fileSortedTripletRDD
-        .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(config.getBasePath()), true)
+        .mapPartitionsWithIndex(
+            new HoodieBloomIndexCheckFunction(hoodieTable, config.getBasePath()), true)
         .flatMap(indexLookupResults -> indexLookupResults.iterator())
         .filter(lookupResult -> lookupResult.getMatchingRecordKeys().size() > 0)
         .flatMapToPair(lookupResult -> {

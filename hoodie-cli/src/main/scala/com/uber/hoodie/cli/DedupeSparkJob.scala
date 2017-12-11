@@ -75,7 +75,7 @@ class DedupeSparkJob(basePath: String,
     val tmpTableName = s"htbl_${System.currentTimeMillis()}"
     val dedupeTblName = s"${tmpTableName}_dupeKeys"
 
-    val metadata = new HoodieTableMetaClient(fs, basePath)
+    val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
 
     val allFiles = fs.listStatus(new org.apache.hadoop.fs.Path(s"${basePath}/${duplicatedPartitionPath}"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
@@ -127,7 +127,7 @@ class DedupeSparkJob(basePath: String,
 
 
   def fixDuplicates(dryRun: Boolean = true) = {
-    val metadata = new HoodieTableMetaClient(fs, basePath)
+    val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
 
     val allFiles = fs.listStatus(new Path(s"${basePath}/${duplicatedPartitionPath}"))
     val fsView = new HoodieTableFileSystemView(metadata, metadata.getActiveTimeline.getCommitTimeline.filterCompletedInstants(), allFiles)
