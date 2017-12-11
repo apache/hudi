@@ -33,7 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -51,14 +50,12 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
   private final HoodieTimeline commitTimeline;
   private HoodieTable<T> hoodieTable;
   private HoodieWriteConfig config;
-  private FileSystem fs;
 
   public HoodieCleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getCompletedFileSystemView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
     this.config = config;
-    this.fs = hoodieTable.getFs();
   }
 
 

@@ -55,8 +55,9 @@ public class TestUpdateMapFunction {
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
     HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
+        HoodieTestUtils.getDefaultHadoopConf(), basePath);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metaClient);
 
     String recordStr1 =
         "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -80,16 +81,16 @@ public class TestUpdateMapFunction {
     Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
     Path commitFile =
         new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
-    FSUtils.getFs().create(commitFile);
+    FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
 
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-    metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    metaClient = new HoodieTableMetaClient(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     String fileId = insertResult.next().get(0).getFileId();
     System.out.println(fileId);
 
-    table = new HoodieCopyOnWriteTable(config, metadata);
+    table = new HoodieCopyOnWriteTable(config, metaClient);
     // New content with values for the newly added field
     recordStr1 =
         "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";

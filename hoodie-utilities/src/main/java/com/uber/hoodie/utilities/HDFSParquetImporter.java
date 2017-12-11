@@ -56,21 +56,18 @@ import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.VoidFunction;
 import scala.Tuple2;
 
 public class HDFSParquetImporter implements Serializable {
 
   private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
   private final Config cfg;
-  private final transient FileSystem fs;
+  private transient FileSystem fs;
   public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
   public HDFSParquetImporter(
       Config cfg) throws IOException {
     this.cfg = cfg;
-    fs = FSUtils.getFs();
   }
 
   public static class FormatValidator implements IValueValidator<String> {
@@ -203,6 +200,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   public int dataImport(JavaSparkContext jsc, int retry) throws Exception {
+    this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     int ret = -1;
     try {
       // Verify that targetPath is not present.
@@ -251,43 +249,36 @@ public class HDFSParquetImporter implements Serializable {
               GenericRecord.class, job.getConfiguration())
           // To reduce large number of tasks.
           .coalesce(16 * cfg.parallelism)
-          .map(new Function<Tuple2<Void, GenericRecord>, HoodieRecord<HoodieJsonPayload>>() {
-                 @Override
-                 public HoodieRecord<HoodieJsonPayload> call(Tuple2<Void, GenericRecord> entry)
-                     throws Exception {
-                   GenericRecord genericRecord = entry._2();
-                   Object partitionField = genericRecord.get(cfg.partitionKey);
-                   if (partitionField == null) {
-                     throw new HoodieIOException(
-                         "partition key is missing. :" + cfg.partitionKey);
-                   }
-                   Object rowField = genericRecord.get(cfg.rowKey);
-                   if (rowField == null) {
-                     throw new HoodieIOException(
-                         "row field is missing. :" + cfg.rowKey);
-                   }
-                   long ts = (long) ((Double) partitionField * 1000l);
-                   String partitionPath = PARTITION_FORMATTER.format(new Date(ts));
-                   return new HoodieRecord<HoodieJsonPayload>(
-                       new HoodieKey((String) rowField, partitionPath),
-                       new HoodieJsonPayload(genericRecord.toString()));
-                 }
-               }
+          .map(entry -> {
+                GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+                Object partitionField = genericRecord.get(cfg.partitionKey);
+                if (partitionField == null) {
+                  throw new HoodieIOException(
+                      "partition key is missing. :" + cfg.partitionKey);
+                }
+                Object rowField = genericRecord.get(cfg.rowKey);
+                if (rowField == null) {
+                  throw new HoodieIOException(
+                      "row field is missing. :" + cfg.rowKey);
+                }
+                long ts = (long) ((Double) partitionField * 1000l);
+                String partitionPath = PARTITION_FORMATTER.format(new Date(ts));
+                return new HoodieRecord<>(
+                    new HoodieKey((String) rowField, partitionPath),
+                    new HoodieJsonPayload(genericRecord.toString()));
+              }
           );
       // Get commit time.
       String commitTime = client.startCommit();
 
       JavaRDD<WriteStatus> writeResponse = client.bulkInsert(hoodieRecords, commitTime);
       Accumulator<Integer> errors = jsc.accumulator(0);
-      writeResponse.foreach(new VoidFunction<WriteStatus>() {
-        @Override
-        public void call(WriteStatus writeStatus) throws Exception {
+      writeResponse.foreach(writeStatus -> {
           if (writeStatus.hasErrors()) {
             errors.add(1);
             logger.error(String.format("Error processing records :writeStatus:%s",
                 writeStatus.getStat().toString()));
           }
-        }
       });
       if (errors.value() == 0) {
         logger.info(String

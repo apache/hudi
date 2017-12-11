@@ -34,12 +34,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieSavepointException;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
-import org.apache.spark.api.java.JavaSparkContext;
-
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
@@ -47,6 +41,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * Abstract implementation of a HoodieTable
@@ -55,6 +54,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
+
   private static Logger logger = LogManager.getLogger(HoodieTable.class);
 
   protected HoodieTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
@@ -87,8 +87,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return metaClient;
   }
 
-  public FileSystem getFs() {
-    return metaClient.getFs();
+  public Configuration getHadoopConf() {
+    return metaClient.getHadoopConf();
   }
 
   /**

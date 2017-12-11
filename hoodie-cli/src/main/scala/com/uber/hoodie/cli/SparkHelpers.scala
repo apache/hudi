@@ -38,7 +38,7 @@ import scala.collection.mutable._
 object SparkHelpers {
   @throws[Exception]
   def skipKeysAndWriteNewFile(commitTime: String, fs: FileSystem, sourceFile: Path, destinationFile: Path, keysToSkip: Set[String]) {
-    val sourceRecords = ParquetUtils.readAvroRecords(sourceFile)
+    val sourceRecords = ParquetUtils.readAvroRecords(fs.getConf, sourceFile)
     val schema: Schema = sourceRecords.get(0).getSchema
     val filter: BloomFilter = new BloomFilter(HoodieIndexConfig.DEFAULT_BLOOM_FILTER_NUM_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_FILTER_FPP.toDouble)
     val writeSupport: HoodieAvroWriteSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter)
@@ -47,6 +47,7 @@ object SparkHelpers {
     for (rec <- sourceRecords) {
       val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
       if (!keysToSkip.contains(key)) {
+
         writer.writeAvro(key, rec)
       }
     }

@@ -89,7 +89,8 @@ public class TestCopyOnWriteTable {
 
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
 
     HoodieCreateHandle io = new HoodieCreateHandle(config, commitTime, table, partitionPath);
@@ -115,7 +116,7 @@ public class TestCopyOnWriteTable {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
     String partitionPath = "/2016/01/31";
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
@@ -154,7 +155,8 @@ public class TestCopyOnWriteTable {
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path parquetFilePath = new Path(parquetFile.getAbsolutePath());
-    BloomFilter filter = ParquetUtils.readBloomFilterFromParquetMetadata(parquetFilePath);
+    BloomFilter filter = ParquetUtils
+        .readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), parquetFilePath);
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
@@ -163,7 +165,8 @@ public class TestCopyOnWriteTable {
         + FSUtils.getCommitTime(parquetFile.getName()) + ".commit").createNewFile();
 
     // Read the parquet file, check the record content
-    List<GenericRecord> fileRecords = ParquetUtils.readAvroRecords(parquetFilePath);
+    List<GenericRecord> fileRecords = ParquetUtils
+        .readAvroRecords(jsc.hadoopConfiguration(), parquetFilePath);
     GenericRecord newRecord;
     int index = 0;
     for (GenericRecord record : fileRecords) {
@@ -188,7 +191,7 @@ public class TestCopyOnWriteTable {
 
     Thread.sleep(1000);
     String newCommitTime = HoodieTestUtils.makeNewCommitTime();
-    metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = new HoodieCopyOnWriteTable(config, metadata);
     Iterator<List<WriteStatus>> iter = table
         .handleUpdate(newCommitTime, updatedRecord1.getCurrentLocation().getFileId(),
@@ -211,7 +214,7 @@ public class TestCopyOnWriteTable {
     // Check whether the record has been updated
     Path updatedParquetFilePath = new Path(updatedParquetFile.getAbsolutePath());
     BloomFilter updatedFilter = ParquetUtils
-        .readBloomFilterFromParquetMetadata(updatedParquetFilePath);
+        .readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), updatedParquetFilePath);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));
@@ -261,7 +264,7 @@ public class TestCopyOnWriteTable {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withWriteStatusClass(MetadataMergeWriteStatus.class).build();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
@@ -298,8 +301,8 @@ public class TestCopyOnWriteTable {
   public void testInsertWithPartialFailures() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfig();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
-    FileSystem fs = FSUtils.getFs();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
     // Write a few records, and get atleast one file
@@ -340,7 +343,7 @@ public class TestCopyOnWriteTable {
   public void testInsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfig();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
     // Case 1:
@@ -389,7 +392,7 @@ public class TestCopyOnWriteTable {
         HoodieStorageConfig.newBuilder().limitFileSize(64 * 1024).parquetBlockSize(64 * 1024)
             .parquetPageSize(64 * 1024).build()).build();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
     List<HoodieRecord> records = new ArrayList<>();
@@ -437,7 +440,7 @@ public class TestCopyOnWriteTable {
     HoodieClientTestUtils.fakeCommitFile(basePath, "001");
     HoodieClientTestUtils.fakeDataFile(basePath, TEST_PARTITION_PATH, "001", "file1", fileSize);
 
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(

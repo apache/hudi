@@ -65,7 +65,7 @@ public class DFSSource extends Source {
   public DFSSource(PropertiesConfiguration config, JavaSparkContext sparkContext,
       SourceDataFormat dataFormat, SchemaProvider schemaProvider) {
     super(config, sparkContext, dataFormat, schemaProvider);
-    this.fs = FSUtils.getFs();
+    this.fs = FSUtils.getFs(config.getBasePath(), sparkContext.hadoopConfiguration());
     DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
   }
 

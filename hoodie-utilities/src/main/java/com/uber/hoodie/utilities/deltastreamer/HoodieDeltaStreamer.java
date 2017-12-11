@@ -115,10 +115,11 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public HoodieDeltaStreamer(Config cfg) throws IOException {
     this.cfg = cfg;
-    this.fs = FSUtils.getFs();
+    this.jssc = getSparkContext();
+    this.fs = FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration());
 
     if (fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient meta = new HoodieTableMetaClient(fs, cfg.targetBasePath);
+      HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), cfg.targetBasePath);
       this.commitTimelineOpt = Optional
           .of(meta.getActiveTimeline().getCommitsTimeline()
               .filterCompletedInstants());
@@ -129,8 +130,6 @@ public class HoodieDeltaStreamer implements Serializable {
     //TODO(vc) Should these be passed from outside?
     initSchemaProvider();
     initKeyGenerator();
-    this.jssc = getSparkContext();
-
     initSource();
   }
 
@@ -203,7 +202,9 @@ public class HoodieDeltaStreamer implements Serializable {
       Properties properties = new Properties();
       properties.put(HoodieWriteConfig.TABLE_NAME, cfg.targetTableName);
       HoodieTableMetaClient
-          .initializePathAsHoodieDataset(FSUtils.getFs(), cfg.targetBasePath, properties);
+          .initializePathAsHoodieDataset(
+              FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()), cfg.targetBasePath,
+              properties);
     }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 

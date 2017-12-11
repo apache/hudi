@@ -55,7 +55,7 @@ public class TestHoodieCommitArchiveLog {
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     HoodieTestUtils.init(basePath);
-    fs = FSUtils.getFs();
+    fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
   }
 
   @Test
@@ -82,7 +82,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "104");
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieTimeline timeline =
         metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
@@ -112,8 +112,8 @@ public class TestHoodieCommitArchiveLog {
     originalCommits.removeAll(timeline.getInstants().collect(Collectors.toList()));
 
     //read the file
-    HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(),
-        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
+    HoodieLogFormat.Reader reader = HoodieLogFormat
+        .newReader(fs, new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
         HoodieArchivedMetaEntry.getClassSchema(), false);
 
     int archivedRecordsCount = 0;
@@ -147,7 +147,7 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, fs);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
     HoodieTestDataGenerator.createCommitFile(basePath, "101");
@@ -173,7 +173,7 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, fs);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
     HoodieTestDataGenerator.createCommitFile(basePath, "101");
@@ -206,7 +206,7 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, fs);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
     HoodieTestDataGenerator.createCommitFile(basePath, "101");

@@ -150,7 +150,7 @@ public interface HoodieLogFormat {
     public Writer build() throws IOException, InterruptedException {
       log.info("Building HoodieLogFormat Writer");
       if (fs == null) {
-        fs = FSUtils.getFs();
+        throw new IllegalArgumentException("fs is not specified");
       }
       if (logFileId == null) {
         throw new IllegalArgumentException("FileID is not specified");

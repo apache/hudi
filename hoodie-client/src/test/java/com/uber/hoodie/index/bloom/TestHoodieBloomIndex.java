@@ -54,7 +54,6 @@ import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -73,12 +72,11 @@ public class TestHoodieBloomIndex {
 
   private JavaSparkContext jsc = null;
   private String basePath = null;
-  private transient final FileSystem fs;
+  private transient FileSystem fs;
   private String schemaStr;
   private Schema schema;
 
   public TestHoodieBloomIndex() throws Exception {
-    fs = FSUtils.getFs();
   }
 
   @Before
@@ -89,6 +87,7 @@ public class TestHoodieBloomIndex {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
+    fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     HoodieTestUtils.init(basePath);
     // We have some records to be tagged (two different partitions)
     schemaStr = IOUtils.toString(getClass().getResourceAsStream("/exampleSchema.txt"), "UTF-8");
@@ -120,8 +119,6 @@ public class TestHoodieBloomIndex {
         .parallelize(Arrays.asList(record1, record2, record3, record4));
 
     // Load to memory
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-
     Map<String, Iterable<String>> map = recordRDD
         .mapToPair(record -> new Tuple2<>(record.getPartitionPath(), record.getRecordKey()))
         .groupByKey().collectAsMap();
@@ -174,7 +171,7 @@ public class TestHoodieBloomIndex {
         Arrays.asList(record2, record3, record4), schema, null, false);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
     List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, table);
     // Still 0, as no valid commit
@@ -291,7 +288,8 @@ public class TestHoodieBloomIndex {
     List<String> uuids = Arrays.asList(record1.getRecordKey(), record2.getRecordKey(),
         record3.getRecordKey(), record4.getRecordKey());
 
-    List<String> results = HoodieBloomIndexCheckFunction.checkCandidatesAgainstFile(uuids,
+    List<String> results = HoodieBloomIndexCheckFunction
+        .checkCandidatesAgainstFile(jsc.hadoopConfiguration(), uuids,
         new Path(basePath + "/2016/01/31/" + filename));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
@@ -308,7 +306,7 @@ public class TestHoodieBloomIndex {
     // We have some records to be tagged (two different partitions)
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
 
@@ -348,7 +346,7 @@ public class TestHoodieBloomIndex {
         .parallelize(Arrays.asList(record1, record2, record3, record4));
 
     // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
 
@@ -367,7 +365,7 @@ public class TestHoodieBloomIndex {
     String filename3 = writeParquetFile("2015/01/31", Arrays.asList(record4), schema, null, true);
 
     // We do the tag again
-    metadata = new HoodieTableMetaClient(fs, basePath);
+    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metadata, config);
 
     taggedRecordRDD = bloomIndex.tagLocation(recordRDD, table);
@@ -409,7 +407,7 @@ public class TestHoodieBloomIndex {
     JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(key1, key2, key3, key4));
 
     // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
 
@@ -429,7 +427,7 @@ public class TestHoodieBloomIndex {
     String filename3 = writeParquetFile("2015/01/31", Arrays.asList(record4), schema, null, true);
 
     // We do the tag again
-    metadata = new HoodieTableMetaClient(fs, basePath);
+    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metadata, config);
     taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, table);
 
@@ -476,7 +474,7 @@ public class TestHoodieBloomIndex {
 
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
 
@@ -515,7 +513,7 @@ public class TestHoodieBloomIndex {
     String commitTime = FSUtils.getCommitTime(filename);
     HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-        new Configuration());
+        HoodieTestUtils.getDefaultHadoopConf());
     HoodieParquetWriter writer = new HoodieParquetWriter(
         commitTime,
         new Path(basePath + "/" + partitionPath + "/" + filename),

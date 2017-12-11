@@ -18,7 +18,7 @@ package com.uber.hoodie.common;
 
 import static com.uber.hoodie.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 
-import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
 import java.io.IOException;
@@ -42,12 +42,13 @@ import org.apache.hadoop.mapred.RecordReader;
  */
 public class HoodieMergeOnReadTestUtils {
 
-  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths)
+  public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths,
+      String basePath)
       throws IOException {
     JobConf jobConf = new JobConf();
     Schema schema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
     HoodieRealtimeInputFormat inputFormat = new HoodieRealtimeInputFormat();
-    setPropsForInputFormat(inputFormat, jobConf, schema);
+    setPropsForInputFormat(inputFormat, jobConf, schema, basePath);
     return inputPaths.stream().map(path -> {
       setInputPath(jobConf, path);
       List<GenericRecord> records = new ArrayList<>();
@@ -76,12 +77,12 @@ public class HoodieMergeOnReadTestUtils {
   }
 
   private static void setPropsForInputFormat(HoodieRealtimeInputFormat inputFormat, JobConf jobConf,
-      Schema schema) {
+      Schema schema, String basePath) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String postions = fields.stream().map(f -> String.valueOf(f.pos()))
         .collect(Collectors.joining(","));
-    Configuration conf = FSUtils.getFs().getConf();
+    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
     jobConf.set("partition_columns", "datestr");

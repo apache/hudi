@@ -57,7 +57,7 @@ class DataSourceTest extends AssertionsForJUnit {
     val folder = new TemporaryFolder
     folder.create
     basePath = folder.getRoot.getAbsolutePath
-    fs = FSUtils.getFs
+    fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
   }
 
   @Test def testCopyOnWriteStorage() {

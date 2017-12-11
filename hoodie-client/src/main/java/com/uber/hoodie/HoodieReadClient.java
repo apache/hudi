@@ -67,10 +67,10 @@ public class HoodieReadClient implements Serializable {
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath) {
     this.jsc = jsc;
-    this.fs = FSUtils.getFs();
+    this.fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     // Create a Hoodie table which encapsulated the commits and files visible
     this.hoodieTable = HoodieTable
-        .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
+        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true), null);
     this.commitTimeline = hoodieTable.getCommitTimeline().filterCompletedInstants();
     this.index =
         new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
@@ -129,8 +129,8 @@ public class HoodieReadClient implements Serializable {
     JavaPairRDD<HoodieKey, Row> keyRowRDD = originalDF.javaRDD()
         .mapToPair(row -> {
           HoodieKey key = new HoodieKey(
-              row.<String>getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD),
-              row.<String>getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+              row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD),
+              row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
           return new Tuple2<>(key, row);
         });
 

@@ -17,6 +17,7 @@
 package com.uber.hoodie.cli;
 
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -36,7 +37,7 @@ public class HoodieCLI {
 
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
-      HoodieCLI.conf = new Configuration();
+      HoodieCLI.conf = FSUtils.prepareHadoopConf(new Configuration());
       return true;
     }
     return false;

@@ -67,7 +67,7 @@ public class HoodieDataSourceHelpers {
    */
   public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
     HoodieTable table = HoodieTable
-        .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
+        .getHoodieTable(new HoodieTableMetaClient(fs.getConf(), basePath, true), null);
     if (table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return table.getActiveTimeline().getTimelineOfActions(
           Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,

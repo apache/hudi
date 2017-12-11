@@ -47,7 +47,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
       HoodieTable<T> hoodieTable) {
     this.commitTime = commitTime;
     this.config = config;
-    this.fs = FSUtils.getFs();
+    this.fs = hoodieTable.getMetaClient().getFs();
     this.hoodieTable = hoodieTable;
     this.hoodieTimeline = hoodieTable.getCompletedCommitTimeline();
     this.fileSystemView = hoodieTable.getROFileSystemView();
@@ -73,8 +73,9 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   public static void cleanupTmpFilesFromCurrentCommit(HoodieWriteConfig config,
       String commitTime,
       String partitionPath,
-      int taskPartitionId) {
-    FileSystem fs = FSUtils.getFs();
+      int taskPartitionId,
+      HoodieTable hoodieTable) {
+    FileSystem fs = hoodieTable.getMetaClient().getFs();
     try {
       FileStatus[] prevFailedFiles = fs.globStatus(new Path(String
           .format("%s/%s/%s", config.getBasePath(), partitionPath,

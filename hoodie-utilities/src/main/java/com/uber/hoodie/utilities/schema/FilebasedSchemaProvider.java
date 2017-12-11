@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import org.apache.avro.Schema;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
@@ -50,7 +51,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   public FilebasedSchemaProvider(PropertiesConfiguration config) {
     super(config);
-    this.fs = FSUtils.getFs();
+    this.fs = FSUtils.getFs(config.getBasePath(), new Configuration());
 
     DataSourceUtils.checkRequiredProperties(config,
         Arrays.asList(Config.SOURCE_SCHEMA_FILE_PROP, Config.TARGET_SCHEMA_FILE_PROP));

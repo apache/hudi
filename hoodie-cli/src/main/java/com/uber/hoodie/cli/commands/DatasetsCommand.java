@@ -33,7 +33,7 @@ public class DatasetsCommand implements CommandMarker {
       final String path) throws IOException {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
-    HoodieCLI.setTableMetadata(new HoodieTableMetaClient(HoodieCLI.fs, path));
+    HoodieCLI.setTableMetadata(new HoodieTableMetaClient(HoodieCLI.conf, path));
     HoodieCLI.state = HoodieCLI.CLIState.DATASET;
     return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName()
         + " loaded";

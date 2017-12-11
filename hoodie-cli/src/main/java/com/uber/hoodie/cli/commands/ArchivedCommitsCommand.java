@@ -54,12 +54,14 @@ public class ArchivedCommitsCommand implements CommandMarker {
 
     System.out
         .println("===============> Showing only " + limit + " archived commits <===============");
-    FileStatus[] fsStatuses = FSUtils.getFs().globStatus(
-        new Path(HoodieCLI.tableMetadata.getBasePath() + "/.hoodie/.commits_.archive*"));
+    String basePath = HoodieCLI.tableMetadata.getBasePath();
+    FileStatus[] fsStatuses = FSUtils.getFs(basePath, HoodieCLI.conf)
+        .globStatus(new Path(basePath + "/.hoodie/.commits_.archive*"));
     List<String[]> allCommits = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       //read the archived file
-      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(),
+      HoodieLogFormat.Reader reader = HoodieLogFormat
+          .newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
           new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema(), false);
 
       List<IndexedRecord> readRecords = new ArrayList<>();

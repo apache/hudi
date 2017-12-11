@@ -138,7 +138,7 @@ public class SavepointsCommand implements CommandMarker {
   @CliCommand(value = "savepoints refresh", help = "Refresh the savepoints")
   public String refreshMetaClient() throws IOException {
     HoodieTableMetaClient metadata =
-        new HoodieTableMetaClient(HoodieCLI.fs, HoodieCLI.tableMetadata.getBasePath());
+        new HoodieTableMetaClient(HoodieCLI.conf, HoodieCLI.tableMetadata.getBasePath());
     HoodieCLI.setTableMetadata(metadata);
     return "Metadata for table " + metadata.getTableConfig().getTableName() + " refreshed.";
   }

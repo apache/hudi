@@ -17,5 +17,5 @@
 package com.uber.hoodie.common.model;
 
 public enum ActionType {
-  commit, savepoint, compaction, clean, rollback;
+  commit, savepoint, compaction, clean, rollback
 }
