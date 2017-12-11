@@ -58,6 +58,7 @@ import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -69,18 +70,23 @@ import org.junit.rules.TemporaryFolder;
 
 public class HoodieTestUtils {
 
-  public static FileSystem fs = FSUtils.getFs();
+  public static FileSystem fs;
   public static final String TEST_EXTENSION = ".test";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
   public static final int DEFAULT_TASK_PARTITIONID = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
   private static Random rand = new Random(46474747);
 
-  public static void resetFS() {
-    HoodieTestUtils.fs = FSUtils.getFs();
+  public static void resetFS(String basePath) {
+    HoodieTestUtils.fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+  }
+
+  public static Configuration getDefaultHadoopConf() {
+    return new Configuration();
   }
 
   public static HoodieTableMetaClient init(String basePath) throws IOException {
+    fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
     return initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
@@ -211,7 +217,7 @@ public class HoodieTestUtils {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeCleanerFileName(commitTime));
-    FileSystem fs = FSUtils.getFs();
+    FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
     FSDataOutputStream os = fs.create(commitFile, true);
     try {
       HoodieCleanStat cleanStats = new HoodieCleanStat(

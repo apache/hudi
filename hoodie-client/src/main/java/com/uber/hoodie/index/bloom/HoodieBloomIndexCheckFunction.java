@@ -24,10 +24,12 @@ import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.func.LazyIterableIterator;
+import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -45,20 +47,24 @@ public class HoodieBloomIndexCheckFunction implements
 
   private final String basePath;
 
-  public HoodieBloomIndexCheckFunction(String basePath) {
+  private final HoodieTable table;
+
+  public HoodieBloomIndexCheckFunction(HoodieTable table, String basePath) {
+    this.table = table;
     this.basePath = basePath;
   }
 
   /**
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
-  public static List<String> checkCandidatesAgainstFile(List<String> candidateRecordKeys,
+  public static List<String> checkCandidatesAgainstFile(Configuration configuration,
+      List<String> candidateRecordKeys,
       Path filePath) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
-        Set<String> fileRowKeys = ParquetUtils.readRowKeysFromParquet(filePath);
+        Set<String> fileRowKeys = ParquetUtils.readRowKeysFromParquet(configuration, filePath);
         logger.info("Loading " + fileRowKeys.size() + " row keys from " + filePath);
         if (logger.isDebugEnabled()) {
           logger.debug("Keys from " + filePath + " => " + fileRowKeys);
@@ -107,7 +113,8 @@ public class HoodieBloomIndexCheckFunction implements
     private void initState(String fileName, String partitionPath) throws HoodieIndexException {
       try {
         Path filePath = new Path(basePath + "/" + partitionPath + "/" + fileName);
-        bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(filePath);
+        bloomFilter = ParquetUtils
+            .readBloomFilterFromParquetMetadata(table.getHadoopConf(), filePath);
         candidateRecordKeys = new ArrayList<>();
         currentFile = fileName;
         currentParitionPath = partitionPath;
@@ -154,7 +161,7 @@ public class HoodieBloomIndexCheckFunction implements
                   .debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
             }
             ret.add(new IndexLookupResult(currentFile,
-                checkCandidatesAgainstFile(candidateRecordKeys, filePath)));
+                checkCandidatesAgainstFile(table.getHadoopConf(), candidateRecordKeys, filePath)));
 
             initState(fileName, partitionPath);
             if (bloomFilter.mightContain(recordKey)) {
@@ -177,7 +184,7 @@ public class HoodieBloomIndexCheckFunction implements
             logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
           }
           ret.add(new IndexLookupResult(currentFile,
-              checkCandidatesAgainstFile(candidateRecordKeys, filePath)));
+              checkCandidatesAgainstFile(table.getHadoopConf(), candidateRecordKeys, filePath)));
         }
 
       } catch (Throwable e) {

@@ -84,7 +84,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
     try {
       baseFileSchema = readSchema(jobConf, split.getPath());
-      readAndCompactLog();
+      readAndCompactLog(jobConf);
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
@@ -110,7 +110,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
    * Goes through the log files and populates a map with latest version of each key logged, since
    * the base split was written.
    */
-  private void readAndCompactLog() throws IOException {
+  private void readAndCompactLog(JobConf jobConf) throws IOException {
     Schema writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
     List<String> projectionFields = orderFields(
         jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
@@ -123,7 +123,8 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
         String.format("About to read compacted logs %s for base split %s, projecting cols %s",
             split.getDeltaFilePaths(), split.getPath(), projectionFields));
     HoodieCompactedLogRecordScanner compactedLogRecordScanner =
-        new HoodieCompactedLogRecordScanner(FSUtils.getFs(), split.getBasePath(),
+        new HoodieCompactedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
+            split.getBasePath(),
             split.getDeltaFilePaths(),
             readerSchema, split.getMaxCommitTime());
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit

@@ -72,7 +72,8 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends
         HoodieIOHandle.cleanupTmpFilesFromCurrentCommit(hoodieConfig,
             commitTime,
             record.getPartitionPath(),
-            TaskContext.getPartitionId());
+            TaskContext.getPartitionId(),
+            hoodieTable);
         partitionsCleaned.add(record.getPartitionPath());
       }
 

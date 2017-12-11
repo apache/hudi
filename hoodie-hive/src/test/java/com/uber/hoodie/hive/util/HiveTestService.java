@@ -20,6 +20,7 @@ package com.uber.hoodie.hive.util;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -87,7 +88,7 @@ public class HiveTestService {
         .checkState(workDir != null, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
-      hadoopConf = new Configuration();
+      hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     }
 
     String localHiveLocation = getHiveLocation(workDir);

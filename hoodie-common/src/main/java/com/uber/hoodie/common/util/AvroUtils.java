@@ -94,7 +94,7 @@ public class AvroUtils {
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
       Optional<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
     ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder =
-        ImmutableMap.<String, HoodieCleanPartitionMetadata>builder();
+        ImmutableMap.builder();
     int totalDeleted = 0;
     String earliestCommitToRetain = null;
     for (HoodieCleanStat stat : cleanStats) {
@@ -116,7 +116,7 @@ public class AvroUtils {
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime,
       Optional<Long> durationInMs, List<String> commits, List<HoodieRollbackStat> stats) {
     ImmutableMap.Builder<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder =
-        ImmutableMap.<String, HoodieRollbackPartitionMetadata>builder();
+        ImmutableMap.builder();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : stats) {
       HoodieRollbackPartitionMetadata metadata =
@@ -132,7 +132,7 @@ public class AvroUtils {
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
       Map<String, List<String>> latestFiles) {
     ImmutableMap.Builder<String, HoodieSavepointPartitionMetadata> partitionMetadataBuilder =
-        ImmutableMap.<String, HoodieSavepointPartitionMetadata>builder();
+        ImmutableMap.builder();
     for (Map.Entry<String, List<String>> stat : latestFiles.entrySet()) {
       HoodieSavepointPartitionMetadata metadata =
           new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());

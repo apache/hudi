@@ -20,6 +20,7 @@ package com.uber.hoodie.utilities;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.uber.hoodie.common.SerializableConfiguration;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.HoodieTableConfig;
@@ -70,8 +71,10 @@ public class HoodieSnapshotCopier implements Serializable {
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
       final boolean shouldAssumeDatePartitioning) throws IOException {
-    FileSystem fs = FSUtils.getFs();
-    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs, baseDir);
+    FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
+    final SerializableConfiguration serConf = new SerializableConfiguration(
+        jsc.hadoopConfiguration());
+    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
     final TableFileSystemView.ReadOptimizedView fsView = new HoodieTableFileSystemView(
         tableMetadata,
         tableMetadata.getActiveTimeline().getCommitsTimeline()
@@ -104,7 +107,7 @@ public class HoodieSnapshotCopier implements Serializable {
       jsc.parallelize(partitions, partitions.size())
           .flatMap(partition -> {
             // Only take latest version files <= latestCommit.
-            FileSystem fs1 = FSUtils.getFs();
+            FileSystem fs1 = FSUtils.getFs(baseDir, serConf.get());
             List<Tuple2<String, String>> filePaths = new ArrayList<>();
             Stream<HoodieDataFile> dataFiles = fsView
                 .getLatestDataFilesBeforeOrOn(partition, latestCommitTimestamp);
@@ -123,13 +126,13 @@ public class HoodieSnapshotCopier implements Serializable {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
         Path toPartitionPath = new Path(outputDir, partition);
-        FileSystem fs1 = FSUtils.getFs();
+        FileSystem ifs = FSUtils.getFs(baseDir, serConf.get());
 
-        if (!fs1.exists(toPartitionPath)) {
-          fs1.mkdirs(toPartitionPath);
+        if (!ifs.exists(toPartitionPath)) {
+          ifs.mkdirs(toPartitionPath);
         }
-        FileUtil.copy(fs1, sourceFilePath, fs1,
-            new Path(toPartitionPath, sourceFilePath.getName()), false, fs1.getConf());
+        FileUtil.copy(ifs, sourceFilePath, ifs,
+            new Path(toPartitionPath, sourceFilePath.getName()), false, ifs.getConf());
       });
 
       // Also copy the .commit files

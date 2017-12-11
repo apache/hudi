@@ -16,7 +16,8 @@
 
 package com.uber.hoodie.io.storage;
 
-import java.io.FileNotFoundException;
+import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -33,7 +34,6 @@ import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileChecksum;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -41,17 +41,14 @@ import org.apache.hadoop.fs.FsServerDefaults;
 import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Options;
-import org.apache.hadoop.fs.ParentNotDirectoryException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.fs.XAttrSetFlag;
 import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.AclStatus;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Progressable;
@@ -70,6 +67,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
     SUPPORT_SCHEMES.add("file");
     SUPPORT_SCHEMES.add("hdfs");
     SUPPORT_SCHEMES.add("s3");
+    SUPPORT_SCHEMES.add("s3a");
+
 
     // Hoodie currently relies on underlying object store being fully
     // consistent so only regional buckets should be used.
@@ -85,7 +84,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public void initialize(URI uri, Configuration conf) throws IOException {
     // Get the default filesystem to decorate
-    fileSystem = FileSystem.get(conf);
+    Path path = new Path(uri);
+    // Remove 'hoodie-' prefix from path
+    if (path.toString().startsWith(HOODIE_SCHEME_PREFIX)) {
+      path = new Path(path.toString().replace(HOODIE_SCHEME_PREFIX, ""));
+    }
+    this.fileSystem = FSUtils.getFs(path.toString(), conf);
     // Do not need to explicitly initialize the default filesystem, its done already in the above FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
     // fileSystem.setConf(conf);
@@ -219,7 +223,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public FileStatus[] listStatus(Path f) throws FileNotFoundException, IOException {
+  public FileStatus[] listStatus(Path f) throws IOException {
     return fileSystem.listStatus(convertToDefaultPath(f));
   }
 
@@ -415,19 +419,19 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f, PathFilter filter)
-      throws FileNotFoundException, IOException {
+      throws IOException {
     return fileSystem.listStatus(convertToDefaultPath(f), filter);
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files)
-      throws FileNotFoundException, IOException {
+      throws IOException {
     return fileSystem.listStatus(convertDefaults(files));
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files, PathFilter filter)
-      throws FileNotFoundException, IOException {
+      throws IOException {
     return fileSystem.listStatus(convertDefaults(files), filter);
   }
 
@@ -444,13 +448,13 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public RemoteIterator<LocatedFileStatus> listLocatedStatus(Path f)
-      throws FileNotFoundException, IOException {
+      throws IOException {
     return fileSystem.listLocatedStatus(convertToDefaultPath(f));
   }
 
   @Override
   public RemoteIterator<LocatedFileStatus> listFiles(Path f, boolean recursive)
-      throws FileNotFoundException, IOException {
+      throws IOException {
     return fileSystem.listFiles(convertToDefaultPath(f), recursive);
   }
 
@@ -571,21 +575,21 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void access(Path path, FsAction mode)
-      throws AccessControlException, FileNotFoundException, IOException {
+      throws IOException {
     fileSystem.access(convertToDefaultPath(path), mode);
   }
 
   @Override
   public void createSymlink(Path target, Path link, boolean createParent)
-      throws AccessControlException, FileAlreadyExistsException, FileNotFoundException,
-      ParentNotDirectoryException, UnsupportedFileSystemException, IOException {
+      throws
+      IOException {
     fileSystem
         .createSymlink(convertToDefaultPath(target), convertToDefaultPath(link), createParent);
   }
 
   @Override
   public FileStatus getFileLinkStatus(Path f)
-      throws AccessControlException, FileNotFoundException, UnsupportedFileSystemException,
+      throws
       IOException {
     return fileSystem.getFileLinkStatus(convertToDefaultPath(f));
   }
@@ -759,8 +763,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   public static Path convertToHoodiePath(Path file, Configuration conf) {
-    String scheme = FileSystem.getDefaultUri(conf).getScheme();
-    return convertPathWithScheme(file, getHoodieScheme(scheme));
+    try {
+      String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
+      return convertPathWithScheme(file, getHoodieScheme(scheme));
+    } catch (HoodieIOException e) {
+      throw e;
+    }
   }
 
   private Path convertToDefaultPath(Path oldPath) {

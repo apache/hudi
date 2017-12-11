@@ -20,6 +20,7 @@ import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
@@ -193,7 +194,7 @@ public class HoodieTestDataGenerator {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeCommitFileName(commitTime));
-    FileSystem fs = FSUtils.getFs();
+    FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     try {
@@ -209,7 +210,7 @@ public class HoodieTestDataGenerator {
     Path commitFile =
         new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeSavePointFileName(commitTime));
-    FileSystem fs = FSUtils.getFs();
+    FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     try {

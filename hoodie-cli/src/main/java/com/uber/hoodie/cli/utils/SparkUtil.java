@@ -18,6 +18,7 @@ package com.uber.hoodie.cli.utils;
 
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.cli.commands.SparkMain;
+import com.uber.hoodie.common.util.FSUtils;
 import java.io.File;
 import java.net.URISyntaxException;
 import org.apache.log4j.Logger;
@@ -66,6 +67,7 @@ public class SparkUtil {
     sparkConf = HoodieWriteClient.registerClasses(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean("parquet.enable.summary-metadata", false);
+    FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());
     return jsc;
   }
 }

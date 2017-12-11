@@ -16,6 +16,9 @@
 
 package com.uber.hoodie.io;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieClientTestUtils;
@@ -28,7 +31,6 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
@@ -38,21 +40,16 @@ import com.uber.hoodie.index.bloom.HoodieBloomIndex;
 import com.uber.hoodie.io.compact.HoodieCompactor;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.hadoop.fs.FileSystem;
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 public class TestHoodieCompactor {
 
@@ -104,18 +101,19 @@ public class TestHoodieCompactor {
   @Test(expected = IllegalArgumentException.class)
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     HoodieTestUtils.initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
-
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
-
     compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
   }
 
   @Test
   public void testCompactionEmpty() throws Exception {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(FSUtils.getFs(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        basePath);
     HoodieWriteConfig config = getConfig();
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTable table = HoodieTable
+        .getHoodieTable(metaClient, config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
 
     String newCommitTime = writeClient.startCommit();
@@ -132,7 +130,6 @@ public class TestHoodieCompactor {
 
   @Test
   public void testLogFileCountsAfterCompaction() throws Exception {
-    FileSystem fs = FSUtils.getFs();
     // insert 100 records
     HoodieWriteConfig config = getConfig();
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
@@ -144,7 +141,8 @@ public class TestHoodieCompactor {
     List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
 
     // Update all the 100 records
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
 
     newCommitTime = "101";
@@ -161,7 +159,7 @@ public class TestHoodieCompactor {
             updatedRecords);
 
     // Verify that all data file has one log file
-    metaClient = new HoodieTableMetaClient(fs, basePath);
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metaClient, config);
     for (String partitionPath : dataGen.getPartitionPaths()) {
       List<FileSlice> groupedLogFiles =
@@ -174,14 +172,14 @@ public class TestHoodieCompactor {
     }
 
     // Do a compaction
-    metaClient = new HoodieTableMetaClient(fs, basePath);
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metaClient, config);
 
     HoodieCommitMetadata result =
         compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
 
     // Verify that recently written compacted data file has no log file
-    metaClient = new HoodieTableMetaClient(fs, basePath);
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metaClient, config);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 

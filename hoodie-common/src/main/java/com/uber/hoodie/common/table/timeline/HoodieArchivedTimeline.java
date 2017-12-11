@@ -16,8 +16,8 @@
 
 package com.uber.hoodie.common.table.timeline;
 
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
@@ -44,17 +43,17 @@ import org.apache.log4j.Logger;
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   private static final String HOODIE_COMMIT_ARCHIVE_LOG_FILE = "commits";
-  private transient FileSystem fs;
-  private String metaPath;
+  private HoodieTableMetaClient metaClient;
   private Map<String, byte[]> readCommits = new HashMap<>();
 
   private final transient static Logger log = LogManager.getLogger(HoodieArchivedTimeline.class);
 
-  public HoodieArchivedTimeline(FileSystem fs, String metaPath) {
+  public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     // Read back the commits to make sure
-    Path archiveLogPath = getArchiveLogPath(metaPath);
+    Path archiveLogPath = getArchiveLogPath(metaClient.getMetaPath());
     try (SequenceFile.Reader reader =
-        new SequenceFile.Reader(fs.getConf(), SequenceFile.Reader.file(archiveLogPath))) {
+        new SequenceFile.Reader(metaClient.getHadoopConf(),
+            SequenceFile.Reader.file(archiveLogPath))) {
       Text key = new Text();
       Text val = new Text();
       while (reader.next(key, val)) {
@@ -71,8 +70,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     }
     // multiple casts will make this lambda serializable - http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
-    this.fs = fs;
-    this.metaPath = metaPath;
+    this.metaClient = metaClient;
   }
 
   /**
@@ -91,7 +89,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private void readObject(java.io.ObjectInputStream in)
       throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    this.fs = FSUtils.getFs();
   }
 
 
@@ -105,7 +102,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   public HoodieArchivedTimeline reload() {
-    return new HoodieArchivedTimeline(fs, metaPath);
+    return new HoodieArchivedTimeline(metaClient);
   }
 
 }

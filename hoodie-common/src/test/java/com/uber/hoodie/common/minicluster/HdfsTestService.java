@@ -19,6 +19,7 @@ package com.uber.hoodie.common.minicluster;
 
 import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import java.io.File;
 import java.io.IOException;
 import org.apache.commons.io.FileUtils;
@@ -54,7 +55,7 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() {
-    hadoopConf = new Configuration();
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     workDir = Files.createTempDir().getAbsolutePath();
   }
 
@@ -67,7 +68,7 @@ public class HdfsTestService {
         .checkState(workDir != null, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
-      hadoopConf = new Configuration();
+      hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     }
 
     // If clean, then remove the work dir so we can start fresh.

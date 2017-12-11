@@ -19,6 +19,7 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.Serializable;
@@ -86,7 +87,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
     }
     Path folder = null;
     try {
-      FileSystem fs = path.getFileSystem(new Configuration());
+      FileSystem fs = path.getFileSystem(FSUtils.prepareHadoopConf(new Configuration()));
       if (fs.isDirectory(path)) {
         return true;
       }
@@ -123,7 +124,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       if (baseDir != null) {
         try {
           HoodieTableMetaClient metaClient =
-              new HoodieTableMetaClient(fs, baseDir.toString());
+              new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
               metaClient.getActiveTimeline().getCommitTimeline()
                   .filterCompletedInstants(),

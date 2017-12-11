@@ -24,6 +24,7 @@ import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.minicluster.HdfsTestService;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
@@ -38,7 +39,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -174,7 +174,7 @@ public class TestHDFSParquetImporter implements Serializable {
     ParquetWriter<GenericRecord> writer = AvroParquetWriter
         .<GenericRecord>builder(srcFile)
         .withSchema(HoodieTestDataGenerator.avroSchema)
-        .withConf(new Configuration())
+        .withConf(HoodieTestUtils.getDefaultHadoopConf())
         .build();
     for (GenericRecord record : records) {
       writer.write(record);

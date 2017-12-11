@@ -295,6 +295,6 @@ public class HoodieInputFormat extends MapredParquetInputFormat
     }
     Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return new HoodieTableMetaClient(fs, baseDir.toString());
+    return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
   }
 }

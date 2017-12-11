@@ -126,7 +126,8 @@ public class HoodieCommitArchiveLog {
     int minCommitsToKeep = config.getMinCommitsToKeep();
 
     HoodieTable table = HoodieTable
-        .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        .getHoodieTable(new HoodieTableMetaClient(fs.getConf(), config.getBasePath(), true),
+            config);
 
     // GroupBy each action and limit each action timeline to maxCommitsToKeep
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
@@ -165,7 +166,7 @@ public class HoodieCommitArchiveLog {
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants) {
     log.info("Deleting instants " + archivedInstants);
     HoodieTableMetaClient metaClient =
-        new HoodieTableMetaClient(fs, config.getBasePath(), true);
+        new HoodieTableMetaClient(fs.getConf(), config.getBasePath(), true);
 
     boolean success = true;
     for (HoodieInstant archivedInstant : archivedInstants) {
@@ -188,7 +189,7 @@ public class HoodieCommitArchiveLog {
 
     try {
       HoodieTableMetaClient metaClient =
-          new HoodieTableMetaClient(fs, config.getBasePath(), true);
+          new HoodieTableMetaClient(fs.getConf(), config.getBasePath(), true);
       HoodieTimeline commitTimeline =
           metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
 

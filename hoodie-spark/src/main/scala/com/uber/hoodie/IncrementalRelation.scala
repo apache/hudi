@@ -47,7 +47,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
   val fs = new Path(basePath).getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
-  val metaClient = new HoodieTableMetaClient(fs, basePath, true)
+  val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
   // MOR datasets not supported yet
   if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read datasets")
@@ -72,7 +72,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val latestMeta = HoodieCommitMetadata
       .fromBytes(commitTimeline.getInstantDetails(commitsToReturn.last).get)
     val metaFilePath = latestMeta.getFileIdAndFullPaths(basePath).values().iterator().next()
-    AvroConversionUtils.convertAvroSchemaToStructType(ParquetUtils.readAvroSchema(new Path(metaFilePath)))
+    AvroConversionUtils.convertAvroSchemaToStructType(ParquetUtils.readAvroSchema(
+      sqlContext.sparkContext.hadoopConfiguration, new Path(metaFilePath)))
   }
 
   override def schema: StructType = latestSchema
