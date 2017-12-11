@@ -54,17 +54,6 @@ import com.uber.hoodie.table.HoodieTable;
 import com.uber.hoodie.table.UserDefinedBulkInsertPartitioner;
 import com.uber.hoodie.table.WorkloadProfile;
 import com.uber.hoodie.table.WorkloadStat;
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
-import java.text.ParseException;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -76,6 +65,18 @@ import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.storage.StorageLevel;
 import scala.Option;
 import scala.Tuple2;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient
@@ -829,9 +830,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         // Create a Hoodie table which encapsulated the commits and files visible
         HoodieTable<T> table = HoodieTable
                 .getHoodieTable(new HoodieTableMetaClient(fs, config.getBasePath(), true), config);
+        final Timer.Context context = metrics.getCompactionCtx();
         Optional<HoodieCompactionMetadata> compactionMetadata = table.compact(jsc, compactionCommitTime);
         if (compactionMetadata.isPresent()) {
             logger.info("Compacted successfully on commit " + compactionCommitTime);
+            if (context != null && compactionMetadata.isPresent()) {
+                long durationInMs = metrics.getDurationInMs(context.stop());
+                metrics.updateCompactionMetrics(0, durationInMs, compactionMetadata.get());
+            }
         } else {
             logger.info("Compaction did not run for commit " + compactionCommitTime);
         }

@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -196,6 +198,30 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return totalWriteErrors;
+  }
+
+  public long fetchTotalUnCompactedBytes() {
+    long totaBytesInLogFiles = 0;
+    for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
+      for (HoodieWriteStat stat : stats) {
+        if (stat instanceof HoodieDeltaWriteStat) {
+          long bytesFromPreviousLogVersions = (((HoodieDeltaWriteStat) stat).getLogVersion() - 1) *
+                  HoodieLogFormat.WriterBuilder.DEFAULT_SIZE_THRESHOLD;
+          totaBytesInLogFiles += bytesFromPreviousLogVersions + ((HoodieDeltaWriteStat) stat).getLogOffset();
+        }
+      }
+    }
+    return totaBytesInLogFiles;
+  }
+
+  public long fetchTotalRecordsDeleted() {
+    long totalDeletes = 0;
+    for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
+      for (HoodieWriteStat stat : stats) {
+        totalDeletes += stat.getNumDeletes();
+      }
+    }
+    return totalDeletes;
   }
 
   @Override
