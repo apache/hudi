@@ -251,11 +251,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public void initializeFinalizeWrite() {
-    // do nothing for MOR tables
-  }
-
-  @Override
   public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
     // do nothing for MOR tables
     return Optional.empty();
