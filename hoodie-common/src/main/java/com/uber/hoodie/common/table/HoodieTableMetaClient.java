@@ -233,6 +233,11 @@ public class HoodieTableMetaClient implements Serializable {
       }
     }
 
+    // Always create temporaryFolder which is needed for finalizeWrite for Hoodie tables
+    final Path temporaryFolder = new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
+    if (!fs.exists(temporaryFolder)) {
+      fs.mkdirs(temporaryFolder);
+    }
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType()
