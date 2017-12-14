@@ -274,11 +274,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       throws IOException;
 
   /**
-   * Initialize resources needed for finalize write.
-   */
-  public abstract void initializeFinalizeWrite();
-
-  /**
    * Finalize the written data files
    *
    * @param writeStatuses List of WriteStatus

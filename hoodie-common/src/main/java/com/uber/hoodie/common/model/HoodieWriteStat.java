@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import javax.annotation.Nullable;
 import java.io.Serializable;
+import org.apache.hadoop.fs.Path;
 
 /**
  * Statistics about a single Hoodie write operation.
@@ -210,6 +211,16 @@ public class HoodieWriteStat implements Serializable {
 
   public String getTempPath() {
     return this.tempPath;
+  }
+
+  /**
+   * Set path and tempPath relative to the given basePath.
+   */
+  public void setPaths(Path basePath, Path path, Path tempPath) {
+    this.path = path.toString().replace(basePath + "/", "");
+    if (tempPath != null) {
+      this.tempPath = tempPath.toString().replace(basePath + "/", "");
+    }
   }
 
   @Override

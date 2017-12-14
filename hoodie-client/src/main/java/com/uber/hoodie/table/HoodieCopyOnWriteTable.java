@@ -577,24 +577,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public void initializeFinalizeWrite() {
-    if (!config.shouldUseTempFolderForCopyOnWrite()) {
-      return;
-    }
-
-    // create temporary folder if needed
-    final FileSystem fs = FSUtils.getFs();
-    final Path temporaryFolder = new Path(config.getBasePath(), HoodieTableMetaClient.TEMPFOLDER_NAME);
-    try {
-      if (!fs.exists(temporaryFolder)) {
-        fs.mkdirs(temporaryFolder);
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to create temporary folder: " + temporaryFolder);
-    }
-  }
-
-  @Override
   @SuppressWarnings("unchecked")
   public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
     if (!config.shouldUseTempFolderForCopyOnWrite()) {

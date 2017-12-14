@@ -848,7 +848,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         String commitActionType = table.getCommitActionType();
         activeTimeline.createInflight(
             new HoodieInstant(true, commitActionType, commitTime));
-        table.initializeFinalizeWrite();
     }
 
     /**
