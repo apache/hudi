@@ -20,6 +20,7 @@ package com.uber.hoodie.config;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
@@ -42,6 +43,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
   public static final String TABLE_NAME = "hoodie.table.name";
+  public static final String TABLE_TYPE = "hoodie.table.type";
   private static final String DEFAULT_PARALLELISM = "200";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
@@ -76,6 +78,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
+  }
+
+  public String getTableType() {
+    return props.getProperty(TABLE_TYPE);
   }
 
   public Boolean shouldAutoCommit() {
@@ -320,6 +326,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder forTable(String tableName) {
       props.setProperty(TABLE_NAME, tableName);
+      return this;
+    }
+
+    public Builder withTableType(HoodieTableType tableType) {
+      props.setProperty(TABLE_TYPE, tableType.name());
       return this;
     }
 
