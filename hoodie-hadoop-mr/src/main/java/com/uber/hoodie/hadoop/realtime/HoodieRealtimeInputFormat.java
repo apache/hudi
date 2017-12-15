@@ -124,7 +124,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
               // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
               String maxCommitTime = metaClient.getActiveTimeline()
                   .getTimelineOfActions(
-                      Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
+                      Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.ROLLBACK_ACTION,
                           HoodieTimeline.DELTA_COMMIT_ACTION))
                   .filterCompletedInstants().lastInstant().get().getTimestamp();
               rtSplits.add(

@@ -17,6 +17,8 @@
 package com.uber.hoodie.table;
 
 import com.uber.hoodie.common.model.HoodieRecordLocation;
+import org.apache.commons.lang3.tuple.Pair;
+
 import java.io.Serializable;
 import java.util.HashMap;
 
@@ -29,7 +31,7 @@ public class WorkloadStat implements Serializable {
 
   private long numUpdates = 0L;
 
-  private HashMap<String, Long> updateLocationToCount;
+  private HashMap<String, Pair<String, Long>> updateLocationToCount;
 
   public WorkloadStat() {
     updateLocationToCount = new HashMap<>();
@@ -40,7 +42,7 @@ public class WorkloadStat implements Serializable {
   }
 
   long addUpdates(HoodieRecordLocation location, long numUpdates) {
-    updateLocationToCount.put(location.getFileId(), numUpdates);
+    updateLocationToCount.put(location.getFileId(), Pair.of(location.getCommitTime(), numUpdates));
     return this.numUpdates += numUpdates;
   }
 
@@ -52,7 +54,7 @@ public class WorkloadStat implements Serializable {
     return numInserts;
   }
 
-  public HashMap<String, Long> getUpdateLocationToCount() {
+  public HashMap<String, Pair<String, Long>> getUpdateLocationToCount() {
     return updateLocationToCount;
   }
 

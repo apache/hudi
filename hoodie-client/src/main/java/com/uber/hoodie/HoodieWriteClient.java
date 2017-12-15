@@ -318,7 +318,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 partitionStat.getUpdateLocationToCount().entrySet().stream().forEach(entry -> {
                     HoodieWriteStat writeStat = new HoodieWriteStat();
                     writeStat.setFileId(entry.getKey());
-                    writeStat.setNumUpdateWrites(entry.getValue());
+                    writeStat.setPrevCommit(entry.getValue().getKey());
+                    writeStat.setNumUpdateWrites(entry.getValue().getValue());
                     metadata.addWriteStat(path.toString(), writeStat);
                 });
             });
