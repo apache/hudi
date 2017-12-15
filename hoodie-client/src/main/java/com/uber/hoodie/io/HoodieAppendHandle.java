@@ -187,7 +187,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
     } catch (Exception e) {
       throw new HoodieAppendException(
-          "Failed while appeding records to " + currentLogFile.getPath(), e);
+          "Failed while appending records to " + currentLogFile.getPath(), e);
     }
   }
 

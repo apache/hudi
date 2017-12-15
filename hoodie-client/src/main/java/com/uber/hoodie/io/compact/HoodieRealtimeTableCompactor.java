@@ -23,6 +23,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -86,7 +87,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
             .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
                 .getLatestFileSlices(partitionPath)
                 .map(s -> new CompactionOperation(s.getDataFile().get(),
-                    partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
+                    partitionPath, s.getLogFiles().sorted(HoodieLogFile.getLogVersionComparator().reversed())
+                    .collect(Collectors.toList()), config))
                 .filter(c -> !c.getDeltaFilePaths().isEmpty())
                 .collect(toList()).iterator()).collect();
     log.info("Total of " + operations.size() + " compactions are retrieved");
@@ -144,7 +146,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     String maxInstantTime = metaClient.getActiveTimeline()
         .getTimelineOfActions(
-            Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
+            Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.ROLLBACK_ACTION,
                 HoodieTimeline.DELTA_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant().get().getTimestamp();
 
