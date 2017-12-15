@@ -17,6 +17,7 @@
 package com.uber.hoodie.common.table.log.block;
 
 import com.google.common.collect.Maps;
+import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -90,7 +91,7 @@ public abstract class HoodieLogBlock {
   /**
    * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}
    */
-  public static Map<LogMetadataType, String> getLogMetadata(DataInputStream dis)
+  public static Map<LogMetadataType, String> getLogMetadata(SizeAwareDataInputStream dis)
       throws IOException {
 
     Map<LogMetadataType, String> metadata = Maps.newHashMap();

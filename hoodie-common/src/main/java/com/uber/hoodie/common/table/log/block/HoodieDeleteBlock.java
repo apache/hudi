@@ -23,6 +23,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Map;
+
+import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -64,7 +66,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   }
 
   public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
-    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
+    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
     Map<LogMetadataType, String> metadata = null;
     if (readMetadata) {
       metadata = HoodieLogBlock.getLogMetadata(dis);

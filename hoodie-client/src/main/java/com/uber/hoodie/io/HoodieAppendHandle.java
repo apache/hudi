@@ -160,14 +160,17 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     List<String> keysToDelete = new ArrayList<>();
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, commitTime);
-    records.stream().forEach(record -> {
+    Iterator<HoodieRecord<T>> recordsItr = records.iterator();
+    while (recordsItr.hasNext()) {
+      HoodieRecord record = recordsItr.next();
       Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
       if (indexedRecord.isPresent()) {
         recordList.add(indexedRecord.get());
       } else {
         keysToDelete.add(record.getRecordKey());
       }
-    });
+      recordsItr.remove(); //remove entries when IndexedRecord added to new list
+    }
     try {
       if (recordList.size() > 0) {
         writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, schema, metadata));
