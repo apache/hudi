@@ -16,6 +16,8 @@
 
 package com.uber.hoodie.common.table.log.block;
 
+import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -65,7 +67,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
-    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
+    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
     Map<LogMetadataType, String> metadata = null;
     if (readMetadata) {
       metadata = HoodieLogBlock.getLogMetadata(dis);
