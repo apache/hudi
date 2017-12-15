@@ -463,7 +463,7 @@ public class TestMergeOnReadTable {
     newCommitTime = "002";
     client.startCommitWithTime(newCommitTime);
 
-    records = dataGen.generateUpdates(newCommitTime, 200);
+    records = dataGen.generateUpdates(newCommitTime, records);
 
     statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
     // Verify there are no errors
@@ -556,6 +556,7 @@ public class TestMergeOnReadTable {
     return HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withAutoCommit(autoCommit)
+        .withAssumeDatePartitioning(true)
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
                 .withInlineCompaction(false).build())
