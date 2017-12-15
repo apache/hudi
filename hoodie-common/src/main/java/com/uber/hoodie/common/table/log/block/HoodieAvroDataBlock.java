@@ -16,16 +16,9 @@
 
 package com.uber.hoodie.common.table.log.block;
 
+import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -35,18 +28,31 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
 /**
- * DataBlock contains a list of records serialized using Avro. The Datablock contains 1. Compressed
- * Writer Schema length 2. Compressed Writer Schema content 3. Total number of records in the block
- * 4. Size of a record 5. Actual avro serialized content of the record
+ * DataBlock contains a list of records serialized using Avro.
+ * The Datablock contains
+ * 1. Compressed Writer Schema length
+ * 2. Compressed Writer Schema content
+ * 3. Total number of records in the block
+ * 4. Size of a record
+ * 5. Actual avro serialized content of the record
  */
 public class HoodieAvroDataBlock extends HoodieLogBlock {
 
   private List<IndexedRecord> records;
   private Schema schema;
 
-  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema,
-      Map<LogMetadataType, String> metadata) {
+  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema, Map<LogMetadataType, String> metadata) {
     super(metadata);
     this.records = records;
     this.schema = schema;
@@ -56,6 +62,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     this(records, schema, null);
   }
 
+  //TODO : (na) lazily create IndexedRecords only when required
   public List<IndexedRecord> getRecords() {
     return records;
   }
@@ -85,7 +92,9 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     output.writeInt(records.size());
 
     // 4. Write the records
-    records.forEach(s -> {
+    Iterator<IndexedRecord> itr = records.iterator();
+    while (itr.hasNext()) {
+      IndexedRecord s = itr.next();
       ByteArrayOutputStream temp = new ByteArrayOutputStream();
       Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
       try {
@@ -99,10 +108,11 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
         output.writeInt(size);
         // Write the content
         output.write(temp.toByteArray());
+        itr.remove();
       } catch (IOException e) {
         throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
       }
-    });
+    }
 
     output.close();
     return baos.toByteArray();
@@ -113,10 +123,10 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     return HoodieLogBlockType.AVRO_DATA_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, Schema readerSchema, boolean readMetadata)
-      throws IOException {
+  //TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used
+  public static HoodieLogBlock fromBytes(byte[] content, Schema readerSchema, boolean readMetadata) throws IOException {
 
-    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(content));
+    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
     Map<LogMetadataType, String> metadata = null;
     // 1. Read the metadata written out, if applicable
     if (readMetadata) {
@@ -132,22 +142,20 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       readerSchema = writerSchema;
     }
 
+    //TODO : (na) lazily create IndexedRecords only when required
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     // 2. Get the total records
     int totalRecords = dis.readInt();
     List<IndexedRecord> records = new ArrayList<>(totalRecords);
 
     // 3. Read the content
-    for (int i = 0; i < totalRecords; i++) {
-      // TODO - avoid bytes copy
+    for (int i=0;i<totalRecords;i++) {
       int recordLength = dis.readInt();
-      byte[] recordData = new byte[recordLength];
-      dis.readFully(recordData, 0, recordLength);
-      Decoder decoder = DecoderFactory.get().binaryDecoder(recordData, null);
+      Decoder decoder = DecoderFactory.get().binaryDecoder(content, dis.getNumberOfBytesRead(), recordLength, null);
       IndexedRecord record = reader.read(null, decoder);
       records.add(record);
+      dis.skipBytes(recordLength);
     }
-
     dis.close();
     return new HoodieAvroDataBlock(records, readerSchema, metadata);
   }
