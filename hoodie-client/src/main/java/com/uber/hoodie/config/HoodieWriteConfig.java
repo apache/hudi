@@ -214,6 +214,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieIndexConfig.HBASE_TABLENAME_PROP);
   }
 
+  public int getHbaseIndexGetBatchSize() {
+    return Integer.valueOf(props.getProperty(HoodieIndexConfig.HBASE_GET_BATCH_SIZE_PROP));
+  }
+
+  public int getHbaseIndexPutBatchSize() {
+    return Integer.valueOf(props.getProperty(HoodieIndexConfig.HBASE_PUT_BATCH_SIZE_PROP));
+  }
+
   public int getBloomIndexParallelism() {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PARALLELISM_PROP));
   }
