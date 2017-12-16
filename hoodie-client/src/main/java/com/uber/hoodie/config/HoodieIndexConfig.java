@@ -49,6 +49,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
   public final static String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
   public final static String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
+  public final static String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
+  public final static String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
+  public final static String DEFAULT_HBASE_BATCH_SIZE = "100";
 
   // ***** Bucketed Index Configs *****
   public final static String BUCKETED_INDEX_NUM_BUCKETS_PROP = "hoodie.index.bucketed.numbuckets";
@@ -130,6 +133,16 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder hbaseIndexGetBatchSize(int getBatchSize) {
+      props.setProperty(HBASE_GET_BATCH_SIZE_PROP, String.valueOf(getBatchSize));
+      return this;
+    }
+
+    public Builder hbaseIndexPutBatchSize(int putBatchSize) {
+      props.setProperty(HBASE_PUT_BATCH_SIZE_PROP, String.valueOf(putBatchSize));
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP),
@@ -144,6 +157,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_PRUNE_BY_RANGES_PROP, DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_USE_CACHING_PROP),
           BLOOM_INDEX_USE_CACHING_PROP, DEFAULT_BLOOM_INDEX_USE_CACHING);
+      setDefaultOnCondition(props, !props.containsKey(HBASE_GET_BATCH_SIZE_PROP),
+          HBASE_GET_BATCH_SIZE_PROP, String.valueOf(DEFAULT_HBASE_BATCH_SIZE));
+      setDefaultOnCondition(props, !props.containsKey(HBASE_PUT_BATCH_SIZE_PROP),
+          HBASE_PUT_BATCH_SIZE_PROP, String.valueOf(DEFAULT_HBASE_BATCH_SIZE));
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;
