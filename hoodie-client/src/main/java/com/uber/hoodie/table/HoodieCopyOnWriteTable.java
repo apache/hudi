@@ -21,6 +21,7 @@ import com.google.common.hash.Hashing;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieCompactionMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -39,18 +40,6 @@ import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
 import com.uber.hoodie.io.HoodieCleanHelper;
 import com.uber.hoodie.io.HoodieMergeHandle;
-import java.io.IOException;
-import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -69,6 +58,19 @@ import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import scala.Option;
 import scala.Tuple2;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where
@@ -302,12 +304,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
       if (!commitTimeline.empty()) { // if we have some commits
         HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
-        List<HoodieDataFile> allFiles = getROFileSystemView()
-            .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
+        List<FileSlice> allFileSlices = getRTFileSystemView()
+            .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
             .collect(Collectors.toList());
 
-        for (HoodieDataFile file : allFiles) {
-          if (file.getFileSize() < config.getParquetSmallFileLimit()) {
+        for (FileSlice fileSlice : allFileSlices) {
+          HoodieDataFile file = fileSlice.getDataFile().get();
+          if (fileSlice.getLogFiles().count() == 0 && file.getFileSize() < config.getParquetSmallFileLimit()) {
             String filename = file.getFileName();
             SmallFile sf = new SmallFile();
             sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename),
