@@ -440,9 +440,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             );
         }
 
-        // Clean temp files
-        table.cleanTemporaryDataFiles(jsc);
-
         // add in extra metadata
         if (extraMetadata.isPresent()) {
             extraMetadata.get().forEach((k, v) -> metadata.addMetadata(k, v));
@@ -697,9 +694,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                         + s);
             }
         });
-
-        // clean data files in temporary folder
-        table.cleanTemporaryDataFiles(jsc);
 
         try {
             if (commitTimeline.empty() && inflightTimeline.empty()) {

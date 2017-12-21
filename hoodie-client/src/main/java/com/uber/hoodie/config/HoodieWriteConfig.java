@@ -61,7 +61,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER = "hoodie.copyonwrite.use.temp.folder";
   private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER = "false";
   private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
-  private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = "5";
+  private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
 
   private HoodieWriteConfig(Properties props) {
     super(props);
