@@ -569,6 +569,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
               .withDeletedFileResults(results).build();
         }).collect();
 
+    // clean temporary data files
+    cleanTemporaryDataFiles(jsc);
+
     // Remove the rolled back inflight commits
     commits.stream().map(s -> new HoodieInstant(true, actionType, s))
         .forEach(activeTimeline::deleteInflight);
@@ -609,11 +612,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
           return new Tuple2<>(writeStat.getPath(), true);
         }).collect();
 
+    // clean temporary data files
+    cleanTemporaryDataFiles(jsc);
+
     return Optional.of(results.size());
   }
 
-  @Override
-  public void cleanTemporaryDataFiles(JavaSparkContext jsc) {
+  private void cleanTemporaryDataFiles(JavaSparkContext jsc) {
     if (!config.shouldUseTempFolderForCopyOnWrite()) {
       return;
     }

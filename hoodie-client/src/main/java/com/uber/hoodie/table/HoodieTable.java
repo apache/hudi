@@ -281,8 +281,4 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc, List<Tuple2<String, HoodieWriteStat>> writeStatuses);
 
-  /**
-   * Clean temporary data files after data files are finalized or commit is rolled back.
-   */
-  public abstract void cleanTemporaryDataFiles(JavaSparkContext jsc);
 }
