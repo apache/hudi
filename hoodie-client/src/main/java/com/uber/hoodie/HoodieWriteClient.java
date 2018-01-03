@@ -91,7 +91,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     private final HoodieWriteConfig config;
     private transient final HoodieMetrics metrics;
     private transient final HoodieIndex<T> index;
-    private transient final HoodieCommitArchiveLog archiveLog;
     private transient Timer.Context writeContext = null;
 
     /**
@@ -116,7 +115,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         this.config = clientConfig;
         this.index = HoodieIndex.createIndex(config, jsc);
         this.metrics = new HoodieMetrics(config, config.getTableName());
-        this.archiveLog = new HoodieCommitArchiveLog(clientConfig, fs);
 
         if (rollbackInFlight) {
             rollbackInflightCommits();
@@ -446,6 +444,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             }
 
             // We cannot have unbounded commit files. Archive commits if we have to archive
+            HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(config,
+                new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true));
             archiveLog.archiveIfRequired();
             if (config.isAutoClean()) {
                 // Call clean to cleanup if there is anything to cleanup after the commit,
