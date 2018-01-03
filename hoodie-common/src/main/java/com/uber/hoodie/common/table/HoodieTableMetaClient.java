@@ -132,6 +132,18 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * @return path where archived timeline is stored
+   */
+  public String getArchivePath() {
+    String archiveFolder = tableConfig.getArchivelogFolder();
+    if (archiveFolder.equals(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER)) {
+      return getMetaPath();
+    } else {
+      return getMetaPath() + "/" + archiveFolder;
+    }
+  }
+
+  /**
    * @return Table Config
    */
   public HoodieTableConfig getTableConfig() {
@@ -208,6 +220,18 @@ public class HoodieTableMetaClient implements Serializable {
     if (!fs.exists(metaPathDir)) {
       fs.mkdirs(metaPathDir);
     }
+
+    // if anything other than default archive log folder is specified, create that too
+    String archiveLogPropVal = props
+        .getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME,
+            HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
+    if (!archiveLogPropVal.equals(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER)) {
+      Path archiveLogDir = new Path(metaPathDir, archiveLogPropVal);
+      if (!fs.exists(archiveLogDir)) {
+        fs.mkdirs(archiveLogDir);
+      }
+    }
+
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType()

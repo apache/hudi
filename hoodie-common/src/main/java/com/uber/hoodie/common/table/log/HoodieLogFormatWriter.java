@@ -40,7 +40,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private final static Logger log = LogManager.getLogger(HoodieLogFormatWriter.class);
 
-  private final HoodieLogFile logFile;
+  private HoodieLogFile logFile;
   private final FileSystem fs;
   private final long sizeThreshold;
   private final Integer bufferSize;
@@ -82,6 +82,15 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
             log.warn("Failed to recover lease on path " + path);
             throw new HoodieException(e);
           }
+        }
+      } catch (IOException ioe) {
+        if (ioe.getMessage().equalsIgnoreCase("Not supported")) {
+          log.info("Append not supported. Opening a new log file..");
+          this.logFile = logFile.rollOver(fs);
+          this.output = fs.create(this.logFile.getPath(), false, bufferSize, replication,
+              WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+        } else {
+          throw ioe;
         }
       }
     } else {

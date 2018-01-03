@@ -50,7 +50,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     // Read back the commits to make sure
-    Path archiveLogPath = getArchiveLogPath(metaClient.getMetaPath());
+    Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     try (SequenceFile.Reader reader =
         new SequenceFile.Reader(metaClient.getHadoopConf(),
             SequenceFile.Reader.file(archiveLogPath))) {
@@ -92,8 +92,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
 
-  public static Path getArchiveLogPath(String metaPath) {
-    return new Path(metaPath, HOODIE_COMMIT_ARCHIVE_LOG_FILE);
+  public static Path getArchiveLogPath(String archiveFolder) {
+    return new Path(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE);
   }
 
   @Override

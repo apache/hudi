@@ -52,11 +52,13 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME =
       "hoodie.table.rt.file.format";
   public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = "hoodie.compaction.payload.class";
+  public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
 
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
   public static final HoodieFileFormat DEFAULT_RO_FILE_FORMAT = HoodieFileFormat.PARQUET;
   public static final HoodieFileFormat DEFAULT_RT_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
   public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
+  public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
   private Properties props;
 
   public HoodieTableConfig(FileSystem fs, String metaPath) {
@@ -104,6 +106,9 @@ public class HoodieTableConfig implements Serializable {
           .name()
           && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
         properties.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS);
+      }
+      if (!properties.containsKey(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME)) {
+        properties.setProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
       }
       properties
           .store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
@@ -161,4 +166,10 @@ public class HoodieTableConfig implements Serializable {
     return DEFAULT_RT_FILE_FORMAT;
   }
 
+  /**
+   * Get the relative path of archive log folder under metafolder, for this dataset
+   */
+  public String getArchivelogFolder() {
+    return props.getProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
+  }
 }

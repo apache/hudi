@@ -107,7 +107,7 @@ public class HoodieTableMetaClientTest {
 
   @Test
   public void checkArchiveCommitTimeline() throws IOException {
-    Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getMetaPath());
+    Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     SequenceFile.Writer writer = SequenceFile
         .createWriter(HoodieTestUtils.fs.getConf(), SequenceFile.Writer.file(archiveLogPath),
             SequenceFile.Writer.keyClass(Text.class),

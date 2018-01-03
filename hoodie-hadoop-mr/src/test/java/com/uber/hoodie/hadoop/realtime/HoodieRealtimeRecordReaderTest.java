@@ -72,6 +72,7 @@ public class HoodieRealtimeRecordReaderTest {
     jobConf = new JobConf();
     fs = FSUtils
         .getFs(basePath.getRoot().getAbsolutePath(), HoodieTestUtils.getDefaultHadoopConf());
+    HoodieTestUtils.fs = fs;
   }
 
   @Rule
