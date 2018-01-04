@@ -70,27 +70,22 @@ import org.junit.rules.TemporaryFolder;
 
 public class HoodieTestUtils {
 
-  public static FileSystem fs;
   public static final String TEST_EXTENSION = ".test";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
   public static final int DEFAULT_TASK_PARTITIONID = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
   private static Random rand = new Random(46474747);
 
-  public static void resetFS(String basePath) {
-    HoodieTestUtils.fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
-  }
-
   public static Configuration getDefaultHadoopConf() {
     return new Configuration();
   }
 
-  public static HoodieTableMetaClient init(String basePath) throws IOException {
-    fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
-    return initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
+  public static HoodieTableMetaClient init(FileSystem fs, String basePath) throws IOException {
+    return initTableType(fs, basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static HoodieTableMetaClient initTableType(String basePath, HoodieTableType tableType)
+  public static HoodieTableMetaClient initTableType(FileSystem fs, String basePath,
+      HoodieTableType tableType)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
@@ -105,7 +100,8 @@ public class HoodieTestUtils {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     String basePath = folder.getRoot().getAbsolutePath();
-    return HoodieTestUtils.init(basePath);
+    return HoodieTestUtils
+        .init(FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()), basePath);
   }
 
   public static String makeNewCommitTime() {
@@ -143,7 +139,7 @@ public class HoodieTestUtils {
     return fileID;
   }
 
-  public static final String createNewLogFile(String basePath, String partitionPath,
+  public static final String createNewLogFile(FileSystem fs, String basePath, String partitionPath,
       String commitTime, String fileID, Optional<Integer> version) throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
     boolean makeDir = fs.mkdirs(new Path(folderPath));
@@ -159,7 +155,8 @@ public class HoodieTestUtils {
     return fileID;
   }
 
-  public static final void createCompactionCommitFiles(String basePath, String... commitTimes)
+  public static final void createCompactionCommitFiles(FileSystem fs, String basePath,
+      String... commitTimes)
       throws IOException {
     for (String commitTime : commitTimes) {
       boolean createFile = fs.createNewFile(new Path(
@@ -268,7 +265,7 @@ public class HoodieTestUtils {
     return deseralizedObject;
   }
 
-  public static void writeRecordsToLogFiles(String basePath, Schema schema,
+  public static void writeRecordsToLogFiles(FileSystem fs, String basePath, Schema schema,
       List<HoodieRecord> updatedRecords) {
     Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated = updatedRecords.stream()
         .collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation));
