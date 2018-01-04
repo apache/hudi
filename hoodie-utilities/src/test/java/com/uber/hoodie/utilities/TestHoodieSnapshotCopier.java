@@ -53,7 +53,7 @@ public class TestHoodieSnapshotCopier {
       outputPath = rootPath + "/output";
 
       fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
-      HoodieTestUtils.init(basePath);
+      HoodieTestUtils.init(fs, basePath);
       // Start a local Spark job
       SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
       jsc = new JavaSparkContext(conf);

@@ -27,7 +27,6 @@ import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
-import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
@@ -71,7 +70,6 @@ public class TestHDFSParquetImporter implements Serializable {
     dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
     dfs.mkdirs(new Path(dfsBasePath));
-    FSUtils.setFs(dfs);
   }
 
   @AfterClass
@@ -79,7 +77,6 @@ public class TestHDFSParquetImporter implements Serializable {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }
-    FSUtils.setFs(null);
   }
 
   /**

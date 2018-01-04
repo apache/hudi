@@ -45,7 +45,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class HoodieTableFileSystemViewTest {
@@ -58,10 +57,8 @@ public class HoodieTableFileSystemViewTest {
 
   @Before
   public void init() throws IOException {
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    this.basePath = folder.getRoot().getAbsolutePath();
-    metaClient = HoodieTestUtils.init(basePath);
+    metaClient = HoodieTestUtils.initOnTemp();
+    basePath = metaClient.getBasePath();
     fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
     roView = (TableFileSystemView.ReadOptimizedView) fsView;
@@ -69,7 +66,7 @@ public class HoodieTableFileSystemViewTest {
   }
 
   private void refreshFsView(FileStatus[] statuses) {
-    metaClient = new HoodieTableMetaClient(HoodieTestUtils.fs.getConf(), basePath, true);
+    metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     if (statuses != null) {
       fsView = new HoodieTableFileSystemView(metaClient,
           metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
@@ -184,7 +181,7 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
-    FileStatus[] statuses = HoodieTestUtils.fs.listStatus(new Path(fullPartitionPath));
+    FileStatus[] statuses = metaClient.getFs().listStatus(new Path(fullPartitionPath));
     assertEquals(11, statuses.length);
     refreshFsView(null);
 
@@ -285,7 +282,7 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
-    FileStatus[] statuses = HoodieTestUtils.fs.listStatus(new Path(fullPartitionPath));
+    FileStatus[] statuses = metaClient.getFs().listStatus(new Path(fullPartitionPath));
     assertEquals(7, statuses.length);
 
     refreshFsView(null);
@@ -359,7 +356,7 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
-    FileStatus[] statuses = HoodieTestUtils.fs.listStatus(new Path(fullPartitionPath));
+    FileStatus[] statuses = metaClient.getFs().listStatus(new Path(fullPartitionPath));
     assertEquals(9, statuses.length);
 
     refreshFsView(statuses);
@@ -430,7 +427,7 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
-    FileStatus[] statuses = HoodieTestUtils.fs.listStatus(new Path(fullPartitionPath));
+    FileStatus[] statuses = metaClient.getFs().listStatus(new Path(fullPartitionPath));
     assertEquals(7, statuses.length);
 
     refreshFsView(null);
@@ -492,7 +489,7 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
 
     // Now we list the entire partition
-    FileStatus[] statuses = HoodieTestUtils.fs.listStatus(new Path(fullPartitionPath));
+    FileStatus[] statuses = metaClient.getFs().listStatus(new Path(fullPartitionPath));
     assertEquals(10, statuses.length);
 
     refreshFsView(statuses);

@@ -72,7 +72,6 @@ public class HoodieRealtimeRecordReaderTest {
     jobConf = new JobConf();
     fs = FSUtils
         .getFs(basePath.getRoot().getAbsolutePath(), HoodieTestUtils.getDefaultHadoopConf());
-    HoodieTestUtils.fs = fs;
   }
 
   @Rule
@@ -105,7 +104,7 @@ public class HoodieRealtimeRecordReaderTest {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils
-        .initTableType(basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+        .initTableType(fs, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     File partitionDir = InputFormatTestUtil
         .prepareParquetDataset(basePath, schema, 1, 100, commitTime);
@@ -163,7 +162,7 @@ public class HoodieRealtimeRecordReaderTest {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
     HoodieTestUtils
-        .initTableType(basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+        .initTableType(fs, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;

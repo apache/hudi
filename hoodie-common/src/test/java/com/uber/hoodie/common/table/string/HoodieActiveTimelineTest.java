@@ -49,7 +49,7 @@ public class HoodieActiveTimelineTest {
 
   @After
   public void tearDown() throws Exception {
-    HoodieTestUtils.fs.delete(new Path(this.metaClient.getBasePath()), true);
+    metaClient.getFs().delete(new Path(this.metaClient.getBasePath()), true);
   }
 
   @Test

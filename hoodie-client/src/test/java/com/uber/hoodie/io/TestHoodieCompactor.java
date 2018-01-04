@@ -31,6 +31,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
@@ -44,6 +45,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
@@ -57,6 +59,7 @@ public class TestHoodieCompactor {
   private String basePath = null;
   private HoodieCompactor compactor;
   private transient HoodieTestDataGenerator dataGen = null;
+  private transient FileSystem fs;
 
   @Before
   public void init() throws IOException {
@@ -67,7 +70,8 @@ public class TestHoodieCompactor {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
-    HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+    fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
 
     dataGen = new HoodieTestDataGenerator();
     compactor = new HoodieRealtimeTableCompactor();
@@ -100,7 +104,7 @@ public class TestHoodieCompactor {
 
   @Test(expected = IllegalArgumentException.class)
   public void testCompactionOnCopyOnWriteFail() throws Exception {
-    HoodieTestUtils.initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.COPY_ON_WRITE);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
@@ -155,7 +159,7 @@ public class TestHoodieCompactor {
 
     // Write them to corresponding avro logfiles
     HoodieTestUtils
-        .writeRecordsToLogFiles(metaClient.getBasePath(), HoodieTestDataGenerator.avroSchema,
+        .writeRecordsToLogFiles(fs, metaClient.getBasePath(), HoodieTestDataGenerator.avroSchema,
             updatedRecords);
 
     // Verify that all data file has one log file

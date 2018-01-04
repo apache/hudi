@@ -102,7 +102,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath.toString(), jsc.hadoopConfiguration());
-    HoodieTestUtils.init(basePath);
+    HoodieTestUtils.init(fs, basePath);
     dataGen = new HoodieTestDataGenerator();
   }
 
@@ -1247,27 +1247,27 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
             .retainFileVersions(1).build()).build();
 
     HoodieTableMetaClient metaClient = HoodieTestUtils
-        .initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+        .initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
 
     // Make 3 files, one base file and 2 log files associated with base file
     String file1P0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");
     String file2P0L0 = HoodieTestUtils
-        .createNewLogFile(basePath, partitionPaths[0], "000", file1P0, Optional.empty());
+        .createNewLogFile(fs, basePath, partitionPaths[0], "000", file1P0, Optional.empty());
     String file2P0L1 = HoodieTestUtils
-        .createNewLogFile(basePath, partitionPaths[0], "000", file1P0, Optional.of(2));
+        .createNewLogFile(fs, basePath, partitionPaths[0], "000", file1P0, Optional.of(2));
     // make 1 compaction commit
-    HoodieTestUtils.createCompactionCommitFiles(basePath, "000");
+    HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "000");
 
     // Make 4 files, one base file and 3 log files associated with base file
     HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "001", file1P0);
     file2P0L0 = HoodieTestUtils
-        .createNewLogFile(basePath, partitionPaths[0], "001", file1P0, Optional.empty());
+        .createNewLogFile(fs, basePath, partitionPaths[0], "001", file1P0, Optional.empty());
     file2P0L0 = HoodieTestUtils
-        .createNewLogFile(basePath, partitionPaths[0], "001", file1P0, Optional.of(2));
+        .createNewLogFile(fs, basePath, partitionPaths[0], "001", file1P0, Optional.of(2));
     file2P0L0 = HoodieTestUtils
-        .createNewLogFile(basePath, partitionPaths[0], "001", file1P0, Optional.of(3));
+        .createNewLogFile(fs, basePath, partitionPaths[0], "001", file1P0, Optional.of(3));
     // make 1 compaction commit
-    HoodieTestUtils.createCompactionCommitFiles(basePath, "001");
+    HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "001");
 
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
     List<HoodieCleanStat> hoodieCleanStats = table.clean(jsc);

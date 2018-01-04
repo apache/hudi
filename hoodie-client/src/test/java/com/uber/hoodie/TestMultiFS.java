@@ -47,8 +47,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class TestMultiFS implements Serializable {
@@ -64,8 +64,8 @@ public class TestMultiFS implements Serializable {
   private static JavaSparkContext jsc;
   private static SQLContext sqlContext;
 
-  @Before
-  public void initClass() throws Exception {
+  @BeforeClass
+  public static void initClass() throws Exception {
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
 
@@ -82,15 +82,18 @@ public class TestMultiFS implements Serializable {
     sqlContext = new SQLContext(jsc);
   }
 
-  @After
-  public void cleanupClass() throws Exception {
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-    }
+  @AfterClass
+  public static void cleanupClass() throws Exception {
     if (jsc != null) {
       jsc.stop();
     }
-    FSUtils.setFs(null);
+
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+      dfsCluster.shutdown();
+    }
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the same JVM
+    FileSystem.closeAll();
   }
 
   @Test

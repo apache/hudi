@@ -42,7 +42,6 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
@@ -80,7 +79,6 @@ public class TestMergeOnReadTable {
   private transient SQLContext sqlContext;
   private static String basePath = null;
   private HoodieCompactor compactor;
-  private FileSystem fs;
 
   //NOTE : Be careful in using DFS (FileSystem.class) vs LocalFs(RawLocalFileSystem.class)
   //The implementation and gurantees of many API's differ, for example check rename(src,dst)
@@ -94,10 +92,8 @@ public class TestMergeOnReadTable {
       hdfsTestService.stop();
       dfsCluster.shutdown();
     }
-    FSUtils.setFs(null);
     // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the same JVM
     FileSystem.closeAll();
-    HoodieTestUtils.resetFS(basePath);
   }
 
   @BeforeClass
@@ -110,8 +106,6 @@ public class TestMergeOnReadTable {
       // Create a temp folder as the base path
       dfs = dfsCluster.getFileSystem();
     }
-    FSUtils.setFs(dfs);
-    HoodieTestUtils.resetFS(basePath);
   }
 
   @Before
@@ -124,12 +118,10 @@ public class TestMergeOnReadTable {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
-    fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    jsc.hadoopConfiguration().addResource(fs.getConf());
+    jsc.hadoopConfiguration().addResource(dfs.getConf());
 
     dfs.mkdirs(new Path(basePath));
-    FSUtils.setFs(dfs);
-    HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(dfs, basePath, HoodieTableType.MERGE_ON_READ);
 
     sqlContext = new SQLContext(jsc); // SQLContext stuff
     compactor = new HoodieRealtimeTableCompactor();
@@ -219,7 +211,7 @@ public class TestMergeOnReadTable {
 
     compactor.compact(jsc, getConfig(true), table, HoodieActiveTimeline.createNewCommitTime());
 
-    allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());
+    allFiles = HoodieTestUtils.listAllDataFilesInPath(dfs, cfg.getBasePath());
     roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(),
         allFiles);
     dataFilesToRead = roView.getLatestDataFiles();
@@ -339,7 +331,7 @@ public class TestMergeOnReadTable {
     commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
     assertFalse(commit.isPresent());
 
-    allFiles = HoodieTestUtils.listAllDataFilesInPath(fs, cfg.getBasePath());
+    allFiles = HoodieTestUtils.listAllDataFilesInPath(dfs, cfg.getBasePath());
     roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(),
         allFiles);
     dataFilesToRead = roView.getLatestDataFiles();
@@ -357,7 +349,7 @@ public class TestMergeOnReadTable {
   public void testCOWToMORConvertedDatasetRollback() throws Exception {
 
     //Set TableType to COW
-    HoodieTestUtils.initTableType(basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestUtils.initTableType(dfs, basePath, HoodieTableType.COPY_ON_WRITE);
 
     HoodieWriteConfig cfg = getConfig(true);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
@@ -396,7 +388,7 @@ public class TestMergeOnReadTable {
     assertNoWriteErrors(statuses);
 
     //Set TableType to MOR
-    HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(dfs, basePath, HoodieTableType.MERGE_ON_READ);
 
     //rollback a COW commit when TableType is MOR
     client.rollback(newCommitTime);

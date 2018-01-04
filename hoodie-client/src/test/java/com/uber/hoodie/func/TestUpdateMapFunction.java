@@ -48,7 +48,7 @@ public class TestUpdateMapFunction {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     this.basePath = folder.getRoot().getAbsolutePath();
-    HoodieTestUtils.init(basePath);
+    HoodieTestUtils.init(FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()), basePath);
   }
 
   @Test
