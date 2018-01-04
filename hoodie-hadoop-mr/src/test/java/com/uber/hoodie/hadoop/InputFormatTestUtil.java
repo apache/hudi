@@ -39,7 +39,9 @@ public class InputFormatTestUtil {
   public static File prepareDataset(TemporaryFolder basePath, int numberOfFiles,
       String commitNumber) throws IOException {
     basePath.create();
-    HoodieTestUtils.init(basePath.getRoot().toString());
+    HoodieTestUtils
+        .init(FSUtils.getFs(basePath.getRoot().toString(), HoodieTestUtils.getDefaultHadoopConf()),
+            basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
     for (int i = 0; i < numberOfFiles; i++) {
       File dataFile =
@@ -99,7 +101,9 @@ public class InputFormatTestUtil {
       int numberOfFiles, int numberOfRecords,
       String commitNumber) throws IOException {
     basePath.create();
-    HoodieTestUtils.init(basePath.getRoot().toString());
+    HoodieTestUtils
+        .init(FSUtils.getFs(basePath.getRoot().toString(), HoodieTestUtils.getDefaultHadoopConf()),
+            basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {

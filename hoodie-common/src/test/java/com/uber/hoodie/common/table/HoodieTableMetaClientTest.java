@@ -36,7 +36,6 @@ import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 public class HoodieTableMetaClientTest {
 
@@ -45,10 +44,8 @@ public class HoodieTableMetaClientTest {
 
   @Before
   public void init() throws IOException {
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    this.basePath = folder.getRoot().getAbsolutePath();
-    metaClient = HoodieTestUtils.init(basePath);
+    metaClient = HoodieTestUtils.initOnTemp();
+    basePath = metaClient.getBasePath();
   }
 
   @Test
@@ -109,7 +106,7 @@ public class HoodieTableMetaClientTest {
   public void checkArchiveCommitTimeline() throws IOException {
     Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     SequenceFile.Writer writer = SequenceFile
-        .createWriter(HoodieTestUtils.fs.getConf(), SequenceFile.Writer.file(archiveLogPath),
+        .createWriter(metaClient.getHadoopConf(), SequenceFile.Writer.file(archiveLogPath),
             SequenceFile.Writer.keyClass(Text.class),
             SequenceFile.Writer.valueClass(Text.class));
 

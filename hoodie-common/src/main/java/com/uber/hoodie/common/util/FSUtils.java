@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.common.util;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
@@ -57,15 +56,6 @@ public class FSUtils {
   private static final long MIN_CLEAN_TO_KEEP = 10;
   private static final long MIN_ROLLBACK_TO_KEEP = 10;
   private static final String HOODIE_ENV_PROPS_PREFIX = "HOODIE_ENV_";
-  private static FileSystem fs;
-
-  /**
-   * Only to be used for testing.
-   */
-  @VisibleForTesting
-  public static void setFs(FileSystem fs) {
-    FSUtils.fs = fs;
-  }
 
   public static Configuration prepareHadoopConf(Configuration conf) {
     conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
@@ -86,9 +76,6 @@ public class FSUtils {
 
 
   public static FileSystem getFs(String path, Configuration conf) {
-    if (fs != null) {
-      return fs;
-    }
     FileSystem fs;
     conf = prepareHadoopConf(conf);
     try {

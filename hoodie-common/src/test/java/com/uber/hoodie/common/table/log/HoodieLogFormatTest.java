@@ -80,7 +80,6 @@ public class HoodieLogFormatTest {
   @AfterClass
   public static void tearDownClass() {
     MiniClusterUtil.shutdown();
-    HoodieTestUtils.resetFS(basePath);
   }
 
   @Before
@@ -91,8 +90,7 @@ public class HoodieLogFormatTest {
     assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
     this.partitionPath = new Path(folder.getRoot().getPath());
     this.basePath = folder.getRoot().getParent();
-    HoodieTestUtils.fs = fs;
-    HoodieTestUtils.initTableType(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @After

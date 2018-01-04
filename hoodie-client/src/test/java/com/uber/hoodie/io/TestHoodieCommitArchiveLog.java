@@ -54,8 +54,8 @@ public class TestHoodieCommitArchiveLog {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
-    HoodieTestUtils.init(basePath);
     fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+    HoodieTestUtils.init(fs, basePath);
   }
 
   @Test
@@ -75,7 +75,7 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
-    HoodieTestUtils.init(basePath);
+    HoodieTestUtils.init(fs, basePath);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
     HoodieTestDataGenerator.createCommitFile(basePath, "101");
     HoodieTestDataGenerator.createCommitFile(basePath, "102");
