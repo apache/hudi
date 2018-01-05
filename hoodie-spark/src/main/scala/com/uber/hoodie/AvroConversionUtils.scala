@@ -43,6 +43,16 @@ object AvroConversionUtils {
     }
   }
 
+  def getNewRecordNamespace(elementDataType: DataType,
+                            currentRecordNamespace: String,
+                            elementName: String): String = {
+
+    elementDataType match {
+      case StructType(_) => s"$currentRecordNamespace.$elementName"
+      case _ => currentRecordNamespace
+    }
+  }
+
   def createConverterToAvro(dataType: DataType,
                             structName: String,
                             recordNamespace: String): (Any) => Any = {
@@ -60,7 +70,10 @@ object AvroConversionUtils {
       case DateType => (item: Any) =>
         if (item == null) null else item.asInstanceOf[Date].getTime
       case ArrayType(elementType, _) =>
-        val elementConverter = createConverterToAvro(elementType, structName, recordNamespace)
+        val elementConverter = createConverterToAvro(
+          elementType,
+          structName,
+          getNewRecordNamespace(elementType, recordNamespace, structName))
         (item: Any) => {
           if (item == null) {
             null
@@ -77,7 +90,10 @@ object AvroConversionUtils {
           }
         }
       case MapType(StringType, valueType, _) =>
-        val valueConverter = createConverterToAvro(valueType, structName, recordNamespace)
+        val valueConverter = createConverterToAvro(
+          valueType,
+          structName,
+          getNewRecordNamespace(valueType, recordNamespace, structName))
         (item: Any) => {
           if (item == null) {
             null
@@ -94,7 +110,10 @@ object AvroConversionUtils {
         val schema: Schema = SchemaConverters.convertStructToAvro(
           structType, builder, recordNamespace)
         val fieldConverters = structType.fields.map(field =>
-          createConverterToAvro(field.dataType, field.name, recordNamespace))
+          createConverterToAvro(
+            field.dataType,
+            field.name,
+            getNewRecordNamespace(field.dataType, recordNamespace, field.name)))
         (item: Any) => {
           if (item == null) {
             null

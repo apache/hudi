@@ -41,7 +41,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String TABLE_NAME = "hoodie.table.name";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
-  private static final String DEFAULT_PARALLELISM = "200";
+  private static final String DEFAULT_PARALLELISM = "1500";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
