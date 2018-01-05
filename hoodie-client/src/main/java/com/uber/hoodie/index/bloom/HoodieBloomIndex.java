@@ -18,15 +18,13 @@
 
 package com.uber.hoodie.index.bloom;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.toList;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -37,10 +35,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.MetadataNotFoundException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -49,6 +43,16 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 import scala.Tuple2;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
+import static org.apache.zookeeper.server.ServerCnxn.me;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in
@@ -235,17 +239,17 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions,
       final HoodieTable<T> hoodieTable) {
     // Obtain the latest data files from all the partitions.
-    List<Tuple2<String, HoodieDataFile>> dataFilesList = jsc
+    List<Tuple2<String, Tuple2<HoodieDataFile, List<HoodieLogFile>>>> dataFilesList = jsc
         .parallelize(partitions, Math.max(partitions.size(), 1))
         .flatMapToPair(partitionPath -> {
           java.util.Optional<HoodieInstant> latestCommitTime =
               hoodieTable.getCommitTimeline().filterCompletedInstants().lastInstant();
-          List<Tuple2<String, HoodieDataFile>> filteredFiles = new ArrayList<>();
+          List<Tuple2<String, Tuple2<HoodieDataFile, List<HoodieLogFile>>>> filteredFiles = new ArrayList<>();
           if (latestCommitTime.isPresent()) {
             filteredFiles =
-                hoodieTable.getROFileSystemView().getLatestDataFilesBeforeOrOn(partitionPath,
+                hoodieTable.getRTFileSystemView().getLatestFileSlicesBeforeOrOn(partitionPath,
                     latestCommitTime.get().getTimestamp())
-                    .map(f -> new Tuple2<>(partitionPath, f))
+                    .map(f -> new Tuple2<>(partitionPath, new Tuple2<>(f.getDataFile().get(), f.getLogFiles().collect(Collectors.toList()))))
                     .collect(toList());
           }
           return filteredFiles.iterator();
@@ -257,17 +261,21 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           .mapToPair(ft -> {
             try {
               String[] minMaxKeys = ParquetUtils
-                  .readMinMaxRecordKeys(ft._2().getFileStatus().getPath());
+                  .readMinMaxRecordKeys(ft._2()._1().getFileStatus().getPath());
               return new Tuple2<>(ft._1(),
-                  new BloomIndexFileInfo(ft._2().getFileName(), minMaxKeys[0], minMaxKeys[1]));
+                  new BloomIndexFileInfo(ft._2()._2().stream().filter(l -> {
+                    return l.getFileStatus() != null;
+                  }).map(logFile -> logFile.getFileStatus().get().getPath().toString()).collect(Collectors.toList()), ft._2()._1().getFileName(), minMaxKeys[0], minMaxKeys[1]));
             } catch (MetadataNotFoundException me) {
               logger.warn("Unable to find range metadata in file :" + ft._2());
-              return new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2().getFileName()));
+              return new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2()._2().stream().filter(l -> l.getFileStatus() != null).map(logFile -> logFile.getFileStatus().get().getPath().toString()).collect(Collectors.toList())
+                      , ft._2()._1().getFileName()));
             }
           }).collect();
     } else {
       return dataFilesList.stream()
-          .map(ft -> new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2().getFileName())))
+          .map(ft -> new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2()._2().stream().filter(l -> l.getFileStatus() != null).map(logFile -> logFile.getFileStatus().get().getPath().toString()).collect(Collectors.toList())
+                  , ft._2()._1().getFileName())))
           .collect(toList());
     }
   }
@@ -321,7 +329,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   // sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on recordKey
   // ranges in the index info.
   @VisibleForTesting
-  JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
+  JavaPairRDD<String, Tuple2<BloomIndexFileInfo, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
     return partitionRecordKeyPairRDD
@@ -330,7 +338,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           String partitionPath = partitionRecordKeyPair._1();
 
           List<BloomIndexFileInfo> indexInfos = partitionToFileIndexInfo.get(partitionPath);
-          List<Tuple2<String, Tuple2<String, HoodieKey>>> recordComparisons = new ArrayList<>();
+          List<Tuple2<String, Tuple2<BloomIndexFileInfo, HoodieKey>>> recordComparisons = new ArrayList<>();
           if (indexInfos
               != null) { // could be null, if there are no files in a given partition yet.
             // for each candidate file in partition, that needs to be compared.
@@ -338,7 +346,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
               if (shouldCompareWithFile(indexInfo, recordKey)) {
                 recordComparisons.add(
                     new Tuple2<>(String.format("%s#%s", indexInfo.getFileName(), recordKey),
-                        new Tuple2<>(indexInfo.getFileName(),
+                        new Tuple2<>(indexInfo,
                             new HoodieKey(recordKey, partitionPath))));
               }
             }
@@ -366,13 +374,13 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     int joinParallelism = determineParallelism(partitionRecordKeyPairRDD.partitions().size(),
         totalSubpartitions);
 
-    JavaPairRDD<String, Tuple2<String, HoodieKey>> fileSortedTripletRDD = explodeRecordRDDWithFileComparisons(
+    JavaPairRDD<String, Tuple2<BloomIndexFileInfo, HoodieKey>> fileSortedTripletRDD = explodeRecordRDDWithFileComparisons(
         partitionToFileIndexInfo, partitionRecordKeyPairRDD)
         // sort further based on filename, such that all checking for the file can happen within a single partition, on-the-fly
         .sortByKey(true, joinParallelism);
 
     return fileSortedTripletRDD
-        .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(config.getBasePath()), true)
+        .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(config.getBasePath(), config), true)
         .flatMap(indexLookupResults -> indexLookupResults.iterator())
         .filter(lookupResult -> lookupResult.getMatchingRecordKeys().size() > 0)
         .flatMapToPair(lookupResult -> {

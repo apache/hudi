@@ -17,6 +17,7 @@
 package com.uber.hoodie.io;
 
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
@@ -78,11 +79,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
         HoodieRecord<T> record = newRecordsItr.next();
         // If the first record, we need to extract some info out
         if (oldFilePath == null) {
-          String latestValidFilePath = fileSystemView
-              .getLatestDataFiles(record.getPartitionPath())
-              .filter(dataFile -> dataFile.getFileId().equals(fileId))
-              .findFirst()
-              .get().getFileName();
+          FileSlice fileSlice = fileSystemView.getLatestFileSlices(record.getPartitionPath())
+                  .filter(fSlice -> fSlice.getDataFile().get().getFileId().equals(fileId))
+                  .findFirst().get();
+          String latestValidFilePath = fileSlice.getDataFile().get().getFileName();
           writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
           HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,

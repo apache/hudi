@@ -164,7 +164,7 @@ public class HoodieCompactedLogRecordScanner implements
         }
 
       } catch (IOException e) {
-        throw new HoodieIOException("IOException when reading log file " + logFile);
+        throw new HoodieIOException("IOException when reading log file " + logFile, e);
       }
       // merge the last read block when all the blocks are done reading
       if (!lastBlocks.isEmpty()) {

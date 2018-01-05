@@ -28,10 +28,12 @@ import com.uber.hoodie.exception.CorruptedLogFileException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -52,6 +54,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final Schema readerSchema;
   private HoodieLogBlock nextBlock = null;
   private boolean readMetadata = true;
+  private long reverseLogFilePosition;
 
   HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readMetadata) throws IOException {
@@ -59,6 +62,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.logFile = logFile;
     this.readerSchema = readerSchema;
     this.readMetadata = readMetadata;
+    setFilePos(fs);
   }
 
   HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
@@ -69,6 +73,10 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   @Override
   public HoodieLogFile getLogFile() {
     return logFile;
+  }
+
+  private void setFilePos(FileSystem fs) throws IOException {
+    this.reverseLogFilePosition = fs.getFileStatus(logFile.getPath()).getLen();
   }
 
   private HoodieLogBlock readBlock() throws IOException {
@@ -84,7 +92,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     // We may have had a crash which could have written this block partially
     // Skip blocksize in the stream and we should either find a sync marker (start of the next block) or EOF
     // If we did not find either of it, then this block is a corrupted block.
-    boolean isCorrupted = isBlockCorrupt(blocksize);
+    // Integer.BYTES is for length of block
+    boolean isCorrupted = isBlockCorrupt(blocksize + Integer.BYTES);
     if (isCorrupted) {
       return createCorruptBlock();
     }
@@ -93,6 +102,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     // TODO - have a max block size and reuse this buffer in the ByteBuffer (hard to guess max block size for now)
     byte[] content = new byte[blocksize];
     inputStream.readFully(content, 0, blocksize);
+
+    int totalBlockSize = inputStream.readInt();
 
     switch (blockType) {
       // based on type read the block
@@ -198,6 +209,37 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       hasNext();
     }
     return nextBlock;
+  }
+
+  /**
+   * Is not idempotent
+   * @return
+   */
+  public boolean hasPrev() {
+    try {
+      reverseLogFilePosition -= Integer.BYTES;
+      inputStream.seek(reverseLogFilePosition);
+    } catch(Exception e) {
+      return false;
+    }
+    return true;
+  }
+
+  // reverse iterator
+  // blocksize should be everything about a block including the length as well
+  public HoodieLogBlock prev() throws IOException {
+    int blockSize = inputStream.readInt();
+    inputStream.seek(reverseLogFilePosition - blockSize);
+    readMagic();
+//    boolean isCorrupted = isBlockCorrupt(blockSize);
+//    if(isCorrupted) {
+//      reverseLogFilePosition -= blockSize;
+//      // log warning
+//      prev();
+//    }
+    HoodieLogBlock block = readBlock();
+    reverseLogFilePosition -= blockSize;
+    return block;
   }
 
   @Override

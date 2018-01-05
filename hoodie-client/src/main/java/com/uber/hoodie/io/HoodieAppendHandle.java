@@ -19,6 +19,9 @@ package com.uber.hoodie.io;
 import com.beust.jcommander.internal.Maps;
 import com.clearspring.analytics.util.Lists;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.avro.HoodieAvroWriteSupport;
+import com.uber.hoodie.common.BloomFilter;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -26,6 +29,7 @@ import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
+import com.uber.hoodie.common.table.log.HoodieLogIndex;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
@@ -66,6 +70,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private long recordsDeleted = 0;
   private HoodieLogFile currentLogFile;
   private Writer writer;
+  private FileSlice fileSlice;
 
   public HoodieAppendHandle(HoodieWriteConfig config,
       String commitTime,
@@ -88,10 +93,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       if (partitionPath == null) {
         partitionPath = record.getPartitionPath();
         // HACK(vc) This also assumes a base file. It will break, if appending without one.
-        String latestValidFilePath =
-            fileSystemView.getLatestDataFiles(record.getPartitionPath())
-                .filter(dataFile -> dataFile.getFileId().equals(fileId))
-                .findFirst().get().getFileName();
+        this.fileSlice = fileSystemView.getLatestFileSlices(record.getPartitionPath())
+                .filter(fileSlice -> fileSlice.getDataFile().get().getFileId().equals(fileId))
+                .findFirst().get();
+        String latestValidFilePath = this.fileSlice.getDataFile().get().getFileName();
         String baseCommitTime = FSUtils.getCommitTime(latestValidFilePath);
         writeStatus.getStat().setPrevCommit(baseCommitTime);
         writeStatus.setFileId(fileId);
@@ -158,16 +163,24 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
     List<IndexedRecord> recordList = new ArrayList<>();
     List<String> keysToDelete = new ArrayList<>();
+    // get last bloom filter
+    HoodieLogIndex logIndex = new HoodieLogIndex(fileSlice.getLogFiles(), schema,
+            config.getBloomFilterNumEntries(), config.getBloomFilterFPP());
+
     Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
     metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, commitTime);
     records.stream().forEach(record -> {
       Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
       if (indexedRecord.isPresent()) {
         recordList.add(indexedRecord.get());
+        if(!logIndex.getBloomFilter().mightContain(record.getRecordKey())) {
+          logIndex.getBloomFilter().add(record.getRecordKey());
+        }
       } else {
         keysToDelete.add(record.getRecordKey());
       }
     });
+    metadata.put(HoodieLogBlock.LogMetadataType.LOG_INDEX, logIndex.getBloomFilter().serializeToString());
     try {
       if (recordList.size() > 0) {
         writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, schema, metadata));

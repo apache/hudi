@@ -61,6 +61,18 @@ public class HoodieReadClient implements Serializable {
   private final HoodieTimeline commitTimeline;
   private HoodieTable hoodieTable;
   private transient Optional<SQLContext> sqlContextOpt;
+  public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\","
+          + "\"name\": \"triprec\","
+          + "\"fields\": [ "
+          + "{\"name\": \"timestamp\",\"type\": \"double\"},"
+          + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+          + "{\"name\": \"rider\", \"type\": \"string\"},"
+          + "{\"name\": \"driver\", \"type\": \"string\"},"
+          + "{\"name\": \"begin_lat\", \"type\": \"double\"},"
+          + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
+          + "{\"name\": \"end_lat\", \"type\": \"double\"},"
+          + "{\"name\": \"end_lon\", \"type\": \"double\"},"
+          + "{\"name\":\"fare\",\"type\": \"double\"}]}";
 
   /**
    * @param basePath path to Hoodie dataset
@@ -73,7 +85,8 @@ public class HoodieReadClient implements Serializable {
         .getHoodieTable(new HoodieTableMetaClient(fs, basePath, true), null);
     this.commitTimeline = hoodieTable.getCompletedCompactionCommitTimeline();
     this.index =
-        new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).build(), jsc);
+        new HoodieBloomIndex(HoodieWriteConfig.newBuilder().withPath(basePath).
+                withSchema(TRIP_EXAMPLE_SCHEMA).build(), jsc);
     this.sqlContextOpt = Optional.absent();
   }
 

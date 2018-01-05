@@ -20,14 +20,20 @@ package com.uber.hoodie.index.bloom;
 
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.table.log.HoodieLogIndex;
+import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.func.LazyIterableIterator;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -39,21 +45,24 @@ import scala.Tuple2;
  * actual files
  */
 public class HoodieBloomIndexCheckFunction implements
-    Function2<Integer, Iterator<Tuple2<String, Tuple2<String, HoodieKey>>>, Iterator<List<IndexLookupResult>>> {
+    Function2<Integer, Iterator<Tuple2<String, Tuple2<BloomIndexFileInfo, HoodieKey>>>, Iterator<List<IndexLookupResult>>> {
 
   private static Logger logger = LogManager.getLogger(HoodieBloomIndexCheckFunction.class);
 
   private final String basePath;
+  private final HoodieWriteConfig config;
 
-  public HoodieBloomIndexCheckFunction(String basePath) {
+  public HoodieBloomIndexCheckFunction(String basePath, HoodieWriteConfig config) {
     this.basePath = basePath;
+    this.config = config;
   }
 
   /**
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
+  // TODO : Pass FileGroup here and check index in parquet and log (if present)
   public static List<String> checkCandidatesAgainstFile(List<String> candidateRecordKeys,
-      Path filePath) throws HoodieIndexException {
+      Path filePath, Optional<HoodieLogIndex> logIndex) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm
@@ -64,7 +73,7 @@ public class HoodieBloomIndexCheckFunction implements
           logger.debug("Keys from " + filePath + " => " + fileRowKeys);
         }
         for (String rowKey : candidateRecordKeys) {
-          if (fileRowKeys.contains(rowKey)) {
+          if (fileRowKeys.contains(rowKey) || (logIndex.isPresent() && logIndex.get().getKeys().contains(rowKey))) {
             foundRecordKeys.add(rowKey);
           }
         }
@@ -81,22 +90,25 @@ public class HoodieBloomIndexCheckFunction implements
   }
 
   class LazyKeyCheckIterator extends
-      LazyIterableIterator<Tuple2<String, Tuple2<String, HoodieKey>>, List<IndexLookupResult>> {
+      LazyIterableIterator<Tuple2<String, Tuple2<BloomIndexFileInfo, HoodieKey>>, List<IndexLookupResult>> {
 
     private List<String> candidateRecordKeys;
 
     private BloomFilter bloomFilter;
+
+    private HoodieLogIndex logIndex;
 
     private String currentFile;
 
     private String currentParitionPath;
 
     LazyKeyCheckIterator(
-        Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr) {
+        Iterator<Tuple2<String, Tuple2<BloomIndexFileInfo, HoodieKey>>> fileParitionRecordKeyTripletItr) {
       super(fileParitionRecordKeyTripletItr);
       currentFile = null;
       candidateRecordKeys = new ArrayList<>();
       bloomFilter = null;
+      logIndex = null;
       currentParitionPath = null;
     }
 
@@ -104,10 +116,14 @@ public class HoodieBloomIndexCheckFunction implements
     protected void start() {
     }
 
-    private void initState(String fileName, String partitionPath) throws HoodieIndexException {
+    private void initState(String fileName, Optional<List<String>> logFilePaths, String partitionPath) throws HoodieIndexException {
       try {
         Path filePath = new Path(basePath + "/" + partitionPath + "/" + fileName);
         bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(filePath);
+        if(logFilePaths.isPresent()) {
+          logIndex = new HoodieLogIndex(logFilePaths.get(),
+                  Schema.parse(config.getSchema()), config.getBloomFilterNumEntries(), config.getBloomFilterFPP());
+        }
         candidateRecordKeys = new ArrayList<>();
         currentFile = fileName;
         currentParitionPath = partitionPath;
@@ -124,14 +140,14 @@ public class HoodieBloomIndexCheckFunction implements
         // process one file in each go.
         while (inputItr.hasNext()) {
 
-          Tuple2<String, Tuple2<String, HoodieKey>> currentTuple = inputItr.next();
-          String fileName = currentTuple._2._1;
+          Tuple2<String, Tuple2<BloomIndexFileInfo, HoodieKey>> currentTuple = inputItr.next();
+          String fileName = currentTuple._2._1.getFileName();
           String partitionPath = currentTuple._2._2.getPartitionPath();
           String recordKey = currentTuple._2._2.getRecordKey();
 
           // lazily init state
           if (currentFile == null) {
-            initState(fileName, partitionPath);
+            initState(fileName, Optional.of(currentTuple._2()._1().getLogFilePaths()), partitionPath);
           }
 
           // if continue on current file)
@@ -142,6 +158,13 @@ public class HoodieBloomIndexCheckFunction implements
                 logger.debug("#1 Adding " + recordKey + " as candidate for file " + fileName);
               }
               candidateRecordKeys.add(recordKey);
+            } else if(logIndex != null) {
+              if(logIndex.getBloomFilter().mightContain(recordKey)) {
+                if (logger.isDebugEnabled()) {
+                  logger.debug("#1 Adding " + recordKey + " as candidate for file " + fileName);
+                }
+                candidateRecordKeys.add(recordKey);
+              }
             }
           } else {
             // do the actual checking of file & break out
@@ -154,14 +177,21 @@ public class HoodieBloomIndexCheckFunction implements
                   .debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
             }
             ret.add(new IndexLookupResult(currentFile,
-                checkCandidatesAgainstFile(candidateRecordKeys, filePath)));
+                checkCandidatesAgainstFile(candidateRecordKeys, filePath, Optional.of(logIndex))));
 
-            initState(fileName, partitionPath);
+            initState(fileName, Optional.of(currentTuple._2()._1().getLogFilePaths()), partitionPath);
             if (bloomFilter.mightContain(recordKey)) {
               if (logger.isDebugEnabled()) {
                 logger.debug("#2 Adding " + recordKey + " as candidate for file " + fileName);
               }
               candidateRecordKeys.add(recordKey);
+            } else if(logIndex != null) {
+              if(logIndex.getBloomFilter().mightContain(recordKey)) {
+                if (logger.isDebugEnabled()) {
+                  logger.debug("#2 Adding " + recordKey + " as candidate for file " + fileName);
+                }
+                candidateRecordKeys.add(recordKey);
+              }
             }
             break;
           }
@@ -177,7 +207,7 @@ public class HoodieBloomIndexCheckFunction implements
             logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
           }
           ret.add(new IndexLookupResult(currentFile,
-              checkCandidatesAgainstFile(candidateRecordKeys, filePath)));
+              checkCandidatesAgainstFile(candidateRecordKeys, filePath, Optional.of(logIndex))));
         }
 
       } catch (Throwable e) {
@@ -198,7 +228,7 @@ public class HoodieBloomIndexCheckFunction implements
 
   @Override
   public Iterator<List<IndexLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr)
+      Iterator<Tuple2<String, Tuple2<BloomIndexFileInfo, HoodieKey>>> fileParitionRecordKeyTripletItr)
       throws Exception {
     return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }

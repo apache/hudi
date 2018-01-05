@@ -19,7 +19,10 @@
 package com.uber.hoodie.index.bloom;
 
 import com.google.common.base.Objects;
+import com.uber.hoodie.common.model.FileSlice;
+
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * Metadata about a given file, useful for index lookup
@@ -28,20 +31,28 @@ public class BloomIndexFileInfo implements Serializable {
 
   private final String fileName;
 
+  private final List<String> logFilePaths;
+
   private final String minRecordKey;
 
   private final String maxRecordKey;
 
-  public BloomIndexFileInfo(String fileName, String minRecordKey, String maxRecordKey) {
+  public BloomIndexFileInfo(List<String> logFilePaths, String fileName, String minRecordKey, String maxRecordKey) {
+    this.logFilePaths = logFilePaths;
     this.fileName = fileName;
     this.minRecordKey = minRecordKey;
     this.maxRecordKey = maxRecordKey;
   }
 
-  public BloomIndexFileInfo(String fileName) {
+  public BloomIndexFileInfo(List<String> logFilePaths, String fileName) {
+    this.logFilePaths = logFilePaths;
     this.fileName = fileName;
     this.minRecordKey = null;
     this.maxRecordKey = null;
+  }
+
+  public List<String> getLogFilePaths() {
+    return logFilePaths;
   }
 
   public String getFileName() {

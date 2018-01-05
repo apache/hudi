@@ -320,6 +320,14 @@ public class TestMergeOnReadTable {
     statuses = client.upsert(writeRecords, newCommitTime).collect();
     assertNoWriteErrors(statuses);
 
+    newCommitTime = "003";
+    client.startCommitWithTime(newCommitTime);
+
+    records = dataGen.generateUpdates(newCommitTime, records);
+    writeRecords = jsc.parallelize(records, 1);
+    statuses = client.upsert(writeRecords, newCommitTime).collect();
+    assertNoWriteErrors(statuses);
+
     /**
      * Write 2 (only deletes, written to .log file)
      */
@@ -566,7 +574,7 @@ public class TestMergeOnReadTable {
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
                 .withInlineCompaction(false).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024* 1024 * 1024).build())
         .forTable("test-trip-table").withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
   }

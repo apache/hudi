@@ -108,6 +108,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   @Override
   public Writer appendBlock(HoodieLogBlock block)
       throws IOException, InterruptedException {
+    int currentSize = this.output.size();
     byte[] content = block.getBytes();
     // 1. write the magic header for the start of the block
     this.output.write(HoodieLogFormat.MAGIC);
@@ -117,7 +118,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.output.writeInt(content.length);
     // 4. Write the contents of the block
     this.output.write(content);
-
+    // 5. Write the size of the block + magic header + block type (for reverse pointer)
+    this.output.writeInt(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
 
