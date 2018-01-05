@@ -17,7 +17,9 @@ There are two configurations required for Hoodie-S3 compatibility:
 
 ### AWS Credentials
 
-Add the required configs in your core-site.xml from where Hoodie can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hoodie should be able to read/write from the bucket. 
+Simplest way to use Hoodie with S3, is to configure your `SparkSession` or `SparkContext` with S3 credentials. Hoodie will automatically pick this up and talk to S3.
+
+Alternatively, add the required configs in your core-site.xml from where Hoodie can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hoodie should be able to read/write from the bucket.
 
 ```
   <property>
@@ -50,6 +52,22 @@ Add the required configs in your core-site.xml from where Hoodie can fetch them.
        <value>AWS_SECRET</value>
   </property>
 ```
+
+
+Utilities such as hoodie-cli or deltastreamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
+such variables and then have cli be able to work on datasets stored in s3
+
+```
+export HOODIE_ENV_fs_DOT_s3a_DOT_access_DOT_key=$accessKey
+export HOODIE_ENV_fs_DOT_s3a_DOT_secret_DOT_key=$secretKey
+export HOODIE_ENV_fs_DOT_s3_DOT_awsAccessKeyId=$accessKey
+export HOODIE_ENV_fs_DOT_s3_DOT_awsSecretAccessKey=$secretKey
+export HOODIE_ENV_fs_DOT_s3n_DOT_awsAccessKeyId=$accessKey
+export HOODIE_ENV_fs_DOT_s3n_DOT_awsSecretAccessKey=$secretKey
+export HOODIE_ENV_fs_DOT_s3n_DOT_impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+```
+
+
 
 ### AWS Libs
 
