@@ -134,10 +134,15 @@ class DefaultSource extends RelationProvider
                               df: DataFrame): BaseRelation = {
 
     val parameters = parametersWithWriteDefaults(optParams).toMap
+    val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
     val tblName = parameters.get(HoodieWriteConfig.TABLE_NAME)
     if (path.isEmpty || tblName.isEmpty) {
       throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}', 'path' must be set.")
+    }
+    val serializer = sparkContext.getConf.get("spark.serializer")
+    if (!serializer.equals("org.apache.spark.serializer.KryoSerializer")) {
+      throw new HoodieException(s"${serializer} serialization is not supported by hoodie. Please use kryo.")
     }
 
     val storageType = parameters(STORAGE_TYPE_OPT_KEY)
@@ -146,11 +151,12 @@ class DefaultSource extends RelationProvider
     // register classes & schemas
     val structName = s"${tblName.get}_record"
     val nameSpace = s"hoodie.${tblName.get}"
-    sqlContext.sparkContext.getConf.registerKryoClasses(
+    sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
     val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
-    sqlContext.sparkContext.getConf.registerAvroSchemas(schema)
+    sparkContext.getConf.registerAvroSchemas(schema)
+    log.info(s"Registered avro schema : ${schema.toString(true)}");
 
     // Convert to RDD[HoodieRecord]
     val keyGenerator = DataSourceUtils.createKeyGenerator(
@@ -167,7 +173,7 @@ class DefaultSource extends RelationProvider
 
 
     val basePath = new Path(parameters.get("path").get)
-    val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
+    val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(basePath)
 
     // Handle various save modes
@@ -190,12 +196,11 @@ class DefaultSource extends RelationProvider
       properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tblName.get);
       properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, storageType);
       properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived");
-      HoodieTableMetaClient.initializePathAsHoodieDataset(
-        sqlContext.sparkContext.hadoopConfiguration, path.get, properties);
+      HoodieTableMetaClient.initializePathAsHoodieDataset(sparkContext.hadoopConfiguration, path.get, properties);
     }
 
     // Create a HoodieWriteClient & issue the write.
-    val client = DataSourceUtils.createHoodieClient(new JavaSparkContext(sqlContext.sparkContext),
+    val client = DataSourceUtils.createHoodieClient(new JavaSparkContext(sparkContext),
       schema.toString,
       path.get,
       tblName.get,

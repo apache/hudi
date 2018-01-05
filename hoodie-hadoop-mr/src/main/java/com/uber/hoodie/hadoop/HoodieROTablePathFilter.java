@@ -20,7 +20,6 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.Serializable;
@@ -61,6 +60,9 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
   private HashSet<String> nonHoodiePathCache;
 
 
+  private transient FileSystem fs;
+
+
   public HoodieROTablePathFilter() {
     hoodiePathCache = new HashMap<>();
     nonHoodiePathCache = new HashSet<>();
@@ -79,7 +81,6 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
     return null;
   }
 
-
   @Override
   public boolean accept(Path path) {
 
@@ -88,9 +89,8 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
     }
     Path folder = null;
     try {
-      FileSystem fs = path.getFileSystem(FSUtils.prepareHadoopConf(new Configuration()));
-      if (fs.isDirectory(path)) {
-        return true;
+      if (fs == null) {
+        fs = path.getFileSystem(new Configuration());
       }
 
       // Assumes path is a file
