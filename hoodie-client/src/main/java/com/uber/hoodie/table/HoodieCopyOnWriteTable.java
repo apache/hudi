@@ -182,6 +182,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      */
     private HashMap<Integer, BucketInfo> bucketInfoMap;
 
+    /**
+     * List of all small files to be corrected
+     */
+    List<SmallFile> smallFiles = new ArrayList<SmallFile>();
+
     UpsertPartitioner(WorkloadProfile profile) {
       updateLocationToBucket = new HashMap<>();
       partitionPathToInsertBuckets = new HashMap<>();
@@ -296,7 +301,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     /**
      * Returns a list  of small files in the given partition path
      */
-    private List<SmallFile> getSmallFiles(String partitionPath) {
+    protected List<SmallFile> getSmallFiles(String partitionPath) {
+
+      // smallFiles only for partitionPath
       List<SmallFile> smallFileLocations = new ArrayList<>();
 
       HoodieTimeline commitTimeline = getCompletedCommitTimeline();
@@ -315,6 +322,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
                 FSUtils.getFileId(filename));
             sf.sizeBytes = file.getFileSize();
             smallFileLocations.add(sf);
+            // Update the global small files list
+            smallFiles.add(sf);
           }
         }
       }
