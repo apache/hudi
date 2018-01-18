@@ -255,9 +255,4 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     // do nothing for MOR tables
     return Optional.empty();
   }
-
-  @Override
-  public void cleanTemporaryDataFiles(JavaSparkContext jsc) {
-    // do nothing for MOR tables
-  }
 }
