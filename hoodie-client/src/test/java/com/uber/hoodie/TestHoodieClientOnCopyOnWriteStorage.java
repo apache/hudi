@@ -310,7 +310,6 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         .build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
-    FileSystem fs = FSUtils.getFs();
 
     /**
      * Write 1 (only inserts)
@@ -328,9 +327,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
 
     // verify that there is a commit
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs, basePath);
-    HoodieTimeline timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath())
-        .getCommitTimeline();
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
 
     assertEquals("Expecting a single commit.", 1,
         timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
@@ -366,13 +364,13 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     assertNoWriteErrors(statuses);
 
     // verify there are now 2 commits
-    timeline = new HoodieActiveTimeline(fs, metaClient.getMetaPath()).getCommitTimeline();
+    timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
     assertEquals("Expecting two commits.",
         timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), 2);
     assertEquals("Latest commit should be 004", timeline.lastInstant().get().getTimestamp(),
         newCommitTime);
 
-    metaClient = new HoodieTableMetaClient(fs, basePath);
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metaClient, getConfig());
 
     // Index should be able to locate all updates in correct locations.

@@ -591,7 +591,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         .map(writeStatus -> {
           Tuple2<String, HoodieWriteStat> writeStatTuple2 = (Tuple2<String, HoodieWriteStat>) writeStatus;
           HoodieWriteStat writeStat = writeStatTuple2._2();
-          final FileSystem fs = FSUtils.getFs();
+          final FileSystem fs = getMetaClient().getFs();
           final Path finalPath = new Path(config.getBasePath(), writeStat.getPath());
 
           if (writeStat.getTempPath() != null) {
@@ -623,7 +623,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       return;
     }
 
-    final FileSystem fs = FSUtils.getFs();
+    final FileSystem fs = getMetaClient().getFs();
     final Path temporaryFolder = new Path(config.getBasePath(),
         HoodieTableMetaClient.TEMPFOLDER_NAME);
     try {
@@ -635,7 +635,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       List<Tuple2<String, Boolean>> results = jsc
           .parallelize(fileStatusesList, config.getFinalizeWriteParallelism())
           .map(fileStatus -> {
-            FileSystem fs1 = FSUtils.getFs();
+            FileSystem fs1 = getMetaClient().getFs();
             boolean success = fs1.delete(fileStatus.getPath(), false);
             logger.info("Deleting file in temporary folder" + fileStatus.getPath() + "\t"
                 + success);
