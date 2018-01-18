@@ -306,6 +306,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
   public void testUpsertsWithFinalizeWrite() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder()
         .withUseTempFolderCopyOnWrite(true)
+        .withUseTempFolderMergeHandle(true)
         .build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
