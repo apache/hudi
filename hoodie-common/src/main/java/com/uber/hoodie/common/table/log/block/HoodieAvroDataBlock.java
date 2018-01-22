@@ -21,17 +21,6 @@ import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.exception.HoodieIOException;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.io.Decoder;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.EncoderFactory;
-import org.apache.hadoop.fs.FSDataInputStream;
-
-import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -43,6 +32,16 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.annotation.Nonnull;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
  * DataBlock contains a list of records serialized using Avro.
@@ -161,6 +160,10 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
   }
 
   public Schema getSchema() {
+    // if getSchema was invoked before converting byte [] to records
+    if (records == null) {
+      getRecords();
+    }
     return schema;
   }
 
