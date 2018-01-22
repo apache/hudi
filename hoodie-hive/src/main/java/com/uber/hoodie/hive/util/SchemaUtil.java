@@ -18,13 +18,22 @@ package com.uber.hoodie.hive.util;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.table.log.HoodieLogFormat;
+import com.uber.hoodie.common.table.log.HoodieLogFormat.Reader;
+import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HoodieHiveSyncException;
 import com.uber.hoodie.hive.SchemaDifference;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parquet.schema.DecimalMetadata;
@@ -415,5 +424,25 @@ public class SchemaUtil {
     // Default the unknown partition fields to be String
     // TODO - all partition fields should be part of the schema. datestr is treated as special. Dont do that
     return "String";
+  }
+
+  /**
+   * Read the schema from the log file on path
+   */
+  @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+  public static MessageType readSchemaFromLogFile(FileSystem fs,
+      Path path) throws IOException {
+    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
+    HoodieAvroDataBlock lastBlock = null;
+    while (reader.hasNext()) {
+      HoodieLogBlock block = reader.next();
+      if (block instanceof HoodieAvroDataBlock) {
+        lastBlock = (HoodieAvroDataBlock) block;
+      }
+    }
+    if (lastBlock != null) {
+      return new parquet.avro.AvroSchemaConverter().convert(lastBlock.getSchema());
+    }
+    return null;
   }
 }
