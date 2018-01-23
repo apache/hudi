@@ -40,7 +40,6 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   protected final FileSystem fs;
   protected final HoodieTable<T> hoodieTable;
   protected HoodieTimeline hoodieTimeline;
-  protected TableFileSystemView.ReadOptimizedView fileSystemView;
   protected final Schema schema;
 
   public HoodieIOHandle(HoodieWriteConfig config, String commitTime,
@@ -50,7 +49,6 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     this.fs = hoodieTable.getMetaClient().getFs();
     this.hoodieTable = hoodieTable;
     this.hoodieTimeline = hoodieTable.getCompletedCommitTimeline();
-    this.fileSystemView = hoodieTable.getROFileSystemView();
     this.schema =
         HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
   }

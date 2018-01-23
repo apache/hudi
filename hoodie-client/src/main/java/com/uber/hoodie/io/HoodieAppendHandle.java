@@ -19,11 +19,13 @@ package com.uber.hoodie.io;
 import com.beust.jcommander.internal.Maps;
 import com.clearspring.analytics.util.Lists;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
@@ -58,6 +60,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
   private static AtomicLong recordIndex = new AtomicLong(1);
 
+  private TableFileSystemView.RealtimeView fileSystemView;
   private final WriteStatus writeStatus;
   private final String fileId;
   private String partitionPath;
@@ -77,6 +80,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     writeStatus.setStat(new HoodieDeltaWriteStat());
     this.writeStatus = writeStatus;
     this.fileId = fileId;
+    this.fileSystemView = hoodieTable.getRTFileSystemView();
     init(recordItr);
   }
 
@@ -87,11 +91,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       // extract some information from the first record
       if (partitionPath == null) {
         partitionPath = record.getPartitionPath();
+        FileSlice fileSlice = fileSystemView.getLatestFileSlices(record.getPartitionPath())
+            .filter(fileSlice1 -> fileSlice1.getDataFile().get().getFileId().equals(fileId))
+            .findFirst().get();
         // HACK(vc) This also assumes a base file. It will break, if appending without one.
-        String latestValidFilePath =
-            fileSystemView.getLatestDataFiles(record.getPartitionPath())
-                .filter(dataFile -> dataFile.getFileId().equals(fileId))
-                .findFirst().get().getFileName();
+        String latestValidFilePath = fileSlice.getDataFile().get().getFileName();
         String baseCommitTime = FSUtils.getCommitTime(latestValidFilePath);
         writeStatus.getStat().setPrevCommit(baseCommitTime);
         writeStatus.setFileId(fileId);
@@ -101,7 +105,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         try {
           this.writer = HoodieLogFormat.newWriterBuilder()
               .onParentPath(new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-              .withFileId(fileId).overBaseCommit(baseCommitTime)
+              .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(fileSlice.getLogFiles()
+                  .max(HoodieLogFile.getLogVersionComparator()::compare)
+                  .map(logFile -> logFile.getLogVersion()).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
               .withFs(fs).withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
           this.currentLogFile = writer.getLogFile();
           ((HoodieDeltaWriteStat) writeStatus.getStat())

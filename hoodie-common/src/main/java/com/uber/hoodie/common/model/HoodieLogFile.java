@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.Path;
 public class HoodieLogFile implements Serializable {
 
   public static final String DELTA_EXTENSION = ".log";
+  public static final Integer LOGFILE_BASE_VERSION = 1;
 
   private final Path path;
   private Optional<FileStatus> fileStatus;
