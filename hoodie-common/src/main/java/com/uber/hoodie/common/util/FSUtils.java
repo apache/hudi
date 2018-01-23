@@ -284,7 +284,7 @@ public class FSUtils {
     Optional<Integer> currentVersion =
         getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
     // handle potential overflow
-    return (currentVersion.isPresent()) ? currentVersion.get() : 1;
+    return (currentVersion.isPresent()) ? currentVersion.get() : HoodieLogFile.LOGFILE_BASE_VERSION;
   }
 
   /**
@@ -295,7 +295,7 @@ public class FSUtils {
     Optional<Integer> currentVersion =
         getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
     // handle potential overflow
-    return (currentVersion.isPresent()) ? currentVersion.get() + 1 : 1;
+    return (currentVersion.isPresent()) ? currentVersion.get() + 1 : HoodieLogFile.LOGFILE_BASE_VERSION;
   }
 
   public static int getDefaultBufferSize(final FileSystem fs) {
