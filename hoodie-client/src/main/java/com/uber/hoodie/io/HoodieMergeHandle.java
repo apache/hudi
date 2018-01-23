@@ -22,6 +22,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -48,6 +49,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   private WriteStatus writeStatus;
   private HashMap<String, HoodieRecord<T>> keyToNewRecords;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
+  private TableFileSystemView.ReadOptimizedView fileSystemView;
   private Path newFilePath;
   private Path oldFilePath;
   private long recordsWritten = 0;
@@ -60,6 +62,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       Iterator<HoodieRecord<T>> recordItr,
       String fileId) {
     super(config, commitTime, hoodieTable);
+    this.fileSystemView = hoodieTable.getROFileSystemView();
     init(fileId, recordItr);
   }
 

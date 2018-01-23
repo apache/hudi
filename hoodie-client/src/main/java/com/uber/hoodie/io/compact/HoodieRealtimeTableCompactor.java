@@ -27,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -78,11 +79,11 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
             config.shouldAssumeDatePartitioning());
 
+    TableFileSystemView.RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<CompactionOperation> operations =
         jsc.parallelize(partitionPaths, partitionPaths.size())
-            .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> hoodieTable
-                .getRTFileSystemView()
+            .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
                 .getLatestFileSlices(partitionPath)
                 .map(s -> new CompactionOperation(s.getDataFile().get(),
                     partitionPath, s.getLogFiles().collect(Collectors.toList()), config))
