@@ -43,6 +43,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -62,8 +63,8 @@ public class HoodieCompactedLogRecordScanner implements
 
   private final static Logger log = LogManager.getLogger(HoodieCompactedLogRecordScanner.class);
 
-  // Final list of compacted/merged records to iterate
-  private final Collection<HoodieRecord<? extends HoodieRecordPayload>> logRecords;
+  // Final map of compacted/merged records
+  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> records;
   // Reader schema for the records
   private final Schema readerSchema;
   // Total log files read - for metrics
@@ -89,7 +90,7 @@ public class HoodieCompactedLogRecordScanner implements
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
 
     // Store merged records for all versions for this log file
-    Map<String, HoodieRecord<? extends HoodieRecordPayload>> records = Maps.newHashMap();
+    this.records = Maps.newHashMap();
     // iterate over the paths
     Iterator<String> logFilePathsItr = logFilePaths.iterator();
     while (logFilePathsItr.hasNext()) {
@@ -202,7 +203,6 @@ public class HoodieCompactedLogRecordScanner implements
         merge(records, currentInstantLogBlocks);
       }
     }
-    this.logRecords = Collections.unmodifiableCollection(records.values());
     this.totalRecordsToUpdate = records.size();
   }
 
@@ -297,7 +297,7 @@ public class HoodieCompactedLogRecordScanner implements
 
   @Override
   public Iterator<HoodieRecord<? extends HoodieRecordPayload>> iterator() {
-    return logRecords.iterator();
+    return records.values().iterator();
   }
 
   public long getTotalLogFiles() {
@@ -306,6 +306,10 @@ public class HoodieCompactedLogRecordScanner implements
 
   public long getTotalLogRecords() {
     return totalLogRecords.get();
+  }
+
+  public Map<String, HoodieRecord<? extends HoodieRecordPayload>> getRecords() {
+    return records;
   }
 
   public long getTotalRecordsToUpdate() {
