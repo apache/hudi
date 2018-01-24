@@ -160,7 +160,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // Compacting is very similar to applying updates to existing file
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metaClient);
     Iterator<List<WriteStatus>> result = table
-        .handleUpdate(commitTime, operation.getFileId(), scanner.iterator());
+        .handleUpdate(commitTime, operation.getFileId(), scanner.getRecords());
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false)
         .flatMap(Collection::stream)
