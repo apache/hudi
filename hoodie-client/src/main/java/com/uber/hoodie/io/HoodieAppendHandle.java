@@ -70,8 +70,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   public HoodieAppendHandle(HoodieWriteConfig config,
       String commitTime,
       HoodieTable<T> hoodieTable,
-      String fileId,
-      Iterator<HoodieRecord<T>> recordItr) {
+      Iterator<HoodieRecord<T>> recordItr,
+      String fileId) {
     super(config, commitTime, hoodieTable);
     WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     writeStatus.setStat(new HoodieDeltaWriteStat());
@@ -199,5 +199,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     return writeStatus;
   }
 
+  public String getFileId() {
+    return fileId;
+  }
 
 }

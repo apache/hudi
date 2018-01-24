@@ -47,6 +47,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import com.uber.hoodie.io.HoodieMergeHandle;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
@@ -194,8 +196,8 @@ public class TestCopyOnWriteTable {
     metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = new HoodieCopyOnWriteTable(config, metadata);
     Iterator<List<WriteStatus>> iter = table
-        .handleUpdate(newCommitTime, updatedRecord1.getCurrentLocation().getFileId(),
-            updatedRecords.iterator());
+        .handleUpdate(new HoodieMergeHandle(config, newCommitTime, table, updatedRecords.iterator(),
+            updatedRecord1.getCurrentLocation().getFileId()));
 
     // Check the updated file
     File updatedParquetFile = null;

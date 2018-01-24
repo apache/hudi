@@ -32,7 +32,9 @@ import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Optional;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -46,8 +48,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
 
   private WriteStatus writeStatus;
-  private HashMap<String, HoodieRecord<T>> keyToNewRecords;
+  private Map<String, HoodieRecord<T>> keyToNewRecords;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
+  private final String fileId;
   private Path newFilePath;
   private Path oldFilePath;
   private long recordsWritten = 0;
@@ -60,74 +63,101 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       Iterator<HoodieRecord<T>> recordItr,
       String fileId) {
     super(config, commitTime, hoodieTable);
+    this.fileId = fileId;
     init(fileId, recordItr);
+  }
+
+  public HoodieMergeHandle(HoodieWriteConfig config,
+                           String commitTime,
+                           HoodieTable<T> hoodieTable,
+                           Map<String, HoodieRecord<T>> keyToNewRecords,
+                           String fileId) {
+    super(config, commitTime, hoodieTable);
+    this.fileId = fileId;
+    init(fileId, keyToNewRecords);
   }
 
   /**
    * Load the new incoming records in a map, and extract the old file path.
    */
   private void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
-    WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
-    writeStatus.setStat(new HoodieWriteStat());
-    this.writeStatus = writeStatus;
+    // Load the new records in a map
     this.keyToNewRecords = new HashMap<>();
-
-    try {
-      // Load the new records in a map
-      while (newRecordsItr.hasNext()) {
-        HoodieRecord<T> record = newRecordsItr.next();
-        // If the first record, we need to extract some info out
-        if (oldFilePath == null) {
-          String latestValidFilePath = fileSystemView
-              .getLatestDataFiles(record.getPartitionPath())
-              .filter(dataFile -> dataFile.getFileId().equals(fileId))
-              .findFirst()
-              .get().getFileName();
-          writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
-
-          HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
-              commitTime,
-              new Path(config.getBasePath()),
-              new Path(config.getBasePath(), record.getPartitionPath()));
-          partitionMetadata.trySave(TaskContext.getPartitionId());
-
-          oldFilePath = new Path(
-              config.getBasePath() + "/" + record.getPartitionPath() + "/"
-                  + latestValidFilePath);
-          String relativePath = new Path(record.getPartitionPath() + "/" + FSUtils
-              .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId)).toString();
-          newFilePath = new Path(config.getBasePath(), relativePath);
-
-          // handle cases of partial failures, for update task
-          if (fs.exists(newFilePath)) {
-            fs.delete(newFilePath, false);
-          }
-
-          logger.info(String.format("Merging new data into oldPath %s, as newPath %s",
-              oldFilePath.toString(), newFilePath.toString()));
-          // file name is same for all records, in this bunch
-          writeStatus.setFileId(fileId);
-          writeStatus.setPartitionPath(record.getPartitionPath());
-          writeStatus.getStat().setFileId(fileId);
-          writeStatus.getStat().setPath(relativePath);
-        }
-        keyToNewRecords.put(record.getRecordKey(), record);
-        // update the new location of the record, so we know where to find it next
-        record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
-      }
-      // Create the writer for writing the new version file
-      storageWriter = HoodieStorageWriterFactory
-          .getStorageWriter(commitTime, newFilePath, hoodieTable, config, schema);
-
-    } catch (Exception e) {
-      logger.error("Error in update task at commit " + commitTime, e);
-      writeStatus.setGlobalError(e);
-      throw new HoodieUpsertException(
-          "Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
-              + commitTime + " on path " + hoodieTable.getMetaClient().getBasePath(), e);
+    while (newRecordsItr.hasNext()) {
+      HoodieRecord<T> record = newRecordsItr.next();
+      // If the first record, we need to extract some info out
+      initInternal(fileId, record);
+      keyToNewRecords.put(record.getRecordKey(), record);
+      // update the new location of the record, so we know where to find it next
+      record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
     }
   }
 
+  /**
+   * Initialize the incoming records map and extract the old file path.
+   */
+  private void init(String fileId, Map<String, HoodieRecord<T>> keyToNewRecords) {
+    this.keyToNewRecords = keyToNewRecords;
+    if (keyToNewRecords.size() > 0) {
+      initInternal(fileId, keyToNewRecords.values().stream().findFirst().get());
+    }
+  }
+
+  /**
+   * Initialize write status and extract old file path
+   * @param fileId
+   * @param record
+   */
+  private void initInternal(String fileId, HoodieRecord record) {
+    if (oldFilePath == null) {
+      WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
+      writeStatus.setStat(new HoodieWriteStat());
+      this.writeStatus = writeStatus;
+      try {
+        String latestValidFilePath = fileSystemView
+            .getLatestDataFiles(record.getPartitionPath())
+            .filter(dataFile -> dataFile.getFileId().equals(fileId))
+            .findFirst()
+            .get().getFileName();
+        writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
+
+        HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
+            commitTime,
+            new Path(config.getBasePath()),
+            new Path(config.getBasePath(), record.getPartitionPath()));
+        partitionMetadata.trySave(TaskContext.getPartitionId());
+
+        oldFilePath = new Path(
+            config.getBasePath() + "/" + record.getPartitionPath() + "/"
+                + latestValidFilePath);
+        String relativePath = new Path(record.getPartitionPath() + "/" + FSUtils
+            .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId)).toString();
+        newFilePath = new Path(config.getBasePath(), relativePath);
+
+        // handle cases of partial failures, for update task
+        if (fs.exists(newFilePath)) {
+          fs.delete(newFilePath, false);
+        }
+
+        logger.info(String.format("Merging new data into oldPath %s, as newPath %s",
+            oldFilePath.toString(), newFilePath.toString()));
+        // file name is same for all records, in this bunch
+        writeStatus.setFileId(fileId);
+        writeStatus.setPartitionPath(record.getPartitionPath());
+        writeStatus.getStat().setFileId(fileId);
+        writeStatus.getStat().setPath(relativePath);
+        // Create the writer for writing the new version file
+        storageWriter = HoodieStorageWriterFactory
+            .getStorageWriter(commitTime, newFilePath, hoodieTable, config, schema);
+      } catch (IOException io) {
+        logger.error("Error in update task at commit " + commitTime, io);
+        writeStatus.setGlobalError(io);
+        throw new HoodieUpsertException(
+            "Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
+                + commitTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
+      }
+    }
+  }
 
   private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord,
       Optional<IndexedRecord> indexedRecord) {
@@ -233,4 +263,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   public WriteStatus getWriteStatus() {
     return writeStatus;
   }
+
+  public String getFileId() {
+    return fileId;
+  }
+
 }

@@ -34,6 +34,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
+import com.uber.hoodie.io.HoodieMergeHandle;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -157,7 +158,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // Compacting is very similar to applying updates to existing file
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metaClient);
     Iterator<List<WriteStatus>> result = table
-        .handleUpdate(commitTime, operation.getFileId(), scanner.iterator());
+        .handleUpdate(new HoodieMergeHandle(config, commitTime,
+            table, scanner.getRecords(), operation.getFileId()));
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false)
         .flatMap(Collection::stream)

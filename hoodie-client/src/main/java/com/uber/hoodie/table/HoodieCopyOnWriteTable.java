@@ -37,6 +37,7 @@ import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
 import com.uber.hoodie.io.HoodieCleanHelper;
+import com.uber.hoodie.io.HoodieIOHandle;
 import com.uber.hoodie.io.HoodieMergeHandle;
 import java.io.IOException;
 import java.io.Serializable;
@@ -402,19 +403,23 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return true;
   }
 
+  public Iterator<List<WriteStatus>> handleInsert(String commitTime,
+                                                  Iterator<HoodieRecord<T>> recordItr) throws Exception {
+    return new LazyInsertIterable<>(recordItr, config, commitTime, this);
+  }
 
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileLoc,
-      Iterator<HoodieRecord<T>> recordItr)
+  public Iterator<List<WriteStatus>> handleUpdate(HoodieIOHandle<T> ioHandle)
       throws IOException {
+
+    HoodieMergeHandle<T> mergeHandle = (HoodieMergeHandle<T>) ioHandle;
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileLoc, recordItr);
-    if (upsertHandle.getOldFilePath() == null) {
+    if (mergeHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException("Error in finding the old file path at commit " +
-          commitTime + " at fileLoc: " + fileLoc);
+          mergeHandle.getCommitTime() + " at fileLoc: " + mergeHandle.getFileId());
     } else {
-      AvroReadSupport.setAvroReadSchema(getHadoopConf(), upsertHandle.getSchema());
+      AvroReadSupport.setAvroReadSchema(getHadoopConf(), mergeHandle.getSchema());
       ParquetReader<IndexedRecord> reader =
-          AvroParquetReader.builder(upsertHandle.getOldFilePath()).withConf(getHadoopConf())
+          AvroParquetReader.builder(mergeHandle.getOldFilePath()).withConf(getHadoopConf())
               .build();
       try {
         IndexedRecord record;
@@ -422,36 +427,31 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
           // Two types of writes here (new record, and old record).
           // We have already catch the exception during writing new records.
           // But for old records, we should fail if any exception happens.
-          upsertHandle.write((GenericRecord) record);
+          mergeHandle.write((GenericRecord) record);
         }
       } catch (IOException e) {
         throw new HoodieUpsertException(
-            "Failed to read record from " + upsertHandle.getOldFilePath()
-                + " with new Schema " + upsertHandle.getSchema(), e);
+            "Failed to read record from " + mergeHandle.getOldFilePath()
+                + " with new Schema " + mergeHandle.getSchema(), e);
       } finally {
         reader.close();
-        upsertHandle.close();
+        mergeHandle.close();
       }
     }
     //TODO(vc): This needs to be revisited
-    if (upsertHandle.getWriteStatus().getPartitionPath() == null) {
-      logger.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath()
-          + ", " + upsertHandle.getWriteStatus());
+    if (mergeHandle.getWriteStatus().getPartitionPath() == null) {
+      logger.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath()
+          + ", " + mergeHandle.getWriteStatus());
     }
-    return Collections.singletonList(Collections.singletonList(upsertHandle.getWriteStatus()))
+    return Collections.singletonList(Collections.singletonList(mergeHandle.getWriteStatus()))
         .iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String commitTime, String fileLoc,
-      Iterator<HoodieRecord<T>> recordItr) {
+
+  protected HoodieIOHandle<T> getIOHandle(String commitTime, String fileLoc,
+                                          Iterator<HoodieRecord<T>> recordItr) {
     return new HoodieMergeHandle<>(config, commitTime, this, recordItr, fileLoc);
   }
-
-  public Iterator<List<WriteStatus>> handleInsert(String commitTime,
-      Iterator<HoodieRecord<T>> recordItr) throws Exception {
-    return new LazyInsertIterable<>(recordItr, config, commitTime, this);
-  }
-
 
   @SuppressWarnings("unchecked")
   @Override
@@ -464,7 +464,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       if (btype.equals(BucketType.INSERT)) {
         return handleInsert(commitTime, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(commitTime, binfo.fileLoc, recordItr);
+        return handleUpdate(getIOHandle(commitTime, binfo.fileLoc, recordItr));
       } else {
         throw new HoodieUpsertException(
             "Unknown bucketType " + btype + " for partition :" + partition);

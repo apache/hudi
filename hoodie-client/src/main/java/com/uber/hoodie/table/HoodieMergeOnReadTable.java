@@ -36,6 +36,8 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.io.HoodieAppendHandle;
+import com.uber.hoodie.io.HoodieIOHandle;
+import com.uber.hoodie.io.HoodieMergeHandle;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -77,11 +79,15 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) throws IOException {
-    logger.info("Merging updates for commit " + commitTime + " for file " + fileId);
-    HoodieAppendHandle<T> appendHandle =
-        new HoodieAppendHandle<>(config, commitTime, this, fileId, recordItr);
+  protected HoodieIOHandle<T> getIOHandle(String commitTime, String fileLoc,
+                                          Iterator<HoodieRecord<T>> recordItr) {
+    return new HoodieAppendHandle<>(config, commitTime, this, recordItr, fileLoc);
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdate(HoodieIOHandle<T> ioHandle) throws IOException {
+    HoodieAppendHandle<T> appendHandle = (HoodieAppendHandle<T>) ioHandle;
+    logger.info("Merging updates for commit " + appendHandle.getCommitTime() + " for file " + appendHandle.getFileId());
     appendHandle.doAppend();
     appendHandle.close();
     return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus()))

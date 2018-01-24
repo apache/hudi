@@ -16,8 +16,6 @@
 
 package com.uber.hoodie.func;
 
-import static org.junit.Assert.fail;
-
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieKey;
@@ -28,15 +26,19 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.io.HoodieMergeHandle;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import static org.junit.Assert.fail;
 
 public class TestUpdateMapFunction {
 
@@ -103,7 +105,7 @@ public class TestUpdateMapFunction {
     records.add(record1);
 
     try {
-      table.handleUpdate("101", fileId, records.iterator());
+      table.handleUpdate(new HoodieMergeHandle(config, "101", table, records.iterator(), fileId));
     } catch (ClassCastException e) {
       fail(
           "UpdateFunction could not read records written with exampleSchema.txt using the exampleEvolvedSchema.txt");

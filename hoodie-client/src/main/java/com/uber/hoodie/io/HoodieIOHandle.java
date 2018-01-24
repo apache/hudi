@@ -96,4 +96,8 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   public Schema getSchema() {
     return schema;
   }
+
+  public String getCommitTime() {
+    return commitTime;
+  }
 }
