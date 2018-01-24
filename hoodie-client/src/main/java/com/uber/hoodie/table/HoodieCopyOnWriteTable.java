@@ -407,10 +407,23 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
 
   public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileLoc,
-      Iterator<HoodieRecord<T>> recordItr)
+                                                  Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileLoc, recordItr);
+    return handleUpdateInternal(upsertHandle, commitTime, fileLoc);
+  }
+
+  public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileLoc,
+                                                  Map<String, HoodieRecord<T>> keyToNewRecords)
+      throws IOException {
+    // these are updates
+    HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileLoc, keyToNewRecords);
+    return handleUpdateInternal(upsertHandle, commitTime, fileLoc);
+  }
+
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle upsertHandle, String commitTime, String fileLoc)
+      throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException("Error in finding the old file path at commit " +
           commitTime + " at fileLoc: " + fileLoc);
@@ -448,6 +461,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   protected HoodieMergeHandle getUpdateHandle(String commitTime, String fileLoc,
       Iterator<HoodieRecord<T>> recordItr) {
     return new HoodieMergeHandle<>(config, commitTime, this, recordItr, fileLoc);
+  }
+
+  protected HoodieMergeHandle getUpdateHandle(String commitTime, String fileLoc,
+                                              Map<String, HoodieRecord<T>> keyToNewRecords) {
+    return new HoodieMergeHandle<>(config, commitTime, this, keyToNewRecords, fileLoc);
   }
 
   public Iterator<List<WriteStatus>> handleInsert(String commitTime,
