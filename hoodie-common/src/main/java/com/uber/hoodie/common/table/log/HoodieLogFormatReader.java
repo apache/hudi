@@ -81,18 +81,24 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     // 3. Read the size of the block
     int blocksize = inputStream.readInt();
 
+    // 4. Read the length of the footer (since corrrupt block can cause issues)
+    int footerLength = inputStream.readInt();
+
     // We may have had a crash which could have written this block partially
     // Skip blocksize in the stream and we should either find a sync marker (start of the next block) or EOF
     // If we did not find either of it, then this block is a corrupted block.
-    boolean isCorrupted = isBlockCorrupt(blocksize);
+    boolean isCorrupted = isBlockCorrupt(blocksize, footerLength);
     if (isCorrupted) {
       return createCorruptBlock();
     }
 
-    // 4. Read the content
+    // 5. Read the content
     // TODO - have a max block size and reuse this buffer in the ByteBuffer (hard to guess max block size for now)
     byte[] content = new byte[blocksize];
     inputStream.readFully(content, 0, blocksize);
+
+    // 6. Read the footer( totalBlockSize used for reverse pointer )
+    readFooter(footerLength);
 
     switch (blockType) {
       // based on type read the block
@@ -120,10 +126,11 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     return HoodieCorruptBlock.fromBytes(content, corruptedBlockSize, true);
   }
 
-  private boolean isBlockCorrupt(int blocksize) throws IOException {
+  private boolean isBlockCorrupt(int blocksize, int footerLength) throws IOException {
     long currentPos = inputStream.getPos();
     try {
       inputStream.seek(currentPos + blocksize);
+      readFooter(footerLength);
     } catch (EOFException e) {
       // this is corrupt
       return true;
@@ -151,6 +158,19 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
         // No luck - advance and try again
         inputStream.seek(currentPos + 1);
       }
+    }
+  }
+
+  /**
+   * At the moment, the footer only has the total length of the block
+   * This is a placeholder for LogFormat evolution.
+   * @return
+   * @throws IOException
+   */
+  private void readFooter(int readFooterLength) throws IOException {
+    while(readFooterLength > 0) {
+      inputStream.readInt();
+      readFooterLength--;
     }
   }
 
