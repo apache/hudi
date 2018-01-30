@@ -101,7 +101,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
           String relativePath = new Path(record.getPartitionPath() + "/" + FSUtils
               .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId)).toString();
           newFilePath = new Path(config.getBasePath(), relativePath);
-          if (config.shouldUseTempFolderForCopyOnWrite() && config.shouldUseTempFolderForMergeHandle()) {
+          if (config.shouldUseTempFolderForCopyOnWriteForMerge()) {
             this.tempPath = makeTempPath(record.getPartitionPath(), TaskContext.getPartitionId(), fileId, TaskContext.get().stageId(), TaskContext.get().taskAttemptId());
           }
 
@@ -111,7 +111,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
           }
 
           logger.info(String.format("Merging new data into oldPath %s, as newPath %s",
-              oldFilePath.toString(), getNewFilePath().toString()));
+              oldFilePath.toString(), getStorageWriterPath().toString()));
           // file name is same for all records, in this bunch
           writeStatus.setFileId(fileId);
           writeStatus.setPartitionPath(record.getPartitionPath());
@@ -124,7 +124,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       }
       // Create the writer for writing the new version file
       storageWriter = HoodieStorageWriterFactory
-          .getStorageWriter(commitTime, getNewFilePath(), hoodieTable, config, schema);
+          .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
 
     } catch (Exception e) {
       logger.error("Error in update task at commit " + commitTime, e);
@@ -190,18 +190,18 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
       String errMsg = "Failed to merge old record into new file for key " + key + " from old file "
-          + getOldFilePath() + " to new file " + getNewFilePath();
+          + getOldFilePath() + " to new file " + getStorageWriterPath();
       try {
         storageWriter.writeAvro(key, oldRecord);
       } catch (ClassCastException e) {
         logger.error(
             "Schema mismatch when rewriting old record " + oldRecord + " from file "
-                + getOldFilePath() + " to file " + getNewFilePath() + " with schema " + schema
+                + getOldFilePath() + " to file " + getStorageWriterPath() + " with schema " + schema
                 .toString(true));
         throw new HoodieUpsertException(errMsg, e);
       } catch (IOException e) {
         logger.error("Failed to merge old record into new file for key " + key + " from old file "
-            + getOldFilePath() + " to new file " + getNewFilePath(), e);
+            + getOldFilePath() + " to new file " + getStorageWriterPath(), e);
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
@@ -223,7 +223,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
         storageWriter.close();
       }
 
-      writeStatus.getStat().setTotalWriteBytes(FSUtils.getFileSize(fs, getNewFilePath()));
+      writeStatus.getStat().setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
@@ -237,12 +237,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     return oldFilePath;
   }
 
-  private Path getNewFilePath() {
+  private Path getStorageWriterPath() {
     // Use tempPath for storage writer if possible
-    if (this.tempPath != null) {
-      return this.tempPath;
-    }
-    return this.newFilePath;
+    return (this.tempPath == null) ? this.newFilePath : this.tempPath;
   }
 
   public WriteStatus getWriteStatus() {

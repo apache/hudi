@@ -579,6 +579,12 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return stats;
   }
 
+  /**
+   * Finalize the written data files
+   *
+   * @param writeStatuses List of WriteStatus
+   * @return number of files finalized
+   */
   @Override
   @SuppressWarnings("unchecked")
   public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
@@ -618,6 +624,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return Optional.of(results.size());
   }
 
+  /**
+   * Clean temporary data files that are produced from previous failed commit or retried spark
+   * stages.
+   */
   private void cleanTemporaryDataFiles(JavaSparkContext jsc) {
     if (!config.shouldUseTempFolderForCopyOnWrite()) {
       return;
