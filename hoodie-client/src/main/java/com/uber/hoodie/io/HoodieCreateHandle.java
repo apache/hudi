@@ -58,8 +58,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
     final int sparkPartitionId = TaskContext.getPartitionId();
     this.path = makeNewPath(partitionPath, sparkPartitionId, status.getFileId());
-    if (config.shouldUseTempFolderForCopyOnWrite()) {
-      this.tempPath = makeTempPath(partitionPath, sparkPartitionId, status.getFileId(), TaskContext.get().stageId(), TaskContext.get().taskAttemptId());
+    if (config.shouldUseTempFolderForCopyOnWriteForCreate()) {
+      this.tempPath = makeTempPath(partitionPath, sparkPartitionId, status.getFileId(),
+          TaskContext.get().stageId(), TaskContext.get().taskAttemptId());
     }
 
     try {
@@ -144,9 +145,6 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
   private Path getStorageWriterPath() {
     // Use tempPath for storage writer if possible
-    if (this.tempPath != null) {
-      return this.tempPath;
-    }
-    return this.path;
+    return (this.tempPath == null) ? this.path : this.tempPath;
   }
 }

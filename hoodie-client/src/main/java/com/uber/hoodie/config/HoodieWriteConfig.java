@@ -58,10 +58,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
   private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
   private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
-  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER = "hoodie.copyonwrite.use.temp.folder";
-  private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER = "false";
-  private static final String HOODIE_MERGEHANDLE_USE_TEMP_FOLDER = "hoodie.mergehandle.use.temp.folder";
-  private static final String DEFAULT_HOODIE_MERGEHANDLE_USE_TEMP_FOLDER = "false";
+  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE = "hoodie.copyonwrite.use.temp.folder.for.create";
+  private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE = "false";
+  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE = "hoodie.copyonwrite.use.temp.folder.for.merge";
+  private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE = "false";
   private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
 
@@ -120,12 +120,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HOODIE_WRITE_STATUS_CLASS_PROP);
   }
 
-  public boolean shouldUseTempFolderForCopyOnWrite() {
-    return Boolean.parseBoolean(props.getProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER));
+  public boolean shouldUseTempFolderForCopyOnWriteForCreate() {
+    return Boolean.parseBoolean(props.getProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE));
   }
 
-  public boolean shouldUseTempFolderForMergeHandle() {
-    return Boolean.parseBoolean(props.getProperty(HOODIE_MERGEHANDLE_USE_TEMP_FOLDER));
+  public boolean shouldUseTempFolderForCopyOnWriteForMerge() {
+    return Boolean.parseBoolean(props.getProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE));
+  }
+
+  public boolean shouldUseTempFolderForCopyOnWrite() {
+    return shouldUseTempFolderForCopyOnWriteForCreate() ||
+        shouldUseTempFolderForCopyOnWriteForMerge();
   }
 
   public int getFinalizeWriteParallelism() {
@@ -403,13 +408,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withUseTempFolderCopyOnWrite(boolean shouldUseTempFolderCopyOnWrite) {
-      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER, String.valueOf(shouldUseTempFolderCopyOnWrite));
+    public Builder withUseTempFolderCopyOnWriteForCreate(
+        boolean shouldUseTempFolderCopyOnWriteForCreate) {
+      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE, String.valueOf
+          (shouldUseTempFolderCopyOnWriteForCreate));
       return this;
     }
 
-    public Builder withUseTempFolderMergeHandle(boolean shouldUseTempFolderMergeHandle) {
-      props.setProperty(HOODIE_MERGEHANDLE_USE_TEMP_FOLDER, String.valueOf(shouldUseTempFolderMergeHandle));
+    public Builder withUseTempFolderCopyOnWriteForMerge(
+        boolean shouldUseTempFolderCopyOnWriteForMerge) {
+      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE, String.valueOf
+          (shouldUseTempFolderCopyOnWriteForMerge));
       return this;
     }
 
@@ -441,10 +450,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
           HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
-      setDefaultOnCondition(props, !props.containsKey(HOODIE_COPYONWRITE_USE_TEMP_FOLDER),
-          HOODIE_COPYONWRITE_USE_TEMP_FOLDER, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER);
-      setDefaultOnCondition(props, !props.containsKey(HOODIE_MERGEHANDLE_USE_TEMP_FOLDER),
-          HOODIE_MERGEHANDLE_USE_TEMP_FOLDER, DEFAULT_HOODIE_MERGEHANDLE_USE_TEMP_FOLDER);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE),
+          HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE),
+          HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE);
       setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM),
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
 
