@@ -280,5 +280,4 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @return number of files finalized
    */
   public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc, List<Tuple2<String, HoodieWriteStat>> writeStatuses);
-
 }

@@ -48,6 +48,7 @@ import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.FileInputStream;
@@ -55,6 +56,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -211,9 +213,12 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
   @Test
   public void testUpserts() throws Exception {
-    HoodieWriteConfig cfg = getConfig();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
-    HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
+    testUpsertsInternal(getConfig());
+  }
+
+  private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig) throws Exception {
+    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieWriteConfig);
+    HoodieIndex index = HoodieIndex.createIndex(hoodieWriteConfig, jsc);
 
     /**
      * Write 1 (only inserts)
@@ -304,95 +309,11 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
   @Test
   public void testUpsertsWithFinalizeWrite() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder()
-        .withUseTempFolderCopyOnWrite(true)
-        .withUseTempFolderMergeHandle(true)
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+        .withUseTempFolderCopyOnWriteForCreate(true)
+        .withUseTempFolderCopyOnWriteForMerge(true)
         .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
-    HoodieIndex index = HoodieIndex.createIndex(cfg, jsc);
-
-    /**
-     * Write 1 (only inserts)
-     */
-    String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
-
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-
-    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-    assertNoWriteErrors(statuses);
-
-    // check the partition metadata is written out
-    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
-
-    // verify that there is a commit
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-
-    assertEquals("Expecting a single commit.", 1,
-        timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
-    assertEquals("Latest commit should be 001", newCommitTime,
-        timeline.lastInstant().get().getTimestamp());
-    assertEquals("Must contain 200 records",
-        records.size(),
-        HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
-    // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());
-
-    List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table)
-        .collect();
-    checkTaggedRecords(taggedRecords, "001");
-
-    /**
-     * Write 2 (updates)
-     */
-    newCommitTime = "004";
-    client.startCommitWithTime(newCommitTime);
-
-    records = dataGen.generateUpdates(newCommitTime, 100);
-    LinkedHashMap<HoodieKey, HoodieRecord> recordsMap = new LinkedHashMap<>();
-    for (HoodieRecord rec : records) {
-      if (!recordsMap.containsKey(rec.getKey())) {
-        recordsMap.put(rec.getKey(), rec);
-      }
-    }
-    List<HoodieRecord> dedupedRecords = new ArrayList<>(recordsMap.values());
-
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-    // Verify there are no errors
-    assertNoWriteErrors(statuses);
-
-    // verify there are now 2 commits
-    timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-    assertEquals("Expecting two commits.",
-        timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), 2);
-    assertEquals("Latest commit should be 004", timeline.lastInstant().get().getTimestamp(),
-        newCommitTime);
-
-    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, getConfig());
-
-    // Index should be able to locate all updates in correct locations.
-    taggedRecords = index.tagLocation(jsc.parallelize(dedupedRecords, 1), table).collect();
-    checkTaggedRecords(taggedRecords, "004");
-
-    // Check the entire dataset has 100 records still
-    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
-    for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
-    }
-    assertEquals("Must contain 200 records",
-        200,
-        HoodieClientTestUtils.read(basePath, sqlContext, fs, fullPartitionPaths).count());
-
-    // Check that the incremental consumption from time 000
-    assertEquals("Incremental consumption from time 002, should give all records in commit 004",
-        HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-        HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "002").count());
-    assertEquals("Incremental consumption from time 001, should give all records in commit 004",
-        HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count(),
-        HoodieClientTestUtils.readSince(basePath, sqlContext, timeline, "001").count());
+    testUpsertsInternal(hoodieWriteConfig);
   }
 
   @Test
@@ -1575,6 +1496,32 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
             .count() == 3);
   }
 
+  @Test
+  public void testCleanTemporaryDataFiles() throws IOException {
+    HoodieTestUtils.createCommitFiles(basePath, "000");
+    List<String> tempFiles = createTempFiles("000", 10);
+    assertEquals("Some temp files are created.",10, tempFiles.size());
+    assertEquals("Some temp files are created.",tempFiles.size(), getTotalTempFiles());
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withUseTempFolderCopyOnWriteForCreate(false)
+        .withUseTempFolderCopyOnWriteForMerge(false).build();
+    HoodieTable table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+            config.getBasePath(), true),
+        config);
+    table.rollback(jsc, Collections.emptyList());
+    assertEquals("Some temp files are created.",tempFiles.size(), getTotalTempFiles());
+
+    config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withUseTempFolderCopyOnWriteForCreate(true)
+        .withUseTempFolderCopyOnWriteForMerge(false).build();
+    table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+          config.getBasePath(), true),
+        config);
+    table.rollback(jsc, Collections.emptyList());
+    assertEquals("All temp files are deleted.",0, getTotalTempFiles());
+  }
+
   public void testCommitWritesRelativePaths() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
@@ -1640,6 +1587,18 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
       files.add(HoodieTestUtils.createNewDataFile(basePath, partitionPath, commitTime));
     }
     return files;
+  }
+
+  private List<String> createTempFiles(String commitTime, int numFiles) throws IOException {
+    List<String> files = new ArrayList<>();
+    for (int i = 0; i < numFiles; i++) {
+      files.add(HoodieTestUtils.createNewDataFile(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, commitTime));
+    }
+    return files;
+  }
+
+  private int getTotalTempFiles() throws IOException {
+    return fs.listStatus(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME)).length;
   }
 
   @After
