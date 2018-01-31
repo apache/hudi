@@ -41,18 +41,21 @@ import java.util.Map;
 /**
  * DataBlock contains a list of records serialized using Avro.
  * The Datablock contains
- * 1. Compressed Writer Schema length
- * 2. Compressed Writer Schema content
- * 3. Total number of records in the block
- * 4. Size of a record
- * 5. Actual avro serialized content of the record
+ * 1. Metadata for a block
+ * 2. Compressed Writer Schema length
+ * 3. Compressed Writer Schema content
+ * 4. Total number of records in the block
+ * 5. Size of a record
+ * 6. Actual avro serialized content of the record
  */
 public class HoodieAvroDataBlock extends HoodieLogBlock {
 
   private List<IndexedRecord> records;
   private Schema schema;
+  private byte [] content;
 
-  public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema, Map<LogMetadataType, String> metadata) {
+  public HoodieAvroDataBlock(List<IndexedRecord> records,
+                             Schema schema, Map<LogMetadataType, String> metadata) {
     super(metadata);
     this.records = records;
     this.schema = schema;
@@ -62,8 +65,20 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     this(records, schema, null);
   }
 
-  //TODO : (na) lazily create IndexedRecords only when required
+  private HoodieAvroDataBlock(byte [] content, Schema schema, Map<LogMetadataType, String> metadata) {
+    super(metadata);
+    this.schema = schema;
+    this.content = content;
+  }
+
   public List<IndexedRecord> getRecords() {
+    if(records == null) {
+      try {
+        readRecordsFromBytes();
+      } catch(IOException io) {
+        throw new HoodieIOException("Unable to convert bytes content to records", io);
+      }
+    }
     return records;
   }
 
@@ -130,25 +145,42 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     Map<LogMetadataType, String> metadata = null;
     // 1. Read the metadata written out, if applicable
     if (readMetadata) {
-      metadata = HoodieLogBlock.getLogMetadata(dis);
+      metadata = readMetadata(dis);
     }
-    // 1. Read the schema written out
+    // 2. Read the schema written out
+    Schema writerSchema = readWriterSchema(dis);
+    if (readerSchema == null) {
+      readerSchema = writerSchema;
+    }
+    return new HoodieAvroDataBlock(content, readerSchema, metadata);
+  }
+
+  private static Map<LogMetadataType, String> readMetadata(SizeAwareDataInputStream dis) throws IOException {
+    return HoodieLogBlock.getLogMetadata(dis);
+  }
+
+  private static Schema readWriterSchema(SizeAwareDataInputStream dis) throws IOException {
     int schemaLength = dis.readInt();
     byte[] compressedSchema = new byte[schemaLength];
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(HoodieAvroUtils.decompress(compressedSchema));
+    return writerSchema;
+  }
 
-    if (readerSchema == null) {
-      readerSchema = writerSchema;
+  private void readRecordsFromBytes() throws IOException {
+    SizeAwareDataInputStream dis =
+        new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(this.content)));
+    if(super.getLogMetadata() != null) {
+      readMetadata(dis);
     }
+    Schema writerSchema = readWriterSchema(dis);
 
-    //TODO : (na) lazily create IndexedRecords only when required
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
-    // 2. Get the total records
+    // 3. Get the total records
+    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, schema);
     int totalRecords = dis.readInt();
     List<IndexedRecord> records = new ArrayList<>(totalRecords);
 
-    // 3. Read the content
+    // 4. Read the content
     for (int i=0;i<totalRecords;i++) {
       int recordLength = dis.readInt();
       Decoder decoder = DecoderFactory.get().binaryDecoder(content, dis.getNumberOfBytesRead(), recordLength, null);
@@ -157,6 +189,8 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       dis.skipBytes(recordLength);
     }
     dis.close();
-    return new HoodieAvroDataBlock(records, readerSchema, metadata);
+    this.records = records;
+    // Null out content and release memory
+    this.content = null;
   }
 }
