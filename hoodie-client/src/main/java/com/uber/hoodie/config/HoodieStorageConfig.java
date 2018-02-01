@@ -34,6 +34,12 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_PARQUET_BLOCK_SIZE_BYTES = DEFAULT_PARQUET_FILE_MAX_BYTES;
   public static final String PARQUET_PAGE_SIZE_BYTES = "hoodie.parquet.page.size";
   public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
+  // used to size log files
+  public static final String LOGFILE_SIZE_MAX_BYTES = "hoodie.logfile.max.size";
+  public static final String DEFAULT_LOGFILE_SIZE_MAX_BYTES = String.valueOf(1024*1024*1024); // 1 GB
+  // used to size data blocks in log file
+  public static final String LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = "hoodie.logfile.data.block.max.size";
+  public static final String DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = String.valueOf(256*1024*1024); // 256 MB
 
   private HoodieStorageConfig(Properties props) {
     super(props);
@@ -77,6 +83,16 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder logFileDataBlockMaxSize(int dataBlockSize) {
+      props.setProperty(LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES, String.valueOf(dataBlockSize));
+      return this;
+    }
+
+    public Builder logFileMaxSize(int logFileSize) {
+      props.setProperty(LOGFILE_SIZE_MAX_BYTES, String.valueOf(logFileSize));
+      return this;
+    }
+
     public HoodieStorageConfig build() {
       HoodieStorageConfig config = new HoodieStorageConfig(props);
       setDefaultOnCondition(props, !props.containsKey(PARQUET_FILE_MAX_BYTES),
@@ -85,6 +101,10 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
           PARQUET_BLOCK_SIZE_BYTES, DEFAULT_PARQUET_BLOCK_SIZE_BYTES);
       setDefaultOnCondition(props, !props.containsKey(PARQUET_PAGE_SIZE_BYTES),
           PARQUET_PAGE_SIZE_BYTES, DEFAULT_PARQUET_PAGE_SIZE_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES),
+          LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES, DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(LOGFILE_SIZE_MAX_BYTES),
+          LOGFILE_SIZE_MAX_BYTES, DEFAULT_LOGFILE_SIZE_MAX_BYTES);
       return config;
     }
   }
