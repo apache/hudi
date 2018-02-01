@@ -277,6 +277,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieStorageConfig.PARQUET_PAGE_SIZE_BYTES));
   }
 
+  public int getLogFileDataBlockMaxSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES));
+  }
+
+  public int getLogFileMaxSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.LOGFILE_SIZE_MAX_BYTES));
+  }
+
+
   /**
    * metrics properties
    **/
