@@ -53,6 +53,10 @@ summary: "Here we list all possible configurations and what they mean"
         <span style="color:grey">Parquet RowGroup size. Its better than this is aligned with the file size, so that a single column within a file is stored continuously on disk</span>
         - [parquetPageSize](#parquetPageSize) (pagesize = 1MB) <br/>
         <span style="color:grey">Parquet page size. Page is the unit of read within a parquet file. Within a block, pages are compressed seperately. </span>
+        - [logFileMaxSize](#logFileMaxSize) (logFileSize = 1GB) <br/>
+        <span style="color:grey">LogFile max size. This is the maximum size allowed for a log file before it is rolled over to the next version. </span>
+        - [logFileDataBlockMaxSize](#logFileDataBlockMaxSize) (dataBlockSize = 256MB) <br/>
+        <span style="color:grey">LogFile Data block max size. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory. </span>
 
     - [withCompactionConfig](#withCompactionConfig) (HoodieCompactionConfig) <br/>
     <span style="color:grey">Cleaning and configurations related to compaction techniques</span>
