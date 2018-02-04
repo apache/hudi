@@ -16,12 +16,6 @@
 
 package com.uber.hoodie.common.table.log;
 
-import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.minicluster.MiniClusterUtil;
 import com.uber.hoodie.common.model.HoodieArchivedLogFile;
@@ -41,15 +35,6 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -63,6 +48,22 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @SuppressWarnings("Duplicates")
 public class HoodieLogFormatTest {
@@ -872,5 +873,76 @@ public class HoodieLogFormatTest {
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 150 records", 100, readKeys.size());
+  }
+
+  @Test
+  public void testMagicAndLogVersionsBackwardsCompatibility()
+      throws IOException, InterruptedException, URISyntaxException {
+    Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs).build();
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    List<IndexedRecord> records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
+    metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, "100");
+
+    // Write 1 with MAGIC_V2 and latest log format version
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records,
+        schema, metadata);
+    writer = writer.appendBlock(dataBlock);
+    writer.close();
+
+    // Write 2 with MAGIC and no log format version
+    // Append a log block to end of the log (mimics a log block with old format)
+    fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
+    FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
+    // create a block with
+    outputStream.write(HoodieLogFormat.MAGIC);
+    outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
+    // Write out a length that does not confirm with the content
+    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    dataBlock = new HoodieAvroDataBlock(records,
+        schema, metadata);
+    byte [] content = dataBlock.getBytes();
+    outputStream.writeInt(content.length);
+    // Write out some metadata + content
+    outputStream.write(content);
+    outputStream.flush();
+    outputStream.close();
+
+    // Write 3 with MAGIC_V2 and latest log format version
+    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs).build();
+    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
+    dataBlock = new HoodieAvroDataBlock(records,
+        schema, metadata);
+    writer = writer.appendBlock(dataBlock);
+    writer.close();
+
+    Reader reader = HoodieLogFormat
+        .newReader(fs, writer.getLogFile(), schema, true);
+
+    // Read the first block written with latest version and magic
+    reader.hasNext();
+    HoodieLogBlock block = reader.next();
+    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    HoodieAvroDataBlock dBlock = (HoodieAvroDataBlock) block;
+    assertEquals(dBlock.getRecords().size(), 100);
+
+    // Read second block written with old magic and no version
+    reader.hasNext();
+    block = reader.next();
+    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    dBlock = (HoodieAvroDataBlock) block;
+    assertEquals(dBlock.getRecords().size(), 100);
+
+    //Read third block written with latest version and magic
+    reader.hasNext();
+    block = reader.next();
+    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
+    dBlock = (HoodieAvroDataBlock) block;
+    assertEquals(dBlock.getRecords().size(), 100);
+
   }
 }
