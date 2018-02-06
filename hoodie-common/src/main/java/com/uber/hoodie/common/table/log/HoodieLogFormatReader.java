@@ -27,14 +27,15 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.exception.CorruptedLogFileException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import java.io.EOFException;
-import java.io.IOException;
-import java.util.Arrays;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block
@@ -49,12 +50,14 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
   private static final byte[] magicBuffer = new byte[4];
+  private static final byte[] magicBufferV2 = new byte[6];
   private final Schema readerSchema;
   private HoodieLogBlock nextBlock = null;
   private boolean readMetadata = true;
+  private LogBlockVersion nextBlockVersion;
 
   HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-      boolean readMetadata) throws IOException {
+                        boolean readMetadata) throws IOException {
     this.inputStream = fs.open(logFile.getPath(), bufferSize);
     this.logFile = logFile;
     this.readerSchema = readerSchema;
@@ -62,7 +65,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   }
 
   HoodieLogFormatReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
-      boolean readMetadata) throws IOException {
+                        boolean readMetadata) throws IOException {
     this(fs, logFile, readerSchema, DEFAULT_BUFFER_SIZE, readMetadata);
   }
 
@@ -169,6 +172,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       if (isEOF) {
         return false;
       }
+      this.nextBlockVersion = readVersion();
       this.nextBlock = readBlock();
       return nextBlock != null;
     } catch (IOException e) {
@@ -176,13 +180,33 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     }
   }
 
+  /**
+   * Read log format version from log file, if present
+   * For old log files written with Magic header MAGIC and without version, return DEFAULT_VERSION
+   * @throws IOException
+   */
+  private LogBlockVersion readVersion() throws IOException {
+    // If not old log file format (written with Magic header MAGIC), then read log version
+    if(Arrays.equals(magicBufferV2, HoodieLogFormat.MAGIC_V2)) {
+      return new HoodieLogBlockVersion(inputStream.readInt());
+    }
+    return new HoodieLogBlockVersion(HoodieLogBlockVersion.DEFAULT_VERSION);
+  }
+
   private boolean readMagic() throws IOException {
     try {
+      long pos = inputStream.getPos();
       // 1. Read magic header from the start of the block
-      inputStream.readFully(magicBuffer, 0, 4);
-      if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
-        throw new CorruptedLogFileException(
-            logFile + "could not be read. Did not find the magic bytes at the start of the block");
+      inputStream.readFully(magicBufferV2, 0, 6);
+      if (!Arrays.equals(magicBufferV2, HoodieLogFormat.MAGIC_V2)) {
+        inputStream.seek(pos);
+        // 1. Read old magic header from the start of the block
+        // (for backwards compatibility of older log files written without log version)
+        inputStream.readFully(magicBuffer, 0, 4);
+        if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
+          throw new CorruptedLogFileException(
+              logFile + "could not be read. Did not find the magic bytes at the start of the block");
+        }
       }
       return false;
     } catch (EOFException e) {

@@ -22,7 +22,6 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
-import java.io.IOException;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -31,6 +30,8 @@ import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
 
 /**
  * HoodieLogFormatWriter can be used to append blocks to a log file Use
@@ -117,14 +118,24 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   @Override
   public Writer appendBlock(HoodieLogBlock block)
       throws IOException, InterruptedException {
+
+    // Find current version
+    LogBlockVersion currentLogBlockVersion = new HoodieLogBlockVersion(HoodieLogFormat.version);
+
     byte[] content = block.getBytes();
     // 1. write the magic header for the start of the block
-    this.output.write(HoodieLogFormat.MAGIC);
-    // 2. Write the block type
+    this.output.write(HoodieLogFormat.MAGIC_V2);
+
+    // 2. Write the version of this block
+    this.output.writeInt(currentLogBlockVersion.getVersion());
+
+    // 3. Write the block type
     this.output.writeInt(block.getBlockType().ordinal());
-    // 3. Write the size of the block
+
+    // 4. Write the size of the block
     this.output.writeInt(content.length);
-    // 4. Write the contents of the block
+
+    // 5. Write the contents of the block
     this.output.write(content);
 
     // Flush every block to disk

@@ -19,14 +19,15 @@ package com.uber.hoodie.common.table.log;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Iterator;
 
 /**
  * File Format for Hoodie Log Files. The File Format consists of blocks each seperated with a MAGIC
@@ -43,6 +44,20 @@ public interface HoodieLogFormat {
    * think is suffice for now - PR
    */
   byte[] MAGIC = new byte[]{'H', 'U', 'D', 'I'};
+
+  /**
+   * Magic 4 bytes we put at the start of every block in the log file.
+   * This is added to maintain backwards compatiblity due to lack of log format/block
+   * version in older log files
+   */
+  byte[] MAGIC_V2 = new byte[]{'H', 'U', 'D', 'I', 'V', '2'};
+
+  /**
+   * The current version of the log block/format. Anytime the logBlockFormat changes
+   * this version needs to be bumped and corresponding changes need to be made to
+   * {@link HoodieLogBlockVersion}
+   */
+  int version = 1;
 
   /**
    * Writer interface to allow appending block to this file format
@@ -197,7 +212,7 @@ public interface HoodieLogFormat {
   }
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
-      boolean readMetadata)
+                                          boolean readMetadata)
       throws IOException {
     return new HoodieLogFormatReader(fs, logFile, readerSchema, readMetadata);
   }
