@@ -317,6 +317,16 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
   }
 
   @Test
+  public void testUpsertsWithMultiSparkStages() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+        .withUpsertWriteMaxPartitions(1)
+        .withUseTempFolderCopyOnWriteForCreate(true)
+        .withUseTempFolderCopyOnWriteForMerge(true)
+        .build();
+    testUpsertsInternal(hoodieWriteConfig);
+  }
+
+  @Test
   public void testDeletes() throws Exception {
 
     HoodieWriteConfig cfg = getConfig();

@@ -138,6 +138,21 @@ public class HoodieMetrics {
     }
   }
 
+  public void updateUpsertSparkMetrics(int totalPartitions, long totalUpdates,
+      long totalInserts) {
+    if (config.isMetricsOn()) {
+      logger.info(String.format("Sending upsert metrics:" +
+              "(totalPartitions=%d, totalUpdates=%d, totalInserts=%d)",
+          totalPartitions, totalUpdates, totalInserts));
+      registerGauge(getMetricsName("upsert", "totalPartitions"),
+          totalPartitions);
+      registerGauge(getMetricsName("upsert", "totalUpdates"),
+          totalUpdates);
+      registerGauge(getMetricsName("upsert", "totalInserts"),
+          totalInserts);
+    }
+  }
+
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
     return config == null ? null :

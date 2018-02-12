@@ -64,6 +64,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE = "false";
   private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
+  private static final String UPSERT_WRITE_MAX_PARTITIONS = "hoodie.upsert.write.max.partitions";
+  private static final String DEFAULT_UPSERT_WRITE_MAX_PARTITIONS = "30000";
 
   private HoodieWriteConfig(Properties props) {
     super(props);
@@ -135,6 +137,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getFinalizeWriteParallelism() {
     return Integer.parseInt(props.getProperty(FINALIZE_WRITE_PARALLELISM));
+  }
+
+  public int getUpsertWriteMaxPartitions() {
+    return Integer.parseInt(props.getProperty(UPSERT_WRITE_MAX_PARTITIONS));
   }
 
   /**
@@ -435,6 +441,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withUpsertWriteMaxPartitions(int maxPartitions) {
+      props.setProperty(UPSERT_WRITE_MAX_PARTITIONS, String.valueOf(maxPartitions));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       // Check for mandatory properties
@@ -464,6 +475,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE);
       setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM),
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(UPSERT_WRITE_MAX_PARTITIONS),
+          UPSERT_WRITE_MAX_PARTITIONS, DEFAULT_UPSERT_WRITE_MAX_PARTITIONS);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,

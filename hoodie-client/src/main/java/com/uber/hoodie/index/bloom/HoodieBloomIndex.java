@@ -253,8 +253,15 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         }).collect();
 
     if (config.getBloomIndexPruneByRanges()) {
+      int rangeBloomIndexParallelism = Math.max(dataFilesList.size(), 1);
+      logger.info("Bloom index range pruning total files: " + dataFilesList.size());
+      if (config.getBloomIndexParallelism() > 0) {
+        rangeBloomIndexParallelism = Math.min(rangeBloomIndexParallelism, config.getBloomIndexParallelism());
+      }
+      logger.info("Bloom index range pruning will use parallelism: " + rangeBloomIndexParallelism);
+
       // also obtain file ranges, if range pruning is enabled
-      return jsc.parallelize(dataFilesList, Math.max(dataFilesList.size(), 1))
+      return jsc.parallelize(dataFilesList, rangeBloomIndexParallelism)
           .mapToPair(ft -> {
             try {
               String[] minMaxKeys = ParquetUtils
