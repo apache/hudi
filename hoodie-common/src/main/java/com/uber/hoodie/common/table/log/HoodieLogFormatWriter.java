@@ -117,21 +117,61 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   @Override
   public Writer appendBlock(HoodieLogBlock block)
       throws IOException, InterruptedException {
-    byte[] content = block.getBytes();
-    // 1. write the magic header for the start of the block
-    this.output.write(HoodieLogFormat.MAGIC);
-    // 2. Write the block type
-    this.output.writeInt(block.getBlockType().ordinal());
-    // 3. Write the size of the block
-    this.output.writeInt(content.length);
-    // 4. Write the contents of the block
-    this.output.write(content);
 
+    // Find current version
+    LogBlockVersion currentLogBlockVersion = new HoodieLogBlockVersion(HoodieLogFormat.version);
+    long currentSize = this.output.size();
+
+    // 1. Write the magic header for the start of the block
+    this.output.write(HoodieLogFormat.MAGIC_V2);
+
+    // bytes for header
+    byte [] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
+    // content bytes
+    byte [] content = block.getContentBytes();
+    // bytes for footer
+    byte [] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
+
+    // 2. Write the size of the total block (excluding Magic)
+    this.output.writeInt(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
+
+    // 3. Write the version of this log block
+    this.output.writeInt(currentLogBlockVersion.getVersion());
+    // 4. Write the block type
+    this.output.writeInt(block.getBlockType().ordinal());
+
+    // 5. Write the headers for the log block
+    this.output.write(headerBytes);
+    // 6. Write the size of the content block
+    this.output.writeInt(content.length);
+    // 7. Write the contents of the data block
+    this.output.write(content);
+    // 8. Write the footers for the log block
+    this.output.write(footerBytes);
+    // 9. Write the size of the log block (including magic) which is everything written until now (for reverse pointer)
+    this.output.writeLong(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
 
     // roll over if size is past the threshold
     return rolloverIfNeeded();
+  }
+
+  /**
+   *
+   * This method returns the total LogBlock Length which is the sum of
+   * 1. Length of version
+   * 2. Length of the ordinal
+   * 3. Length of the content
+   * 4. Length of the headers
+   * 5. Length of the footers
+   * @param contentLength
+   * @param headerLength
+   * @param footerLength
+   * @return
+   */
+  private int getLogBlockLength(int contentLength, int headerLength, int footerLength) {
+    return Integer.BYTES + Integer.BYTES + contentLength + Integer.BYTES + headerLength + footerLength + Long.BYTES;
   }
 
   private Writer rolloverIfNeeded() throws IOException, InterruptedException {

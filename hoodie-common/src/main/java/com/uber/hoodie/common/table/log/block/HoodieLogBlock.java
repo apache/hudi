@@ -17,21 +17,50 @@
 package com.uber.hoodie.common.table.log.block;
 
 import com.google.common.collect.Maps;
-import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.exception.HoodieException;
+
+import javax.annotation.Nonnull;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Abstract class defining a block in HoodieLogFile
  */
 public abstract class HoodieLogBlock {
 
-  public byte[] getBytes() throws IOException {
+  // Header for each log block
+  private final Map<HeaderMetadataType, String> logBlockHeader;
+
+  // Footer for each log block
+  private final Map<HeaderMetadataType, String> logBlockFooter;
+
+  // Location of a log block on disk
+  private final Optional<HoodieLogBlockContentLocation> blockLocation;
+
+  public HoodieLogBlock(@Nonnull  Map<HeaderMetadataType, String> logBlockHeader) {
+    this(logBlockHeader, Maps.newHashMap(), Optional.empty());
+  }
+
+  public HoodieLogBlock(@Nonnull  Map<HeaderMetadataType, String> logBlockHeader,
+                        @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
+                        @Nonnull Optional<HoodieLogBlockContentLocation> blockLocation) {
+    this.logBlockHeader = logBlockHeader;
+    this.logBlockFooter = logBlockFooter;
+    this.blockLocation = blockLocation;
+  }
+
+  // Return the bytes representation of the data belonging to a LogBlock
+  public byte[] getContentBytes() throws IOException {
+    throw new HoodieException("No implementation was provided");
+  }
+
+  public byte [] getMagic() {
     throw new HoodieException("No implementation was provided");
   }
 
@@ -39,8 +68,21 @@ public abstract class HoodieLogBlock {
     throw new HoodieException("No implementation was provided");
   }
 
-  //log metadata for each log block
-  private Map<LogMetadataType, String> logMetadata;
+  public long getLogBlockLength() {
+    throw new HoodieException("No implementation was provided");
+  }
+
+  public Optional<HoodieLogBlockContentLocation> getBlockContentLocation() {
+    return this.blockLocation;
+  }
+
+  public Map<HeaderMetadataType, String> getLogBlockHeader() {
+    return logBlockHeader;
+  }
+
+  public Map<HeaderMetadataType, String> getLogBlockFooter() {
+    return logBlockFooter;
+  }
 
   /**
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at
@@ -54,32 +96,64 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Metadata abstraction for a HoodieLogBlock WARNING : This enum is serialized as the ordinal.
+   * Log Metadata headers abstraction for a HoodieLogBlock WARNING : This enum is serialized as the ordinal.
    * Only add new enums at the end.
    */
-  public enum LogMetadataType {
+  public enum HeaderMetadataType {
     INSTANT_TIME,
-    TARGET_INSTANT_TIME
+    TARGET_INSTANT_TIME,
+    SCHEMA,
+    COMMAND_BLOCK_TYPE
   }
 
-  public HoodieLogBlock(Map<LogMetadataType, String> logMetadata) {
-    this.logMetadata = logMetadata;
+  /**
+   * Log Metadata footers abstraction for a HoodieLogBlock WARNING : This enum is serialized as the ordinal.
+   * Only add new enums at the end.
+   */
+  public enum FooterMetadataType {
   }
 
-  public Map<LogMetadataType, String> getLogMetadata() {
-    return logMetadata;
+  /**
+   * This class is used to store the Location of the Content of a Log Block. It's used when a client chooses for a
+   * IO intensive CompactedScanner, the location helps to lazily read contents from the log file
+   */
+  public static final class HoodieLogBlockContentLocation {
+    // The logFile that contains this block
+    private final HoodieLogFile logFile;
+    // The filePosition in the logFile for the contents of this block
+    private final long contentPositionInLogFile;
+    // The number of bytes / size of the contents of this block
+    private final long blockSize;
+
+    HoodieLogBlockContentLocation(HoodieLogFile logFile, long contentPositionInLogFile, long blockSize) {
+      this.logFile = logFile;
+      this.contentPositionInLogFile = contentPositionInLogFile;
+      this.blockSize = blockSize;
+    }
+
+    public HoodieLogFile getLogFile() {
+      return logFile;
+    }
+
+    public long getContentPositionInLogFile() {
+      return contentPositionInLogFile;
+    }
+
+    public long getBlockSize() {
+      return blockSize;
+    }
   }
 
   /**
    * Convert log metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual
    * bytes
    */
-  public static byte[] getLogMetadataBytes(Map<LogMetadataType, String> metadata)
+  public static byte[] getLogMetadataBytes(Map<HeaderMetadataType, String> metadata)
       throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
     output.writeInt(metadata.size());
-    for (Map.Entry<LogMetadataType, String> entry : metadata.entrySet()) {
+    for (Map.Entry<HeaderMetadataType, String> entry : metadata.entrySet()) {
       output.writeInt(entry.getKey().ordinal());
       byte[] bytes = entry.getValue().getBytes();
       output.writeInt(bytes.length);
@@ -91,10 +165,10 @@ public abstract class HoodieLogBlock {
   /**
    * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}
    */
-  public static Map<LogMetadataType, String> getLogMetadata(SizeAwareDataInputStream dis)
+  public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis)
       throws IOException {
 
-    Map<LogMetadataType, String> metadata = Maps.newHashMap();
+    Map<HeaderMetadataType, String> metadata = Maps.newHashMap();
     // 1. Read the metadata written out
     int metadataCount = dis.readInt();
     try {
@@ -103,7 +177,7 @@ public abstract class HoodieLogBlock {
         int metadataEntrySize = dis.readInt();
         byte[] metadataEntry = new byte[metadataEntrySize];
         dis.readFully(metadataEntry, 0, metadataEntrySize);
-        metadata.put(LogMetadataType.values()[metadataEntryIndex], new String(metadataEntry));
+        metadata.put(HeaderMetadataType.values()[metadataEntryIndex], new String(metadataEntry));
         metadataCount--;
       }
       return metadata;

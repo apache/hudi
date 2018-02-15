@@ -283,8 +283,9 @@ public class HoodieTestUtils {
             .overBaseCommit(location.getCommitTime())
             .withFs(fs).build();
 
-        Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
-        metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, location.getCommitTime());
+        Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+        header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getCommitTime());
+        header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
         logWriter.appendBlock(new HoodieAvroDataBlock(s.getValue().stream().map(r -> {
           try {
             GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
@@ -296,7 +297,7 @@ public class HoodieTestUtils {
           } catch (IOException e) {
             return null;
           }
-        }).collect(Collectors.toList()), schema, metadata));
+        }).collect(Collectors.toList()), header));
         logWriter.close();
       } catch (Exception e) {
         fail(e.toString());

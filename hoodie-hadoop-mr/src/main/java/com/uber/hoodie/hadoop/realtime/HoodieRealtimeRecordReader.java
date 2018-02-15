@@ -24,15 +24,6 @@ import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
@@ -58,6 +49,16 @@ import parquet.avro.AvroSchemaConverter;
 import parquet.hadoop.ParquetFileReader;
 import parquet.schema.MessageType;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real
  * time queries.
@@ -71,6 +72,11 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
   // Fraction of mapper/reducer task memory used for compaction of log files
   public static final String COMPACTION_MEMORY_FRACTION_PROP = "compaction.memory.fraction";
   public static final String DEFAULT_COMPACTION_MEMORY_FRACTION = "0.75";
+
+  // used to choose a trade off between IO vs Memory when performing compaction process
+  // Depending on outputfile_size and memory provided, choose true to avoid OOM for large file size + small memory
+  public static final String COMPACTION_IO_INTENSIVE_SUPPORT_PROP = "hooodie.compaction.io.intensive.support";
+  public static final String COMPACTION_IO_INTENSIVE_SUPPORT = "false";
 
   public static final Log LOG = LogFactory.getLog(HoodieRealtimeRecordReader.class);
 
@@ -132,7 +138,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
             split.getDeltaFilePaths(),
             readerSchema, split.getMaxCommitTime(),
             (long) Math.ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
-                *jobConf.getMemoryForMapTask()));
+                *jobConf.getMemoryForMapTask()), Boolean.valueOf(jobConf.get(COMPACTION_IO_INTENSIVE_SUPPORT_PROP, COMPACTION_IO_INTENSIVE_SUPPORT)));
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)
     for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {
