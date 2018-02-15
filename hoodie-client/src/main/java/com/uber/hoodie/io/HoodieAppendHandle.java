@@ -159,11 +159,14 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     return Optional.empty();
   }
 
+  // TODO (NA) - Perform a schema check of current input record with the last schema on log file
+  // to make sure we don't append records with older (shorter) schema than already appended
   public void doAppend() {
 
     int maxBlockSize = config.getLogFileDataBlockMaxSize(); int numberOfRecords = 0;
-    Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
-    metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, commitTime);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
       // update the new location of the record, so we know where to find it next
@@ -178,7 +181,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         // Recompute averageRecordSize before writing a new block and update existing value with avg of new and old
         logger.info("AvgRecordSize => " + averageRecordSize);
         averageRecordSize = (averageRecordSize + SizeEstimator.estimate(record))/2;
-        doAppend(metadata);
+        doAppend(header);
         numberOfRecords = 0;
       }
       Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
@@ -189,18 +192,18 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
       numberOfRecords++;
     }
-    doAppend(metadata);
+    doAppend(header);
   }
 
-  private void doAppend(Map<HoodieLogBlock.LogMetadataType, String> metadata) {
+  private void doAppend(Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     try {
       if (recordList.size() > 0) {
-        writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, schema, metadata));
+        writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, header));
         recordList.clear();
       }
       if (keysToDelete.size() > 0) {
         writer = writer.appendBlock(
-            new HoodieDeleteBlock(keysToDelete.stream().toArray(String[]::new), metadata));
+            new HoodieDeleteBlock(keysToDelete.stream().toArray(String[]::new), header));
         keysToDelete.clear();
       }
     } catch (Exception e) {

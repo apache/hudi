@@ -314,9 +314,10 @@ public class TestUtil {
     List<IndexedRecord> records = (isLogSchemaSimple ? SchemaTestUtil
         .generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100));
-    Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
-    metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, dataFile.getCommitTime());
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema, metadata);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
     logWriter.appendBlock(dataBlock);
     logWriter.close();
     return logWriter.getLogFile();

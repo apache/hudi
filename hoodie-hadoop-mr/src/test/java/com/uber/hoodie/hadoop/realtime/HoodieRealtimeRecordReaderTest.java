@@ -91,9 +91,10 @@ public class HoodieRealtimeRecordReaderTest {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
     }
     Schema writeSchema = records.get(0).getSchema();
-    Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
-    metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME, newCommit);
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, writeSchema, metadata);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size = writer.getCurrentSize();
     return writer;

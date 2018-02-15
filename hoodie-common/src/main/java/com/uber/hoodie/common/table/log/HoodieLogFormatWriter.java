@@ -22,7 +22,6 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
-import java.io.IOException;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -31,6 +30,8 @@ import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
 
 /**
  * HoodieLogFormatWriter can be used to append blocks to a log file Use
@@ -117,21 +118,70 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   @Override
   public Writer appendBlock(HoodieLogBlock block)
       throws IOException, InterruptedException {
-    byte[] content = block.getBytes();
-    // 1. write the magic header for the start of the block
-    this.output.write(HoodieLogFormat.MAGIC);
-    // 2. Write the block type
-    this.output.writeInt(block.getBlockType().ordinal());
-    // 3. Write the size of the block
-    this.output.writeInt(content.length);
-    // 4. Write the contents of the block
-    this.output.write(content);
 
+    // Find current version
+    LogFormatVersion currentLogFormatVersion = new HoodieLogFormatVersion(HoodieLogFormat.currentVersion);
+    long currentSize = this.output.size();
+
+    // 1. Write the magic header for the start of the block
+    this.output.write(HoodieLogFormat.MAGIC);
+
+    // bytes for header
+    byte [] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
+    // content bytes
+    byte [] content = block.getContentBytes();
+    // bytes for footer
+    byte [] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
+
+    // 2. Write the total size of the block (excluding Magic)
+    this.output.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
+
+    // 3. Write the version of this log block
+    this.output.writeInt(currentLogFormatVersion.getVersion());
+    // 4. Write the block type
+    this.output.writeInt(block.getBlockType().ordinal());
+
+    // 5. Write the headers for the log block
+    this.output.write(headerBytes);
+    // 6. Write the size of the content block
+    this.output.writeLong(content.length);
+    // 7. Write the contents of the data block
+    this.output.write(content);
+    // 8. Write the footers for the log block
+    this.output.write(footerBytes);
+    // 9. Write the total size of the log block (including magic) which is everything written until now (for reverse pointer)
+    this.output.writeLong(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
 
     // roll over if size is past the threshold
     return rolloverIfNeeded();
+  }
+
+  /**
+   *
+   * This method returns the total LogBlock Length which is the sum of
+   * 1. Number of bytes to write version
+   * 2. Number of bytes to write ordinal
+   * 3. Length of the headers
+   * 4. Number of bytes used to write content length
+   * 5. Length of the content
+   * 6. Length of the footers
+   * 7. Number of bytes to write totalLogBlockLength
+   * @param contentLength
+   * @param headerLength
+   * @param footerLength
+   * @return
+   */
+  private int getLogBlockLength(int contentLength, int headerLength, int footerLength) {
+    return
+        Integer.BYTES + // Number of bytes to write version
+        Integer.BYTES + // Number of bytes to write ordinal
+        headerLength +  // Length of the headers
+        Long.BYTES + // Number of bytes used to write content length
+        contentLength + // Length of the content
+        footerLength +  // Length of the footers
+        Long.BYTES;     // Number of bytes to write totalLogBlockLength at end of block (for reverse pointer)
   }
 
   private Writer rolloverIfNeeded() throws IOException, InterruptedException {

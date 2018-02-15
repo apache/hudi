@@ -23,7 +23,7 @@ topnav_dropdowns:
             url: /api_docs.html
             output: web
           - title: Code Structure
-            url: /code_structure.html
+            url: /code_and_design.html
             output: web
           - title: Roadmap
             url: /roadmap.html
