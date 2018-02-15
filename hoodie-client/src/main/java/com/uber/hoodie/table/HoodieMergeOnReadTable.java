@@ -265,14 +265,15 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
                             Long numRollbackBlocks = 0L;
                             // generate metadata
-                            Map<HoodieLogBlock.LogMetadataType, String> metadata = Maps.newHashMap();
-                            metadata.put(HoodieLogBlock.LogMetadataType.INSTANT_TIME,
+                            Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+                            header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME,
                                 metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
-                            metadata.put(HoodieLogBlock.LogMetadataType.TARGET_INSTANT_TIME, commit);
+                            header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
+                            header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+                                String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
                             // if update belongs to an existing log file
                             writer = writer.appendBlock(new HoodieCommandBlock(
-                                HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK,
-                                metadata));
+                                header));
                             numRollbackBlocks++;
                             filesToNumBlocksRollback
                                 .put(this.getMetaClient().getFs().getFileStatus(writer.getLogFile().getPath()),

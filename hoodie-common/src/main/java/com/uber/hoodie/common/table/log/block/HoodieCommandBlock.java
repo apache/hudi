@@ -16,14 +16,12 @@
 
 package com.uber.hoodie.common.table.log.block;
 
-import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+import com.uber.hoodie.common.model.HoodieLogFile;
+import org.apache.hadoop.fs.FSDataInputStream;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Command block issues a specific command to the scanner
@@ -34,27 +32,16 @@ public class HoodieCommandBlock extends HoodieLogBlock {
 
   public enum HoodieCommandBlockTypeEnum {ROLLBACK_PREVIOUS_BLOCK}
 
-  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type,
-      Map<LogMetadataType, String> metadata) {
-    super(metadata);
-    this.type = type;
+  public HoodieCommandBlock(Map<HeaderMetadataType, String> header) {
+    this(Optional.empty(), null, false, Optional.empty(), header, new HashMap<>());
   }
 
-  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type) {
-    this(type, null);
-  }
-
-  @Override
-  public byte[] getBytes() throws IOException {
-
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DataOutputStream output = new DataOutputStream(baos);
-    if (super.getLogMetadata() != null) {
-      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
-    }
-    output.writeInt(type.ordinal());
-    output.close();
-    return baos.toByteArray();
+  private HoodieCommandBlock(Optional<byte[]> content, FSDataInputStream inputStream,
+      boolean readBlockLazily, Optional<HoodieLogBlockContentLocation> blockContentLocation,
+      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
+    this.type = HoodieCommandBlockTypeEnum.values()[Integer
+        .parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
   }
 
   public HoodieCommandBlockTypeEnum getType() {
@@ -66,13 +53,23 @@ public class HoodieCommandBlock extends HoodieLogBlock {
     return HoodieLogBlockType.COMMAND_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
-    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
-    Map<LogMetadataType, String> metadata = null;
-    if (readMetadata) {
-      metadata = HoodieLogBlock.getLogMetadata(dis);
-    }
-    int ordinal = dis.readInt();
-    return new HoodieCommandBlock(HoodieCommandBlockTypeEnum.values()[ordinal], metadata);
+  @Override
+  public byte[] getContentBytes() {
+    return new byte[0];
+  }
+
+  public static HoodieLogBlock getBlock(HoodieLogFile logFile,
+      FSDataInputStream inputStream,
+      Optional<byte[]> content,
+      boolean readBlockLazily,
+      long position,
+      long blockSize,
+      long blockEndpos,
+      Map<HeaderMetadataType, String> header,
+      Map<HeaderMetadataType, String> footer) {
+
+    return new HoodieCommandBlock(content, inputStream, readBlockLazily,
+        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
+        header, footer);
   }
 }

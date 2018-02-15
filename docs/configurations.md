@@ -74,6 +74,14 @@ summary: "Here we list all possible configurations and what they mean"
         <span style="color:grey">Should hoodie dynamically compute the insertSplitSize based on the last 24 commit's metadata. Turned off by default. </span>
         - [approxRecordSize](#approxRecordSize) () <br/>
         <span style="color:grey">The average record size. If specified, hoodie will use this and not compute dynamically based on the last 24 commit's metadata. No value set as default. This is critical in computing the insert parallelism and bin-packing inserts into small files. See above.</span>
+        - [withCompactionLazyBlockReadEnabled](#withCompactionLazyBlockReadEnabled) (true) <br/>
+        <span style="color:grey">When a CompactedLogScanner merges all log files, this config helps to choose whether the logblocks should be read lazily or not. Choose true to use I/O intensive lazy block reading (low memory usage) or false for Memory intensive immediate block read (high memory usage)</span>
+        - [withMaxNumDeltaCommitsBeforeCompaction](#withMaxNumDeltaCommitsBeforeCompaction) (maxNumDeltaCommitsBeforeCompaction = 10) <br/>
+        <span style="color:grey">Number of max delta commits to keep before triggering an inline compaction</span>
+        - [withCompactionReverseLogReadEnabled](#withCompactionReverseLogReadEnabled) (false) <br/>
+        <span style="color:grey">HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the Reader reads the logfile in reverse direction, from pos=file_length to pos=0</span>
+        - [withMaxMemorySizePerCompactionInBytes](#withMaxMemorySizePerCompactionInBytes) (maxMemorySizePerCompactionInBytes = 1GB) <br/>
+        <span style="color:grey">HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then merges these log blocks and records. At any point, the number of entries in a log block can be less than or equal to the number of entries in the corresponding parquet file. This can lead to OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to set the max allowable inMemory footprint of the spillable map.</span>
 
     - [withMetricsConfig](#withMetricsConfig) (HoodieMetricsConfig) <br/>
     <span style="color:grey">Hoodie publishes metrics on every commit, clean, rollback etc.</span>
