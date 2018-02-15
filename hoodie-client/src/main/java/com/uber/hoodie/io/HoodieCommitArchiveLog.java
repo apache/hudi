@@ -18,6 +18,7 @@ package com.uber.hoodie.io;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.avro.model.HoodieArchivedMetaEntry;
 import com.uber.hoodie.avro.model.HoodieCleanMetadata;
@@ -30,6 +31,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
@@ -39,6 +41,7 @@ import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
 import org.apache.avro.Schema;
+import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -47,6 +50,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -190,7 +194,9 @@ public class HoodieCommitArchiveLog {
       for (HoodieInstant hoodieInstant : instants) {
         records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
       }
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, wrapperSchema);
+      Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
       this.writer = writer.appendBlock(block);
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to archive commits", e);

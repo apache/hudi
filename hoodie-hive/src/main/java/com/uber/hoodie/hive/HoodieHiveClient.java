@@ -395,7 +395,7 @@ public class HoodieHiveClient {
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private MessageType readSchemaFromLogFile(Optional<HoodieInstant> lastCompactionCommitOpt,
       Path path) throws IOException {
-    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null, true);
+    Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
     HoodieAvroDataBlock lastBlock = null;
     while (reader.hasNext()) {
       HoodieLogBlock block = reader.next();
@@ -404,6 +404,7 @@ public class HoodieHiveClient {
       }
     }
     if (lastBlock != null) {
+      lastBlock.getRecords();
       return new parquet.avro.AvroSchemaConverter().convert(lastBlock.getSchema());
     }
     // Fall back to read the schema from last compaction

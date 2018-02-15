@@ -72,6 +72,11 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
   public static final String COMPACTION_MEMORY_FRACTION_PROP = "compaction.memory.fraction";
   public static final String DEFAULT_COMPACTION_MEMORY_FRACTION = "0.75";
 
+  // used to choose a trade off between IO vs Memory when performing compaction process
+  // Depending on outputfile size and memory provided, choose true to avoid OOM for large file size + small memory
+  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = "compaction.lazy.block.read.enabled";
+  public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = "true";
+
   public static final Log LOG = LogFactory.getLog(HoodieRealtimeRecordReader.class);
 
   private final HashMap<String, ArrayWritable> deltaRecordMap;
@@ -132,7 +137,8 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
             split.getDeltaFilePaths(),
             readerSchema, split.getMaxCommitTime(),
             (long) Math.ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
-                *jobConf.getMemoryForMapTask()));
+                *jobConf.getMemoryForMapTask()),
+            Boolean.valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)), false);
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)
     for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {
@@ -140,6 +146,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
           .get();
       String key = hoodieRecord.getRecordKey();
       // we assume, a later safe record in the log, is newer than what we have in the map & replace it.
+      // TODO : handle deletes here
       ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, writerSchema);
       deltaRecordMap.put(key, aWritable);
       if (LOG.isDebugEnabled()) {
@@ -302,6 +309,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
             arrayWritableToString(deltaRecordMap.get(key))));
       }
       if (deltaRecordMap.containsKey(key)) {
+        // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro ?
         Writable[] replaceValue = deltaRecordMap.get(key).get();
         Writable[] originalValue = arrayWritable.get();
         System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);
