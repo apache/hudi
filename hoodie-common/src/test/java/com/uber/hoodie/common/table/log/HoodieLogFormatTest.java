@@ -392,6 +392,8 @@ public class HoodieLogFormatTest {
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
     // Write out a length that does not confirm with the content
     outputStream.writeInt(1000);
+    // Write out footer length
+    outputStream.writeInt(1);
     // Write out some metadata
     // TODO : test for failure to write metadata - NA ?
     outputStream.write(HoodieLogBlock.getLogMetadataBytes(metadata));
@@ -419,6 +421,8 @@ public class HoodieLogFormatTest {
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
     // Write out a length that does not confirm with the content
     outputStream.writeInt(1000);
+    // Write out footer length
+    outputStream.writeInt(1);
     // Write out some metadata
     // TODO : test for failure to write metadata - NA ?
     outputStream.write(HoodieLogBlock.getLogMetadataBytes(metadata));
@@ -600,6 +604,8 @@ public class HoodieLogFormatTest {
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
     // Write out a length that does not confirm with the content
     outputStream.writeInt(100);
+    // Write out footer length
+    outputStream.writeInt(1);
     // Write out some metadata
     // TODO : test for failure to write metadata - NA ?
     outputStream.write(HoodieLogBlock.getLogMetadataBytes(metadata));
