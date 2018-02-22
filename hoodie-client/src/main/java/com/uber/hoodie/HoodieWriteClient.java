@@ -142,12 +142,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    writeContext = metrics.getCommitCtx();
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
-        config);
-
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -166,6 +161,30 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   }
 
   /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied commitTime.
+   *
+   * This implementation requires that the input records are already tagged, and de-duped if
+   * needed.
+   *
+   * @param preppedRecords Prepared HoodieRecords to upsert
+   * @param commitTime Commit Time handle
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   */
+  public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
+      final String commitTime) {
+    HoodieTable<T> table = getTableAndInitCtx();
+    try {
+      return upsertRecordsInternal(preppedRecords, commitTime, table, true);
+    } catch (Throwable e) {
+      if (e instanceof HoodieUpsertException) {
+        throw (HoodieUpsertException) e;
+      }
+      throw new HoodieUpsertException("Failed to upsert prepared records for commit time " +
+          commitTime, e);
+    }
+  }
+
+  /**
    * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal
    * writes.
    *
@@ -177,11 +196,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    writeContext = metrics.getCommitCtx();
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
-        config);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -194,6 +209,31 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         throw e;
       }
       throw new HoodieInsertException("Failed to insert for commit time " + commitTime, e);
+    }
+  }
+
+  /**
+   * Inserts the given prepared records into the Hoodie table, at the supplied commitTime.
+   *
+   * This implementation skips the index check, skips de-duping and is able to leverage benefits
+   * such as small file handling/blocking alignment, as with insert(), by profiling the workload.
+   * The prepared HoodieRecords should be de-duped if needed.
+   *
+   * @param preppedRecords HoodieRecords to insert
+   * @param commitTime Commit Time handle
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   */
+  public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
+      final String commitTime) {
+    HoodieTable<T> table = getTableAndInitCtx();
+    try {
+      return upsertRecordsInternal(preppedRecords, commitTime, table, false);
+    } catch (Throwable e) {
+      if (e instanceof HoodieInsertException) {
+        throw e;
+      }
+      throw new HoodieInsertException("Failed to insert prepared records for commit time " +
+          commitTime, e);
     }
   }
 
@@ -235,40 +275,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records,
       final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    writeContext = metrics.getCommitCtx();
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
-        config);
-
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
           combineOnCondition(config.shouldCombineBeforeInsert(), records,
               config.getInsertShuffleParallelism());
 
-      final JavaRDD<HoodieRecord<T>> repartitionedRecords;
-      if (bulkInsertPartitioner.isDefined()) {
-        repartitionedRecords =
-            bulkInsertPartitioner.get().repartitionRecords(dedupedRecords,
-                config.getBulkInsertShuffleParallelism());
-      } else {
-        // Now, sort the records and line them up nicely for loading.
-        repartitionedRecords = dedupedRecords
-            .sortBy(record -> {
-              // Let's use "partitionPath + key" as the sort key. Spark, will ensure
-              // the records split evenly across RDD partitions, such that small partitions fit
-              // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
-              return String
-                  .format("%s+%s", record.getPartitionPath(), record.getRecordKey());
-            }, true, config.getBulkInsertShuffleParallelism());
-      }
-      JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
-          .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table),
-              true)
-          .flatMap(writeStatuses -> writeStatuses.iterator());
-
-      return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
+      return bulkInsertInternal(dedupedRecords, commitTime, table, bulkInsertPartitioner);
     } catch (Throwable e) {
       if (e instanceof HoodieInsertException) {
         throw e;
@@ -276,6 +290,67 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       throw new HoodieInsertException("Failed to bulk insert for commit time " + commitTime,
           e);
     }
+  }
+
+  /**
+   * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk
+   * loads into a Hoodie table for the very first time (e.g: converting an existing dataset to
+   * Hoodie).  The input records should contain no duplicates if needed.
+   *
+   * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and
+   * attempts to control the numbers of files with less memory compared to the {@link
+   * HoodieWriteClient#insert(JavaRDD, String)}. Optionally it allows users to specify their own
+   * partitioner. If specified then it will be used for repartitioning records. See {@link
+   * UserDefinedBulkInsertPartitioner}.
+   *
+   * @param preppedRecords HoodieRecords to insert
+   * @param commitTime Commit Time handle
+   * @param bulkInsertPartitioner If specified then it will be used to partition input records
+   * before they are inserted into hoodie.
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   */
+  public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
+      final String commitTime,
+      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+    HoodieTable<T> table = getTableAndInitCtx();
+    try {
+      return bulkInsertInternal(preppedRecords, commitTime, table, bulkInsertPartitioner);
+    } catch (Throwable e) {
+      if (e instanceof HoodieInsertException) {
+        throw e;
+      }
+      throw new HoodieInsertException("Failed to bulk insert prepared records for commit time " +
+          commitTime, e);
+    }
+  }
+
+  private JavaRDD<WriteStatus> bulkInsertInternal(
+      JavaRDD<HoodieRecord<T>> dedupedRecords,
+      String commitTime,
+      HoodieTable<T> table,
+      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+    final JavaRDD<HoodieRecord<T>> repartitionedRecords;
+    if (bulkInsertPartitioner.isDefined()) {
+      repartitionedRecords =
+          bulkInsertPartitioner.get().repartitionRecords(dedupedRecords,
+              config.getBulkInsertShuffleParallelism());
+    } else {
+      // Now, sort the records and line them up nicely for loading.
+      repartitionedRecords = dedupedRecords
+          .sortBy(record -> {
+            // Let's use "partitionPath + key" as the sort key. Spark, will ensure
+            // the records split evenly across RDD partitions, such that small partitions fit
+            // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
+            return String
+                .format("%s+%s", record.getPartitionPath(), record.getRecordKey());
+          }, true, config.getBulkInsertShuffleParallelism());
+    }
+    JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
+        .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table),
+            true)
+        .flatMap(writeStatuses -> writeStatuses.iterator());
+
+    return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
   }
 
   private void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD) {
@@ -906,5 +981,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     for (String commit : commits) {
       rollback(commit);
     }
+  }
+
+  private HoodieTable getTableAndInitCtx() {
+    writeContext = metrics.getCommitCtx();
+    // Create a Hoodie table which encapsulated the commits and files visible
+    return HoodieTable.getHoodieTable(
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
+        config);
   }
 }

@@ -80,6 +80,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import scala.Option;
 import scala.collection.Iterator;
 
 public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
@@ -190,7 +191,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> result = client.bulkInsertPreppedRecords(writeRecords, newCommitTime,
+        Option.empty());
 
     assertFalse("If Autocommit is false, then commit should not be made automatically",
         HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
@@ -218,7 +220,6 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
   private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig) throws Exception {
     HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieWriteConfig);
-    HoodieIndex index = HoodieIndex.createIndex(hoodieWriteConfig, jsc);
 
     /**
      * Write 1 (only inserts)
@@ -229,7 +230,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+    List<WriteStatus> statuses = client.upsertPreppedRecords(writeRecords, newCommitTime).collect();
     assertNoWriteErrors(statuses);
 
     // check the partition metadata is written out
@@ -249,10 +250,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         records.size(),
         HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, newCommitTime).count());
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieTable table = HoodieTable
-        .getHoodieTable(metaClient, getConfig());
-
-    List<HoodieRecord> taggedRecords = index.tagLocation(jsc.parallelize(records, 1), table)
+    HoodieReadClient readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
+    List<HoodieRecord> taggedRecords = readClient.tagLocation(jsc.parallelize(records, 1))
         .collect();
     checkTaggedRecords(taggedRecords, "001");
 
@@ -282,11 +281,9 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     assertEquals("Latest commit should be 004", timeline.lastInstant().get().getTimestamp(),
         newCommitTime);
 
-    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, getConfig());
-
     // Index should be able to locate all updates in correct locations.
-    taggedRecords = index.tagLocation(jsc.parallelize(dedupedRecords, 1), table).collect();
+    readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
+    taggedRecords = readClient.tagLocation(jsc.parallelize(dedupedRecords, 1)).collect();
     checkTaggedRecords(taggedRecords, "004");
 
     // Check the entire dataset has 100 records still
@@ -732,7 +729,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 500);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 5);
 
-    List<WriteStatus> statuses = client.insert(writeRecords, newCommitTime).collect();
+    List<WriteStatus> statuses = client.insertPreppedRecords(writeRecords, newCommitTime).collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
 
