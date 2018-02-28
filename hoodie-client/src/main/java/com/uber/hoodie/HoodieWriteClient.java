@@ -40,6 +40,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
+import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.exception.HoodieRollbackException;
@@ -353,10 +354,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
   }
 
-  private void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD) {
+  private void commitOnAutoCommit(String commitTime, JavaRDD<WriteStatus> resultRDD,
+      String actionType) {
     if (config.shouldAutoCommit()) {
       logger.info("Auto commit enabled: Committing " + commitTime);
-      boolean commitResult = commit(commitTime, resultRDD);
+      boolean commitResult = commit(commitTime, resultRDD, Optional.empty(), actionType);
       if (!commitResult) {
         throw new HoodieCommitException("Failed to commit " + commitTime);
       }
@@ -454,7 +456,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, table);
     // Trigger the insert and collect statuses
     statuses = statuses.persist(config.getWriteStatusStorageLevel());
-    commitOnAutoCommit(commitTime, statuses);
+    commitOnAutoCommit(commitTime, statuses, table.getCommitActionType());
     return statuses;
   }
 
@@ -482,6 +484,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   public boolean commit(String commitTime,
       JavaRDD<WriteStatus> writeStatuses,
       Optional<HashMap<String, String>> extraMetadata) {
+    HoodieTable<T> table = HoodieTable.getHoodieTable(
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
+        config);
+    return commit(commitTime, writeStatuses, extraMetadata, table.getCommitActionType());
+  }
+
+  private boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
+      Optional<HashMap<String, String>> extraMetadata, String actionType) {
 
     logger.info("Commiting " + commitTime);
     // Create a Hoodie table which encapsulated the commits and files visible
@@ -519,7 +529,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
 
     try {
-      String actionType = table.getCommitActionType();
       activeTimeline.saveAsComplete(
           new HoodieInstant(true, actionType, commitTime),
           Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -918,16 +927,79 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   }
 
   /**
+   * Provides a new commit time for a compaction (commit) operation
+   */
+  public String startCompaction() {
+    String commitTime = HoodieActiveTimeline.createNewCommitTime();
+    logger.info("Generate a new commit time " + commitTime);
+    startCompactionWithTime(commitTime);
+    return commitTime;
+  }
+
+  /** Since MOR tableType default to {@link HoodieTimeline#DELTA_COMMIT_ACTION},
+   * we need to explicitly set to {@link HoodieTimeline#COMMIT_ACTION} for compaction
+   */
+  public void startCompactionWithTime(String commitTime) {
+    HoodieTable<T> table = HoodieTable.getHoodieTable(
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
+        config);
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    String commitActionType =  HoodieTimeline.COMMIT_ACTION;
+    activeTimeline.createInflight(
+        new HoodieInstant(true, commitActionType, commitTime));
+  }
+
+  /**
    * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
    * asynchronously. Please always use this serially before or after an insert/upsert action.
    */
-  private void compact(String compactionCommitTime) throws IOException {
+  public JavaRDD<WriteStatus> compact(String commitTime) throws IOException {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
         config);
-    Optional<HoodieCommitMetadata> compactionMetadata = table.compact(jsc, compactionCommitTime);
-    if (compactionMetadata.isPresent()) {
+    JavaRDD<WriteStatus> statuses = table.compact(jsc, commitTime);
+    // Trigger the insert and collect statuses
+    statuses = statuses.persist(config.getWriteStatusStorageLevel());
+    String actionType = HoodieActiveTimeline.COMMIT_ACTION;
+    commitOnAutoCommit(commitTime, statuses, actionType);
+    return statuses;
+  }
+
+  /**
+   * Commit a compaction operation
+   * @param commitTime
+   * @param writeStatuses
+   * @param extraMetadata
+   */
+  public void commitCompaction(String commitTime, JavaRDD<WriteStatus> writeStatuses,
+      Optional<HashMap<String, String>> extraMetadata) {
+    String commitCompactionActionType = HoodieActiveTimeline.COMMIT_ACTION;
+    commit(commitTime, writeStatuses, extraMetadata, commitCompactionActionType);
+  }
+
+  /**
+   * Commit a compaction operation
+   * @param commitTime
+   * @param writeStatuses
+   */
+  public void commitCompaction(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
+    String commitCompactionActionType = HoodieActiveTimeline.COMMIT_ACTION;
+    commit(commitTime, writeStatuses, Optional.empty(), commitCompactionActionType);
+  }
+
+  /**
+   * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
+   * asynchronously. Please always use this serially before or after an insert/upsert action.
+   */
+  private void forceCompact(String compactionCommitTime) throws IOException {
+    // Create a Hoodie table which encapsulated the commits and files visible
+    HoodieTableMetaClient metaClient =
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config);
+    JavaRDD<WriteStatus> compactedStatuses = table.compact(jsc, compactionCommitTime);
+    if (!compactedStatuses.isEmpty()) {
+      commitForceCompaction(compactedStatuses, metaClient, compactionCommitTime);
       logger.info("Compacted successfully on commit " + compactionCommitTime);
     } else {
       logger.info("Compaction did not run for commit " + compactionCommitTime);
@@ -938,10 +1010,36 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
    * asynchronously. Please always use this serially before or after an insert/upsert action.
    */
-  public String forceCompact() throws IOException {
-    String compactionCommitTime = HoodieActiveTimeline.createNewCommitTime();
-    compact(compactionCommitTime);
+  private String forceCompact() throws IOException {
+    String compactionCommitTime = startCompaction();
+    forceCompact(compactionCommitTime);
     return compactionCommitTime;
+  }
+
+  private void commitForceCompaction(JavaRDD<WriteStatus> writeStatuses,
+      HoodieTableMetaClient metaClient,
+      String compactionCommitTime) {
+    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(writeStatus -> writeStatus.getStat())
+        .collect();
+
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
+    for (HoodieWriteStat stat : updateStatusMap) {
+      metadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+
+    logger.info("Compaction finished with result " + metadata);
+
+    logger.info("Committing Compaction " + compactionCommitTime);
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    try {
+      activeTimeline.saveAsComplete(
+          new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, compactionCommitTime),
+          Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieCompactionException(
+          "Failed to commit " + metaClient.getBasePath() + " at time " + compactionCommitTime, e);
+    }
   }
 
   public static SparkConf registerClasses(SparkConf conf) {

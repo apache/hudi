@@ -41,14 +41,6 @@ import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.io.HoodieAppendHandle;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -60,6 +52,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 
 /**
  * Implementation of a more real-time read-optimized Hoodie Table where
@@ -167,7 +167,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public Optional<HoodieCommitMetadata> compact(JavaSparkContext jsc, String compactionCommitTime) {
+  public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionCommitTime) {
     logger.info("Checking if compaction needs to be run on " + config.getBasePath());
     Optional<HoodieInstant> lastCompaction = getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
@@ -182,13 +182,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       logger.info("Not running compaction as only " + deltaCommitsSinceLastCompaction
           + " delta commits was found since last compaction " + deltaCommitsSinceTs
           + ". Waiting for " + config.getInlineCompactDeltaCommitMax());
-      return Optional.empty();
+      return jsc.emptyRDD();
     }
 
     logger.info("Compacting merge on read table " + config.getBasePath());
     HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
     try {
-      return Optional.of(compactor.compact(jsc, config, this, compactionCommitTime));
+      return compactor.compact(jsc, config, this, compactionCommitTime);
     } catch (IOException e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
