@@ -35,6 +35,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
+import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.LazyInsertIterable;
 import com.uber.hoodie.io.HoodieCleanHelper;
@@ -64,6 +65,7 @@ import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
@@ -414,6 +416,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     return true;
   }
 
+  @Override
+  public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String commitTime) {
+    throw new HoodieNotSupportedException("Compaction is not supported from a CopyOnWrite table");
+  }
+
 
   public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileLoc,
                                                   Iterator<HoodieRecord<T>> recordItr)
@@ -511,12 +518,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       Iterator recordItr,
       Partitioner partitioner) {
     return handleUpsertPartition(commitTime, partition, recordItr, partitioner);
-  }
-
-  @Override
-  public Optional<HoodieCommitMetadata> compact(JavaSparkContext jsc, String commitCompactionTime) {
-    logger.info("Nothing to compact in COW storage format");
-    return Optional.empty();
   }
 
   /**

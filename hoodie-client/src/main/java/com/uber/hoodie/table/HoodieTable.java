@@ -20,7 +20,6 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
-import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
@@ -43,9 +42,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
@@ -56,8 +54,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
-
-  private static Logger logger = LogManager.getLogger(HoodieTable.class);
 
   protected HoodieTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
@@ -240,7 +236,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract Iterator<List<WriteStatus>> handleInsertPartition(String commitTime,
       Integer partition, Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
-
   public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
       HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     switch (metaClient.getTableType()) {
@@ -254,11 +249,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data
-   * access
+   * Run Compaction on the table.
+   * Compaction arranges the data so that it is optimized for data access
    */
-  public abstract Optional<HoodieCommitMetadata> compact(JavaSparkContext jsc,
-                                                         String commitCompactionTime);
+  public abstract JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String commitTime);
 
   /**
    * Clean partition paths according to cleaning policy and returns the number of files cleaned.
@@ -279,5 +273,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param writeStatuses List of WriteStatus
    * @return number of files finalized
    */
-  public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc, List<Tuple2<String, HoodieWriteStat>> writeStatuses);
+  public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc,
+      List<Tuple2<String, HoodieWriteStat>> writeStatuses);
 }
