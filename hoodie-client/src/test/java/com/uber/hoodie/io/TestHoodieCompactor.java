@@ -24,12 +24,10 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.FileSlice;
-import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -125,15 +123,14 @@ public class TestHoodieCompactor {
     JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
     writeClient.insert(recordsRDD, newCommitTime).collect();
 
-    HoodieCommitMetadata result =
+    JavaRDD<WriteStatus> result =
         compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
-    String basePath = table.getMetaClient().getBasePath();
     assertTrue("If there is nothing to compact, result will be empty",
-        result == null || result.getFileIdAndFullPaths(basePath).isEmpty());
+        result.isEmpty());
   }
 
   @Test
-  public void testLogFileCountsAfterCompaction() throws Exception {
+  public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
@@ -179,28 +176,15 @@ public class TestHoodieCompactor {
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     table = HoodieTable.getHoodieTable(metaClient, config);
 
-    HoodieCommitMetadata result =
+    JavaRDD<WriteStatus> result =
         compactor.compact(jsc, getConfig(), table, HoodieActiveTimeline.createNewCommitTime());
 
-    // Verify that recently written compacted data file has no log file
-    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, config);
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-
-    assertTrue("Compaction commit should be > than last insert",
-        HoodieTimeline.compareTimestamps(timeline.lastInstant().get().getTimestamp(), newCommitTime,
-            HoodieTimeline.GREATER));
-
+    // Verify that all partition paths are present in the WriteStatus result
     for (String partitionPath : dataGen.getPartitionPaths()) {
-      List<FileSlice> groupedLogFiles = table.getRTFileSystemView()
-          .getLatestFileSlices(partitionPath)
-          .collect(Collectors.toList());
-      for (FileSlice slice : groupedLogFiles) {
-        assertTrue(
-            "After compaction there should be no log files visiable on a Realtime view",
-            slice.getLogFiles().collect(Collectors.toList()).isEmpty());
-      }
-      assertTrue(result.getPartitionToWriteStats().containsKey(partitionPath));
+      List<WriteStatus> writeStatuses = result.collect();
+      assertTrue(writeStatuses.stream()
+          .filter(writeStatus -> writeStatus.getStat().getPartitionPath()
+              .contentEquals(partitionPath)).count() > 0);
     }
   }
 

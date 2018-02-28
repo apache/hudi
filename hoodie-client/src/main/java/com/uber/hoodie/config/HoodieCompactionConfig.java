@@ -42,7 +42,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
   // Turn on inline compaction - after fw delta commits a inline compaction will be run
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
-  private static final String DEFAULT_INLINE_COMPACT = "true";
+  private static final String DEFAULT_INLINE_COMPACT = "false";
 
   // Run a compaction every N delta commits
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
