@@ -126,9 +126,11 @@ public class HoodieCommitArchiveLog {
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
 
     // GroupBy each action and limit each action timeline to maxCommitsToKeep
+    // TODO: Handle ROLLBACK_ACTION in future
+    // ROLLBACK_ACTION is currently not defined in HoodieActiveTimeline
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
-        .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION,
-            HoodieTimeline.ROLLBACK_ACTION));
+        .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION))
+        .filterCompletedInstants();
     Stream<HoodieInstant> instants = cleanAndRollbackTimeline.getInstants()
         .collect(Collectors.groupingBy(s -> s.getAction()))
         .entrySet()

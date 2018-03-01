@@ -124,6 +124,14 @@ public class HoodieTestUtils {
     }
   }
 
+  public static final void createInflightCleanFiles(String basePath, String... commitTimes)
+      throws IOException {
+    for (String commitTime : commitTimes) {
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" +
+          HoodieTimeline.makeInflightCleanerFileName(commitTime)).createNewFile();
+    }
+  }
+
   public static final String createNewDataFile(String basePath, String partitionPath,
       String commitTime) throws IOException {
     String fileID = UUID.randomUUID().toString();
