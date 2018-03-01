@@ -19,6 +19,7 @@ package com.uber.hoodie.io;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.Sets;
 import com.uber.hoodie.avro.model.HoodieArchivedMetaEntry;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieLogFile;
@@ -90,11 +91,13 @@ public class TestHoodieCommitArchiveLog {
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
     HoodieTestUtils.createCleanFiles(basePath, "100");
+    HoodieTestUtils.createInflightCleanFiles(basePath, "101");
     HoodieTestUtils.createCleanFiles(basePath, "101");
     HoodieTestUtils.createCleanFiles(basePath, "102");
     HoodieTestUtils.createCleanFiles(basePath, "103");
     HoodieTestUtils.createCleanFiles(basePath, "104");
     HoodieTestUtils.createCleanFiles(basePath, "105");
+    HoodieTestUtils.createInflightCleanFiles(basePath, "106", "107");
 
     //reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline()
@@ -102,6 +105,9 @@ public class TestHoodieCommitArchiveLog {
     List<HoodieInstant> originalCommits = timeline.getInstants().collect(Collectors.toList());
 
     assertEquals("Loaded 6 commits and the count should match", 12, timeline.countInstants());
+
+    // verify in-flight instants before archive
+    verifyInflightInstants(metaClient, 3);
 
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg,
         new HoodieTableMetaClient(fs.getConf(), basePath, true));
@@ -141,6 +147,9 @@ public class TestHoodieCommitArchiveLog {
         "Read commits map should match the originalCommits - commitsLoadedFromArchival",
         originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
         readCommits);
+
+    // verify in-flight instants after archive
+    verifyInflightInstants(metaClient, 3);
   }
 
   @Test
@@ -233,5 +242,10 @@ public class TestHoodieCommitArchiveLog {
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "103")));
   }
 
-
+  private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
+        .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION)).filterInflights();
+    assertEquals("Loaded inflight clean actions and the count should match",
+        expectedTotalInstants, timeline.countInstants());
+  }
 }
