@@ -154,7 +154,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
         metaClient.getBasePath(),
-        operation.getDeltaFilePaths(), readerSchema, maxInstantTime, config.getMaxMemorySizePerCompactionInBytes());
+        operation.getDeltaFilePaths(), readerSchema, maxInstantTime, config.getMaxMemorySizePerCompactionInBytes(),
+        config.getCompactionIOIntensiveSupport());
     if (!scanner.iterator().hasNext()) {
       return Lists.newArrayList();
     }

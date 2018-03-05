@@ -24,14 +24,15 @@ import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.metrics.MetricsReporterType;
+import org.apache.spark.storage.StorageLevel;
+
+import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
-import org.apache.spark.storage.StorageLevel;
 
 /**
  * Class storing configs for the {@link com.uber.hoodie.HoodieWriteClient}
@@ -213,6 +214,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public Long getMaxMemorySizePerCompactionInBytes() {
     return Long
         .parseLong(props.getProperty(HoodieCompactionConfig.MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP));
+  }
+
+  public Boolean getCompactionIOIntensiveSupport() {
+    return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_IO_INTENSIVE_SUPPORT_PROP));
   }
 
   /**

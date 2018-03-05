@@ -105,6 +105,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // Default memory size per compaction, excess spills to disk
   public static final String DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES = String.valueOf(1024*1024*1024L); //1GB
 
+  // used to choose a trade off between IO vs Memory when performing compaction process
+  // Depending on outputfile_size and memory provided, choose true to avoid OOM for large file size + small memory
+  public static final String COMPACTION_IO_INTENSIVE_SUPPORT_PROP = "hooodie.compaction.io.intensive.support";
+  public static final String COMPACTION_IO_INTENSIVE_SUPPORT = "false";
+
   private HoodieCompactionConfig(Properties props) {
     super(props);
   }
@@ -225,6 +230,12 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withCompactionIOIntensiveSupport(Boolean compactionIOIntensiveSupport) {
+      props.setProperty(COMPACTION_IO_INTENSIVE_SUPPORT_PROP,
+          String.valueOf(compactionIOIntensiveSupport));
+      return this;
+    }
+
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP),
@@ -262,6 +273,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
       setDefaultOnCondition(props, !props.containsKey(MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP),
           MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP, DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(COMPACTION_IO_INTENSIVE_SUPPORT_PROP),
+          COMPACTION_IO_INTENSIVE_SUPPORT_PROP, COMPACTION_IO_INTENSIVE_SUPPORT);
 
       HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
       Preconditions.checkArgument(

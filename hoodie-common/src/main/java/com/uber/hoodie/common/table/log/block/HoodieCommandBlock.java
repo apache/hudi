@@ -16,14 +16,13 @@
 
 package com.uber.hoodie.common.table.log.block;
 
-import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+import com.uber.hoodie.common.model.HoodieLogFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import javax.annotation.Nonnull;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Command block issues a specific command to the scanner
@@ -32,29 +31,29 @@ public class HoodieCommandBlock extends HoodieLogBlock {
 
   private final HoodieCommandBlockTypeEnum type;
 
-  public enum HoodieCommandBlockTypeEnum {ROLLBACK_PREVIOUS_BLOCK}
+  private byte [] content;
 
-  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type,
-      Map<LogMetadataType, String> metadata) {
-    super(metadata);
-    this.type = type;
+  public enum HoodieCommandBlockTypeEnum {ROLLBACK_PREVIOUS_BLOCK};
+
+  public HoodieCommandBlock(Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    this(Optional.ofNullable(null), header, footer);
   }
 
-  public HoodieCommandBlock(HoodieCommandBlockTypeEnum type) {
-    this(type, null);
+  public HoodieCommandBlock(Map<HeaderMetadataType, String> header) {
+    this(Optional.ofNullable(null), header, new HashMap<>());
   }
 
-  @Override
-  public byte[] getBytes() throws IOException {
+  private HoodieCommandBlock(byte [] content,
+                             Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(header, footer, Optional.ofNullable(null));
+    this.content = content;
+    this.type = HoodieCommandBlockTypeEnum.values()[Integer.parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
+  }
 
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DataOutputStream output = new DataOutputStream(baos);
-    if (super.getLogMetadata() != null) {
-      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
-    }
-    output.writeInt(type.ordinal());
-    output.close();
-    return baos.toByteArray();
+  private HoodieCommandBlock(Optional<HoodieLogBlockContentLocation> blockLocation,
+                             Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(header, footer, blockLocation);
+    this.type = HoodieCommandBlockTypeEnum.values()[Integer.parseInt(header.get(HeaderMetadataType.COMMAND_BLOCK_TYPE))];
   }
 
   public HoodieCommandBlockTypeEnum getType() {
@@ -66,13 +65,24 @@ public class HoodieCommandBlock extends HoodieLogBlock {
     return HoodieLogBlockType.COMMAND_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
-    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
-    Map<LogMetadataType, String> metadata = null;
-    if (readMetadata) {
-      metadata = HoodieLogBlock.getLogMetadata(dis);
-    }
-    int ordinal = dis.readInt();
-    return new HoodieCommandBlock(HoodieCommandBlockTypeEnum.values()[ordinal], metadata);
+  @Override
+  public byte [] getContentBytes() {
+    return new byte[0];
+  }
+
+  public static HoodieLogBlock getBlock(byte [] content,
+                                        Map<HeaderMetadataType, String> header,
+                                        Map<HeaderMetadataType, String> footer) throws IOException {
+
+    return new HoodieCommandBlock(content, header, footer);
+  }
+
+  public static HoodieLogBlock getBlock(HoodieLogFile logFile,
+                                        long position,
+                                        long blockSize,
+                                        Map<HeaderMetadataType, String> header,
+                                        Map<HeaderMetadataType, String> footer) throws IOException {
+
+    return new HoodieCommandBlock(Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize)), header, footer);
   }
 }

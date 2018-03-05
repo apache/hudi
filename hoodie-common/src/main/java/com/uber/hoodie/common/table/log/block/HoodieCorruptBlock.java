@@ -16,14 +16,14 @@
 
 package com.uber.hoodie.common.table.log.block;
 
-import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.exception.HoodieException;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Corrupt block is emitted whenever the scanner finds the length of the block written at the
@@ -31,26 +31,26 @@ import java.util.Map;
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  private final byte[] corruptedBytes;
+  private byte[] corruptedBytes;
 
-  private HoodieCorruptBlock(byte[] corruptedBytes, Map<LogMetadataType, String> metadata) {
-    super(metadata);
+  private HoodieCorruptBlock(Optional<HoodieLogBlockContentLocation> blockLocation,
+                             Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(header, footer, blockLocation);
+  }
+
+  private HoodieCorruptBlock(byte [] corruptedBytes,
+                             Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(header, footer, Optional.ofNullable(null));
     this.corruptedBytes = corruptedBytes;
   }
 
-  private HoodieCorruptBlock(byte[] corruptedBytes) {
-    this(corruptedBytes, null);
-  }
-
   @Override
-  public byte[] getBytes() throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DataOutputStream output = new DataOutputStream(baos);
-    if (super.getLogMetadata() != null) {
-      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
+  public byte[] getContentBytes() throws IOException {
+
+    if(corruptedBytes == null) {
+      throw new HoodieException("corrupted bytes is empty, use HoodieLazyBlockReader to read contents lazily");
     }
-    output.write(corruptedBytes);
-    return baos.toByteArray();
+    return corruptedBytes;
   }
 
   @Override
@@ -58,26 +58,19 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
     return HoodieLogBlockType.CORRUPT_BLOCK;
   }
 
-  public byte[] getCorruptedBytes() {
-    return corruptedBytes;
+  public static HoodieLogBlock getBlock(byte [] corruptedBytes,
+                                        Map<HeaderMetadataType, String> header,
+                                        Map<HeaderMetadataType, String> footer) throws IOException {
+
+    return new HoodieCorruptBlock(corruptedBytes, header, footer);
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, int blockSize, boolean readMetadata)
-      throws IOException {
-    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
-    Map<LogMetadataType, String> metadata = null;
-    int bytesRemaining = blockSize;
-    if (readMetadata) {
-      try { //attempt to read metadata
-        metadata = HoodieLogBlock.getLogMetadata(dis);
-        bytesRemaining = blockSize - HoodieLogBlock.getLogMetadataBytes(metadata).length;
-      } catch (IOException e) {
-        // unable to read metadata, possibly corrupted
-        metadata = null;
-      }
-    }
-    byte[] corruptedBytes = new byte[bytesRemaining];
-    dis.readFully(corruptedBytes);
-    return new HoodieCorruptBlock(corruptedBytes, metadata);
+  public static HoodieLogBlock getBlock(HoodieLogFile logFile,
+                                        long position,
+                                        long blockSize,
+                                        Map<HeaderMetadataType, String> header,
+                                        Map<HeaderMetadataType, String> footer) throws IOException {
+
+    return new HoodieCorruptBlock(Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize)), header, footer);
   }
 }

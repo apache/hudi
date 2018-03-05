@@ -45,6 +45,20 @@ public interface HoodieLogFormat {
   byte[] MAGIC = new byte[]{'H', 'U', 'D', 'I'};
 
   /**
+   * Magic 6 bytes we put at the start of every block in the log file.
+   * This is added to maintain backwards compatiblity due to lack of log format/block
+   * version in older log files. All new log block will now write this MAGIC value
+   */
+  byte[] MAGIC_V2 = new byte[]{'#', 'H', 'U', 'D', 'I', '#'};
+
+  /**
+   * The current version of the log block/format. Anytime the logBlockFormat changes
+   * this version needs to be bumped and corresponding changes need to be made to
+   * {@link HoodieLogBlockVersion}
+   */
+  int version = 1;
+
+  /**
    * Writer interface to allow appending block to this file format
    */
   interface Writer extends Closeable {
@@ -196,9 +210,8 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
-      boolean readMetadata)
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
-    return new HoodieLogFormatReader(fs, logFile, readerSchema, readMetadata);
+    return new HoodieLogFormatReader(fs, logFile, readerSchema, false);
   }
 }

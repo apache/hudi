@@ -16,48 +16,87 @@
 
 package com.uber.hoodie.common.table.log.block;
 
+import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+import com.uber.hoodie.exception.HoodieException;
+import com.uber.hoodie.exception.HoodieIOException;
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.HashMap;
 import java.util.Map;
-
-import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
-import org.apache.commons.lang3.StringUtils;
+import java.util.Optional;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far
  */
 public class HoodieDeleteBlock extends HoodieLogBlock {
 
-  private final String[] keysToDelete;
+  private String[] keysToDelete;
 
-  public HoodieDeleteBlock(String[] keysToDelete, Map<LogMetadataType, String> metadata) {
-    super(metadata);
-    this.keysToDelete = keysToDelete;
+  private byte[] content;
+
+  public HoodieDeleteBlock(String[] keysToDelete,
+                           Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    this(keysToDelete, null, header, footer);
   }
 
-  public HoodieDeleteBlock(String[] keysToDelete) {
-    this(keysToDelete, null);
+  public HoodieDeleteBlock(String[] keysToDelete,
+                           Map<HeaderMetadataType, String> header) {
+    this(keysToDelete, null, header, new HashMap<>());
+  }
+
+
+  private HoodieDeleteBlock(String[] keysToDelete, Optional<HoodieLogBlockContentLocation> blockLocation,
+                            Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    super(header, footer, blockLocation);
+    this.keysToDelete = keysToDelete;
+    this.content = null;
+  }
+
+  private HoodieDeleteBlock(Optional<HoodieLogBlockContentLocation> blockLocation,
+                            Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    this(null, blockLocation, header, footer);
+  }
+
+  private HoodieDeleteBlock(byte [] content,
+                            Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+    this(null, Optional.empty(), header, footer);
+    this.content = content;
   }
 
   @Override
-  public byte[] getBytes() throws IOException {
+  public byte[] getContentBytes() throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
-    if (super.getLogMetadata() != null) {
-      output.write(HoodieLogBlock.getLogMetadataBytes(super.getLogMetadata()));
-    }
-    byte[] bytesToWrite = StringUtils.join(keysToDelete, ',').getBytes(Charset.forName("utf-8"));
+    byte[] bytesToWrite = StringUtils.join(getKeysToDelete(), ',').getBytes(Charset.forName("utf-8"));
     output.writeInt(bytesToWrite.length);
     output.write(bytesToWrite);
     return baos.toByteArray();
   }
 
   public String[] getKeysToDelete() {
-    return keysToDelete;
+    try {
+      if (keysToDelete == null) {
+        if(content == null) {
+          throw new HoodieException("Content is empty, use HoodieLazyBlockReader to read contents lazily");
+        }
+        SizeAwareDataInputStream dis =
+            new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
+        int dataLength = dis.readInt();
+        byte[] data = new byte[dataLength];
+        dis.readFully(data);
+        this.keysToDelete = new String(data).split(",");
+      }
+      return keysToDelete;
+    } catch(IOException io) {
+      throw new HoodieIOException("Unable to generate keys to delete from block content", io);
+    }
   }
 
   @Override
@@ -65,15 +104,20 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     return HoodieLogBlockType.DELETE_BLOCK;
   }
 
-  public static HoodieLogBlock fromBytes(byte[] content, boolean readMetadata) throws IOException {
-    SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
-    Map<LogMetadataType, String> metadata = null;
-    if (readMetadata) {
-      metadata = HoodieLogBlock.getLogMetadata(dis);
-    }
-    int dataLength = dis.readInt();
-    byte[] data = new byte[dataLength];
-    dis.readFully(data);
-    return new HoodieDeleteBlock(new String(data).split(","), metadata);
+  public static HoodieLogBlock getBlock(byte [] content,
+                                        Map<HeaderMetadataType, String> header,
+                                        Map<HeaderMetadataType, String> footer) throws IOException {
+
+    return new HoodieDeleteBlock(content, header, footer);
+  }
+
+  public static HoodieLogBlock getBlock(HoodieLogFile logFile,
+                                        long position,
+                                        long blockSize,
+                                        Map<HeaderMetadataType, String> header,
+                                        Map<HeaderMetadataType, String> footer) throws IOException {
+
+    return new HoodieDeleteBlock(Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize)),
+        header, footer);
   }
 }
