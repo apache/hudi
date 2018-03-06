@@ -44,6 +44,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = "true";
   public static final String BLOOM_INDEX_USE_CACHING_PROP = "hoodie.bloom.index.use.caching";
   public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
+  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
+  public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
   // ***** HBase Index Configs *****
   public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
@@ -143,6 +145,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBloomIndexInputStorageLevel(String level) {
+      props.setProperty(BLOOM_INDEX_INPUT_STORAGE_LEVEL, level);
+      return this;
+    }
+
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP),
@@ -161,6 +168,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           HBASE_GET_BATCH_SIZE_PROP, String.valueOf(DEFAULT_HBASE_BATCH_SIZE));
       setDefaultOnCondition(props, !props.containsKey(HBASE_PUT_BATCH_SIZE_PROP),
           HBASE_PUT_BATCH_SIZE_PROP, String.valueOf(DEFAULT_HBASE_BATCH_SIZE));
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_INPUT_STORAGE_LEVEL),
+          BLOOM_INDEX_INPUT_STORAGE_LEVEL, DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;
