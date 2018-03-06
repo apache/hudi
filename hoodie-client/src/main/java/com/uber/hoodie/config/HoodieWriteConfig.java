@@ -275,11 +275,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.BUCKETED_INDEX_NUM_BUCKETS_PROP));
   }
 
+  public StorageLevel getBloomIndexInputStorageLevel() {
+    return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
+  }
+
   /**
    * storage properties
    **/
-  public int getParquetMaxFileSize() {
-    return Integer.parseInt(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
+  public long getParquetMaxFileSize() {
+    return Long.parseLong(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
   }
 
   public int getParquetBlockSize() {
