@@ -202,8 +202,7 @@ public class HoodieDeltaStreamer implements Serializable {
       Properties properties = new Properties();
       properties.put(HoodieWriteConfig.TABLE_NAME, cfg.targetTableName);
       HoodieTableMetaClient
-          .initializePathAsHoodieDataset(
-              FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()), cfg.targetBasePath,
+          .initializePathAsHoodieDataset(jssc.hadoopConfiguration(), cfg.targetBasePath,
               properties);
     }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);

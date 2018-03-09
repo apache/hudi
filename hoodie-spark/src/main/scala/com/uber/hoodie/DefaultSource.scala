@@ -190,7 +190,8 @@ class DefaultSource extends RelationProvider
       properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tblName.get);
       properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, storageType);
       properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived");
-      HoodieTableMetaClient.initializePathAsHoodieDataset(fs, path.get, properties);
+      HoodieTableMetaClient.initializePathAsHoodieDataset(
+        sqlContext.sparkContext.hadoopConfiguration, path.get, properties);
     }
 
     // Create a HoodieWriteClient & issue the write.
