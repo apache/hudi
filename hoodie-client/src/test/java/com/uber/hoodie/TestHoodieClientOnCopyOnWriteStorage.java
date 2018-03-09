@@ -105,7 +105,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath.toString(), jsc.hadoopConfiguration());
-    HoodieTestUtils.init(fs, basePath);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     dataGen = new HoodieTestDataGenerator();
   }
 
@@ -1258,7 +1258,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
             .retainFileVersions(1).build()).build();
 
     HoodieTableMetaClient metaClient = HoodieTestUtils
-        .initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
+        .initTableType(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
 
     // Make 3 files, one base file and 2 log files associated with base file
     String file1P0 = HoodieTestUtils.createNewDataFile(basePath, partitionPaths[0], "000");

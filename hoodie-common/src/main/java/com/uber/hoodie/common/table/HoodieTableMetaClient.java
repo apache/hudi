@@ -193,7 +193,7 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Helper method to initialize a given path, as a given storage type and table name
    */
-  public static HoodieTableMetaClient initTableType(FileSystem fs, String basePath,
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
@@ -201,7 +201,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
     }
-    return HoodieTableMetaClient.initializePathAsHoodieDataset(fs, basePath, properties);
+    return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
   }
 
   /**
@@ -210,10 +210,11 @@ public class HoodieTableMetaClient implements Serializable {
    *
    * @return Instance of HoodieTableMetaClient
    */
-  public static HoodieTableMetaClient initializePathAsHoodieDataset(FileSystem fs,
+  public static HoodieTableMetaClient initializePathAsHoodieDataset(Configuration hadoopConf,
       String basePath, Properties props) throws IOException {
     log.info("Initializing " + basePath + " as hoodie dataset " + basePath);
     Path basePathDir = new Path(basePath);
+    final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     if (!fs.exists(basePathDir)) {
       fs.mkdirs(basePathDir);
     }
@@ -239,7 +240,9 @@ public class HoodieTableMetaClient implements Serializable {
       fs.mkdirs(temporaryFolder);
     }
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
+    // We should not use fs.getConf as this might be different from the original configuration
+    // used to create the fs in unit tests
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType()
         + " from " + basePath);
     return metaClient;

@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
@@ -49,14 +50,16 @@ public class TestHoodieCommitArchiveLog {
 
   private String basePath;
   private FileSystem fs;
+  private Configuration hadoopConf;
 
   @Before
   public void init() throws Exception {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
-    fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
-    HoodieTestUtils.init(fs, basePath);
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    fs = FSUtils.getFs(basePath, hadoopConf);
+    HoodieTestUtils.init(hadoopConf, basePath);
   }
 
   @Test
@@ -76,7 +79,7 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
-    HoodieTestUtils.init(fs, basePath);
+    HoodieTestUtils.init(hadoopConf, basePath);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
     HoodieTestDataGenerator.createCommitFile(basePath, "101");
     HoodieTestDataGenerator.createCommitFile(basePath, "102");

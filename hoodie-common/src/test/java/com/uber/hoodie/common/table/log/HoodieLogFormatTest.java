@@ -109,7 +109,7 @@ public class HoodieLogFormatTest {
     assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
     this.partitionPath = new Path(folder.getRoot().getPath());
     this.basePath = folder.getRoot().getParent();
-    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @After

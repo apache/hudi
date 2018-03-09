@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -58,6 +59,7 @@ public class TestHoodieCompactor {
   private HoodieCompactor compactor;
   private transient HoodieTestDataGenerator dataGen = null;
   private transient FileSystem fs;
+  private Configuration hadoopConf;
 
   @Before
   public void init() throws IOException {
@@ -68,8 +70,9 @@ public class TestHoodieCompactor {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
-    fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
-    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    fs = FSUtils.getFs(basePath, hadoopConf);
+    HoodieTestUtils.initTableType(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
 
     dataGen = new HoodieTestDataGenerator();
     compactor = new HoodieRealtimeTableCompactor();
@@ -102,7 +105,7 @@ public class TestHoodieCompactor {
 
   @Test(expected = IllegalArgumentException.class)
   public void testCompactionOnCopyOnWriteFail() throws Exception {
-    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestUtils.initTableType(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig());

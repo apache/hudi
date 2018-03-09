@@ -85,7 +85,7 @@ public class HoodieClientExample {
     FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
     if (!fs.exists(path)) {
       HoodieTableMetaClient
-          .initTableType(fs, tablePath, HoodieTableType.valueOf(tableType), tableName,
+          .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
               HoodieAvroPayload.class.getName());
     }
 

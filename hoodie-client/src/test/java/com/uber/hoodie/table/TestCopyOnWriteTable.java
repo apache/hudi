@@ -76,7 +76,7 @@ public class TestCopyOnWriteTable {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     this.basePath = folder.getRoot().getAbsolutePath();
-    HoodieTestUtils.init(FSUtils.getFs(basePath, jsc.hadoopConfiguration()), basePath);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
   }
 
   @Test
