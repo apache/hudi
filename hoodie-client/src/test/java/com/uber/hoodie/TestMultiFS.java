@@ -103,9 +103,8 @@ public class TestMultiFS implements Serializable {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
 
     // Initialize table and filesystem
-    FileSystem hdfs = FSUtils.getFs(dfsBasePath, jsc.hadoopConfiguration());
     HoodieTableMetaClient
-        .initTableType(hdfs, dfsBasePath, HoodieTableType.valueOf(tableType), tableName,
+        .initTableType(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.valueOf(tableType), tableName,
             HoodieAvroPayload.class.getName());
 
     //Create write client to write some records in
@@ -133,9 +132,8 @@ public class TestMultiFS implements Serializable {
     assertEquals("Should contain 100 records", readRecords.count(), records.size());
 
     // Write to local
-    FileSystem local = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
     HoodieTableMetaClient
-        .initTableType(local, tablePath, HoodieTableType.valueOf(tableType), tableName,
+        .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
             HoodieAvroPayload.class.getName());
     HoodieWriteConfig localConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)

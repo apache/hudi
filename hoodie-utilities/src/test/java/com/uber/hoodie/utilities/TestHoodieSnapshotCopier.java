@@ -25,6 +25,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.File;
 import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
@@ -52,8 +53,9 @@ public class TestHoodieSnapshotCopier {
       basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
       outputPath = rootPath + "/output";
 
-      fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
-      HoodieTestUtils.init(fs, basePath);
+      final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+      fs = FSUtils.getFs(basePath, hadoopConf);
+      HoodieTestUtils.init(hadoopConf, basePath);
       // Start a local Spark job
       SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
       jsc = new JavaSparkContext(conf);

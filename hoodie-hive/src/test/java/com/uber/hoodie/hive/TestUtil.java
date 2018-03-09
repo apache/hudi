@@ -118,7 +118,7 @@ public class TestUtil {
   static void clear() throws IOException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
     HoodieTableMetaClient
-        .initTableType(fileSystem, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
+        .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
             hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
 
     HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(),
@@ -154,7 +154,7 @@ public class TestUtil {
     Path path = new Path(hiveSyncConfig.basePath);
     FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient
-        .initTableType(fileSystem, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
+        .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
             hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
@@ -170,7 +170,7 @@ public class TestUtil {
     Path path = new Path(hiveSyncConfig.basePath);
     FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient
-        .initTableType(fileSystem, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
+        .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
             hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
 
     boolean result = fileSystem.mkdirs(path);

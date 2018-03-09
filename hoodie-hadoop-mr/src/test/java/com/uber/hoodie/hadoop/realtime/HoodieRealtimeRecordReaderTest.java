@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
@@ -66,12 +67,13 @@ public class HoodieRealtimeRecordReaderTest {
 
   private JobConf jobConf;
   private FileSystem fs;
+  private Configuration hadoopConf;
 
   @Before
   public void setUp() {
     jobConf = new JobConf();
-    fs = FSUtils
-        .getFs(basePath.getRoot().getAbsolutePath(), HoodieTestUtils.getDefaultHadoopConf());
+    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    fs = FSUtils.getFs(basePath.getRoot().getAbsolutePath(), hadoopConf);
   }
 
   @Rule
@@ -105,7 +107,7 @@ public class HoodieRealtimeRecordReaderTest {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils
-        .initTableType(fs, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+        .initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     File partitionDir = InputFormatTestUtil
         .prepareParquetDataset(basePath, schema, 1, 100, commitTime);
@@ -163,7 +165,7 @@ public class HoodieRealtimeRecordReaderTest {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
     HoodieTestUtils
-        .initTableType(fs, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+        .initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;

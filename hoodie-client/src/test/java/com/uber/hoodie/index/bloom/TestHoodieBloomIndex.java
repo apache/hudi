@@ -88,7 +88,7 @@ public class TestHoodieBloomIndex {
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    HoodieTestUtils.init(fs, basePath);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     // We have some records to be tagged (two different partitions)
     schemaStr = IOUtils.toString(getClass().getResourceAsStream("/exampleSchema.txt"), "UTF-8");
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));

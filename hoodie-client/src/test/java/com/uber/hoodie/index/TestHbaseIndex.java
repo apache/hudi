@@ -112,7 +112,7 @@ public class TestHbaseIndex {
     basePath = folder.getRoot().getAbsolutePath();
     // Initialize table
     metaClient = HoodieTableMetaClient
-        .initTableType(utility.getTestFileSystem(), basePath, HoodieTableType.COPY_ON_WRITE,
+        .initTableType(utility.getConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE,
             tableName, HoodieTableConfig.DEFAULT_PAYLOAD_CLASS);
   }
 
