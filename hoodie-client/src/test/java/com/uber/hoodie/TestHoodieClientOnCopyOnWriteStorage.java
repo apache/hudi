@@ -20,6 +20,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Iterables;
 import com.uber.hoodie.common.HoodieCleanStat;
@@ -48,13 +50,13 @@ import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,6 +67,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
@@ -216,6 +219,36 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
   @Test
   public void testUpserts() throws Exception {
     testUpsertsInternal(getConfig());
+  }
+
+  @Test
+  public void testDeduplication() throws Exception {
+    String newCommitTime = "001";
+
+    String recordKey = UUID.randomUUID().toString();
+    HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
+    HoodieRecord recordOne = new HoodieRecord(keyOne,
+        HoodieTestDataGenerator.generateRandomValue(keyOne, newCommitTime));
+
+    HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
+    HoodieRecord recordTwo = new HoodieRecord(keyTwo,
+        HoodieTestDataGenerator.generateRandomValue(keyTwo, newCommitTime));
+
+    JavaRDD<HoodieRecord> records = jsc.parallelize(Arrays.asList(recordOne, recordTwo), 1);
+
+    // dedup should be done based on recordKey only
+    HoodieWriteClient clientWithDummyGlobalIndex = getWriteClientWithDummyIndex(true);
+    assertEquals(1, clientWithDummyGlobalIndex.deduplicateRecords(records, 1).collect().size());
+
+    // dedup should be done based on both recordKey and partitionPath
+    HoodieWriteClient clientWithDummyNonGlobalIndex = getWriteClientWithDummyIndex(false);
+    assertEquals(2, clientWithDummyNonGlobalIndex.deduplicateRecords(records, 1).collect().size());
+  }
+
+  private HoodieWriteClient getWriteClientWithDummyIndex(final boolean isGlobal) throws Exception {
+    HoodieIndex index = mock(HoodieIndex.class);
+    when(index.isGlobal()).thenReturn(isGlobal);
+    return new HoodieWriteClient(jsc, getConfigBuilder().build(), false, index);
   }
 
   private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig) throws Exception {
