@@ -24,6 +24,8 @@ import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.List;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
@@ -33,6 +35,8 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final Schema readerSchema;
   private final boolean readBlocksLazily;
   private final boolean reverseLogReader;
+
+  private final static Logger log = LogManager.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles,
                                   Schema readerSchema, boolean readBlocksLazily, boolean reverseLogReader) throws IOException {
@@ -77,6 +81,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
+      log.info("Moving to the next reader for logfile " + currentReader.getLogFile());
       return this.currentReader.hasNext();
     }
     return false;
@@ -84,8 +89,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   @Override
   public HoodieLogBlock next() {
-    HoodieLogBlock block = currentReader.next();
-    return block;
+    return currentReader.next();
   }
 
   @Override

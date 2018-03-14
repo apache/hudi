@@ -374,6 +374,7 @@ public class HoodieLogFormatTest {
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
 
+    reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
     assertEquals("Read records size should be equal to the written records size",
@@ -381,6 +382,7 @@ public class HoodieLogFormatTest {
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords2,
         dataBlockRead.getRecords());
 
+    reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
     assertEquals("Read records size should be equal to the written records size",
