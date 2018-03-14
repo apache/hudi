@@ -133,6 +133,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       stat.setFileId(status.getFileId());
       stat.setPaths(new Path(config.getBasePath()), path, tempPath);
       stat.setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
+      stat.setTotalUncompressedWriteBytes(storageWriter.getBytesWritten());
       stat.setTotalWriteErrors(status.getFailedRecords().size());
       status.setStat(stat);
 

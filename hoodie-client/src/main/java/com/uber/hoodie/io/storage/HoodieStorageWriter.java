@@ -29,4 +29,6 @@ public interface HoodieStorageWriter<R extends IndexedRecord> {
   void close() throws IOException;
 
   void writeAvro(String key, R oldRecord) throws IOException;
+
+  long getBytesWritten();
 }

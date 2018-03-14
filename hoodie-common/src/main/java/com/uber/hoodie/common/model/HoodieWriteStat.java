@@ -105,6 +105,9 @@ public class HoodieWriteStat implements Serializable {
   @Nullable
   private Long totalRecordsToBeUpdate;
 
+  @Nullable
+  private long totalUncompressedWriteBytes;
+
   public HoodieWriteStat() {
     // called by jackson json lib
   }
@@ -211,6 +214,14 @@ public class HoodieWriteStat implements Serializable {
 
   public String getTempPath() {
     return this.tempPath;
+  }
+
+  public long getTotalUncompressedWriteBytes() {
+    return totalUncompressedWriteBytes;
+  }
+
+  public void setTotalUncompressedWriteBytes(long totalUncompressedWriteBytes) {
+    this.totalUncompressedWriteBytes = totalUncompressedWriteBytes;
   }
 
   /**
