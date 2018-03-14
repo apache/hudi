@@ -240,14 +240,12 @@ public class HoodieCompactedLogRecordScanner implements
 
   /**
    * Iterate over the GenericRecord in the block, read the hoodie key and partition path and merge
-   * with the application specific payload if the same key was found before Sufficient to just merge
-   * the log records since the base data is merged on previous compaction
+   * with the application specific payload if the same key was found before. Sufficient to just merge
+   * the log records since the base data is merged on previous compaction.
+   * Finally, merge this log block with the accumulated records
    */
-  private Map<String, HoodieRecord<? extends HoodieRecordPayload>> loadRecordsFromBlock(
+  private Map<String, HoodieRecord<? extends HoodieRecordPayload>> merge(
       HoodieAvroDataBlock dataBlock) throws IOException {
-    // TODO (NA) - Instead of creating a new HashMap use the spillable map
-    Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock = Maps
-        .newHashMap();
     // TODO (NA) - Implemnt getRecordItr() in HoodieAvroDataBlock and use that here
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
@@ -256,19 +254,19 @@ public class HoodieCompactedLogRecordScanner implements
           .toString();
       HoodieRecord<? extends HoodieRecordPayload> hoodieRecord =
           SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
-      if (recordsFromLastBlock.containsKey(key)) {
+      if (records.containsKey(key)) {
         // Merge and store the merged record
-        HoodieRecordPayload combinedValue = recordsFromLastBlock.get(key).getData()
+        HoodieRecordPayload combinedValue = records.get(key).getData()
             .preCombine(hoodieRecord.getData());
-        recordsFromLastBlock
+        records
             .put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
                 combinedValue));
       } else {
         // Put the record as is
-        recordsFromLastBlock.put(key, hoodieRecord);
+        records.put(key, hoodieRecord);
       }
     });
-    return recordsFromLastBlock;
+    return records;
   }
 
   /**
@@ -277,11 +275,12 @@ public class HoodieCompactedLogRecordScanner implements
   private void merge(Map<String, HoodieRecord<? extends HoodieRecordPayload>> records,
       Deque<HoodieLogBlock> lastBlocks) throws IOException {
     while (!lastBlocks.isEmpty()) {
+      log.info("Number of remaining logblocks to merge " + lastBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = lastBlocks.pollLast();
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
-          merge(records, loadRecordsFromBlock((HoodieAvroDataBlock) lastBlock));
+          merge((HoodieAvroDataBlock) lastBlock);
           break;
         case DELETE_BLOCK:
           // TODO : If delete is the only block written and/or records are present in parquet file
@@ -293,25 +292,6 @@ public class HoodieCompactedLogRecordScanner implements
           break;
       }
     }
-  }
-
-  /**
-   * Merge the records read from a single data block with the accumulated records
-   */
-  private void merge(Map<String, HoodieRecord<? extends HoodieRecordPayload>> records,
-      Map<String, HoodieRecord<? extends HoodieRecordPayload>> recordsFromLastBlock) {
-    recordsFromLastBlock.forEach((key, hoodieRecord) -> {
-      if (records.containsKey(key)) {
-        // Merge and store the merged record
-        HoodieRecordPayload combinedValue = records.get(key).getData()
-            .preCombine(hoodieRecord.getData());
-        records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()),
-            combinedValue));
-      } else {
-        // Put the record as is
-        records.put(key, hoodieRecord);
-      }
-    });
   }
 
   @Override
