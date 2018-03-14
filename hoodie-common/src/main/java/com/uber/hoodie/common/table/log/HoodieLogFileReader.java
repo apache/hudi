@@ -56,7 +56,6 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private static final byte[] oldMagicBuffer = new byte[4];
   private static final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
-  private HoodieLogBlock nextBlock = null;
   private LogFormatVersion nextBlockVersion;
   private boolean readBlockLazily;
   private long reverseLogFilePosition;
@@ -271,8 +270,8 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
       if (isEOF) {
         return false;
       }
-      this.nextBlock = readBlock();
-      return nextBlock != null;
+      // If not hasNext(), we either we reach EOF or throw an exception on invalid magic header
+      return true;
     } catch (IOException e) {
       throw new HoodieIOException("IOException when reading logfile " + logFile, e);
     }
@@ -322,11 +321,12 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   @Override
   public HoodieLogBlock next() {
-    if (nextBlock == null) {
-      // may be hasNext is not called
-      hasNext();
+    try {
+      // hasNext() must be called before next()
+      return readBlock();
+    } catch(IOException io) {
+      throw new HoodieIOException("IOException when reading logblock from log file " + logFile, io);
     }
-    return nextBlock;
   }
 
   /**
@@ -378,7 +378,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     boolean hasNext = hasNext();
     reverseLogFilePosition -= blockSize;
     lastReverseLogFilePosition = reverseLogFilePosition;
-    return this.nextBlock;
+    return next();
   }
 
   /**
