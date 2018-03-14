@@ -149,8 +149,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         recordsDeleted++;
       }
 
-      hoodieRecord.deflate();
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
+      // deflate record payload after recording success. This will help users access payload as a part of marking
+      // record successful.
+      hoodieRecord.deflate();
       return avroRecord;
     } catch (Exception e) {
       logger.error("Error writing record  " + hoodieRecord, e);

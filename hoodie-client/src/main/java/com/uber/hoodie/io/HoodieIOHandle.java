@@ -50,8 +50,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     this.fs = hoodieTable.getMetaClient().getFs();
     this.hoodieTable = hoodieTable;
     this.hoodieTimeline = hoodieTable.getCompletedCommitTimeline();
-    this.schema =
-        HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
+    this.schema = createHoodieWriteSchema(config);
   }
 
   public Path makeNewPath(String partitionPath, int taskPartitionId, String fileName) {
@@ -100,5 +99,9 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
 
   public Schema getSchema() {
     return schema;
+  }
+
+  public static Schema createHoodieWriteSchema(HoodieWriteConfig config) {
+    return HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
   }
 }
