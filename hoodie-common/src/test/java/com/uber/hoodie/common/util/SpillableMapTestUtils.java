@@ -36,8 +36,8 @@ public class SpillableMapTestUtils {
     iRecords
         .stream()
         .forEach(r -> {
-          String key = ((GenericRecord)r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = ((GenericRecord)r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
           recordKeys.add(key);
           records.put(key, new HoodieRecord<>(new HoodieKey(key, partitionPath),
               new HoodieAvroPayload(Optional.of((GenericRecord) r))));

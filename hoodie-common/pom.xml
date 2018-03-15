@@ -144,5 +144,10 @@
       <version>1.16.0</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+        <groupId>com.twitter.common</groupId>
+        <artifactId>objectsize</artifactId>
+        <version>0.0.12</version>
+    </dependency>
   </dependencies>
 </project>

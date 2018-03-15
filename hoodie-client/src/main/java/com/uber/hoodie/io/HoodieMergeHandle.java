@@ -25,23 +25,26 @@ import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
+import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
+import com.uber.hoodie.common.util.collection.converter.StringConverter;
+import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.io.storage.HoodieStorageWriter;
 import com.uber.hoodie.io.storage.HoodieStorageWriterFactory;
 import com.uber.hoodie.table.HoodieTable;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Optional;
-
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
+
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
 
 @SuppressWarnings("Duplicates")
 public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
@@ -145,9 +148,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
    * @return
    */
   private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
-    // Load the new records in a map
-    // TODO (NA) instantiate a ExternalSpillableMap
-    this.keyToNewRecords = new HashMap<>();
+    try {
+      // Load the new records in a map
+      logger.info("MaxMemoryPerPartitionMerge => " + config.getMaxMemoryPerPartitionMerge());
+      this.keyToNewRecords = new ExternalSpillableMap<>(config.getMaxMemoryPerPartitionMerge(),
+          Optional.empty(), new StringConverter(), new HoodieRecordConverter(schema, config.getPayloadClass()));
+    } catch(IOException io) {
+      throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
+    }
     String partitionPath = null;
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
@@ -156,6 +164,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       // update the new location of the record, so we know where to find it next
       record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
     }
+    logger.debug("Number of entries in MemoryBasedMap => " +
+        ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
+        + "Total size in bytes of MemoryBasedMap => " +
+        ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize()
+        + "Number of entries in DiskBasedMap => " +
+        ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries()
+        + "Size of file spilled to disk => " +
+        ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
+
     return partitionPath;
   }
 

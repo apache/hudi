@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.common.table.log;
 
-import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -29,8 +28,9 @@ import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.SpillableMapUtils;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
+import com.uber.hoodie.common.util.collection.converter.StringConverter;
+import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
 import com.uber.hoodie.exception.HoodieIOException;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
@@ -102,8 +103,8 @@ public class HoodieCompactedLogRecordScanner implements
 
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
-      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, readerSchema,
-          payloadClassFQN, Optional.empty());
+      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, Optional.empty(),
+          new StringConverter(), new HoodieRecordConverter(readerSchema, payloadClassFQN));
       // iterate over the paths
       HoodieLogFormatReader logFormatReaderWrapper =
           new HoodieLogFormatReader(fs,

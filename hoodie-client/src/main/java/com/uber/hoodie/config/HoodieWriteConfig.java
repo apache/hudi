@@ -48,7 +48,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
   private static final String WRITE_BUFFER_LIMIT_BYTES = "hoodie.write.buffer.limit.bytes";
-  private static final String DEFAULT_WRITE_BUFFER_LIMIT_BYTES = String.valueOf(4*1024*1024);
+  private static final String DEFAULT_WRITE_BUFFER_LIMIT_BYTES = String.valueOf(4 * 1024 * 1024);
   private static final String COMBINE_BEFORE_INSERT_PROP = "hoodie.combine.before.insert";
   private static final String DEFAULT_COMBINE_BEFORE_INSERT = "false";
   private static final String COMBINE_BEFORE_UPSERT_PROP = "hoodie.combine.before.upsert";
@@ -108,7 +108,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getWriteBufferLimitBytes() {
-    return Integer.parseInt(props.getProperty(WRITE_BUFFER_LIMIT_BYTES, DEFAULT_WRITE_BUFFER_LIMIT_BYTES));
+    return Integer
+        .parseInt(props.getProperty(WRITE_BUFFER_LIMIT_BYTES, DEFAULT_WRITE_BUFFER_LIMIT_BYTES));
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -217,17 +218,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         .parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB_PROP));
   }
 
-  public Long getMaxMemorySizePerCompactionInBytes() {
-    return Long
-        .parseLong(props.getProperty(HoodieCompactionConfig.MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP));
-  }
-
   public Boolean getCompactionLazyBlockReadEnabled() {
-    return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP));
+    return Boolean
+        .valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP));
   }
 
   public Boolean getCompactionReverseLogReadEnabled() {
-    return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
+    return Boolean.valueOf(
+        props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
+  }
+
+  public String getPayloadClass() {
+    return props.getProperty(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
 
   /**
@@ -283,7 +285,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public StorageLevel getBloomIndexInputStorageLevel() {
-    return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
+    return StorageLevel
+        .fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
   }
 
   /**
@@ -302,7 +305,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getLogFileDataBlockMaxSize() {
-    return Integer.parseInt(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES));
+    return Integer
+        .parseInt(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES));
   }
 
   public int getLogFileMaxSize() {
@@ -312,7 +316,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public double getParquetCompressionRatio() {
     return Double.valueOf(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO));
   }
-
 
   /**
    * metrics properties
@@ -342,6 +345,28 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return new Builder();
   }
 
+  /**
+   * memory configs
+   */
+  public Double getMaxMemoryFractionPerPartitionMerge() {
+    return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP));
+  }
+
+  public Double getMaxMemoryFractionPerCompaction() {
+    return Double
+        .valueOf(
+            props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP));
+  }
+
+  public Long getMaxMemoryPerPartitionMerge() {
+    return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP));
+  }
+
+  public Long getMaxMemoryPerCompaction() {
+    return Long
+        .valueOf(
+            props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP));
+  }
 
   public static class Builder {
 
@@ -351,6 +376,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isCompactionConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isAutoCommit = true;
+    private boolean isMemoryConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       FileReader reader = new FileReader(propertiesFile);
@@ -501,9 +527,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
           HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE),
-          HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE);
+          HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE,
+          DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE),
-          HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE, DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE);
+          HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE,
+          DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE);
       setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM),
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
 
@@ -516,6 +544,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet,
           HoodieMetricsConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isMemoryConfigSet,
+          HoodieMemoryConfig.newBuilder().fromProperties(props).build());
       return config;
     }
   }
