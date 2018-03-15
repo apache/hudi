@@ -1,0 +1,8 @@
+{"namespace": "com.uber.hoodie.example",
+ "type": "record",
+ "name": "SpecificRecordExampleValue",
+ "fields": [
+     {"name": "id", "type": "string"},
+     {"name": "name", "type": "string"}
+ ]
+}

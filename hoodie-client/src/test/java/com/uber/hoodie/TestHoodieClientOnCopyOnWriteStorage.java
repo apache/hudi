@@ -27,6 +27,7 @@ import com.google.common.collect.Iterables;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -48,8 +49,10 @@ import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.example.SpecificRecordExampleValue;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.FileInputStream;
@@ -65,9 +68,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
@@ -81,6 +86,7 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.util.AccumulatorV2;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import scala.Option;
@@ -92,8 +98,11 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
   private transient SQLContext sqlContext;
   private transient FileSystem fs;
   private String basePath = null;
-  private transient HoodieTestDataGenerator dataGen = null;
+  private transient HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
   private String[] partitionPaths = {"2016/01/01", "2016/02/02", "2016/06/02"};
+
+  @Rule
+  public TemporaryFolder folder = new TemporaryFolder();
 
   @Before
   public void init() throws IOException {
@@ -103,27 +112,34 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     //SQLContext stuff
     sqlContext = new SQLContext(jsc);
 
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath.toString(), jsc.hadoopConfiguration());
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
-    dataGen = new HoodieTestDataGenerator();
+  }
+
+  @After
+  public void clean() {
+    if (jsc != null) {
+      jsc.stop();
+    }
   }
 
 
   private HoodieWriteConfig getConfig() {
-    return getConfigBuilder().build();
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, "test-trip-table").build();
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, "test-trip-table");
+  }
+
+  private HoodieWriteConfig.Builder getConfigBuilder(String schemaString, String tableName) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaString)
+        .withParallelism(2, 2)
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
-        .forTable("test-trip-table").withIndexConfig(
+        .forTable(tableName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
   }
 
@@ -1552,6 +1568,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     assertEquals("All temp files are deleted.",0, getTotalTempFiles());
   }
 
+  @Test
   public void testCommitWritesRelativePaths() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
@@ -1596,6 +1613,25 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     }
   }
 
+  @Test
+  public void shouldCompactTableWithSpecificRecord() throws Exception {
+    HoodieWriteConfig config =
+        getConfigBuilder(SpecificRecordExampleValue.getClassSchema().toString(),
+            "example-specificvalue-table").build();
+    HoodieWriteClient client = new HoodieWriteClient<>(jsc, config);
+
+    insertNewDataSpecificRecord(client, 10);
+    // should compact small file
+    boolean success = insertNewDataSpecificRecord(client, 10);
+    assertTrue(success);
+  }
+
+  private boolean insertNewDataSpecificRecord(HoodieWriteClient client, int nb) throws IOException {
+    String commitTime = client.startCommit();
+    JavaRDD<WriteStatus> insert = client.insert(jsc.parallelize(dataGen.generateInsertsSpecificRecord(nb)), commitTime);
+    return client.commit(commitTime, insert);
+  }
+
   private HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo,
       String partitionPath) {
     return hoodieCleanStatsTwo.stream()
@@ -1631,13 +1667,4 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     return fs.listStatus(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME)).length;
   }
 
-  @After
-  public void clean() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
-  }
 }
