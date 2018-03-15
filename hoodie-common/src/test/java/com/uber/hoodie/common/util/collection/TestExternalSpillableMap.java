@@ -16,6 +16,10 @@
 
 package com.uber.hoodie.common.util.collection;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -24,13 +28,8 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.junit.FixMethodOrder;
-import org.junit.Test;
-import org.junit.runners.MethodSorters;
-
+import com.uber.hoodie.common.util.collection.converter.StringConverter;
+import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -39,10 +38,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.junit.FixMethodOrder;
+import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class TestExternalSpillableMap {
@@ -51,17 +52,19 @@ public class TestExternalSpillableMap {
 
   @Test
   public void simpleInsertTest() throws IOException, URISyntaxException {
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>
-            (16L, HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema()),
-                HoodieAvroPayload.class.getName(), Optional.empty()); //16B
+            (16L, Optional.empty(), new StringConverter(),
+                new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
     List<HoodieRecord> oRecords = new ArrayList<>();
-    while(itr.hasNext()) {
+    while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       oRecords.add(rec);
       assert recordKeys.contains(rec.getRecordKey());
@@ -72,16 +75,18 @@ public class TestExternalSpillableMap {
   public void testSimpleUpsert() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    String payloadClazz = HoodieAvroPayload.class.getName();
+
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>
-            (16L, schema,
-                HoodieAvroPayload.class.getName(), Optional.of(FAILURE_OUTPUT_PATH)); //16B
+            (16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+                new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    while(itr.hasNext()) {
+    while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       assert recordKeys.contains(rec.getRecordKey());
     }
@@ -99,8 +104,8 @@ public class TestExternalSpillableMap {
     updatedRecords.stream().forEach(record -> {
       HoodieRecord rec = records.get(((GenericRecord) record).get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
       try {
-        assertEquals(rec.getData().getInsertValue(schema).get(),record);
-      } catch(IOException io) {
+        assertEquals(rec.getData().getInsertValue(schema).get(), record);
+      } catch (IOException io) {
         throw new UncheckedIOException(io);
       }
     });
@@ -109,25 +114,28 @@ public class TestExternalSpillableMap {
   @Test
   public void testAllMapOperations() throws IOException, URISyntaxException {
 
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    String payloadClazz = HoodieAvroPayload.class.getName();
+
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>
-            (16L, HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema()),
-                HoodieAvroPayload.class.getName(), Optional.empty()); //16B
+            (16L, Optional.empty(), new StringConverter(),
+                new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     IndexedRecord inMemoryRecord = iRecords.get(0);
-    String ikey = ((GenericRecord)inMemoryRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String iPartitionPath = ((GenericRecord)inMemoryRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    String ikey = ((GenericRecord) inMemoryRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String iPartitionPath = ((GenericRecord) inMemoryRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
     HoodieRecord inMemoryHoodieRecord = new HoodieRecord<>(new HoodieKey(ikey, iPartitionPath),
-        new HoodieAvroPayload(Optional.of((GenericRecord)inMemoryRecord)));
+        new HoodieAvroPayload(Optional.of((GenericRecord) inMemoryRecord)));
 
     IndexedRecord onDiskRecord = iRecords.get(99);
-    String dkey = ((GenericRecord)onDiskRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String dPartitionPath = ((GenericRecord)onDiskRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    String dkey = ((GenericRecord) onDiskRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String dPartitionPath = ((GenericRecord) onDiskRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
     HoodieRecord onDiskHoodieRecord = new HoodieRecord<>(new HoodieKey(dkey, dPartitionPath),
-        new HoodieAvroPayload(Optional.of((GenericRecord)onDiskRecord)));
+        new HoodieAvroPayload(Optional.of((GenericRecord) onDiskRecord)));
     // assert size
     assert records.size() == 100;
     // get should return the same HoodieKey and same value
@@ -162,16 +170,19 @@ public class TestExternalSpillableMap {
 
   @Test(expected = IOException.class)
   public void simpleTestWithException() throws IOException, URISyntaxException {
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    String payloadClazz = HoodieAvroPayload.class.getName();
+
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>
-            (16L, HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema()),
-                HoodieAvroPayload.class.getName(), Optional.of(FAILURE_OUTPUT_PATH)); //16B
+            (16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+                new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    while(itr.hasNext()) {
+    while (itr.hasNext()) {
       throw new IOException("Testing failures...");
     }
   }
@@ -183,17 +194,19 @@ public class TestExternalSpillableMap {
   }
 
   @Test
-  public void testDataCorrectnessInMapAndDisk() throws IOException, URISyntaxException {
+  public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk() throws IOException, URISyntaxException {
 
-    Schema schema = SchemaTestUtil.getSimpleSchema();
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
+    String payloadClazz = HoodieAvroPayload.class.getName();
+
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>
-            (16L, HoodieAvroUtils.addMetadataFields(schema),
-                HoodieAvroPayload.class.getName(), Optional.of(FAILURE_OUTPUT_PATH)); //16B
+            (16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+                new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
-    while(records.getDiskBasedMapNumEntries() < 1) {
+    while (records.getDiskBasedMapNumEntries() < 1) {
       List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
       recordKeys.addAll(SpillableMapTestUtils.upsertRecords(iRecords, records));
     }
@@ -202,7 +215,6 @@ public class TestExternalSpillableMap {
     String key = recordKeys.get(0);
     HoodieRecord record = records.get(key);
     List<IndexedRecord> recordsToUpdate = new ArrayList<>();
-    schema = HoodieAvroUtils.addMetadataFields(schema);
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 
     String newCommitTime = HoodieActiveTimeline.createNewCommitTime();
@@ -235,7 +247,72 @@ public class TestExternalSpillableMap {
     gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
     // The record returned for this key should have the updated commitTime
     assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
+  }
 
+  @Test
+  public void testDataCorrectnessWithoutHoodieMetadata() throws IOException, URISyntaxException {
+
+    Schema schema = SchemaTestUtil.getSimpleSchema();
+    String payloadClazz = HoodieAvroPayload.class.getName();
+
+    ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
+        new ExternalSpillableMap<>
+            (16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+                new HoodieRecordConverter(schema, payloadClazz)); //16B
+
+    List<String> recordKeys = new ArrayList<>();
+    // Ensure we spill to disk
+    while (records.getDiskBasedMapNumEntries() < 1) {
+      List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 100);
+      hoodieRecords.stream().forEach(r -> {
+        records.put(r.getRecordKey(), r);
+        recordKeys.add(r.getRecordKey());
+      });
+    }
+
+    // Get a record from the in-Memory map
+    String key = recordKeys.get(0);
+    HoodieRecord record = records.get(key);
+    // Get the field we want to update
+    String fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING)
+        .findAny().get().name();
+    // Use a new value to update this field
+    String newValue = "update1";
+    List<HoodieRecord> recordsToUpdate = new ArrayList<>();
+    recordsToUpdate.add(record);
+
+    List<HoodieRecord> updatedRecords =
+        SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(recordsToUpdate, schema, fieldName, newValue);
+
+    // Upsert this updated record
+    updatedRecords.stream().forEach(r -> {
+      records.put(r.getRecordKey(), r);
+    });
+    GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
+    // The record returned for this key should have the updated value for the field name
+    assertEquals(gRecord.get(fieldName).toString(), newValue);
+
+    // Get a record from the disk based map
+    key = recordKeys.get(recordKeys.size() - 1);
+    record = records.get(key);
+    // Get the field we want to update
+    fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING)
+        .findAny().get().name();
+    // Use a new value to update this field
+    newValue = "update2";
+    recordsToUpdate = new ArrayList<>();
+    recordsToUpdate.add(record);
+
+    updatedRecords =
+        SchemaTestUtil.updateHoodieTestRecordsWithoutHoodieMetadata(recordsToUpdate, schema, fieldName, newValue);
+
+    // Upsert this updated record
+    updatedRecords.stream().forEach(r -> {
+      records.put(r.getRecordKey(), r);
+    });
+    gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
+    // The record returned for this key should have the updated value for the field name
+    assertEquals(gRecord.get(fieldName).toString(), newValue);
   }
 
   // TODO : come up with a performance eval test for spillableMap

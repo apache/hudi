@@ -44,6 +44,10 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
     super(record, orderingVal);
   }
 
+  public OverwriteWithLatestAvroPayload(Optional<GenericRecord> record) {
+    this(record.get(), (record1) -> 0); // natural order
+  }
+
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
     // pick the payload with greatest ordering value

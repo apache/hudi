@@ -98,11 +98,12 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         .getTimelineOfActions(
             Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.ROLLBACK_ACTION,
                 HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
 
+        .filterCompletedInstants().lastInstant().get().getTimestamp();
+    log.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
         metaClient.getBasePath(), operation.getDeltaFilePaths(), readerSchema, maxInstantTime,
-        config.getMaxMemorySizePerCompactionInBytes(), config.getCompactionLazyBlockReadEnabled(),
+        config.getMaxMemoryPerCompaction(), config.getCompactionLazyBlockReadEnabled(),
         config.getCompactionReverseLogReadEnabled());
     if (!scanner.iterator().hasNext()) {
       return Lists.<WriteStatus>newArrayList();

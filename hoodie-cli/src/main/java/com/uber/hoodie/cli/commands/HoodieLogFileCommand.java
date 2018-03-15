@@ -31,6 +31,7 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.config.HoodieCompactionConfig;
+import com.uber.hoodie.config.HoodieMemoryConfig;
 import com.uber.hoodie.hive.util.SchemaUtil;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -173,7 +174,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           HoodieCLI.tableMetadata.getBasePath(), logFilePaths, readerSchema,
           HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get()
               .getTimestamp(),
-          Long.valueOf(HoodieCompactionConfig.DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES),
+          Long.valueOf(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES),
           Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
           Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED));
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {

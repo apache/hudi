@@ -19,7 +19,6 @@ package com.uber.hoodie.io;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -65,10 +64,12 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
         FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName));
   }
 
-  public Path makeTempPath(String partitionPath, int taskPartitionId, String fileName, int stageId, long taskAttemptId) {
+  public Path makeTempPath(String partitionPath, int taskPartitionId, String fileName, int stageId,
+      long taskAttemptId) {
     Path path = new Path(config.getBasePath(), HoodieTableMetaClient.TEMPFOLDER_NAME);
     return new Path(path.toString(),
-        FSUtils.makeTempDataFileName(partitionPath, commitTime, taskPartitionId, fileName, stageId, taskAttemptId));
+        FSUtils.makeTempDataFileName(partitionPath, commitTime, taskPartitionId, fileName, stageId,
+            taskAttemptId));
   }
 
   /**
