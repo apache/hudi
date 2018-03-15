@@ -23,7 +23,7 @@ summary: "Here we list all possible configurations and what they mean"
     <span style="color:grey">Should HoodieWriteClient autoCommit after insert and upsert. The client can choose to turn off auto-commit and commit on a "defined success condition"</span>
     - [withAssumeDatePartitioning](#withAssumeDatePartitioning) (assumeDatePartitioning = false) <br/>
         <span style="color:grey">Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually </span>
-    
+
     - [withIndexConfig](#withIndexConfig) (HoodieIndexConfig) <br/>
     <span style="color:grey">Hoodie uses a index to help find the FileID which contains an incoming record key. This is pluggable to have a external index (HBase) or use the default bloom filter stored in the Parquet files</span>
         - [withIndexType](#withIndexType) (indexType = BLOOM) <br/>
@@ -80,8 +80,6 @@ summary: "Here we list all possible configurations and what they mean"
         <span style="color:grey">Number of max delta commits to keep before triggering an inline compaction</span>
         - [withCompactionReverseLogReadEnabled](#withCompactionReverseLogReadEnabled) (false) <br/>
         <span style="color:grey">HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. If this config is set to true, the Reader reads the logfile in reverse direction, from pos=file_length to pos=0</span>
-        - [withMaxMemorySizePerCompactionInBytes](#withMaxMemorySizePerCompactionInBytes) (maxMemorySizePerCompactionInBytes = 1GB) <br/>
-        <span style="color:grey">HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then merges these log blocks and records. At any point, the number of entries in a log block can be less than or equal to the number of entries in the corresponding parquet file. This can lead to OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to set the max allowable inMemory footprint of the spillable map.</span>
 
     - [withMetricsConfig](#withMetricsConfig) (HoodieMetricsConfig) <br/>
     <span style="color:grey">Hoodie publishes metrics on every commit, clean, rollback etc.</span>
@@ -95,6 +93,13 @@ summary: "Here we list all possible configurations and what they mean"
         <span style="color:grey">Graphite port to connect to</span>
         - [usePrefix](#usePrefix) () <br/>
         <span style="color:grey">Standard prefix for all metrics</span>
+
+    - [withMemoryConfig](#withMemoryConfig) (HoodieMemoryConfig) <br/>
+    <span style="color:grey">Memory related configs</span>
+        - [withMaxMemoryFractionPerPartitionMerge](#withMaxMemoryFractionPerPartitionMerge) (maxMemoryFractionPerPartitionMerge = 0.6) <br/>
+        <span style="color:grey">This fraction is multiplied with the user memory fraction (1 - spark.memory.fraction) to get a final fraction of heap space to use during merge </span>
+        - [withMaxMemorySizePerCompactionInBytes](#withMaxMemorySizePerCompactionInBytes) (maxMemorySizePerCompactionInBytes = 1GB) <br/>
+        <span style="color:grey">HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then merges these log blocks and records. At any point, the number of entries in a log block can be less than or equal to the number of entries in the corresponding parquet file. This can lead to OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to set the max allowable inMemory footprint of the spillable map.</span>
 
     - [S3Configs](s3_hoodie.html) (Hoodie S3 Configs) <br/>
     <span style="color:grey">Configurations required for S3 and Hoodie co-operability.</span>

@@ -99,11 +99,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
   // used to merge records written to log file
   public static final String DEFAULT_PAYLOAD_CLASS = HoodieAvroPayload.class.getName();
-  public static final String PAYLOAD_CLASS = "hoodie.compaction.payload.class";
-
-  public static final String MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP = "hoodie.compaction.spill.threshold";
-  // Default memory size per compaction, excess spills to disk
-  public static final String DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES = String.valueOf(1024*1024*1024L); //1GB
+  public static final String PAYLOAD_CLASS_PROP = "hoodie.compaction.payload.class";
 
   // used to choose a trade off between IO vs Memory when performing compaction process
   // Depending on outputfile_size and memory provided, choose true to avoid OOM for large file size + small memory
@@ -212,19 +208,13 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     }
 
     public Builder withPayloadClass(String payloadClassName) {
-      props.setProperty(PAYLOAD_CLASS, payloadClassName);
+      props.setProperty(PAYLOAD_CLASS_PROP, payloadClassName);
       return this;
     }
 
     public Builder withTargetIOPerCompactionInMB(long targetIOPerCompactionInMB) {
       props.setProperty(TARGET_IO_PER_COMPACTION_IN_MB_PROP,
           String.valueOf(targetIOPerCompactionInMB));
-      return this;
-    }
-
-    public Builder withMaxMemorySizePerCompactionInBytes(long maxMemorySizePerCompactionInBytes) {
-      props.setProperty(MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP,
-          String.valueOf(maxMemorySizePerCompactionInBytes));
       return this;
     }
 
@@ -277,12 +267,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           CLEANER_PARALLELISM, DEFAULT_CLEANER_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_STRATEGY_PROP),
           COMPACTION_STRATEGY_PROP, DEFAULT_COMPACTION_STRATEGY);
-      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_CLASS),
-          PAYLOAD_CLASS, DEFAULT_PAYLOAD_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_CLASS_PROP),
+          PAYLOAD_CLASS_PROP, DEFAULT_PAYLOAD_CLASS);
       setDefaultOnCondition(props, !props.containsKey(TARGET_IO_PER_COMPACTION_IN_MB_PROP),
           TARGET_IO_PER_COMPACTION_IN_MB_PROP, DEFAULT_TARGET_IO_PER_COMPACTION_IN_MB);
-      setDefaultOnCondition(props, !props.containsKey(MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP),
-          MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES_PROP, DEFAULT_MAX_SIZE_IN_MEMORY_PER_COMPACTION_IN_BYTES);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP),
           COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_REVERSE_LOG_READ_ENABLED_PROP),
