@@ -38,7 +38,6 @@ public abstract class BaseAvroPayload implements Serializable {
   protected final Comparable orderingVal;
 
   /**
-   *
    * @param record
    * @param orderingVal
    */

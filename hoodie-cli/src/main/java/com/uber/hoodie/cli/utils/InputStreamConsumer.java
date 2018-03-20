@@ -24,7 +24,7 @@ import java.util.logging.Logger;
 
 public class InputStreamConsumer extends Thread {
 
-  protected final static Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
+  protected static final Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
   private InputStream is;
 
   public InputStreamConsumer(InputStream is) {

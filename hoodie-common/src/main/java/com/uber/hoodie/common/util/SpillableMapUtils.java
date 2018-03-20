@@ -13,6 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
+
 package com.uber.hoodie.common.util;
 
 import com.uber.hoodie.common.model.HoodieKey;
@@ -22,39 +23,28 @@ import com.uber.hoodie.common.util.collection.DiskBasedMap;
 import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import com.uber.hoodie.exception.HoodieCorruptedDataException;
-import org.apache.avro.generic.GenericRecord;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Optional;
 import java.util.zip.CRC32;
+import org.apache.avro.generic.GenericRecord;
 
 public class SpillableMapUtils {
 
   /**
    * Using the schema and payload class, read and convert the bytes on disk to a HoodieRecord
-   *
-   * @param file
-   * @param valuePosition
-   * @param valueLength
-   * @return
-   * @throws IOException
    */
-  public static byte[] readBytesFromDisk(RandomAccessFile file, long valuePosition, int valueLength) throws IOException {
+  public static byte[] readBytesFromDisk(RandomAccessFile file, long valuePosition, int valueLength)
+      throws IOException {
     DiskBasedMap.FileEntry fileEntry = readInternal(file, valuePosition, valueLength);
     return fileEntry.getValue();
   }
 
   /**
    * |crc|timestamp|sizeOfKey|SizeOfValue|key|value|
-   *
-   * @param file
-   * @param valuePosition
-   * @param valueLength
-   * @return
-   * @throws IOException
    */
-  private static DiskBasedMap.FileEntry readInternal(RandomAccessFile file, long valuePosition, int valueLength) throws IOException {
+  private static DiskBasedMap.FileEntry readInternal(RandomAccessFile file, long valuePosition,
+      int valueLength) throws IOException {
     file.seek(valuePosition);
     long crc = file.readLong();
     long timestamp = file.readLong();
@@ -69,27 +59,23 @@ public class SpillableMapUtils {
     file.read(value, 0, valueSize);
     long crcOfReadValue = generateChecksum(value);
     if (!(crc == crcOfReadValue)) {
-      throw new HoodieCorruptedDataException("checksum of payload written to external disk does not match, " +
-          "data may be corrupted");
+      throw new HoodieCorruptedDataException("checksum of payload written to external disk does not match, "
+          + "data may be corrupted");
     }
     return new DiskBasedMap.FileEntry(crc, keySize, valueSize, key, value, timestamp);
   }
 
   /**
-   * Write Value and other metadata necessary to disk. Each entry has the following sequence of data
-   * <p>
+   * Write Value and other metadata necessary to disk. Each entry has the following sequence of data <p>
    * |crc|timestamp|sizeOfKey|SizeOfValue|key|value|
-   *
-   * @param outputStream
-   * @param fileEntry
-   * @return
-   * @throws IOException
    */
-  public static long spillToDisk(SizeAwareDataOutputStream outputStream, DiskBasedMap.FileEntry fileEntry) throws IOException {
+  public static long spillToDisk(SizeAwareDataOutputStream outputStream,
+      DiskBasedMap.FileEntry fileEntry) throws IOException {
     return spill(outputStream, fileEntry);
   }
 
-  private static long spill(SizeAwareDataOutputStream outputStream, DiskBasedMap.FileEntry fileEntry)
+  private static long spill(SizeAwareDataOutputStream outputStream,
+      DiskBasedMap.FileEntry fileEntry)
       throws IOException {
     outputStream.writeLong(fileEntry.getCrc());
     outputStream.writeLong(fileEntry.getTimestamp());
@@ -102,9 +88,6 @@ public class SpillableMapUtils {
 
   /**
    * Generate a checksum for a given set of bytes
-   *
-   * @param data
-   * @return
    */
   public static long generateChecksum(byte[] data) {
     CRC32 crc = new CRC32();
@@ -113,13 +96,8 @@ public class SpillableMapUtils {
   }
 
   /**
-   * Compute a bytes representation of the payload by serializing the contents
-   * This is used to estimate the size of the payload (either in memory or when written to disk)
-   *
-   * @param <R>
-   * @param value
-   * @return
-   * @throws IOException
+   * Compute a bytes representation of the payload by serializing the contents This is used to estimate the size of the
+   * payload (either in memory or when written to disk)
    */
   public static <R> long computePayloadSize(R value, Converter<R> valueConverter) throws IOException {
     return valueConverter.sizeEstimate(value);
@@ -127,12 +105,6 @@ public class SpillableMapUtils {
 
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class
-   *
-   * @param rec
-   * @param payloadClazz
-   * @param <R>
-   * @return
-   * @throws IOException
    */
   public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
     String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD)

@@ -80,19 +80,16 @@ public class HoodieTestUtils {
     return new Configuration();
   }
 
-  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath)
-      throws IOException {
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath) throws IOException {
     return initTableType(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
-      HoodieTableType tableType)
-      throws IOException {
+      HoodieTableType tableType) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
-    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME,
-        HoodieAvroPayload.class.getName());
+    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
   }
 
@@ -108,63 +105,60 @@ public class HoodieTestUtils {
     return new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
   }
 
-  public static final void createCommitFiles(String basePath, String... commitTimes)
-      throws IOException {
+  public static final void createCommitFiles(String basePath, String... commitTimes) throws IOException {
+    for (String commitTime : commitTimes) {
+      new File(
+          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime))
+          .createNewFile();
+    }
+  }
+
+  public static final void createInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
+    for (String commitTime : commitTimes) {
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
+          commitTime)).createNewFile();
+    }
+  }
+
+  public static final void createInflightCleanFiles(String basePath, String... commitTimes) throws IOException {
     for (String commitTime : commitTimes) {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-          .makeCommitFileName(commitTime)).createNewFile();
+          .makeInflightCleanerFileName(
+              commitTime)).createNewFile();
     }
   }
 
-  public static final void createInflightCommitFiles(String basePath, String... commitTimes)
+  public static final String createNewDataFile(String basePath, String partitionPath, String commitTime)
       throws IOException {
-    for (String commitTime : commitTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-          .makeInflightCommitFileName(commitTime)).createNewFile();
-    }
-  }
-
-  public static final void createInflightCleanFiles(String basePath, String... commitTimes)
-      throws IOException {
-    for (String commitTime : commitTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" +
-          HoodieTimeline.makeInflightCleanerFileName(commitTime)).createNewFile();
-    }
-  }
-
-  public static final String createNewDataFile(String basePath, String partitionPath,
-      String commitTime) throws IOException {
     String fileID = UUID.randomUUID().toString();
     return createDataFile(basePath, partitionPath, commitTime, fileID);
   }
 
-  public static final String createDataFile(String basePath, String partitionPath,
-      String commitTime, String fileID) throws IOException {
+  public static final String createDataFile(String basePath, String partitionPath, String commitTime, String fileID)
+      throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
     new File(folderPath).mkdirs();
-    new File(folderPath + FSUtils.makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileID))
-        .createNewFile();
+    new File(folderPath + FSUtils.makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileID)).createNewFile();
     return fileID;
   }
 
-  public static final String createNewLogFile(FileSystem fs, String basePath, String partitionPath,
-      String commitTime, String fileID, Optional<Integer> version) throws IOException {
+  public static final String createNewLogFile(FileSystem fs, String basePath, String partitionPath, String commitTime,
+      String fileID, Optional<Integer> version) throws IOException {
     String folderPath = basePath + "/" + partitionPath + "/";
     boolean makeDir = fs.mkdirs(new Path(folderPath));
     if (!makeDir) {
       throw new IOException("cannot create directory for path " + folderPath);
     }
-    boolean createFile = fs.createNewFile(new Path(folderPath + FSUtils
-        .makeLogFileName(fileID, ".log", commitTime, version.orElse(DEFAULT_TASK_PARTITIONID))));
+    boolean createFile = fs.createNewFile(new Path(
+        folderPath + FSUtils.makeLogFileName(fileID, ".log", commitTime, version.orElse(DEFAULT_TASK_PARTITIONID))));
     if (!createFile) {
-      throw new IOException(StringUtils
-          .format("cannot create data file for commit %s and fileId %s", commitTime, fileID));
+      throw new IOException(
+          StringUtils.format("cannot create data file for commit %s and fileId %s", commitTime, fileID));
     }
     return fileID;
   }
 
-  public static final void createCompactionCommitFiles(FileSystem fs, String basePath,
-      String... commitTimes)
+  public static final void createCompactionCommitFiles(FileSystem fs, String basePath, String... commitTimes)
       throws IOException {
     for (String commitTime : commitTimes) {
       boolean createFile = fs.createNewFile(new Path(
@@ -176,42 +170,42 @@ public class HoodieTestUtils {
     }
   }
 
-  public static final String getDataFilePath(String basePath, String partitionPath,
-      String commitTime, String fileID) throws IOException {
+  public static final String getDataFilePath(String basePath, String partitionPath, String commitTime, String fileID)
+      throws IOException {
     return basePath + "/" + partitionPath + "/" + FSUtils
         .makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileID);
   }
 
-  public static final String getLogFilePath(String basePath, String partitionPath,
-      String commitTime, String fileID, Optional<Integer> version) throws IOException {
-    return basePath + "/" + partitionPath + "/" + FSUtils
-        .makeLogFileName(fileID, ".log", commitTime, version.orElse(DEFAULT_TASK_PARTITIONID));
+  public static final String getLogFilePath(String basePath, String partitionPath, String commitTime, String fileID,
+      Optional<Integer> version) throws IOException {
+    return basePath + "/" + partitionPath + "/" + FSUtils.makeLogFileName(fileID, ".log", commitTime,
+        version.orElse(DEFAULT_TASK_PARTITIONID));
   }
 
-  public static final String getCommitFilePath(String basePath, String commitTime)
+  public static final String getCommitFilePath(String basePath, String commitTime) throws IOException {
+    return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + HoodieTimeline.COMMIT_EXTENSION;
+  }
+
+  public static final boolean doesDataFileExist(String basePath, String partitionPath, String commitTime, String fileID)
       throws IOException {
-    return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
-        + HoodieTimeline.COMMIT_EXTENSION;
-  }
-
-  public static final boolean doesDataFileExist(String basePath, String partitionPath,
-      String commitTime, String fileID) throws IOException {
     return new File(getDataFilePath(basePath, partitionPath, commitTime, fileID)).exists();
   }
 
-  public static final boolean doesLogFileExist(String basePath, String partitionPath,
-      String commitTime, String fileID, Optional<Integer> version) throws IOException {
+  public static final boolean doesLogFileExist(String basePath, String partitionPath, String commitTime, String fileID,
+      Optional<Integer> version) throws IOException {
     return new File(getLogFilePath(basePath, partitionPath, commitTime, fileID, version)).exists();
   }
 
   public static final boolean doesCommitExist(String basePath, String commitTime) {
-    return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
-        + HoodieTimeline.COMMIT_EXTENSION).exists();
+    return new File(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + HoodieTimeline.COMMIT_EXTENSION)
+        .exists();
   }
 
   public static final boolean doesInflightExist(String basePath, String commitTime) {
-    return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
-        + HoodieTimeline.INFLIGHT_EXTENSION).exists();
+    return new File(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + HoodieTimeline.INFLIGHT_EXTENSION)
+        .exists();
   }
 
   public static String makeInflightTestFileName(String instant) {
@@ -219,20 +213,17 @@ public class HoodieTestUtils {
   }
 
   public static void createCleanFiles(String basePath, String commitTime) throws IOException {
-    Path commitFile =
-        new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-            .makeCleanerFileName(commitTime));
+    Path commitFile = new Path(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
     FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
     FSDataOutputStream os = fs.create(commitFile, true);
     try {
-      HoodieCleanStat cleanStats = new HoodieCleanStat(
-          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-          DEFAULT_PARTITION_PATHS[rand.nextInt(DEFAULT_PARTITION_PATHS.length)],
-          new ArrayList<>(), new ArrayList<>(),
+      HoodieCleanStat cleanStats = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
+          DEFAULT_PARTITION_PATHS[rand.nextInt(DEFAULT_PARTITION_PATHS.length)], new ArrayList<>(), new ArrayList<>(),
           new ArrayList<>(), commitTime);
       // Create the clean metadata
-      HoodieCleanMetadata cleanMetadata =
-          AvroUtils.convertCleanMetadata(commitTime, Optional.of(0L), Arrays.asList(cleanStats));
+      HoodieCleanMetadata cleanMetadata = AvroUtils.convertCleanMetadata(commitTime, Optional.of(0L),
+          Arrays.asList(cleanStats));
       // Write empty clean metadata
       os.write(AvroUtils.serializeCleanMetadata(cleanMetadata).get());
     } finally {
@@ -249,7 +240,8 @@ public class HoodieTestUtils {
   }
 
   public static void assertStreamEquals(String message, Stream<?> expected, Stream<?> actual) {
-    Iterator<?> iter1 = expected.iterator(), iter2 = actual.iterator();
+    Iterator<?> iter1 = expected.iterator();
+    Iterator<?> iter2 = actual.iterator();
     while (iter1.hasNext() && iter2.hasNext()) {
       assertEquals(message, iter1.next(), iter2.next());
     }
@@ -275,8 +267,8 @@ public class HoodieTestUtils {
 
   public static void writeRecordsToLogFiles(FileSystem fs, String basePath, Schema schema,
       List<HoodieRecord> updatedRecords) {
-    Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated = updatedRecords.stream()
-        .collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation));
+    Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated = updatedRecords.stream().collect(
+        Collectors.groupingBy(HoodieRecord::getCurrentLocation));
 
     groupedUpdated.entrySet().forEach(s -> {
       HoodieRecordLocation location = s.getKey();
@@ -284,12 +276,9 @@ public class HoodieTestUtils {
 
       Writer logWriter;
       try {
-        logWriter = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(new Path(basePath, partitionPath))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId(location.getFileId())
-            .overBaseCommit(location.getCommitTime())
-            .withFs(fs).build();
+        logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
+            .overBaseCommit(location.getCommitTime()).withFs(fs).build();
 
         Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
         header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getCommitTime());
@@ -297,10 +286,7 @@ public class HoodieTestUtils {
         logWriter.appendBlock(new HoodieAvroDataBlock(s.getValue().stream().map(r -> {
           try {
             GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
-            HoodieAvroUtils.addHoodieKeyToRecord(val,
-                r.getRecordKey(),
-                r.getPartitionPath(),
-                "");
+            HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
             return (IndexedRecord) val;
           } catch (IOException e) {
             return null;
@@ -313,8 +299,7 @@ public class HoodieTestUtils {
     });
   }
 
-  public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath)
-      throws IOException {
+  public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
     RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
     List<FileStatus> returns = Lists.newArrayList();
     while (itr.hasNext()) {

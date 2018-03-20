@@ -17,7 +17,8 @@
 package com.uber.hoodie.exception;
 
 /**
- * <p> Exception thrown when any data corruption happens when reading/writing from temporary disk </p>
+ * <p> Exception thrown when any data corruption happens when reading/writing from temporary disk
+ * </p>
  */
 public class HoodieCorruptedDataException extends HoodieException {
 

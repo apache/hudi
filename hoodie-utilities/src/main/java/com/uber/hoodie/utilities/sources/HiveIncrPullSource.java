@@ -44,12 +44,12 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * Source to read deltas produced by {@link com.uber.hoodie.utilities.HiveIncrementalPuller}, commit
  * by commit and apply to the target table
- *
+ * <p>
  * The general idea here is to have commits sync across the data pipeline.
- *
+ * <p>
  * [Source Tables(s)]  ====> HiveIncrementalScanner  ==> incrPullRootPath ==> targetTable
  * {c1,c2,c3,...}                                       {c1,c2,c3,...}       {c1,c2,c3,...}
- *
+ * <p>
  * This produces beautiful causality, that makes data issues in ETLs very easy to debug
  */
 public class HiveIncrPullSource extends Source {
@@ -66,7 +66,7 @@ public class HiveIncrPullSource extends Source {
    */
   static class Config {
 
-    private final static String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
+    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
   }
 
   public HiveIncrPullSource(PropertiesConfiguration config, JavaSparkContext sparkContext,
@@ -121,8 +121,8 @@ public class HiveIncrPullSource extends Source {
       }
 
       // read the files out.
-      List<FileStatus> commitDeltaFiles = Arrays
-          .asList(fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
+      List<FileStatus> commitDeltaFiles = Arrays.asList(
+          fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
       String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString())
           .collect(Collectors.joining(","));
       String schemaStr = schemaProvider.getSourceSchema().toString();

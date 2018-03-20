@@ -97,9 +97,9 @@ public class TestHoodieSnapshotCopier {
     new File(basePath + "/2016/05/01/").mkdirs();
     new File(basePath + "/2016/05/02/").mkdirs();
     new File(basePath + "/2016/05/06/").mkdirs();
-    HoodieTestDataGenerator.writePartitionMetadata(fs,
-        new String[]{"2016/05/01", "2016/05/02", "2016/05/06"},
-        basePath);
+    HoodieTestDataGenerator
+        .writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
+            basePath);
     // Make commit1
     File file11 = new File(
         basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime1, 1, "id11"));

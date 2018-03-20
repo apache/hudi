@@ -45,11 +45,11 @@ import org.apache.avro.io.EncoderFactory;
 public class HoodieAvroUtils {
 
   // All metadata fields are optional strings.
-  private final static Schema METADATA_FIELD_SCHEMA = Schema.createUnion(Arrays.asList(
+  private static final Schema METADATA_FIELD_SCHEMA = Schema.createUnion(Arrays.asList(
       Schema.create(Schema.Type.NULL),
       Schema.create(Schema.Type.STRING)));
 
-  private final static Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+  private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   /**
    * Convert a given avro record to bytes

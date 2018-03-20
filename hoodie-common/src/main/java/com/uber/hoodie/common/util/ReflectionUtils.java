@@ -55,7 +55,8 @@ public class ReflectionUtils {
       }
       return (T) clazzCache.get(recordPayloadClass).getConstructor(constructorArgTypes)
           .newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+    } catch (InstantiationException | IllegalAccessException
+        | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     } catch (ClassNotFoundException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);

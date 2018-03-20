@@ -55,209 +55,209 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     TableFileSystemView.ReadOptimizedView,
     TableFileSystemView.RealtimeView, Serializable {
 
-    protected HoodieTableMetaClient metaClient;
-    // This is the commits that will be visible for all views extending this view
-    protected HoodieTimeline visibleActiveTimeline;
+  protected HoodieTableMetaClient metaClient;
+  // This is the commits that will be visible for all views extending this view
+  protected HoodieTimeline visibleActiveTimeline;
 
-    // mapping from partition paths to file groups contained within them
-    protected HashMap<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
-    // mapping from file id to the file group.
-    protected HashMap<String, HoodieFileGroup> fileGroupMap;
+  // mapping from partition paths to file groups contained within them
+  protected HashMap<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
+  // mapping from file id to the file group.
+  protected HashMap<String, HoodieFileGroup> fileGroupMap;
 
-    /**
-     * Create a file system view, as of the given timeline
-     */
-    public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
-        HoodieTimeline visibleActiveTimeline) {
-        this.metaClient = metaClient;
-        this.visibleActiveTimeline = visibleActiveTimeline;
-        this.fileGroupMap = new HashMap<>();
-        this.partitionToFileGroupsMap = new HashMap<>();
+  /**
+   * Create a file system view, as of the given timeline
+   */
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
+      HoodieTimeline visibleActiveTimeline) {
+    this.metaClient = metaClient;
+    this.visibleActiveTimeline = visibleActiveTimeline;
+    this.fileGroupMap = new HashMap<>();
+    this.partitionToFileGroupsMap = new HashMap<>();
+  }
+
+
+  /**
+   * Create a file system view, as of the given timeline, with the provided file statuses.
+   */
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
+      HoodieTimeline visibleActiveTimeline,
+      FileStatus[] fileStatuses) {
+    this(metaClient, visibleActiveTimeline);
+    addFilesToView(fileStatuses);
+  }
+
+
+  /**
+   * This method is only used when this object is deserialized in a spark executor.
+   *
+   * @deprecated
+   */
+  private void readObject(java.io.ObjectInputStream in)
+      throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+  }
+
+  private void writeObject(java.io.ObjectOutputStream out)
+      throws IOException {
+    out.defaultWriteObject();
+  }
+
+  /**
+   * Adds the provided statuses into the file system view, and also caches it inside this object.
+   */
+  private List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+    Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = convertFileStatusesToDataFiles(
+        statuses)
+        .collect(Collectors.groupingBy((dataFile) -> {
+          String partitionPathStr = FSUtils.getRelativePartitionPath(
+              new Path(metaClient.getBasePath()),
+              dataFile.getFileStatus().getPath().getParent());
+          return Pair.of(partitionPathStr, dataFile.getFileId());
+        }));
+    Map<Pair<String, String>, List<HoodieLogFile>> logFiles = convertFileStatusesToLogFiles(
+        statuses)
+        .collect(Collectors.groupingBy((logFile) -> {
+          String partitionPathStr = FSUtils.getRelativePartitionPath(
+              new Path(metaClient.getBasePath()),
+              logFile.getPath().getParent());
+          return Pair.of(partitionPathStr, logFile.getFileId());
+        }));
+
+    Set<Pair<String, String>> fileIdSet = new HashSet<>(dataFiles.keySet());
+    fileIdSet.addAll(logFiles.keySet());
+
+    List<HoodieFileGroup> fileGroups = new ArrayList<>();
+    fileIdSet.forEach(pair -> {
+      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), pair.getValue(),
+          visibleActiveTimeline);
+      if (dataFiles.containsKey(pair)) {
+        dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
+      }
+      if (logFiles.containsKey(pair)) {
+        logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
+      }
+      fileGroups.add(group);
+    });
+
+    // add to the cache.
+    fileGroups.forEach(group -> {
+      fileGroupMap.put(group.getId(), group);
+      if (!partitionToFileGroupsMap.containsKey(group.getPartitionPath())) {
+        partitionToFileGroupsMap.put(group.getPartitionPath(), new ArrayList<>());
+      }
+      partitionToFileGroupsMap.get(group.getPartitionPath()).add(group);
+    });
+
+    return fileGroups;
+  }
+
+  private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
+    Predicate<FileStatus> roFilePredicate = fileStatus ->
+        fileStatus.getPath().getName()
+            .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension());
+    return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieDataFile::new);
+  }
+
+  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
+    Predicate<FileStatus> rtFilePredicate = fileStatus ->
+        fileStatus.getPath().getName()
+            .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension());
+    return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
+  }
+
+  @Override
+  public Stream<HoodieDataFile> getLatestDataFiles(final String partitionPath) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> fileGroup.getLatestDataFile())
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<HoodieDataFile> getLatestDataFiles() {
+    return fileGroupMap.values().stream()
+        .map(fileGroup -> fileGroup.getLatestDataFile())
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
+      String maxCommitTime) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> fileGroup.getLatestDataFileBeforeOrOn(maxCommitTime))
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
+    return fileGroupMap.values().stream()
+        .map(fileGroup -> fileGroup.getLatestDataFileInRange(commitsToReturn))
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> fileGroup.getAllDataFiles())
+        .flatMap(dataFileList -> dataFileList);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> fileGroup.getLatestFileSlice())
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
+      String maxCommitTime) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
+    return fileGroupMap.values().stream()
+        .map(fileGroup -> fileGroup.getLatestFileSliceInRange(commitsToReturn))
+        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(Optional::get);
+  }
+
+  @Override
+  public Stream<FileSlice> getAllFileSlices(String partitionPath) {
+    return getAllFileGroups(partitionPath)
+        .map(group -> group.getAllFileSlices())
+        .flatMap(sliceList -> sliceList);
+  }
+
+  /**
+   * Given a partition path, obtain all filegroups within that. All methods, that work at the
+   * partition level go through this.
+   */
+  @Override
+  public Stream<HoodieFileGroup> getAllFileGroups(String partitionPathStr) {
+    // return any previously fetched groups.
+    if (partitionToFileGroupsMap.containsKey(partitionPathStr)) {
+      return partitionToFileGroupsMap.get(partitionPathStr).stream();
     }
 
-
-    /**
-     * Create a file system view, as of the given timeline, with the provided file statuses.
-     */
-    public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
-        HoodieTimeline visibleActiveTimeline,
-        FileStatus[] fileStatuses) {
-        this(metaClient, visibleActiveTimeline);
-        addFilesToView(fileStatuses);
+    try {
+      // Create the path if it does not exist already
+      Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
+      FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
+      FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
+      List<HoodieFileGroup> fileGroups = addFilesToView(statuses);
+      return fileGroups.stream();
+    } catch (IOException e) {
+      throw new HoodieIOException(
+          "Failed to list data files in partition " + partitionPathStr, e);
     }
-
-
-    /**
-     * This method is only used when this object is deserialized in a spark executor.
-     *
-     * @deprecated
-     */
-    private void readObject(java.io.ObjectInputStream in)
-        throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
-    }
-
-    private void writeObject(java.io.ObjectOutputStream out)
-        throws IOException {
-        out.defaultWriteObject();
-    }
-
-    /**
-     * Adds the provided statuses into the file system view, and also caches it inside this object.
-     */
-    private List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
-        Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = convertFileStatusesToDataFiles(
-            statuses)
-            .collect(Collectors.groupingBy((dataFile) -> {
-                String partitionPathStr = FSUtils.getRelativePartitionPath(
-                    new Path(metaClient.getBasePath()),
-                    dataFile.getFileStatus().getPath().getParent());
-                return Pair.of(partitionPathStr, dataFile.getFileId());
-            }));
-        Map<Pair<String, String>, List<HoodieLogFile>> logFiles = convertFileStatusesToLogFiles(
-            statuses)
-            .collect(Collectors.groupingBy((logFile) -> {
-                String partitionPathStr = FSUtils.getRelativePartitionPath(
-                    new Path(metaClient.getBasePath()),
-                    logFile.getPath().getParent());
-                return Pair.of(partitionPathStr, logFile.getFileId());
-            }));
-
-        Set<Pair<String, String>> fileIdSet = new HashSet<>(dataFiles.keySet());
-        fileIdSet.addAll(logFiles.keySet());
-
-        List<HoodieFileGroup> fileGroups = new ArrayList<>();
-        fileIdSet.forEach(pair -> {
-            HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), pair.getValue(),
-                visibleActiveTimeline);
-            if (dataFiles.containsKey(pair)) {
-                dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
-            }
-            if (logFiles.containsKey(pair)) {
-                logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
-            }
-            fileGroups.add(group);
-        });
-
-        // add to the cache.
-        fileGroups.forEach(group -> {
-            fileGroupMap.put(group.getId(), group);
-            if (!partitionToFileGroupsMap.containsKey(group.getPartitionPath())) {
-                partitionToFileGroupsMap.put(group.getPartitionPath(), new ArrayList<>());
-            }
-            partitionToFileGroupsMap.get(group.getPartitionPath()).add(group);
-        });
-
-        return fileGroups;
-    }
-
-    private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
-        Predicate<FileStatus> roFilePredicate = fileStatus ->
-            fileStatus.getPath().getName()
-                .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension());
-        return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieDataFile::new);
-    }
-
-    private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
-        Predicate<FileStatus> rtFilePredicate = fileStatus ->
-            fileStatus.getPath().getName()
-                .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension());
-        return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestDataFiles(final String partitionPath) {
-        return getAllFileGroups(partitionPath)
-            .map(fileGroup -> fileGroup.getLatestDataFile())
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestDataFiles() {
-        return fileGroupMap.values().stream()
-            .map(fileGroup -> fileGroup.getLatestDataFile())
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
-        String maxCommitTime) {
-        return getAllFileGroups(partitionPath)
-            .map(fileGroup -> fileGroup.getLatestDataFileBeforeOrOn(maxCommitTime))
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
-        return fileGroupMap.values().stream()
-            .map(fileGroup -> fileGroup.getLatestDataFileInRange(commitsToReturn))
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
-        return getAllFileGroups(partitionPath)
-            .map(fileGroup -> fileGroup.getAllDataFiles())
-            .flatMap(dataFileList -> dataFileList);
-    }
-
-    @Override
-    public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
-        return getAllFileGroups(partitionPath)
-            .map(fileGroup -> fileGroup.getLatestFileSlice())
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
-        String maxCommitTime) {
-        return getAllFileGroups(partitionPath)
-            .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
-        return fileGroupMap.values().stream()
-            .map(fileGroup -> fileGroup.getLatestFileSliceInRange(commitsToReturn))
-            .filter(dataFileOpt -> dataFileOpt.isPresent())
-            .map(Optional::get);
-    }
-
-    @Override
-    public Stream<FileSlice> getAllFileSlices(String partitionPath) {
-        return getAllFileGroups(partitionPath)
-            .map(group -> group.getAllFileSlices())
-            .flatMap(sliceList -> sliceList);
-    }
-
-    /**
-     * Given a partition path, obtain all filegroups within that. All methods, that work at the
-     * partition level go through this.
-     */
-    @Override
-    public Stream<HoodieFileGroup> getAllFileGroups(String partitionPathStr) {
-        // return any previously fetched groups.
-        if (partitionToFileGroupsMap.containsKey(partitionPathStr)) {
-            return partitionToFileGroupsMap.get(partitionPathStr).stream();
-        }
-
-        try {
-            // Create the path if it does not exist already
-            Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
-            FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
-            FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
-            List<HoodieFileGroup> fileGroups = addFilesToView(statuses);
-            return fileGroups.stream();
-        } catch (IOException e) {
-            throw new HoodieIOException(
-                "Failed to list data files in partition " + partitionPathStr, e);
-        }
-    }
+  }
 }

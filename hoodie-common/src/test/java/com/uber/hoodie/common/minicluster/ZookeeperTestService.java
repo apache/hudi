@@ -43,11 +43,10 @@ import org.slf4j.LoggerFactory;
  * <p/>
  * 2. It will only attempt to bind to the port specified, and will fail if it can't.
  * <p/>
- * 3. The startup method now takes a bindAddress, which allows us to configure which IP the ZK
- * server binds to. This was not configurable in the original class.
+ * 3. The startup method now takes a bindAddress, which allows us to configure which IP the ZK server binds to. This was
+ * not configurable in the original class.
  * <p/>
- * 4. The ZK cluster will re-use a data dir on the local filesystem if it already exists instead of
- * blowing it away.
+ * 4. The ZK cluster will re-use a data dir on the local filesystem if it already exists instead of blowing it away.
  */
 public class ZookeeperTestService {
 
@@ -83,8 +82,7 @@ public class ZookeeperTestService {
   }
 
   public ZooKeeperServer start() throws IOException, InterruptedException {
-    Preconditions.checkState(workDir != null,
-        "The localBaseFsLocation must be set before starting cluster.");
+    Preconditions.checkState(workDir != null, "The localBaseFsLocation must be set before starting cluster.");
 
     setupTestEnv();
     stop();

@@ -43,10 +43,10 @@ public class TestHoodieWriteStat {
     Path partitionPath = new Path(basePath, partitionPathString);
     Path tempPath = new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
 
-    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(commitTime,
-        taskPartitionId, fileName));
-    Path tempFilePath = new Path(tempPath, FSUtils.makeTempDataFileName(partitionPathString,
-        commitTime, taskPartitionId, fileName, stageId, taskAttemptId));
+    Path finalizeFilePath = new Path(partitionPath, FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName));
+    Path tempFilePath = new Path(tempPath, FSUtils
+        .makeTempDataFileName(partitionPathString, commitTime, taskPartitionId,
+            fileName, stageId, taskAttemptId));
 
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPaths(basePath, finalizeFilePath, tempFilePath);

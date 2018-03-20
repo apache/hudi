@@ -63,13 +63,12 @@ public class TestParquetUtils {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
     BloomFilter filter = new BloomFilter(1000, 0.0001);
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(schema), schema, filter);
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema,
+        filter);
 
     String filePath = basePath + "/test.parquet";
-    ParquetWriter writer = new ParquetWriter(new Path(filePath),
-        writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
-        ParquetWriter.DEFAULT_PAGE_SIZE);
+    ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {
       GenericRecord rec = new GenericData.Record(schema);
       rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, rowKey);
@@ -80,15 +79,13 @@ public class TestParquetUtils {
 
     // Read and verify
     List<String> rowKeysInFile = new ArrayList<>(
-        ParquetUtils
-            .readRowKeysFromParquet(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
+        ParquetUtils.readRowKeysFromParquet(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
     Collections.sort(rowKeysInFile);
     Collections.sort(rowKeys);
 
     assertEquals("Did not read back the expected list of keys", rowKeys, rowKeysInFile);
-    BloomFilter filterInFile = ParquetUtils
-        .readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(),
-            new Path(filePath));
+    BloomFilter filterInFile = ParquetUtils.readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(),
+        new Path(filePath));
     for (String rowKey : rowKeys) {
       assertTrue("key should be found in bloom filter", filterInFile.mightContain(rowKey));
     }

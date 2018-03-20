@@ -38,9 +38,7 @@ import org.apache.commons.configuration.PropertiesConfiguration;
 public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   enum TimestampType implements Serializable {
-    UNIX_TIMESTAMP,
-    DATE_STRING,
-    MIXED
+    UNIX_TIMESTAMP, DATE_STRING, MIXED
   }
 
   private final TimestampType timestampType;
@@ -56,9 +54,14 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   static class Config {
 
     // One value from TimestampType above
-    private static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
-    private static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.input.dateformat";
-    private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP = "hoodie.deltastreamer.keygen.timebased.output.dateformat";
+    private static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen"
+        + ".timebased.timestamp.type";
+    private static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP = "hoodie.deltastreamer.keygen"
+        + ".timebased.input"
+        + ".dateformat";
+    private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP = "hoodie.deltastreamer.keygen"
+        + ".timebased.output"
+        + ".dateformat";
   }
 
   public TimestampBasedKeyGenerator(PropertiesConfiguration config) {

@@ -19,9 +19,6 @@ package com.uber.hoodie.common.table.log.block;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
 import com.uber.hoodie.exception.HoodieIOException;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.hadoop.fs.FSDataInputStream;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -31,6 +28,8 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far
@@ -65,7 +64,8 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
-    byte[] bytesToWrite = StringUtils.join(getKeysToDelete(), ',').getBytes(Charset.forName("utf-8"));
+    byte[] bytesToWrite = StringUtils.join(getKeysToDelete(), ',')
+        .getBytes(Charset.forName("utf-8"));
     output.writeInt(HoodieLogBlock.version);
     output.writeInt(bytesToWrite.length);
     output.write(bytesToWrite);
@@ -80,7 +80,8 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
           inflate();
         }
         SizeAwareDataInputStream dis =
-            new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(getContent().get())));
+            new SizeAwareDataInputStream(
+                new DataInputStream(new ByteArrayInputStream(getContent().get())));
         int version = dis.readInt();
         int dataLength = dis.readInt();
         byte[] data = new byte[dataLength];
@@ -110,6 +111,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
       Map<HeaderMetadataType, String> footer) throws IOException {
 
     return new HoodieDeleteBlock(content, inputStream, readBlockLazily,
-        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
+        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
+        header, footer);
   }
 }

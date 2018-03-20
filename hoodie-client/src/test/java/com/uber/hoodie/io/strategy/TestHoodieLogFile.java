@@ -29,6 +29,10 @@ public class TestHoodieLogFile extends HoodieLogFile {
     this.size = size;
   }
 
+  public static HoodieLogFile newLogFile(long size) {
+    return new TestHoodieLogFile(size);
+  }
+
   @Override
   public Path getPath() {
     return new Path("/tmp/test-log");
@@ -37,9 +41,5 @@ public class TestHoodieLogFile extends HoodieLogFile {
   @Override
   public Optional<Long> getFileSize() {
     return Optional.of(size);
-  }
-
-  public static HoodieLogFile newLogFile(long size) {
-    return new TestHoodieLogFile(size);
   }
 }

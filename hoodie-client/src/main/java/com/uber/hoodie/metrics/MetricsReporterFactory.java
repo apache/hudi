@@ -28,8 +28,7 @@ public class MetricsReporterFactory {
 
   private static Logger logger = LogManager.getLogger(MetricsReporterFactory.class);
 
-  public static MetricsReporter createReporter(HoodieWriteConfig config,
-      MetricRegistry registry) {
+  public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
     MetricsReporterType type = config.getMetricsReporterType();
     MetricsReporter reporter = null;
     switch (type) {

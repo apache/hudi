@@ -44,9 +44,9 @@ public class BoundedIOCompactionStrategy implements CompactionStrategy {
       List<HoodieLogFile> logFiles) {
     Map<String, Object> metrics = Maps.newHashMap();
     // Total size of all the log files
-    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(
-        Optional::isPresent).map(Optional::get).reduce(
-        (size1, size2) -> size1 + size2).orElse(0L);
+    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize)
+        .filter(Optional::isPresent).map(Optional::get).reduce((size1, size2) -> size1 + size2)
+        .orElse(0L);
     // Total read will be the base file + all the log files
     Long totalIORead = FSUtils.getSizeInMB(dataFile.getFileSize() + totalLogFileSize);
     // Total write will be similar to the size of the base file
@@ -64,7 +64,8 @@ public class BoundedIOCompactionStrategy implements CompactionStrategy {
   @Override
   public List<CompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<CompactionOperation> operations) {
-    // Iterate through the operations in order and accept operations as long as we are within the IO limit
+    // Iterate through the operations in order and accept operations as long as we are within the
+    // IO limit
     // Preserves the original ordering of compactions
     List<CompactionOperation> finalOperations = Lists.newArrayList();
     long targetIORemaining = writeConfig.getTargetIOPerCompactionInMB();

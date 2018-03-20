@@ -38,9 +38,9 @@ import scala.Tuple2;
 /**
  * An `stateless` index implementation that will using a deterministic mapping function to determine
  * the fileID for a given record.
- *
+ * <p>
  * Pros: - Fast
- *
+ * <p>
  * Cons : - Need to tune the number of buckets per partition path manually (FIXME: Need to autotune
  * this) - Could increase write amplification on copy-on-write storage since inserts always rewrite
  * files - Not global.
