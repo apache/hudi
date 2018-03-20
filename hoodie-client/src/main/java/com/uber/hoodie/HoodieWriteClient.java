@@ -421,7 +421,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       final boolean isUpsert) {
 
     // Cache the tagged records, so we don't end up computing both
-    preppedRecords.persist(StorageLevel.MEMORY_AND_DISK_SER());
+    // TODO: Consistent contract in HoodieWriteClient regarding preppedRecord storage level handling
+    if (preppedRecords.getStorageLevel() == StorageLevel.NONE()) {
+      preppedRecords.persist(StorageLevel.MEMORY_AND_DISK_SER());
+    } else {
+      logger.info("RDD PreppedRecords was persisted at: " + preppedRecords.getStorageLevel());
+    }
 
     WorkloadProfile profile = null;
     if (hoodieTable.isWorkloadProfileNeeded()) {
