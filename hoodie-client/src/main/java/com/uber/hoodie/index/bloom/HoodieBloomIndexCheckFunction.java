@@ -41,7 +41,8 @@ import scala.Tuple2;
  * actual files
  */
 public class HoodieBloomIndexCheckFunction implements
-    Function2<Integer, Iterator<Tuple2<String, Tuple2<String, HoodieKey>>>, Iterator<List<IndexLookupResult>>> {
+    Function2<Integer, Iterator<Tuple2<String, Tuple2<String, HoodieKey>>>,
+        Iterator<List<IndexLookupResult>>> {
 
   private static Logger logger = LogManager.getLogger(HoodieBloomIndexCheckFunction.class);
 
@@ -58,8 +59,7 @@ public class HoodieBloomIndexCheckFunction implements
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
   public static List<String> checkCandidatesAgainstFile(Configuration configuration,
-      List<String> candidateRecordKeys,
-      Path filePath) throws HoodieIndexException {
+      List<String> candidateRecordKeys, Path filePath) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm
@@ -84,6 +84,13 @@ public class HoodieBloomIndexCheckFunction implements
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
     return foundRecordKeys;
+  }
+
+  @Override
+  public Iterator<List<IndexLookupResult>> call(Integer partition,
+      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr)
+      throws Exception {
+    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends
@@ -143,7 +150,8 @@ public class HoodieBloomIndexCheckFunction implements
 
           // if continue on current file)
           if (fileName.equals(currentFile)) {
-            // check record key against bloom filter of current file & add to possible keys if needed
+            // check record key against bloom filter of current file & add to possible keys if
+            // needed
             if (bloomFilter.mightContain(recordKey)) {
               if (logger.isDebugEnabled()) {
                 logger.debug("#1 Adding " + recordKey + " as candidate for file " + fileName);
@@ -200,13 +208,5 @@ public class HoodieBloomIndexCheckFunction implements
     @Override
     protected void end() {
     }
-  }
-
-
-  @Override
-  public Iterator<List<IndexLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr)
-      throws Exception {
-    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }
 }

@@ -64,8 +64,7 @@ public class BloomIndexFileInfo implements Serializable {
    * Does the given key fall within the range (inclusive)
    */
   public boolean isKeyInRange(String recordKey) {
-    return minRecordKey.compareTo(recordKey) <= 0 &&
-        maxRecordKey.compareTo(recordKey) >= 0;
+    return minRecordKey.compareTo(recordKey) <= 0 && maxRecordKey.compareTo(recordKey) >= 0;
   }
 
   @Override
@@ -78,9 +77,8 @@ public class BloomIndexFileInfo implements Serializable {
     }
 
     BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equal(that.fileName, fileName) &&
-        Objects.equal(that.minRecordKey, minRecordKey) &&
-        Objects.equal(that.maxRecordKey, maxRecordKey);
+    return Objects.equal(that.fileName, fileName) && Objects.equal(that.minRecordKey, minRecordKey)
+        && Objects.equal(that.maxRecordKey, maxRecordKey);
 
   }
 

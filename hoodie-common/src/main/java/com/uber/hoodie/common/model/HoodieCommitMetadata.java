@@ -210,12 +210,18 @@ public class HoodieCommitMetadata implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
 
     HoodieCommitMetadata that = (HoodieCommitMetadata) o;
 
-    if (!partitionToWriteStats.equals(that.partitionToWriteStats)) return false;
+    if (!partitionToWriteStats.equals(that.partitionToWriteStats)) {
+      return false;
+    }
     return compacted.equals(that.compacted);
 
   }

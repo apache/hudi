@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.avro;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,11 +25,11 @@ import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Marjority of this is copied from https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/common/JsonConverter.java
- * Adjusted for expected behavior of our use cases
+ * Marjority of this is copied from
+ * https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/
+ * common/JsonConverter.java Adjusted for expected behavior of our use cases
  */
 public class MercifulJsonConverter {
 
@@ -132,10 +133,10 @@ public class MercifulJsonConverter {
   }
 
   private boolean isOptional(Schema schema) {
-    return schema.getType().equals(Schema.Type.UNION) &&
-        schema.getTypes().size() == 2 &&
-        (schema.getTypes().get(0).getType().equals(Schema.Type.NULL) ||
-            schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
+    return schema.getType().equals(Schema.Type.UNION)
+        && schema.getTypes().size() == 2
+        && (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)
+        || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
   }
 
   private Schema getNonNull(Schema schema) {

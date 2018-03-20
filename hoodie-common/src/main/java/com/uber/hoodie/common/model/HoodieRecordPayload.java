@@ -38,13 +38,13 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   /**
    * This methods lets you write custom merging/combining logic to produce new values as a function
    * of current value on storage and whats contained in this object.
-   *
+   * <p>
    * eg: 1) You are updating counters, you may want to add counts to currentValue and write back
    * updated counts 2) You may be reading DB redo logs, and merge them with current image for a
    * database row on storage
    *
    * @param currentValue Current value in storage, to merge/combine this payload with
-   * @param schema Schema used for record
+   * @param schema       Schema used for record
    * @return new combined/merged value to be written back to storage. EMPTY to skip writing this
    * record.
    */

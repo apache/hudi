@@ -79,25 +79,20 @@ public class HoodieInstant implements Serializable {
    */
   public String getFileName() {
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
-      return isInflight ?
-          HoodieTimeline.makeInflightCommitFileName(timestamp) :
-          HoodieTimeline.makeCommitFileName(timestamp);
+      return isInflight ? HoodieTimeline.makeInflightCommitFileName(timestamp)
+          : HoodieTimeline.makeCommitFileName(timestamp);
     } else if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
-      return isInflight ?
-          HoodieTimeline.makeInflightCleanerFileName(timestamp) :
-          HoodieTimeline.makeCleanerFileName(timestamp);
+      return isInflight ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
+          : HoodieTimeline.makeCleanerFileName(timestamp);
     } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
-      return isInflight ?
-          HoodieTimeline.makeInflightRollbackFileName(timestamp) :
-          HoodieTimeline.makeRollbackFileName(timestamp);
+      return isInflight ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
+          : HoodieTimeline.makeRollbackFileName(timestamp);
     } else if (HoodieTimeline.SAVEPOINT_ACTION.equals(action)) {
-      return isInflight ?
-          HoodieTimeline.makeInflightSavePointFileName(timestamp) :
-          HoodieTimeline.makeSavePointFileName(timestamp);
+      return isInflight ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
+          : HoodieTimeline.makeSavePointFileName(timestamp);
     } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
-      return isInflight ?
-          HoodieTimeline.makeInflightDeltaFileName(timestamp) :
-          HoodieTimeline.makeDeltaFileName(timestamp);
+      return isInflight ? HoodieTimeline.makeInflightDeltaFileName(timestamp)
+          : HoodieTimeline.makeDeltaFileName(timestamp);
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }
@@ -111,9 +106,9 @@ public class HoodieInstant implements Serializable {
       return false;
     }
     HoodieInstant that = (HoodieInstant) o;
-    return isInflight == that.isInflight &&
-        Objects.equals(action, that.action) &&
-        Objects.equals(timestamp, that.timestamp);
+    return isInflight == that.isInflight
+        && Objects.equals(action, that.action)
+        && Objects.equals(timestamp, that.timestamp);
   }
 
   @Override

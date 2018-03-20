@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.cli.commands;
 
-
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
@@ -44,12 +43,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class StatsCommand implements CommandMarker {
 
+  private static final int MAX_FILES = 1000000;
+
   @CliAvailabilityIndicator({"stats wa"})
   public boolean isWriteAmpAvailable() {
     return HoodieCLI.tableMetadata != null;
   }
 
-  @CliCommand(value = "stats wa", help = "Write Amplification. Ratio of how many records were upserted to how many records were actually written")
+  @CliCommand(value = "stats wa", help = "Write Amplification. Ratio of how many records were upserted to how many "
+      + "records were actually written")
   public String writeAmplificationStats() throws IOException {
     long totalRecordsUpserted = 0;
     long totalRecordsWritten = 0;
@@ -60,18 +62,13 @@ public class StatsCommand implements CommandMarker {
     String[][] rows = new String[new Long(timeline.countInstants()).intValue() + 1][];
     int i = 0;
     DecimalFormat df = new DecimalFormat("#.00");
-    for (HoodieInstant commitTime : timeline.getInstants().collect(
-        Collectors.toList())) {
+    for (HoodieInstant commitTime : timeline.getInstants().collect(Collectors.toList())) {
       String waf = "0";
-      HoodieCommitMetadata commit = HoodieCommitMetadata
-          .fromBytes(activeTimeline.getInstantDetails(commitTime).get());
+      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitTime).get());
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
-        waf = df.format(
-            (float) commit.fetchTotalRecordsWritten() / commit
-                .fetchTotalUpdateRecordsWritten());
+        waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());
       }
-      rows[i++] = new String[]{commitTime.getTimestamp(),
-          String.valueOf(commit.fetchTotalUpdateRecordsWritten()),
+      rows[i++] = new String[] {commitTime.getTimestamp(), String.valueOf(commit.fetchTotalUpdateRecordsWritten()),
           String.valueOf(commit.fetchTotalRecordsWritten()), waf};
       totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();
       totalRecordsWritten += commit.fetchTotalRecordsWritten();
@@ -80,43 +77,32 @@ public class StatsCommand implements CommandMarker {
     if (totalRecordsUpserted > 0) {
       waf = df.format((float) totalRecordsWritten / totalRecordsUpserted);
     }
-    rows[i] = new String[]{"Total", String.valueOf(totalRecordsUpserted),
-        String.valueOf(totalRecordsWritten), waf};
-    return HoodiePrintHelper.print(
-        new String[]{"CommitTime", "Total Upserted", "Total Written",
-            "Write Amplifiation Factor"}, rows);
+    rows[i] = new String[] {"Total", String.valueOf(totalRecordsUpserted), String.valueOf(totalRecordsWritten), waf};
+    return HoodiePrintHelper
+        .print(new String[] {"CommitTime", "Total Upserted", "Total Written", "Write Amplifiation Factor"},
+            rows);
 
   }
 
 
   private String[] printFileSizeHistogram(String commitTime, Snapshot s) {
-    return new String[]{
-        commitTime,
-        NumericUtils.humanReadableByteCount(s.getMin()),
-        NumericUtils.humanReadableByteCount(s.getValue(0.1)),
-        NumericUtils.humanReadableByteCount(s.getMedian()),
-        NumericUtils.humanReadableByteCount(s.getMean()),
-        NumericUtils.humanReadableByteCount(s.get95thPercentile()),
-        NumericUtils.humanReadableByteCount(s.getMax()),
-        String.valueOf(s.size()),
-        NumericUtils.humanReadableByteCount(s.getStdDev())
-    };
+    return new String[] {commitTime, NumericUtils.humanReadableByteCount(s.getMin()),
+        NumericUtils.humanReadableByteCount(s.getValue(0.1)), NumericUtils.humanReadableByteCount(s.getMedian()),
+        NumericUtils.humanReadableByteCount(s.getMean()), NumericUtils.humanReadableByteCount(s.get95thPercentile()),
+        NumericUtils.humanReadableByteCount(s.getMax()), String.valueOf(s.size()),
+        NumericUtils.humanReadableByteCount(s.getStdDev())};
   }
 
   @CliCommand(value = "stats filesizes", help = "File Sizes. Display summary stats on sizes of files")
-  public String fileSizeStats(
-      @CliOption(key = {
-          "partitionPath"}, help = "regex to select files, eg: 2016/08/02", unspecifiedDefaultValue = "*/*/*")
-      final String globRegex) throws IOException {
+  public String fileSizeStats(@CliOption(key = {
+      "partitionPath"}, help = "regex to select files, eg: 2016/08/02", unspecifiedDefaultValue = "*/*/*") final
+      String globRegex) throws IOException {
 
     FileSystem fs = HoodieCLI.fs;
-    String globPath = String.format("%s/%s/*",
-        HoodieCLI.tableMetadata.getBasePath(),
-        globRegex);
+    String globPath = String.format("%s/%s/*", HoodieCLI.tableMetadata.getBasePath(), globRegex);
     FileStatus[] statuses = fs.globStatus(new Path(globPath));
 
     // max, min, #small files < 10MB, 50th, avg, 95th
-    final int MAX_FILES = 1000000;
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<String, Histogram>();
     for (FileStatus fileStatus : statuses) {
@@ -138,8 +124,8 @@ public class StatsCommand implements CommandMarker {
     Snapshot s = globalHistogram.getSnapshot();
     rows[ind++] = printFileSizeHistogram("ALL", s);
 
-    return HoodiePrintHelper.print(
-        new String[]{"CommitTime", "Min", "10th", "50th", "avg", "95th", "Max", "NumFiles",
-            "StdDev"}, rows);
+    return HoodiePrintHelper
+        .print(new String[] {"CommitTime", "Min", "10th", "50th", "avg", "95th", "Max", "NumFiles", "StdDev"},
+            rows);
   }
 }

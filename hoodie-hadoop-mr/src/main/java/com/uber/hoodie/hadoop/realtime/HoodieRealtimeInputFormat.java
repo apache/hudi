@@ -79,8 +79,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
     // TODO(vc): Should we handle also non-hoodie splits here?
     Map<String, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     Map<Path, HoodieTableMetaClient> partitionsToMetaClient = partitionsToParquetSplits.keySet()
-        .stream()
-        .collect(Collectors.toMap(Function.identity(), p -> {
+        .stream().collect(Collectors.toMap(Function.identity(), p -> {
           // find if we have a metaclient already for this partition.
           Optional<String> matchingBasePath = metaClientMap.keySet().stream()
               .filter(basePath -> p.toString().startsWith(basePath)).findFirst();
@@ -97,7 +96,8 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
           }
         }));
 
-    // for all unique split parents, obtain all delta files based on delta commit timeline, grouped on file id
+    // for all unique split parents, obtain all delta files based on delta commit timeline,
+    // grouped on file id
     List<HoodieRealtimeFileSplit> rtSplits = new ArrayList<>();
     partitionsToParquetSplits.keySet().stream().forEach(partitionPath -> {
       // for each partition path obtain the data & log file groupings, then map back to inputsplits
@@ -119,14 +119,13 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
           dataFileSplits.forEach(split -> {
             try {
               List<String> logFilePaths = fileSlice.getLogFiles()
-                  .map(logFile -> logFile.getPath().toString())
-                  .collect(Collectors.toList());
-              // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
-              String maxCommitTime = metaClient.getActiveTimeline()
-                  .getTimelineOfActions(
-                      Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.ROLLBACK_ACTION,
-                          HoodieTimeline.DELTA_COMMIT_ACTION))
-                  .filterCompletedInstants().lastInstant().get().getTimestamp();
+                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
+              // Get the maxCommit from the last delta or compaction or commit - when
+              // bootstrapped from COW table
+              String maxCommitTime = metaClient.getActiveTimeline().getTimelineOfActions(
+                  Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.ROLLBACK_ACTION,
+                      HoodieTimeline.DELTA_COMMIT_ACTION)).filterCompletedInstants().lastInstant()
+                  .get().getTimestamp();
               rtSplits.add(
                   new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths,
                       maxCommitTime));
@@ -147,7 +146,8 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
 
   @Override
   public FileStatus[] listStatus(JobConf job) throws IOException {
-    // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit timeline.
+    // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
+    // timeline.
     return super.listStatus(job);
   }
 
@@ -170,12 +170,11 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
 
     if (!readColNames.contains(fieldName)) {
       // If not already in the list - then add it
-      conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR,
-          readColNamesPrefix + fieldName);
+      conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
       conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
       if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("Adding extra column " + fieldName
-                + ", to enable log merging cols (%s) ids (%s) ",
+        LOG.debug(String.format(
+            "Adding extra column " + fieldName + ", to enable log merging cols (%s) ids (%s) ",
             conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
             conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
       }
@@ -189,15 +188,14 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
         HOODIE_RECORD_KEY_COL_POS);
     configuration = addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         HOODIE_COMMIT_TIME_COL_POS);
-    configuration = addProjectionField(configuration,
-        HoodieRecord.PARTITION_PATH_METADATA_FIELD, HOODIE_PARTITION_PATH_COL_POS);
+    configuration = addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        HOODIE_PARTITION_PATH_COL_POS);
     return configuration;
   }
 
   @Override
   public RecordReader<Void, ArrayWritable> getRecordReader(final InputSplit split,
-      final JobConf job,
-      final Reporter reporter) throws IOException {
+      final JobConf job, final Reporter reporter) throws IOException {
     LOG.info("Creating record reader with readCols :" + job
         .get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
     // sanity check

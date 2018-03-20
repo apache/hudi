@@ -20,18 +20,17 @@ import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 public class SpillableMapTestUtils {
 
   public static List<String> upsertRecords(List<IndexedRecord> iRecords,
-                                           Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
     List<String> recordKeys = new ArrayList<>();
     iRecords
         .stream()

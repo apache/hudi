@@ -84,7 +84,7 @@ public class KafkaSource extends Source {
 
     /**
      * String representation of checkpoint
-     *
+     * <p>
      * Format: topic1,0:offset0,1:offset1,2:offset2, .....
      */
     public static String offsetsToStr(
@@ -132,9 +132,7 @@ public class KafkaSource extends Source {
   static class ScalaHelpers {
 
     public static <K, V> Map<K, V> toScalaMap(HashMap<K, V> m) {
-      return JavaConverters.mapAsScalaMapConverter(m).asScala().toMap(
-          Predef.conforms()
-      );
+      return JavaConverters.mapAsScalaMapConverter(m).asScala().toMap(Predef.conforms());
     }
 
     public static Set<String> toScalaSet(HashSet<String> s) {
@@ -152,8 +150,8 @@ public class KafkaSource extends Source {
    */
   static class Config {
 
-    private final static String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
-    private final static String DEFAULT_AUTO_RESET_OFFSET = "largest";
+    private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
+    private static final String DEFAULT_AUTO_RESET_OFFSET = "largest";
   }
 
 
@@ -166,8 +164,8 @@ public class KafkaSource extends Source {
     super(config, sparkContext, dataFormat, schemaProvider);
 
     kafkaParams = new HashMap<>();
-    Stream<String> keys = StreamSupport
-        .stream(Spliterators.spliteratorUnknownSize(config.getKeys(), Spliterator.NONNULL), false);
+    Stream<String> keys = StreamSupport.stream(
+        Spliterators.spliteratorUnknownSize(config.getKeys(), Spliterator.NONNULL), false);
     keys.forEach(k -> kafkaParams.put(k, config.getString(k)));
 
     DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.KAFKA_TOPIC_NAME));
@@ -180,8 +178,8 @@ public class KafkaSource extends Source {
 
     // Obtain current metadata for the topic
     KafkaCluster cluster = new KafkaCluster(ScalaHelpers.toScalaMap(kafkaParams));
-    Either<ArrayBuffer<Throwable>, Set<TopicAndPartition>> either = cluster
-        .getPartitions(ScalaHelpers.toScalaSet(new HashSet<>(Arrays.asList(topicName))));
+    Either<ArrayBuffer<Throwable>, Set<TopicAndPartition>> either = cluster.getPartitions(
+        ScalaHelpers.toScalaSet(new HashSet<>(Arrays.asList(topicName))));
     if (either.isLeft()) {
       // log errors. and bail out.
       throw new HoodieDeltaStreamerException("Error obtaining partition metadata",
@@ -197,8 +195,8 @@ public class KafkaSource extends Source {
       String autoResetValue = config
           .getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET);
       if (autoResetValue.equals("smallest")) {
-        fromOffsets = new HashMap(ScalaHelpers
-            .toJavaMap(cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
+        fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
+            cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
       } else if (autoResetValue.equals("largest")) {
         fromOffsets = new HashMap(
             ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
@@ -213,7 +211,8 @@ public class KafkaSource extends Source {
         ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
 
     // Come up with final set of OffsetRanges to read (account for new partitions)
-    // TODO(vc): Respect maxInputBytes, by estimating number of messages to read each batch from partition size
+    // TODO(vc): Respect maxInputBytes, by estimating number of messages to read each batch from
+    // partition size
     OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
@@ -225,14 +224,8 @@ public class KafkaSource extends Source {
     }
 
     // Perform the actual read from Kafka
-    JavaRDD<byte[]> kafkaRDD = KafkaUtils.createRDD(
-        sparkContext,
-        byte[].class,
-        byte[].class,
-        DefaultDecoder.class,
-        DefaultDecoder.class,
-        kafkaParams,
-        offsetRanges).values();
+    JavaRDD<byte[]> kafkaRDD = KafkaUtils.createRDD(sparkContext, byte[].class, byte[].class,
+        DefaultDecoder.class, DefaultDecoder.class, kafkaParams, offsetRanges).values();
 
     // Produce a RDD[GenericRecord]
     final AvroConvertor avroConvertor = new AvroConvertor(
@@ -241,8 +234,8 @@ public class KafkaSource extends Source {
     if (dataFormat == SourceDataFormat.AVRO) {
       newDataRDD = kafkaRDD.map(bytes -> avroConvertor.fromAvroBinary(bytes));
     } else if (dataFormat == SourceDataFormat.JSON) {
-      newDataRDD = kafkaRDD
-          .map(bytes -> avroConvertor.fromJson(new String(bytes, Charset.forName("utf-8"))));
+      newDataRDD = kafkaRDD.map(
+          bytes -> avroConvertor.fromJson(new String(bytes, Charset.forName("utf-8"))));
     } else {
       throw new HoodieNotSupportedException("Unsupport data format :" + dataFormat);
     }

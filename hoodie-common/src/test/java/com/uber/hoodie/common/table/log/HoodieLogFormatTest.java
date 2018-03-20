@@ -16,6 +16,12 @@
 
 package com.uber.hoodie.common.table.log;
 
+import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.minicluster.MiniClusterUtil;
 import com.uber.hoodie.common.model.HoodieArchivedLogFile;
@@ -35,6 +41,17 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.exception.CorruptedLogFileException;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -50,24 +67,6 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @SuppressWarnings("Duplicates")
 @RunWith(Parameterized.class)
@@ -85,9 +84,7 @@ public class HoodieLogFormatTest {
 
   @Parameterized.Parameters(name = "LogBlockReadMode")
   public static Collection<Boolean[]> data() {
-    return Arrays.asList(new Boolean[][]{
-        {true},{false}
-    });
+    return Arrays.asList(new Boolean[][] {{true}, {false}});
   }
 
   @BeforeClass
@@ -123,10 +120,8 @@ public class HoodieLogFormatTest {
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
     assertEquals("Just created this log, size should be 0", 0, writer.getCurrentSize());
-    assertTrue("Check all log files should start with a .",
-        writer.getLogFile().getFileName().startsWith("."));
-    assertEquals("Version should be 1 for new log created", 1,
-        writer.getLogFile().getLogVersion());
+    assertTrue("Check all log files should start with a .", writer.getLogFile().getFileName().startsWith("."));
+    assertEquals("Version should be 1 for new log created", 1, writer.getLogFile().getLogVersion());
   }
 
   @Test
@@ -142,9 +137,8 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(dataBlock);
     long size = writer.getCurrentSize();
     assertTrue("We just wrote a block - size should be > 0", size > 0);
-    assertEquals(
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match",
-        size, fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size,
+        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     writer.close();
   }
 
@@ -166,14 +160,13 @@ public class HoodieLogFormatTest {
 
     // Create a writer with the size threshold as the size we just wrote - so this has to roll
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).withSizeThreshold(size - 1).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).withSizeThreshold(size - 1).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
-    assertEquals("This should be a new log file and hence size should be 0", 0,
-        writer.getCurrentSize());
+    assertEquals("This should be a new log file and hence size should be 0", 0, writer.getCurrentSize());
     assertEquals("Version should be rolled to 2", 2, writer.getLogFile().getLogVersion());
     writer.close();
   }
@@ -193,32 +186,30 @@ public class HoodieLogFormatTest {
     writer.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size2 = writer.getCurrentSize();
     assertTrue("We just wrote a new block - size2 should be > size1", size2 > size1);
-    assertEquals(
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match",
-        size2, fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size2,
+        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     writer.close();
 
     // Close and Open again and append 100 more records
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size3 = writer.getCurrentSize();
     assertTrue("We just wrote a new block - size3 should be > size2", size3 > size2);
-    assertEquals(
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match",
-        size3, fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size3,
+        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     writer.close();
 
     // Cannot get the current size after closing the log
@@ -246,27 +237,24 @@ public class HoodieLogFormatTest {
     // writer.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     long size2 = writer.getCurrentSize();
     assertTrue("We just wrote a new block - size2 should be > size1", size2 > size1);
-    assertEquals(
-        "Write should be auto-flushed. The size reported by FileStatus and the writer should match",
-        size2, fs.getFileStatus(writer.getLogFile().getPath()).getLen());
+    assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match", size2,
+        fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     writer.close();
   }
 
   @Test
-  public void testAppendNotSupported()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAppendNotSupported() throws IOException, URISyntaxException, InterruptedException {
     // Use some fs like LocalFileSystem, that does not support appends
     Path localPartitionPath = new Path("file://" + partitionPath);
-    FileSystem localFs = FSUtils
-        .getFs(localPartitionPath.toString(), HoodieTestUtils.getDefaultHadoopConf());
+    FileSystem localFs = FSUtils.getFs(localPartitionPath.toString(), HoodieTestUtils.getDefaultHadoopConf());
     Path testPath = new Path(localPartitionPath, "append_test");
     localFs.mkdirs(testPath);
 
@@ -279,8 +267,8 @@ public class HoodieLogFormatTest {
 
     for (int i = 0; i < 2; i++) {
       HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
-          .overBaseCommit("").withFs(localFs).build().appendBlock(dataBlock).close();
+          .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive").overBaseCommit("")
+          .withFs(localFs).build().appendBlock(dataBlock).close();
     }
 
     // ensure there are two log file versions, with same data.
@@ -290,16 +278,14 @@ public class HoodieLogFormatTest {
 
   @SuppressWarnings("unchecked")
   @Test
-  public void testBasicWriteAndScan()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testBasicWriteAndScan() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
     Schema schema = getSimpleSchema();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords = records.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords = records.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -307,31 +293,27 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat
-        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
     assertTrue("We wrote a block, we should be able to read it", reader.hasNext());
     HoodieLogBlock nextBlock = reader.next();
-    assertEquals("The next block should be a data block", HoodieLogBlockType.AVRO_DATA_BLOCK,
-        nextBlock.getBlockType());
+    assertEquals("The next block should be a data block", HoodieLogBlockType.AVRO_DATA_BLOCK, nextBlock.getBlockType());
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords,
         dataBlockRead.getRecords());
   }
 
   @SuppressWarnings("unchecked")
   @Test
-  public void testBasicAppendAndRead()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testBasicAppendAndRead() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
     Schema schema = getSimpleSchema();
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
@@ -340,12 +322,11 @@ public class HoodieLogFormatTest {
     writer.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords2 = records2.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords2 = records2.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records2, header);
     writer = writer.appendBlock(dataBlock);
@@ -353,51 +334,48 @@ public class HoodieLogFormatTest {
 
     // Close and Open again and append 100 more records
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords3 = records3.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords3 = records3.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records3, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat
-        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
     assertTrue("First block should be available", reader.hasNext());
     HoodieLogBlock nextBlock = reader.next();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords1.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords1.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
 
     reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords2.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords2.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords2,
         dataBlockRead.getRecords());
 
     reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords3.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords3.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords3,
         dataBlockRead.getRecords());
   }
 
   @SuppressWarnings("unchecked")
   @Test
-  public void testBasicAppendAndScanMultipleFiles()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testBasicAppendAndScanMultipleFiles() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withSizeThreshold(1024).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withSizeThreshold(1024)
+        .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -406,12 +384,11 @@ public class HoodieLogFormatTest {
     Set<HoodieLogFile> logFiles = new HashSet<>();
     List<List<IndexedRecord>> allRecords = new ArrayList<>();
     // create 4 log files
-    while(writer.getLogFile().getLogVersion() != 4) {
+    while (writer.getLogFile().getLogVersion() != 4) {
       logFiles.add(writer.getLogFile());
       List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-      List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-          HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-          .collect(Collectors.toList());
+      List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+          record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
       allRecords.add(copyOfRecords1);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
       HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
@@ -421,24 +398,22 @@ public class HoodieLogFormatTest {
 
     // scan all log blocks (across multiple log files)
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        logFiles.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()),
-        schema, "100", 10240L, readBlocksLazily, false);
+        logFiles.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()), schema, "100",
+        10240L, readBlocksLazily, false);
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
-    for(HoodieRecord record: scanner) {
+    for (HoodieRecord record : scanner) {
       scannedRecords.add((IndexedRecord) record.getData().getInsertValue(schema).get());
     }
 
-    assertEquals("Scanner records count should be the same as appended records",
-        scannedRecords.size(), allRecords.stream().flatMap(records -> records.stream())
-        .collect(Collectors.toList()).size());
+    assertEquals("Scanner records count should be the same as appended records", scannedRecords.size(),
+        allRecords.stream().flatMap(records -> records.stream()).collect(Collectors.toList()).size());
 
   }
 
 
   @Test
-  public void testAppendAndReadOnCorruptedLog()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAppendAndReadOnCorruptedLog() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
@@ -467,14 +442,12 @@ public class HoodieLogFormatTest {
     outputStream.close();
 
     // First round of reads - we should be able to read the first block and then EOF
-    Reader reader = HoodieLogFormat
-        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
     assertTrue("First block should be available", reader.hasNext());
     reader.next();
     assertTrue("We should have corrupted block next", reader.hasNext());
     HoodieLogBlock block = reader.next();
-    assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK,
-        block.getBlockType());
+    assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType());
     HoodieCorruptBlock corruptBlock = (HoodieCorruptBlock) block;
     //assertEquals("", "something-random", new String(corruptBlock.getCorruptedBytes()));
     assertFalse("There should be no more block left", reader.hasNext());
@@ -496,8 +469,8 @@ public class HoodieLogFormatTest {
 
     // Should be able to append a new block
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
@@ -505,16 +478,14 @@ public class HoodieLogFormatTest {
     writer.close();
 
     // Second round of reads - we should be able to read the first and last block
-    reader = HoodieLogFormat
-        .newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
+    reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema());
     assertTrue("First block should be available", reader.hasNext());
     reader.next();
     assertTrue("We should get the 1st corrupted block next", reader.hasNext());
     reader.next();
     assertTrue("We should get the 2nd corrupted block next", reader.hasNext());
     block = reader.next();
-    assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK,
-        block.getBlockType());
+    assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK, block.getBlockType());
     corruptBlock = (HoodieCorruptBlock) block;
     //assertEquals("", "something-else-random", new String(corruptBlock.getCorruptedBytes()));
     assertTrue("We should get the last block next", reader.hasNext());
@@ -524,8 +495,7 @@ public class HoodieLogFormatTest {
 
 
   @Test
-  public void testAvroLogRecordReaderBasic()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAvroLogRecordReaderBasic() throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -533,9 +503,8 @@ public class HoodieLogFormatTest {
         .overBaseCommit("100").withFs(fs).withSizeThreshold(500).build();
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
@@ -545,22 +514,18 @@ public class HoodieLogFormatTest {
 
     // Write 2
     List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords2 = records2.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords2 = records2.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     dataBlock = new HoodieAvroDataBlock(records2, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles,
-        schema, "100", 10240L, readBlocksLazily, false);
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "100", 10240L, readBlocksLazily, false);
     assertEquals("", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -568,10 +533,8 @@ public class HoodieLogFormatTest {
     copyOfRecords1.addAll(copyOfRecords2);
     Set<String> originalKeys = copyOfRecords1.stream()
         .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toSet());
-    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys,
-        readKeys);
+        .collect(Collectors.toSet());
+    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys, readKeys);
   }
 
   @Test
@@ -585,9 +548,8 @@ public class HoodieLogFormatTest {
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
 
@@ -612,34 +574,27 @@ public class HoodieLogFormatTest {
     // Write 3
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
     List<IndexedRecord> records3 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords3 = records3.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords3 = records3.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     dataBlock = new HoodieAvroDataBlock(records3, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles,
-        schema, "102", 10240L, readBlocksLazily, false);
-    assertEquals("We read 200 records from 2 write batches", 200,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "102", 10240L, readBlocksLazily, false);
+    assertEquals("We read 200 records from 2 write batches", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
     copyOfRecords1.addAll(copyOfRecords3);
     Set<String> originalKeys = copyOfRecords1.stream()
         .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toSet());
-    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys,
-        readKeys);
+        .collect(Collectors.toSet());
+    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys, readKeys);
   }
 
   @Test
@@ -653,9 +608,8 @@ public class HoodieLogFormatTest {
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -690,42 +644,35 @@ public class HoodieLogFormatTest {
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     writer = writer.appendBlock(commandBlock);
 
     // Write 3
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
     List<IndexedRecord> records3 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords3 = records3.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords3 = records3.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
 
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     dataBlock = new HoodieAvroDataBlock(records3, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles,
-        schema, "103", 10240L, true, false);
-    assertEquals("We would read 200 records", 200,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "103", 10240L, true, false);
+    assertEquals("We would read 200 records", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records", 200, readKeys.size());
     copyOfRecords1.addAll(copyOfRecords3);
     Set<String> originalKeys = copyOfRecords1.stream()
         .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toSet());
-    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys,
-        readKeys);
+        .collect(Collectors.toSet());
+    assertEquals("CompositeAvroLogReader should return 200 records from 2 versions", originalKeys, readKeys);
   }
 
   @Test
@@ -739,9 +686,8 @@ public class HoodieLogFormatTest {
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -751,44 +697,35 @@ public class HoodieLogFormatTest {
     // Write 2
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     List<IndexedRecord> records2 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords2 = records2.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords2 = records2.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     dataBlock = new HoodieAvroDataBlock(records2, header);
     writer = writer.appendBlock(dataBlock);
 
     copyOfRecords1.addAll(copyOfRecords2);
-    List<String> originalKeys = copyOfRecords1.stream()
-        .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toList());
+    List<String> originalKeys = copyOfRecords1.stream().map(
+        s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()).collect(Collectors.toList());
 
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
 
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
-        header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), header);
     writer = writer.appendBlock(deleteBlock);
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles,
-        schema, "102", 10240L, readBlocksLazily, false);
-    assertEquals("We still would read 200 records", 200,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "102", 10240L, readBlocksLazily, false);
+    assertEquals("We still would read 200 records", 200, scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 150 records", 150, readKeys.size());
     originalKeys.removeAll(deletedKeys);
     Collections.sort(originalKeys);
     Collections.sort(readKeys);
-    assertEquals("CompositeAvroLogReader should return 150 records from 2 versions", originalKeys,
-        readKeys);
+    assertEquals("CompositeAvroLogReader should return 150 records from 2 versions", originalKeys, readKeys);
 
     // Rollback the last block
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
@@ -802,8 +739,7 @@ public class HoodieLogFormatTest {
     scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema, "101", 10240L, readBlocksLazily,
         false);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
-    assertEquals("Stream collect should return all 200 records after rollback of delete", 200,
-        readKeys.size());
+    assertEquals("Stream collect should return all 200 records after rollback of delete", 200, readKeys.size());
   }
 
   @Test
@@ -819,8 +755,8 @@ public class HoodieLogFormatTest {
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
@@ -835,15 +771,12 @@ public class HoodieLogFormatTest {
     dataBlock = new HoodieAvroDataBlock(records2, header);
     writer = writer.appendBlock(dataBlock);
 
-    List<String> originalKeys = copyOfRecords1.stream()
-        .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toList());
+    List<String> originalKeys = copyOfRecords1.stream().map(
+        s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()).collect(Collectors.toList());
 
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
-        header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), header);
     writer = writer.appendBlock(deleteBlock);
 
     // Attempt 1 : Write rollback block for a failed write
@@ -860,14 +793,12 @@ public class HoodieLogFormatTest {
     // Attempt 2 : Write another rollback blocks for a failed write
     writer = writer.appendBlock(commandBlock);
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     // all data must be rolled back before merge
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles, schema, "100", 10240L, readBlocksLazily, false);
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "100", 10240L, readBlocksLazily, false);
     assertEquals("We would have scanned 0 records because of rollback", 0, scanner.getTotalLogRecords());
 
     final List<String> readKeys = new ArrayList<>();
@@ -888,9 +819,8 @@ public class HoodieLogFormatTest {
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
@@ -898,15 +828,12 @@ public class HoodieLogFormatTest {
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
     writer = writer.appendBlock(dataBlock);
 
-    List<String> originalKeys = copyOfRecords1.stream()
-        .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toList());
+    List<String> originalKeys = copyOfRecords1.stream().map(
+        s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()).collect(Collectors.toList());
 
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
-        header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), header);
     writer = writer.appendBlock(deleteBlock);
 
     // Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
@@ -916,15 +843,12 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(commandBlock);
     writer = writer.appendBlock(commandBlock);
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles, schema, "100", 10240L, readBlocksLazily, false);
-    assertEquals("We would read 0 records", 0,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "100", 10240L, readBlocksLazily, false);
+    assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
   @Test
@@ -951,15 +875,12 @@ public class HoodieLogFormatTest {
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer = writer.appendBlock(commandBlock);
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles, schema, "100", 10240L, readBlocksLazily, false);
-    assertEquals("We still would read 100 records", 100,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "100", 10240L, readBlocksLazily, false);
+    assertEquals("We still would read 100 records", 100, scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 150 records", 100, readKeys.size());
@@ -978,9 +899,8 @@ public class HoodieLogFormatTest {
 
     // Write 1
     List<IndexedRecord> records1 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "100");
@@ -990,15 +910,12 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(dataBlock);
     writer = writer.appendBlock(dataBlock);
 
-    List<String> originalKeys = copyOfRecords1.stream()
-        .map(s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString())
-        .collect(
-            Collectors.toList());
+    List<String> originalKeys = copyOfRecords1.stream().map(
+        s -> ((GenericRecord) s).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString()).collect(Collectors.toList());
 
     // Delete 50 keys
     List<String> deletedKeys = originalKeys.subList(0, 50);
-    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]),
-        header);
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new String[50]), header);
     writer = writer.appendBlock(deleteBlock);
 
     // Write 1 rollback block for a failed write
@@ -1008,15 +925,12 @@ public class HoodieLogFormatTest {
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer = writer.appendBlock(commandBlock);
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles, schema, "101", 10240L, readBlocksLazily, false);
-    assertEquals("We would read 0 records", 0,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "101", 10240L, readBlocksLazily, false);
+    assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
   @Test
@@ -1069,8 +983,8 @@ public class HoodieLogFormatTest {
     outputStream.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
 
     writer = writer.appendBlock(dataBlock);
     writer.close();
@@ -1089,8 +1003,8 @@ public class HoodieLogFormatTest {
     outputStream.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     // Write 1 rollback block for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
@@ -1098,15 +1012,12 @@ public class HoodieLogFormatTest {
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer = writer.appendBlock(commandBlock);
 
-    List<String> allLogFiles = FSUtils
-        .getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
-        .map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
+        "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
-        allLogFiles, schema, "101", 10240L, readBlocksLazily, false);
-    assertEquals("We would read 0 records", 0,
-        scanner.getTotalLogRecords());
+    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+        "101", 10240L, readBlocksLazily, false);
+    assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
   @Test
@@ -1133,7 +1044,7 @@ public class HoodieLogFormatTest {
     records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, new String(HoodieAvroUtils.compress(schema.toString())));
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
-    byte [] content = dataBlock.getBytes(schema);
+    byte[] content = dataBlock.getBytes(schema);
     outputStream.writeInt(content.length);
     // Write out some content
     outputStream.write(content);
@@ -1142,8 +1053,8 @@ public class HoodieLogFormatTest {
     outputStream.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
 
     // Write 2 with MAGIC and latest log format version
     records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -1153,16 +1064,15 @@ public class HoodieLogFormatTest {
 
     // Write 3 with MAGIC and latest log format version
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    Reader reader = HoodieLogFormat
-        .newReader(fs, writer.getLogFile(), schema);
+    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), schema);
 
     // Read the first block written with latest version and magic
     reader.hasNext();
@@ -1189,16 +1099,14 @@ public class HoodieLogFormatTest {
 
   @SuppressWarnings("unchecked")
   @Test
-  public void testBasicAppendAndReadInReverse()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testBasicAppendAndReadInReverse() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
     Schema schema = getSimpleSchema();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -1207,54 +1115,51 @@ public class HoodieLogFormatTest {
     writer.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords2 = records2.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords2 = records2.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     dataBlock = new HoodieAvroDataBlock(records2, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
     // Close and Open again and append 100 more records
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords3 = records3.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords3 = records3.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     dataBlock = new HoodieAvroDataBlock(records3, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), readBlocksLazily,
-            true);
+    HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
+        readBlocksLazily, true);
 
     assertTrue("Last block should be available", reader.hasPrev());
     HoodieLogBlock prevBlock = reader.prev();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) prevBlock;
 
-    assertEquals("Third records size should be equal to the written records size",
-        copyOfRecords3.size(), dataBlockRead.getRecords().size());
+    assertEquals("Third records size should be equal to the written records size", copyOfRecords3.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords3,
         dataBlockRead.getRecords());
 
     assertTrue("Second block should be available", reader.hasPrev());
     prevBlock = reader.prev();
     dataBlockRead = (HoodieAvroDataBlock) prevBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords2.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords2.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords2,
         dataBlockRead.getRecords());
 
     assertTrue("First block should be available", reader.hasPrev());
     prevBlock = reader.prev();
     dataBlockRead = (HoodieAvroDataBlock) prevBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords1.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords1.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
 
@@ -1262,8 +1167,7 @@ public class HoodieLogFormatTest {
   }
 
   @Test
-  public void testAppendAndReadOnCorruptedLogInReverse()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testAppendAndReadOnCorruptedLogInReverse() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
@@ -1295,16 +1199,15 @@ public class HoodieLogFormatTest {
 
     // Should be able to append a new block
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     records = SchemaTestUtil.generateTestRecords(0, 100);
     dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
     // First round of reads - we should be able to read the first block and then EOF
-    HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, writer.getLogFile(), schema, readBlocksLazily, true);
+    HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), schema, readBlocksLazily, true);
 
     assertTrue("Last block should be available", reader.hasPrev());
     HoodieLogBlock block = reader.prev();
@@ -1313,7 +1216,7 @@ public class HoodieLogFormatTest {
     assertTrue("Last block should be available", reader.hasPrev());
     try {
       reader.prev();
-    } catch(CorruptedLogFileException e) {
+    } catch (CorruptedLogFileException e) {
       e.printStackTrace();
       // We should have corrupted block
     }
@@ -1321,16 +1224,14 @@ public class HoodieLogFormatTest {
 
   @SuppressWarnings("unchecked")
   @Test
-  public void testBasicAppendAndTraverseInReverse()
-      throws IOException, URISyntaxException, InterruptedException {
+  public void testBasicAppendAndTraverseInReverse() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
         .overBaseCommit("100").withFs(fs).build();
     Schema schema = getSimpleSchema();
     List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords1 = records1.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords1 = records1.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -1339,31 +1240,28 @@ public class HoodieLogFormatTest {
     writer.close();
 
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords2 = records2.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords2 = records2.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     dataBlock = new HoodieAvroDataBlock(records2, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
     // Close and Open again and append 100 more records
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
+        .withFs(fs).build();
     List<IndexedRecord> records3 = SchemaTestUtil.generateTestRecords(0, 100);
-    List<IndexedRecord> copyOfRecords3 = records3.stream().map(record ->
-        HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema))
-        .collect(Collectors.toList());
+    List<IndexedRecord> copyOfRecords3 = records3.stream().map(
+        record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema)).collect(Collectors.toList());
     dataBlock = new HoodieAvroDataBlock(records3, header);
     writer = writer.appendBlock(dataBlock);
     writer.close();
 
-    HoodieLogFileReader reader =
-        new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(), readBlocksLazily,
-            true);
+    HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
+        readBlocksLazily, true);
 
     assertTrue("Third block should be available", reader.hasPrev());
     reader.moveToPrev();
@@ -1375,8 +1273,8 @@ public class HoodieLogFormatTest {
     assertTrue("First block should be available", reader.hasPrev());
     HoodieLogBlock prevBlock = reader.prev();
     HoodieAvroDataBlock dataBlockRead = (HoodieAvroDataBlock) prevBlock;
-    assertEquals("Read records size should be equal to the written records size",
-        copyOfRecords1.size(), dataBlockRead.getRecords().size());
+    assertEquals("Read records size should be equal to the written records size", copyOfRecords1.size(),
+        dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
 

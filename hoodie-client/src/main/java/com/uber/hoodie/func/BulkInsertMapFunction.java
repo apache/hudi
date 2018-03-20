@@ -29,8 +29,8 @@ import org.apache.spark.api.java.function.Function2;
 /**
  * Map function that handles a sorted stream of HoodieRecords
  */
-public class BulkInsertMapFunction<T extends HoodieRecordPayload>
-    implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
+public class BulkInsertMapFunction<T extends HoodieRecordPayload> implements
+    Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
   private String commitTime;
   private HoodieWriteConfig config;
@@ -45,8 +45,7 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
 
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition,
-      Iterator<HoodieRecord<T>> sortedRecordItr)
-      throws Exception {
+      Iterator<HoodieRecord<T>> sortedRecordItr) throws Exception {
     return new LazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable);
   }
 }

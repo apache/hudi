@@ -60,17 +60,27 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     this.metaClient = metaClient;
   }
 
+  public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+    switch (metaClient.getTableType()) {
+      case COPY_ON_WRITE:
+        return new HoodieCopyOnWriteTable<>(config, metaClient);
+      case MERGE_ON_READ:
+        return new HoodieMergeOnReadTable<>(config, metaClient);
+      default:
+        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
+    }
+  }
+
   /**
    * Provides a partitioner to perform the upsert operation, based on the workload profile
    */
   public abstract Partitioner getUpsertPartitioner(WorkloadProfile profile);
 
-
   /**
    * Provides a partitioner to perform the insert operation, based on the workload profile
    */
   public abstract Partitioner getInsertPartitioner(WorkloadProfile profile);
-
 
   /**
    * Return whether this HoodieTable implementation can benefit from workload profiling
@@ -131,7 +141,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     return getCommitsTimeline().filterInflights();
   }
 
-
   /**
    * Get only the completed (no-inflights) clean timeline
    */
@@ -162,12 +171,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       throw new HoodieSavepointException(
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
     }
-    HoodieInstant instant =
-        new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION,
+        savepointTime);
     HoodieSavepointMetadata metadata = null;
     try {
-      metadata = AvroUtils.deserializeHoodieSavepointMetadata(
-          getActiveTimeline().getInstantDetails(instant).get());
+      metadata = AvroUtils
+          .deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
     } catch (IOException e) {
       throw new HoodieSavepointException(
           "Could not get savepointed data files for savepoint " + savepointTime, e);
@@ -189,7 +198,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         return getActiveTimeline().getCommitTimeline();
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits
-        // Include commit action to be able to start doing a MOR over a COW dataset - no migration required
+        // Include commit action to be able to start doing a MOR over a COW dataset - no
+        // migration required
         return getActiveTimeline().getCommitsTimeline();
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
@@ -219,9 +229,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         return HoodieActiveTimeline.COMMIT_ACTION;
       case MERGE_ON_READ:
         return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
+      default:
+        throw new HoodieCommitException(
+            "Could not commit on unknown storage type " + metaClient.getTableType());
     }
-    throw new HoodieCommitException(
-        "Could not commit on unknown storage type " + metaClient.getTableType());
   }
 
   /**
@@ -236,21 +247,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract Iterator<List<WriteStatus>> handleInsertPartition(String commitTime,
       Integer partition, Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    switch (metaClient.getTableType()) {
-      case COPY_ON_WRITE:
-        return new HoodieCopyOnWriteTable<>(config, metaClient);
-      case MERGE_ON_READ:
-        return new HoodieMergeOnReadTable<>(config, metaClient);
-      default:
-        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-    }
-  }
-
   /**
-   * Run Compaction on the table.
-   * Compaction arranges the data so that it is optimized for data access
+   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data
+   * access
    */
   public abstract JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String commitTime);
 

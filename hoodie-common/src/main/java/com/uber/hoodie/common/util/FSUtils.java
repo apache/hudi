@@ -94,8 +94,10 @@ public class FSUtils {
     return String.format("%s_%d_%s.parquet", fileId, taskPartitionId, commitTime);
   }
 
-  public static String makeTempDataFileName(String partitionPath, String commitTime, int taskPartitionId, String fileId, int stageId, long taskAttemptId) {
-    return String.format("%s_%s_%d_%s_%d_%d.parquet", partitionPath.replace("/", "-"), fileId, taskPartitionId, commitTime, stageId, taskAttemptId);
+  public static String makeTempDataFileName(String partitionPath, String commitTime,
+      int taskPartitionId, String fileId, int stageId, long taskAttemptId) {
+    return String.format("%s_%s_%d_%s_%d_%d.parquet", partitionPath.replace("/", "-"), fileId,
+        taskPartitionId, commitTime, stageId, taskAttemptId);
   }
 
   public static String maskWithoutFileId(String commitTime, int taskPartitionId) {
@@ -299,7 +301,8 @@ public class FSUtils {
     Optional<Integer> currentVersion =
         getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
     // handle potential overflow
-    return (currentVersion.isPresent()) ? currentVersion.get() + 1 : HoodieLogFile.LOGFILE_BASE_VERSION;
+    return (currentVersion.isPresent()) ? currentVersion.get() + 1
+        : HoodieLogFile.LOGFILE_BASE_VERSION;
   }
 
   public static int getDefaultBufferSize(final FileSystem fs) {
@@ -331,7 +334,8 @@ public class FSUtils {
       if (recovered) {
         break;
       }
-      // Sleep for 1 second before trying again. Typically it takes about 2-3 seconds to recover under default settings
+      // Sleep for 1 second before trying again. Typically it takes about 2-3 seconds to recover
+      // under default settings
       Thread.sleep(1000);
     }
     return recovered;

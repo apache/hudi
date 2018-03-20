@@ -30,14 +30,14 @@ import org.apache.log4j.Logger;
  */
 public class HoodieMetrics {
 
-  private HoodieWriteConfig config = null;
-  private String tableName = null;
   private static Logger logger = LogManager.getLogger(HoodieMetrics.class);
   // Some timers
   public String rollbackTimerName = null;
   public String cleanTimerName = null;
   public String commitTimerName = null;
   public String finalizeTimerName = null;
+  private HoodieWriteConfig config = null;
+  private String tableName = null;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
   private Timer commitTimer = null;
@@ -113,8 +113,9 @@ public class HoodieMetrics {
 
   public void updateRollbackMetrics(long durationInMs, long numFilesDeleted) {
     if (config.isMetricsOn()) {
-      logger.info(String.format("Sending rollback metrics (duration=%d, numFilesDeleted=$d)",
-          durationInMs, numFilesDeleted));
+      logger.info(String
+          .format("Sending rollback metrics (duration=%d, numFilesDeleted=$d)", durationInMs,
+              numFilesDeleted));
       registerGauge(getMetricsName("rollback", "duration"), durationInMs);
       registerGauge(getMetricsName("rollback", "numFilesDeleted"), numFilesDeleted);
     }
@@ -122,8 +123,9 @@ public class HoodieMetrics {
 
   public void updateCleanMetrics(long durationInMs, int numFilesDeleted) {
     if (config.isMetricsOn()) {
-      logger.info(String.format("Sending clean metrics (duration=%d, numFilesDeleted=%d)",
-          durationInMs, numFilesDeleted));
+      logger.info(String
+          .format("Sending clean metrics (duration=%d, numFilesDeleted=%d)", durationInMs,
+              numFilesDeleted));
       registerGauge(getMetricsName("clean", "duration"), durationInMs);
       registerGauge(getMetricsName("clean", "numFilesDeleted"), numFilesDeleted);
     }
@@ -131,8 +133,9 @@ public class HoodieMetrics {
 
   public void updateFinalizeWriteMetrics(long durationInMs, int numFilesFinalized) {
     if (config.isMetricsOn()) {
-      logger.info(String.format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)",
-          durationInMs, numFilesFinalized));
+      logger.info(String
+          .format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)",
+              durationInMs, numFilesFinalized));
       registerGauge(getMetricsName("finalize", "duration"), durationInMs);
       registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
     }
@@ -140,8 +143,7 @@ public class HoodieMetrics {
 
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
-    return config == null ? null :
-        String.format("%s.%s.%s", tableName, action, metric);
+    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
   }
 
   void registerGauge(String metricName, final long value) {
@@ -154,7 +156,8 @@ public class HoodieMetrics {
         }
       });
     } catch (Exception e) {
-      // Here we catch all exception, so the major upsert pipeline will not be affected if the metrics system
+      // Here we catch all exception, so the major upsert pipeline will not be affected if the
+      // metrics system
       // has some issues.
       logger.error("Failed to send metrics: ", e);
     }

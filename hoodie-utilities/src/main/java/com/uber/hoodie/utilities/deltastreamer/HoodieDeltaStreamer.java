@@ -120,9 +120,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
     if (fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), cfg.targetBasePath);
-      this.commitTimelineOpt = Optional
-          .of(meta.getActiveTimeline().getCommitsTimeline()
-              .filterCompletedInstants());
+      this.commitTimelineOpt = Optional.of(meta.getActiveTimeline().getCommitsTimeline()
+          .filterCompletedInstants());
     } else {
       this.commitTimelineOpt = Optional.empty();
     }
@@ -137,13 +136,13 @@ public class HoodieDeltaStreamer implements Serializable {
     // Create the source & schema providers
     PropertiesConfiguration sourceCfg = UtilHelpers.readConfig(fs, new Path(cfg.sourceConfigProps));
     log.info("Creating source " + cfg.sourceClassName + " with configs : " + sourceCfg.toString());
-    this.source = UtilHelpers
-        .createSource(cfg.sourceClassName, sourceCfg, jssc, cfg.sourceFormat, schemaProvider);
+    this.source = UtilHelpers.createSource(cfg.sourceClassName, sourceCfg, jssc, cfg.sourceFormat,
+        schemaProvider);
   }
 
   private void initSchemaProvider() throws IOException {
-    PropertiesConfiguration schemaCfg = UtilHelpers
-        .readConfig(fs, new Path(cfg.schemaProviderConfigProps));
+    PropertiesConfiguration schemaCfg = UtilHelpers.readConfig(fs,
+        new Path(cfg.schemaProviderConfigProps));
     log.info(
         "Creating schema provider " + cfg.schemaProviderClassName + " with configs : " + schemaCfg
             .toString());
@@ -175,8 +174,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
     sparkConf = HoodieWriteClient.registerClasses(sparkConf);
     // register the schemas, so that shuffle does not serialize the full schemas
-    List<Schema> schemas = Arrays
-        .asList(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+    List<Schema> schemas = Arrays.asList(schemaProvider.getSourceSchema(),
+        schemaProvider.getTargetSchema());
     sparkConf.registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     return new JavaSparkContext(sparkConf);
   }
@@ -187,15 +186,14 @@ public class HoodieDeltaStreamer implements Serializable {
     if (commitTimelineOpt.isPresent()) {
       Optional<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata =
-            HoodieCommitMetadata
-                .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get());
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+            commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get());
         if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
           resumeCheckpointStr = Optional.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {
           throw new HoodieDeltaStreamerException(
-              "Unable to find previous checkpoint. Please double check if this table " +
-                  "was indeed built via delta streamer ");
+              "Unable to find previous checkpoint. Please double check if this table "
+                  + "was indeed built via delta streamer ");
         }
       }
     } else {
@@ -208,8 +206,8 @@ public class HoodieDeltaStreamer implements Serializable {
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
     // Pull the data from the source & prepare the write
-    Pair<Optional<JavaRDD<GenericRecord>>, String> dataAndCheckpoint = source
-        .fetchNewData(resumeCheckpointStr, cfg.maxInputBytes);
+    Pair<Optional<JavaRDD<GenericRecord>>, String> dataAndCheckpoint = source.fetchNewData(
+        resumeCheckpointStr, cfg.maxInputBytes);
 
     if (!dataAndCheckpoint.getKey().isPresent()) {
       log.info("No new data, nothing to commit.. ");
@@ -217,14 +215,11 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     JavaRDD<GenericRecord> avroRDD = dataAndCheckpoint.getKey().get();
-    JavaRDD<HoodieRecord> records = avroRDD
-        .map(gr -> {
-          HoodieRecordPayload payload = DataSourceUtils.createPayload(
-              cfg.payloadClassName,
-              gr,
-              (Comparable) gr.get(cfg.sourceOrderingField));
-          return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
-        });
+    JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
+      HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+          (Comparable) gr.get(cfg.sourceOrderingField));
+      return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+    });
 
     // Perform the write
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig(cfg.hoodieClientProps);
@@ -245,8 +240,8 @@ public class HoodieDeltaStreamer implements Serializable {
     HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
     checkpointCommitMetadata.put(CHECKPOINT_KEY, dataAndCheckpoint.getValue());
 
-    boolean success = client
-        .commit(commitTime, writeStatusRDD, Optional.of(checkpointCommitMetadata));
+    boolean success = client.commit(commitTime, writeStatusRDD,
+        Optional.of(checkpointCommitMetadata));
     if (success) {
       log.info("Commit " + commitTime + " successful!");
       // TODO(vc): Kick off hive sync from here.
@@ -258,23 +253,20 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   private HoodieWriteConfig getHoodieClientConfig(String hoodieClientCfgPath) throws Exception {
-    return HoodieWriteConfig.newBuilder()
-        .combineInput(true, true)
-        .withPath(cfg.targetBasePath)
-        .withAutoCommit(false)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withPayloadClass(OverwriteWithLatestAvroPayload.class.getName()).build())
+    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
+        .withAutoCommit(false).withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withPayloadClass(
+                OverwriteWithLatestAvroPayload
+                    .class
+                    .getName()).build())
         .withSchema(schemaProvider.getTargetSchema().toString())
-        .forTable(cfg.targetTableName)
-        .withIndexConfig(
+        .forTable(cfg.targetTableName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .fromInputStream(fs.open(new Path(hoodieClientCfgPath)))
-        .build();
+        .fromInputStream(fs.open(new Path(hoodieClientCfgPath))).build();
   }
 
   private enum Operation {
-    UPSERT,
-    INSERT
+    UPSERT, INSERT
   }
 
   private class OperationConvertor implements IStringConverter<Operation> {
@@ -308,58 +300,86 @@ public class HoodieDeltaStreamer implements Serializable {
     public String targetTableName;
 
     @Parameter(names = {"--hoodie-client-config"}, description =
-        "path to properties file on localfs or dfs, with hoodie client config. Sane defaults" +
-            "are used, but recommend use to provide basic things like metrics endpoints, hive configs etc")
+        "path to properties file on localfs or "
+            + "dfs, with hoodie client config. "
+            + "Sane defaults"
+            + "are used, but recommend use to "
+            + "provide basic things like metrics "
+            + "endpoints, hive configs etc")
     public String hoodieClientProps = null;
 
     /**
      * SOURCE CONFIGS
      **/
     @Parameter(names = {"--source-class"}, description =
-        "subclass of com.uber.hoodie.utilities.sources.Source to use to read data. " +
-            "built-in options: com.uber.hoodie.utilities.common.{DFSSource (default), KafkaSource, HiveIncrPullSource}")
+        "subclass of com.uber.hoodie.utilities.sources"
+            + ".Source to use to read data. "
+            + "built-in options: com.uber.hoodie.utilities"
+            + ".common.{DFSSource (default), KafkaSource, "
+            + "HiveIncrPullSource}")
     public String sourceClassName = DFSSource.class.getName();
 
     @Parameter(names = {"--source-config"}, description =
-        "path to properties file on localfs or dfs, with source configs. " +
-            "For list of acceptable properties, refer the source class", required = true)
+        "path to properties file on localfs or dfs, with "
+            + "source configs. "
+            + "For list of acceptable properties, refer "
+            + "the source class", required = true)
     public String sourceConfigProps = null;
 
     @Parameter(names = {"--source-format"}, description =
-        "Format of data in source, JSON (default), Avro. All source data is " +
-            "converted to Avro using the provided schema in any case", converter = SourceFormatConvertor.class)
+        "Format of data in source, JSON (default), Avro. "
+            + "All source data is "
+            + "converted to Avro using the provided "
+            + "schema in any case", converter = SourceFormatConvertor.class)
     public SourceDataFormat sourceFormat = SourceDataFormat.JSON;
 
     @Parameter(names = {"--source-ordering-field"}, description =
-        "Field within source record to decide how to break ties between " +
-            " records with same key in input data. Default: 'ts' holding unix timestamp of record")
+        "Field within source record to decide how"
+            + " to break ties between "
+            + " records with same key in input "
+            + "data. Default: 'ts' holding unix "
+            + "timestamp of record")
     public String sourceOrderingField = "ts";
 
     @Parameter(names = {"--key-generator-class"}, description =
-        "Subclass of com.uber.hoodie.utilities.common.KeyExtractor to generate" +
-            "a HoodieKey from the given avro record. Built in: SimpleKeyGenerator (Uses provided field names as recordkey & partitionpath. "
-            +
-            "Nested fields specified via dot notation, e.g: a.b.c)")
+        "Subclass of com.uber.hoodie.utilities"
+            + ".common.KeyExtractor to generate"
+            + "a HoodieKey from the given avro "
+            + "record. Built in: SimpleKeyGenerator"
+            + " (Uses provided field names as "
+            + "recordkey & partitionpath. "
+            + "Nested fields specified via dot "
+            + "notation, e.g: a.b.c)")
     public String keyGeneratorClass = SimpleKeyGenerator.class.getName();
 
     @Parameter(names = {"--key-generator-config"}, description =
-        "Path to properties file on localfs or dfs, with KeyGenerator configs. " +
-            "For list of acceptable properites, refer the KeyGenerator class", required = true)
+        "Path to properties file on localfs or "
+            + "dfs, with KeyGenerator configs. "
+            + "For list of acceptable properites, "
+            + "refer the KeyGenerator class",
+        required = true)
     public String keyGeneratorProps = null;
 
     @Parameter(names = {"--payload-class"}, description =
-        "subclass of HoodieRecordPayload, that works off a GenericRecord. " +
-            "Default: SourceWrapperPayload. Implement your own, if you want to do something other than overwriting existing value")
+        "subclass of HoodieRecordPayload, that works off "
+            + "a GenericRecord. "
+            + "Default: SourceWrapperPayload. Implement "
+            + "your own, if you want to do something "
+            + "other than overwriting existing value")
     public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
 
     @Parameter(names = {"--schemaprovider-class"}, description =
-        "subclass of com.uber.hoodie.utilities.schema.SchemaProvider " +
-            "to attach schemas to input & target table data, built in options: FilebasedSchemaProvider")
+        "subclass of com.uber.hoodie.utilities"
+            + ".schema.SchemaProvider "
+            + "to attach schemas to input & target"
+            + " table data, built in options: "
+            + "FilebasedSchemaProvider")
     public String schemaProviderClassName = FilebasedSchemaProvider.class.getName();
 
     @Parameter(names = {"--schemaprovider-config"}, description =
-        "path to properties file on localfs or dfs, with schema configs. " +
-            "For list of acceptable properties, refer the schema provider class", required = true)
+        "path to properties file on localfs or dfs, with schema "
+            + "configs. For list of acceptable properties, refer "
+            + "the schema provider class", required = true)
     public String schemaProviderConfigProps = null;
 
 
@@ -371,8 +391,9 @@ public class HoodieDeltaStreamer implements Serializable {
     public long maxInputBytes = 1L * 1024 * 1024 * 1024 * 1024;
 
     @Parameter(names = {"--op"}, description =
-        "Takes one of these values : UPSERT (default), INSERT (use when input " +
-            "is purely new data/inserts to gain speed)", converter = OperationConvertor.class)
+        "Takes one of these values : UPSERT (default), INSERT (use when input "
+            + "is purely new data/inserts to gain speed)",
+        converter = OperationConvertor.class)
     public Operation operation = Operation.UPSERT;
 
 

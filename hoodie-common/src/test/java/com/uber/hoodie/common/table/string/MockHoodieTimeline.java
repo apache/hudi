@@ -27,13 +27,10 @@ import java.util.stream.Stream;
 
 public class MockHoodieTimeline extends HoodieActiveTimeline {
 
-  public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights)
-      throws IOException {
+  public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights) throws IOException {
     super();
-    this.instants = Stream.concat(completed
-            .map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
-        inflights.map(
-            s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
+    this.instants = Stream.concat(completed.map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)),
+        inflights.map(s -> new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, s)))
         .sorted(Comparator.comparing(new Function<HoodieInstant, String>() {
           @Override
           public String apply(HoodieInstant hoodieInstant) {

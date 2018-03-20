@@ -43,15 +43,15 @@ import org.apache.commons.io.IOUtils;
  */
 public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayload> {
 
-  private transient static final ObjectMapper mapper = new ObjectMapper();
+  private static final transient ObjectMapper mapper = new ObjectMapper();
   private String partitionPath;
   private String rowKey;
   private byte[] jsonDataCompressed;
   private int dataSize;
   private boolean isDeleted;
 
-  public TestRawTripPayload(Optional<String> jsonData, String rowKey, String partitionPath,
-      String schemaStr, Boolean isDeleted) throws IOException {
+  public TestRawTripPayload(Optional<String> jsonData, String rowKey, String partitionPath, String schemaStr,
+      Boolean isDeleted) throws IOException {
     if (jsonData.isPresent()) {
       this.jsonDataCompressed = compressData(jsonData.get());
       this.dataSize = jsonData.get().length();
@@ -61,8 +61,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     this.isDeleted = isDeleted;
   }
 
-  public TestRawTripPayload(String jsonData, String rowKey, String partitionPath,
-      String schemaStr) throws IOException {
+  public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
     this(Optional.of(jsonData), rowKey, partitionPath, schemaStr, false);
   }
 
@@ -86,8 +85,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema)
-      throws IOException {
+  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
     return this.getInsertValue(schema);
   }
 
@@ -120,8 +118,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
 
   private byte[] compressData(String jsonData) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DeflaterOutputStream dos =
-        new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
+    DeflaterOutputStream dos = new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
     try {
       dos.write(jsonData.getBytes());
     } finally {
@@ -140,12 +137,35 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   /**
-   * A custom {@link WriteStatus} that merges passed metadata key value map to {@code
-   * WriteStatus.markSuccess()} and {@code WriteStatus.markFailure()}.
+   * A custom {@link WriteStatus} that merges passed metadata key value map to {@code WriteStatus.markSuccess()} and
+   * {@code WriteStatus.markFailure()}.
    */
   public static class MetadataMergeWriteStatus extends WriteStatus {
 
     private Map<String, String> mergedMetadataMap = new HashMap<>();
+
+    public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
+      Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
+      for (WriteStatus writeStatus : writeStatuses) {
+        MetadataMergeWriteStatus.mergeMetadataMaps(((MetadataMergeWriteStatus) writeStatus).getMergedMetadataMap(),
+            allWriteStatusMergedMetadataMap);
+      }
+      return allWriteStatusMergedMetadataMap;
+    }
+
+    private static void mergeMetadataMaps(Map<String, String> mergeFromMap, Map<String, String> mergeToMap) {
+      for (Entry<String, String> entry : mergeFromMap.entrySet()) {
+        String key = entry.getKey();
+        if (!mergeToMap.containsKey(key)) {
+          mergeToMap.put(key, "0");
+        }
+        mergeToMap.put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
+      }
+    }
+
+    private static String addStrsAsInt(String a, String b) {
+      return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
+    }
 
     @Override
     public void markSuccess(HoodieRecord record, Optional<Map<String, String>> recordMetadata) {
@@ -156,43 +176,15 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
 
     @Override
-    public void markFailure(HoodieRecord record, Throwable t,
-        Optional<Map<String, String>> recordMetadata) {
+    public void markFailure(HoodieRecord record, Throwable t, Optional<Map<String, String>> recordMetadata) {
       super.markFailure(record, t, recordMetadata);
       if (recordMetadata.isPresent()) {
         mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
       }
     }
 
-    public static Map<String, String> mergeMetadataForWriteStatuses(
-        List<WriteStatus> writeStatuses) {
-      Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
-      for (WriteStatus writeStatus : writeStatuses) {
-        MetadataMergeWriteStatus.mergeMetadataMaps(
-            ((MetadataMergeWriteStatus) writeStatus).getMergedMetadataMap(),
-            allWriteStatusMergedMetadataMap);
-      }
-      return allWriteStatusMergedMetadataMap;
-    }
-
-    private static void mergeMetadataMaps(Map<String, String> mergeFromMap,
-        Map<String, String> mergeToMap) {
-      for (Entry<String, String> entry : mergeFromMap.entrySet()) {
-        String key = entry.getKey();
-        if (!mergeToMap.containsKey(key)) {
-          mergeToMap.put(key, "0");
-        }
-        mergeToMap
-            .put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
-      }
-    }
-
     private Map<String, String> getMergedMetadataMap() {
       return mergedMetadataMap;
-    }
-
-    private static String addStrsAsInt(String a, String b) {
-      return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
     }
   }
 }

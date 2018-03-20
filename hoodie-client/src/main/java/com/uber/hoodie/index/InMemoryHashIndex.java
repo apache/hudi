@@ -49,30 +49,9 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-      JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> table) {
+  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+      final HoodieTable<T> table) {
     throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
-  }
-
-  /**
-   * Function that tags each HoodieRecord with an existing location, if known.
-   */
-  class LocationTagFunction
-      implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {
-
-    @Override
-    public Iterator<HoodieRecord<T>> call(Integer partitionNum,
-        Iterator<HoodieRecord<T>> hoodieRecordIterator) {
-      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
-      while (hoodieRecordIterator.hasNext()) {
-        HoodieRecord<T> rec = hoodieRecordIterator.next();
-        if (recordLocationMap.containsKey(rec.getKey())) {
-          rec.setCurrentLocation(recordLocationMap.get(rec.getKey()));
-        }
-        taggedRecords.add(rec);
-      }
-      return taggedRecords.iterator();
-    }
   }
 
   @Override
@@ -131,5 +110,26 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   @Override
   public boolean isImplicitWithStorage() {
     return false;
+  }
+
+  /**
+   * Function that tags each HoodieRecord with an existing location, if known.
+   */
+  class LocationTagFunction implements
+      Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {
+
+    @Override
+    public Iterator<HoodieRecord<T>> call(Integer partitionNum,
+        Iterator<HoodieRecord<T>> hoodieRecordIterator) {
+      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+      while (hoodieRecordIterator.hasNext()) {
+        HoodieRecord<T> rec = hoodieRecordIterator.next();
+        if (recordLocationMap.containsKey(rec.getKey())) {
+          rec.setCurrentLocation(recordLocationMap.get(rec.getKey()));
+        }
+        taggedRecords.add(rec);
+      }
+      return taggedRecords.iterator();
+    }
   }
 }

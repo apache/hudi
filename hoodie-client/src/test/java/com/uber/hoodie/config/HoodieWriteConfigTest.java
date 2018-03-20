@@ -49,8 +49,7 @@ public class HoodieWriteConfigTest {
     assertEquals(config.getMinCommitsToKeep(), 2);
   }
 
-  private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params)
-      throws IOException {
+  private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {
     Properties properties = new Properties();
     properties.putAll(params);
     ByteArrayOutputStream outStream = new ByteArrayOutputStream();

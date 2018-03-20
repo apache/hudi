@@ -46,7 +46,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private HoodieTableMetaClient metaClient;
   private Map<String, byte[]> readCommits = new HashMap<>();
 
-  private final transient static Logger log = LogManager.getLogger(HoodieArchivedTimeline.class);
+  private static final transient Logger log = LogManager.getLogger(HoodieArchivedTimeline.class);
 
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     // Read back the commits to make sure
@@ -68,8 +68,10 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + archiveLogPath, e);
     }
-    // multiple casts will make this lambda serializable - http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
+    // multiple casts will make this lambda serializable -
+    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
+    this.details =
+        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
     this.metaClient = metaClient;
   }
 
