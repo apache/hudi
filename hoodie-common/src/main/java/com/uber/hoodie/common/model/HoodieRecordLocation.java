@@ -42,8 +42,8 @@ public class HoodieRecordLocation implements Serializable {
       return false;
     }
     HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-    return Objects.equal(commitTime, otherLoc.commitTime) &&
-        Objects.equal(fileId, otherLoc.fileId);
+    return Objects.equal(commitTime, otherLoc.commitTime)
+        && Objects.equal(fileId, otherLoc.fileId);
   }
 
   @Override

@@ -19,11 +19,10 @@ package com.uber.hoodie.common.table.log;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.exception.HoodieIOException;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-
 import java.io.IOException;
 import java.util.List;
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -36,16 +35,16 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final boolean readBlocksLazily;
   private final boolean reverseLogReader;
 
-  private final static Logger log = LogManager.getLogger(HoodieLogFormatReader.class);
+  private static final Logger log = LogManager.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles,
-                                  Schema readerSchema, boolean readBlocksLazily, boolean reverseLogReader) throws IOException {
+      Schema readerSchema, boolean readBlocksLazily, boolean reverseLogReader) throws IOException {
     this.logFiles = logFiles;
     this.fs = fs;
     this.readerSchema = readerSchema;
     this.readBlocksLazily = readBlocksLazily;
     this.reverseLogReader = reverseLogReader;
-    if(logFiles.size() > 0) {
+    if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, readBlocksLazily,
           false);
@@ -53,7 +52,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   }
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles,
-                               Schema readerSchema) throws IOException {
+      Schema readerSchema) throws IOException {
     this(fs, logFiles, readerSchema, false, false);
   }
 
@@ -67,16 +66,15 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   @Override
   public boolean hasNext() {
 
-    if(currentReader == null) {
+    if (currentReader == null) {
       return false;
-    }
-    else if (currentReader.hasNext()) {
+    } else if (currentReader.hasNext()) {
       return true;
-    }
-    else if (logFiles.size() > 0) {
+    } else if (logFiles.size() > 0) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
-        this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, readBlocksLazily,
+        this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema,
+            readBlocksLazily,
             false);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);

@@ -17,10 +17,9 @@
 package com.uber.hoodie.table;
 
 import com.uber.hoodie.common.model.HoodieRecordLocation;
-import org.apache.commons.lang3.tuple.Pair;
-
 import java.io.Serializable;
 import java.util.HashMap;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Wraps stats about a single partition path.

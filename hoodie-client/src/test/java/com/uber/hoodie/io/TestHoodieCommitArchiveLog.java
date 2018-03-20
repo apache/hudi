@@ -88,8 +88,8 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
-    HoodieTimeline timeline =
-        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants();
 
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
@@ -125,7 +125,7 @@ public class TestHoodieCommitArchiveLog {
     //read the file
     HoodieLogFormat.Reader reader = HoodieLogFormat
         .newReader(fs, new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
-        HoodieArchivedMetaEntry.getClassSchema());
+            HoodieArchivedMetaEntry.getClassSchema());
 
     int archivedRecordsCount = 0;
     List<IndexedRecord> readRecords = new ArrayList<>();
@@ -146,8 +146,7 @@ public class TestHoodieCommitArchiveLog {
     }).collect(Collectors.toList());
     Collections.sort(readCommits);
 
-    assertEquals(
-        "Read commits map should match the originalCommits - commitsLoadedFromArchival",
+    assertEquals("Read commits map should match the originalCommits - commitsLoadedFromArchival",
         originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
         readCommits);
 
@@ -159,8 +158,9 @@ public class TestHoodieCommitArchiveLog {
   public void testArchiveDatasetWithNoArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+        .forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build())
+        .build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
@@ -183,8 +183,9 @@ public class TestHoodieCommitArchiveLog {
   public void testArchiveCommitSafety() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+        .forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build())
+        .build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
@@ -215,8 +216,9 @@ public class TestHoodieCommitArchiveLog {
   public void testArchiveCommitSavepointNoHole() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+        .forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build())
+        .build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
@@ -235,8 +237,8 @@ public class TestHoodieCommitArchiveLog {
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline()
         .filterCompletedInstants();
     assertEquals(
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)",
-        5, timeline.countInstants());
+        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only "
+            + "archive 100)", 5, timeline.countInstants());
     assertTrue("Archived commits should always be safe",
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")));
     assertTrue("Archived commits should always be safe",
@@ -248,7 +250,7 @@ public class TestHoodieCommitArchiveLog {
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
         .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION)).filterInflights();
-    assertEquals("Loaded inflight clean actions and the count should match",
-        expectedTotalInstants, timeline.countInstants());
+    assertEquals("Loaded inflight clean actions and the count should match", expectedTotalInstants,
+        timeline.countInstants());
   }
 }

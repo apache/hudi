@@ -103,9 +103,8 @@ public class TestHDFSParquetImporter implements Serializable {
       createRecords(srcFolder);
 
       HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(),
-          hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "_row_key", "timestamp",
-          1, schemaFile);
+          hoodieFolder.toString(), "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1,
+          schemaFile);
       AtomicInteger retry = new AtomicInteger(3);
       AtomicInteger fileCreated = new AtomicInteger(0);
       HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg) {
@@ -165,14 +164,13 @@ public class TestHDFSParquetImporter implements Serializable {
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     for (long recordNum = 0; recordNum < 96; recordNum++) {
       records.add(HoodieTestDataGenerator
-          .generateGenericRecord(Long.toString(recordNum), "rider-" + recordNum,
-              "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
+                      .generateGenericRecord(Long.toString(recordNum), "rider-" + recordNum,
+                          "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
     }
-    ParquetWriter<GenericRecord> writer = AvroParquetWriter
-        .<GenericRecord>builder(srcFile)
-        .withSchema(HoodieTestDataGenerator.avroSchema)
-        .withConf(HoodieTestUtils.getDefaultHadoopConf())
-        .build();
+    ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(srcFile)
+                                              .withSchema(HoodieTestDataGenerator.avroSchema)
+                                              .withConf(HoodieTestUtils.getDefaultHadoopConf())
+                                              .build();
     for (GenericRecord record : records) {
       writer.write(record);
     }
@@ -202,9 +200,8 @@ public class TestHDFSParquetImporter implements Serializable {
       Path srcFolder = new Path(basePath.toString(), "srcTest");
       Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
       HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(),
-          hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "_row_key", "timestamp",
-          1, schemaFile.toString());
+          hoodieFolder.toString(), "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1,
+          schemaFile.toString());
       HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
       // Should fail - return : -1.
       assertEquals(-1, dataImporter.dataImport(jsc, 0));
@@ -247,16 +244,14 @@ public class TestHDFSParquetImporter implements Serializable {
       HDFSParquetImporter.Config cfg;
 
       // Check for invalid row key.
-      cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "invalidRowKey", "timestamp",
-          1, schemaFile.toString());
+      cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable",
+          "COPY_ON_WRITE", "invalidRowKey", "timestamp", 1, schemaFile.toString());
       dataImporter = new HDFSParquetImporter(cfg);
       assertEquals(-1, dataImporter.dataImport(jsc, 0));
 
       // Check for invalid partition key.
-      cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "_row_key", "invalidTimeStamp",
-          1, schemaFile.toString());
+      cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable",
+          "COPY_ON_WRITE", "_row_key", "invalidTimeStamp", 1, schemaFile.toString());
       dataImporter = new HDFSParquetImporter(cfg);
       assertEquals(-1, dataImporter.dataImport(jsc, 0));
 

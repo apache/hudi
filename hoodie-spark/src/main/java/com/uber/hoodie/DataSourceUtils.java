@@ -75,7 +75,7 @@ public class DataSourceUtils {
       PropertiesConfiguration cfg) throws IOException {
     try {
       return (KeyGenerator) ConstructorUtils
-          .invokeConstructor(Class.forName(keyGeneratorClass), (Object) cfg);
+                                .invokeConstructor(Class.forName(keyGeneratorClass), (Object) cfg);
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
     }
@@ -87,8 +87,8 @@ public class DataSourceUtils {
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record,
       Comparable orderingVal) throws IOException {
     try {
-      return (HoodieRecordPayload) ConstructorUtils
-          .invokeConstructor(Class.forName(payloadClass), (Object) record, (Object) orderingVal);
+      return (HoodieRecordPayload) ConstructorUtils.invokeConstructor(Class.forName(payloadClass),
+          (Object) record, (Object) orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -103,36 +103,26 @@ public class DataSourceUtils {
     });
   }
 
-  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc,
-      String schemaStr,
-      String basePath,
-      String tblName,
-      Map<String, String> parameters) throws Exception {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .combineInput(true, true)
-        .withPath(basePath)
-        .withAutoCommit(false)
-        .withSchema(schemaStr)
-        .forTable(tblName)
-        .withIndexConfig(
-            HoodieIndexConfig.newBuilder()
-                .withIndexType(HoodieIndex.IndexType.BLOOM)
-                .build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY()))
-            .build())
-        // override above with Hoodie configs specified as options.
-        .withProps(parameters)
-        .build();
+  public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr,
+      String basePath, String tblName, Map<String, String> parameters) throws Exception {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().combineInput(true, true)
+                                        .withPath(basePath).withAutoCommit(false)
+                                        .withSchema(schemaStr).forTable(tblName).withIndexConfig(
+            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+                                        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                                                                  .withPayloadClass(parameters.get(
+                                                                      DataSourceWriteOptions
+                                                                          .PAYLOAD_CLASS_OPT_KEY()))
+                                                                  .build())
+                                        // override above with Hoodie configs specified as options.
+                                        .withProps(parameters).build();
 
     return new HoodieWriteClient<>(jssc, writeConfig);
   }
 
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client,
-      JavaRDD<HoodieRecord> hoodieRecords,
-      String commitTime,
-      String operation) {
+      JavaRDD<HoodieRecord> hoodieRecords, String commitTime, String operation) {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
       return client.bulkInsert(hoodieRecords, commitTime);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
@@ -143,14 +133,9 @@ public class DataSourceUtils {
     }
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord gr,
-      Comparable orderingVal,
-      HoodieKey hKey,
-      String payloadClass) throws IOException {
-    HoodieRecordPayload payload = DataSourceUtils.createPayload(
-        payloadClass,
-        gr,
-        orderingVal);
+  public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal,
+      HoodieKey hKey, String payloadClass) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
     return new HoodieRecord<>(hKey, payload);
   }
 }

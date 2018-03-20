@@ -34,7 +34,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
 
-  private final transient static Logger log = LogManager.getLogger(HoodieDefaultTimeline.class);
+  private static final transient Logger log = LogManager.getLogger(HoodieDefaultTimeline.class);
 
   protected Function<HoodieInstant, Optional<byte[]>> details;
   protected List<HoodieInstant> instants;
@@ -65,8 +65,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsInRange(String startTs, String endTs) {
     return new HoodieDefaultTimeline(instants.stream().filter(
-        s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), startTs, GREATER) &&
-            HoodieTimeline.compareTimestamps(
+        s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), startTs, GREATER)
+            && HoodieTimeline.compareTimestamps(
                 s.getTimestamp(), endTs, LESSER_OR_EQUAL)), details);
   }
 
@@ -133,8 +133,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public boolean isBeforeTimelineStarts(String instant) {
     Optional<HoodieInstant> firstCommit = firstInstant();
-    return firstCommit.isPresent() &&
-        HoodieTimeline.compareTimestamps(instant, firstCommit.get().getTimestamp(), LESSER);
+    return firstCommit.isPresent()
+        && HoodieTimeline.compareTimestamps(instant, firstCommit.get().getTimestamp(), LESSER);
   }
 
 

@@ -122,10 +122,14 @@ public class TestCopyOnWriteTable {
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
     // Get some records belong to the same partition (2016/01/31)
-    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
+    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
 
     List<HoodieRecord> records = new ArrayList<>();
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
@@ -143,7 +147,8 @@ public class TestCopyOnWriteTable {
 
     // Insert new records
     HoodieClientTestUtils.collectStatuses(table.handleInsert(firstCommitTime, records.iterator()));
-    // We should have a parquet file generated (TODO: better control # files after we revise AvroParquetIO)
+    // We should have a parquet file generated (TODO: better control # files after we revise
+    // AvroParquetIO)
     File parquetFile = null;
     for (File file : new File(this.basePath + partitionPath).listFiles()) {
       if (file.getName().endsWith(".parquet")) {
@@ -161,8 +166,8 @@ public class TestCopyOnWriteTable {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
     // Create a commit file
-    new File(this.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + FSUtils.getCommitTime(parquetFile.getName()) + ".commit").createNewFile();
+    new File(this.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + FSUtils
+        .getCommitTime(parquetFile.getName()) + ".commit").createNewFile();
 
     // Read the parquet file, check the record content
     List<GenericRecord> fileRecords = ParquetUtils
@@ -175,7 +180,8 @@ public class TestCopyOnWriteTable {
     }
 
     // We update the 1st record & add a new record
-    String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     TestRawTripPayload updateRowChanges1 = new TestRawTripPayload(updateRecordStr1);
     HoodieRecord updatedRecord1 = new HoodieRecord(
         new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()),
@@ -201,10 +207,9 @@ public class TestCopyOnWriteTable {
     File updatedParquetFile = null;
     for (File file : new File(basePath + "/2016/01/31").listFiles()) {
       if (file.getName().endsWith(".parquet")) {
-        if (FSUtils.getFileId(file.getName())
-            .equals(FSUtils.getFileId(parquetFile.getName())) &&
-            HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(file.getName()),
-                FSUtils.getCommitTime(parquetFile.getName()), HoodieTimeline.GREATER)) {
+        if (FSUtils.getFileId(file.getName()).equals(FSUtils.getFileId(parquetFile.getName()))
+            && HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(file.getName()),
+            FSUtils.getCommitTime(parquetFile.getName()), HoodieTimeline.GREATER)) {
           updatedParquetFile = file;
           break;
         }
@@ -246,13 +251,11 @@ public class TestCopyOnWriteTable {
     List<HoodieRecord> records = new ArrayList<>();
     for (int i = 0; i < n; i++) {
       String recordStr = String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}",
-          UUID.randomUUID().toString(),
-          time,
-          i);
+          UUID.randomUUID().toString(), time, i);
       TestRawTripPayload rowChange = new TestRawTripPayload(recordStr);
-      records.add(new HoodieRecord(
-          new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()),
-          rowChange));
+      records.add(
+          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()),
+              rowChange));
     }
     return records;
   }
@@ -269,9 +272,12 @@ public class TestCopyOnWriteTable {
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
 
     // Get some records belong to the same partition (2016/01/31)
-    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
 
     List<HoodieRecord> records = new ArrayList<>();
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
@@ -293,7 +299,8 @@ public class TestCopyOnWriteTable {
     Map<String, String> allWriteStatusMergedMetadataMap = MetadataMergeWriteStatus
         .mergeMetadataForWriteStatuses(writeStatuses);
     assertTrue(allWriteStatusMergedMetadataMap.containsKey("InputRecordCount_1506582000"));
-    // For metadata key InputRecordCount_1506582000, value is 2 for each record. So sum of this should be 2 * 3
+    // For metadata key InputRecordCount_1506582000, value is 2 for each record. So sum of this
+    // should be 2 * 3
     assertEquals("6", allWriteStatusMergedMetadataMap.get("InputRecordCount_1506582000"));
   }
 
@@ -314,11 +321,8 @@ public class TestCopyOnWriteTable {
     List<WriteStatus> statuses = HoodieClientTestUtils
         .collectStatuses(table.handleInsert(commitTime, records.iterator()));
     WriteStatus status = statuses.get(0);
-    Path partialFile = new Path(String.format("%s/%s/%s",
-        basePath,
-        status.getPartitionPath(),
-        FSUtils.makeDataFileName(commitTime, 0, status.getFileId()))
-    );
+    Path partialFile = new Path(String.format("%s/%s/%s", basePath, status.getPartitionPath(),
+        FSUtils.makeDataFileName(commitTime, 0, status.getFileId())));
     assertTrue(fs.exists(partialFile));
 
     // When we retry
@@ -329,11 +333,8 @@ public class TestCopyOnWriteTable {
         .collectStatuses(table.handleInsert(commitTime, records.iterator()));
     status = statuses.get(0);
 
-    Path retriedFIle = new Path(String.format("%s/%s/%s",
-        basePath,
-        status.getPartitionPath(),
-        FSUtils.makeDataFileName(commitTime, 0, status.getFileId()))
-    );
+    Path retriedFIle = new Path(String.format("%s/%s/%s", basePath, status.getPartitionPath(),
+        FSUtils.makeDataFileName(commitTime, 0, status.getFileId())));
     assertTrue(fs.exists(retriedFIle));
     assertFalse(fs.exists(partialFile));
   }
@@ -401,8 +402,8 @@ public class TestCopyOnWriteTable {
       String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
           + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
       TestRawTripPayload rowChange = new TestRawTripPayload(recordStr);
-      records
-          .add(new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()),
+      records.add(
+          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()),
               rowChange));
     }
 
@@ -418,22 +419,17 @@ public class TestCopyOnWriteTable {
         counts++;
       }
     }
-    assertEquals(
-        "If the number of records are more than 1150, then there should be a new file", 3,
+    assertEquals("If the number of records are more than 1150, then there should be a new file", 3,
         counts);
   }
 
 
   private List<HoodieCopyOnWriteTable.InsertBucket> testUpsertPartitioner(int smallFileSize,
-      int numInserts,
-      int numUpdates,
-      int fileSize,
-      boolean autoSplitInserts) throws Exception {
+      int numInserts, int numUpdates, int fileSize, boolean autoSplitInserts) throws Exception {
     final String TEST_PARTITION_PATH = "2016/09/26";
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .compactionSmallFileSize(smallFileSize).insertSplitSize(100)
-            .autoTuneInsertSplits(autoSplitInserts).build())
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().compactionSmallFileSize(smallFileSize)
+            .insertSplitSize(100).autoTuneInsertSplits(autoSplitInserts).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build())
         .build();
 
@@ -454,8 +450,9 @@ public class TestCopyOnWriteTable {
     records.addAll(insertRecords);
     records.addAll(updateRecords);
     WorkloadProfile profile = new WorkloadProfile(jsc.parallelize(records));
-    HoodieCopyOnWriteTable.UpsertPartitioner partitioner = (HoodieCopyOnWriteTable.UpsertPartitioner)
-        table.getUpsertPartitioner(profile);
+    HoodieCopyOnWriteTable.UpsertPartitioner partitioner = (HoodieCopyOnWriteTable
+        .UpsertPartitioner) table
+        .getUpsertPartitioner(profile);
 
     assertEquals("Should have 3 partitions", 3, partitioner.numPartitions());
     assertEquals("Bucket 0 is UPDATE", HoodieCopyOnWriteTable.BucketType.UPDATE,
@@ -464,8 +461,8 @@ public class TestCopyOnWriteTable {
         partitioner.getBucketInfo(1).bucketType);
     assertEquals("Bucket 2 is INSERT", HoodieCopyOnWriteTable.BucketType.INSERT,
         partitioner.getBucketInfo(2).bucketType);
-    assertEquals("Update record should have gone to the 1 update partiton", 0,
-        partitioner.getPartition(new Tuple2<>(updateRecords.get(0).getKey(),
+    assertEquals("Update record should have gone to the 1 update partiton", 0, partitioner
+        .getPartition(new Tuple2<>(updateRecords.get(0).getKey(),
             Option.apply(updateRecords.get(0).getCurrentLocation()))));
     return partitioner.getInsertBuckets(TEST_PARTITION_PATH);
   }
@@ -482,7 +479,8 @@ public class TestCopyOnWriteTable {
 
   @Test
   public void testUpsertPartitionerWithSmallInsertHandling() throws Exception {
-    // Inserts + Updates .. Check updates go together & inserts subsplit, after expanding smallest file
+    // Inserts + Updates .. Check updates go together & inserts subsplit, after expanding
+    // smallest file
     List<HoodieCopyOnWriteTable.InsertBucket> insertBuckets = testUpsertPartitioner(1000 * 1024,
         400, 100, 800 * 1024, false);
     assertEquals("Total of 3 insert buckets", 3, insertBuckets.size());

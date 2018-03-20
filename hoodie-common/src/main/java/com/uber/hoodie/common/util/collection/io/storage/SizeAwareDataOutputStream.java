@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * Wrapper for DataOutpuStream to keep track of number of bytes written
  */
 public class SizeAwareDataOutputStream {
+
   // Actual outpuStream
   private DataOutputStream outputStream;
   // Counter to keep track of number of bytes written
@@ -45,12 +46,12 @@ public class SizeAwareDataOutputStream {
     outputStream.writeInt(v);
   }
 
-  public void write(byte [] v) throws IOException {
+  public void write(byte[] v) throws IOException {
     size.addAndGet(v.length);
     outputStream.write(v);
   }
 
-  public void write(byte [] v, int offset, int len) throws IOException {
+  public void write(byte[] v, int offset, int len) throws IOException {
     size.addAndGet(len + offset);
     outputStream.write(v, offset, len);
   }

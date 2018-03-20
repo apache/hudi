@@ -35,8 +35,9 @@ public class TestHoodieIndex {
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE).build())
         .build();
     assertTrue(HoodieIndex.createIndex(config, null) instanceof HBaseIndex);
-    config = clientConfigBuilder.withPath("").withIndexConfig(
-        indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+    config = clientConfigBuilder.withPath("")
+        .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .build();
     assertTrue(HoodieIndex.createIndex(config, null) instanceof InMemoryHashIndex);
     config = clientConfigBuilder.withPath("")
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build())

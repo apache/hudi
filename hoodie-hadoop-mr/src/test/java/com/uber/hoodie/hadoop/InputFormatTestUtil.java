@@ -42,16 +42,15 @@ public class InputFormatTestUtil {
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
     for (int i = 0; i < numberOfFiles; i++) {
-      File dataFile =
-          new File(partitionPath, FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i));
+      File dataFile = new File(partitionPath,
+          FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i));
       dataFile.createNewFile();
     }
     return partitionPath;
   }
 
   public static void simulateUpdates(File directory, final String originalCommit,
-      int numberOfFilesUpdated,
-      String newCommit, boolean randomize) throws IOException {
+      int numberOfFilesUpdated, String newCommit, boolean randomize) throws IOException {
     List<File> dataFiles = Arrays.asList(directory.listFiles(new FilenameFilter() {
       @Override
       public boolean accept(File dir, String name) {
@@ -62,8 +61,8 @@ public class InputFormatTestUtil {
     if (randomize) {
       Collections.shuffle(dataFiles);
     }
-    List<File> toUpdateList =
-        dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
+    List<File> toUpdateList = dataFiles
+        .subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
       File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, 1, fileId));
@@ -78,8 +77,8 @@ public class InputFormatTestUtil {
 
   public static void setupIncremental(JobConf jobConf, String startCommit,
       int numberOfCommitsToPull) {
-    String modePropertyName = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN,
-        HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    String modePropertyName = String
+        .format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.set(modePropertyName, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
 
     String startCommitTimestampName = String
@@ -96,19 +95,16 @@ public class InputFormatTestUtil {
   }
 
   public static File prepareParquetDataset(TemporaryFolder basePath, Schema schema,
-      int numberOfFiles, int numberOfRecords,
-      String commitNumber) throws IOException {
+      int numberOfFiles, int numberOfRecords, String commitNumber) throws IOException {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i);
-      File dataFile =
-          new File(partitionPath, fileId);
+      File dataFile = new File(partitionPath, fileId);
       // dataFile.createNewFile();
-      parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()),
-          schema);
+      parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber,
             fileId)) {
@@ -132,8 +128,7 @@ public class InputFormatTestUtil {
   }
 
   public static void simulateParquetUpdates(File directory, Schema schema, String originalCommit,
-      int totalNumberOfRecords, int numberOfRecordsToUpdate,
-      String newCommit) throws IOException {
+      int totalNumberOfRecords, int numberOfRecordsToUpdate, String newCommit) throws IOException {
     File fileToUpdate = directory.listFiles(new FilenameFilter() {
       @Override
       public boolean accept(File dir, String name) {
@@ -145,8 +140,8 @@ public class InputFormatTestUtil {
     AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()),
         schema);
     try {
-      for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords,
-          originalCommit, fileId)) {
+      for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit,
+          fileId)) {
         if (numberOfRecordsToUpdate > 0) {
           // update this record
           record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, newCommit);

@@ -61,8 +61,8 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     this.isDeleted = isDeleted;
   }
 
-  public TestRawTripPayload(String jsonData, String rowKey, String partitionPath,
-      String schemaStr) throws IOException {
+  public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr)
+      throws IOException {
     this(Optional.of(jsonData), rowKey, partitionPath, schemaStr, false);
   }
 
@@ -120,8 +120,8 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
 
   private byte[] compressData(String jsonData) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    DeflaterOutputStream dos =
-        new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
+    DeflaterOutputStream dos = new DeflaterOutputStream(baos,
+        new Deflater(Deflater.BEST_COMPRESSION), true);
     try {
       dos.write(jsonData.getBytes());
     } finally {
@@ -147,6 +147,32 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
 
     private Map<String, String> mergedMetadataMap = new HashMap<>();
 
+    public static Map<String, String> mergeMetadataForWriteStatuses(
+        List<WriteStatus> writeStatuses) {
+      Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
+      for (WriteStatus writeStatus : writeStatuses) {
+        MetadataMergeWriteStatus
+            .mergeMetadataMaps(((MetadataMergeWriteStatus) writeStatus).getMergedMetadataMap(),
+                allWriteStatusMergedMetadataMap);
+      }
+      return allWriteStatusMergedMetadataMap;
+    }
+
+    private static void mergeMetadataMaps(Map<String, String> mergeFromMap,
+        Map<String, String> mergeToMap) {
+      for (Entry<String, String> entry : mergeFromMap.entrySet()) {
+        String key = entry.getKey();
+        if (!mergeToMap.containsKey(key)) {
+          mergeToMap.put(key, "0");
+        }
+        mergeToMap.put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
+      }
+    }
+
+    private static String addStrsAsInt(String a, String b) {
+      return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
+    }
+
     @Override
     public void markSuccess(HoodieRecord record, Optional<Map<String, String>> recordMetadata) {
       super.markSuccess(record, recordMetadata);
@@ -164,35 +190,8 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
       }
     }
 
-    public static Map<String, String> mergeMetadataForWriteStatuses(
-        List<WriteStatus> writeStatuses) {
-      Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
-      for (WriteStatus writeStatus : writeStatuses) {
-        MetadataMergeWriteStatus.mergeMetadataMaps(
-            ((MetadataMergeWriteStatus) writeStatus).getMergedMetadataMap(),
-            allWriteStatusMergedMetadataMap);
-      }
-      return allWriteStatusMergedMetadataMap;
-    }
-
-    private static void mergeMetadataMaps(Map<String, String> mergeFromMap,
-        Map<String, String> mergeToMap) {
-      for (Entry<String, String> entry : mergeFromMap.entrySet()) {
-        String key = entry.getKey();
-        if (!mergeToMap.containsKey(key)) {
-          mergeToMap.put(key, "0");
-        }
-        mergeToMap
-            .put(key, addStrsAsInt(entry.getValue(), mergeToMap.get(key)));
-      }
-    }
-
     private Map<String, String> getMergedMetadataMap() {
       return mergedMetadataMap;
-    }
-
-    private static String addStrsAsInt(String a, String b) {
-      return String.valueOf(Integer.parseInt(a) + Integer.parseInt(b));
     }
   }
 }

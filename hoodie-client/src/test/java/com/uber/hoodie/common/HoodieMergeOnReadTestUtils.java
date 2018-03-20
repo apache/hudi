@@ -43,8 +43,7 @@ import org.apache.hadoop.mapred.RecordReader;
 public class HoodieMergeOnReadTestUtils {
 
   public static List<GenericRecord> getRecordsUsingInputFormat(List<String> inputPaths,
-      String basePath)
-      throws IOException {
+      String basePath) throws IOException {
     JobConf jobConf = new JobConf();
     Schema schema = HoodieAvroUtils.addMetadataFields(Schema.parse(TRIP_EXAMPLE_SCHEMA));
     HoodieRealtimeInputFormat inputFormat = new HoodieRealtimeInputFormat();
@@ -59,7 +58,8 @@ public class HoodieMergeOnReadTestUtils {
         ArrayWritable writable = (ArrayWritable) recordReader.createValue();
         while (recordReader.next(key, writable)) {
           GenericRecordBuilder newRecord = new GenericRecordBuilder(schema);
-          // writable returns an array with [field1, field2, _hoodie_commit_time, _hoodie_commit_seqno]
+          // writable returns an array with [field1, field2, _hoodie_commit_time,
+          // _hoodie_commit_seqno]
           Writable[] values = writable.get();
           schema.getFields().forEach(field -> {
             newRecord.set(field, values[2]);

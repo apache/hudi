@@ -48,15 +48,23 @@ public class HiveSyncConfig implements Serializable {
       "--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
   public String basePath;
 
-  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by", required = true)
+  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by",
+      required = true)
   public List<String> partitionFields = new ArrayList<>();
 
-  @Parameter(names = "-partition-value-extractor", description = "Class which implements PartitionValueExtractor to extract the partition values from HDFS path")
+  @Parameter(names = "-partition-value-extractor", description = "Class which implements "
+                                                                     + "PartitionValueExtractor "
+                                                                     + "to extract the partition "
+                                                                     + "values from HDFS path")
   public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class
-      .getName();
+                                                   .getName();
 
   @Parameter(names = {
-      "--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
+      "--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
+                                                                    + " exists to support "
+                                                                    + "backward compatibility. If"
+                                                                    + " you use hoodie 0.3.x, do "
+                                                                    + "not set this parameter")
   public Boolean assumeDatePartitioning = false;
 
   @Parameter(names = {"--help", "-h"}, help = true)

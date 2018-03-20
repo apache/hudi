@@ -59,12 +59,12 @@ public class TestUpdateMapFunction {
         HoodieTestUtils.getDefaultHadoopConf(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metaClient);
 
-    String recordStr1 =
-        "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 =
-        "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 =
-        "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
     List<HoodieRecord> records = new ArrayList<>();
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
     records.add(
@@ -79,8 +79,8 @@ public class TestUpdateMapFunction {
         new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
             rowChange3));
     Iterator<List<WriteStatus>> insertResult = table.handleInsert("100", records.iterator());
-    Path commitFile =
-        new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
+    Path commitFile = new Path(
+        config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));
     FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf()).create(commitFile);
 
     // Now try an update with an evolved schema
@@ -92,21 +92,20 @@ public class TestUpdateMapFunction {
 
     table = new HoodieCopyOnWriteTable(config, metaClient);
     // New content with values for the newly added field
-    recordStr1 =
-        "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
+    recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
     records = new ArrayList<>();
     rowChange1 = new TestRawTripPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
-            rowChange1);
+    HoodieRecord record1 = new HoodieRecord(
+        new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     record1.setCurrentLocation(new HoodieRecordLocation("100", fileId));
     records.add(record1);
 
     try {
       table.handleUpdate("101", fileId, records.iterator());
     } catch (ClassCastException e) {
-      fail(
-          "UpdateFunction could not read records written with exampleSchema.txt using the exampleEvolvedSchema.txt");
+      fail("UpdateFunction could not read records written with exampleSchema.txt using the "
+          + "exampleEvolvedSchema.txt");
     }
   }
 

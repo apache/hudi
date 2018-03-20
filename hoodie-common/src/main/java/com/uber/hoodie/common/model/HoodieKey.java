@@ -54,8 +54,8 @@ public class HoodieKey implements Serializable {
       return false;
     }
     HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equal(recordKey, otherKey.recordKey) &&
-        Objects.equal(partitionPath, otherKey.partitionPath);
+    return Objects.equal(recordKey, otherKey.recordKey)
+        && Objects.equal(partitionPath, otherKey.partitionPath);
   }
 
   @Override

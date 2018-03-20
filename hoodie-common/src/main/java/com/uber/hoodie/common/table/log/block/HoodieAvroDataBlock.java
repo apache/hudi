@@ -44,12 +44,9 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
- * DataBlock contains a list of records serialized using Avro.
- * The Datablock contains
- * 1. Data Block version
- * 2. Total number of records in the block
- * 3. Size of a record
- * 4. Actual avro serialized content of the record
+ * DataBlock contains a list of records serialized using Avro. The Datablock contains 1. Data Block
+ * version 2. Total number of records in the block 3. Size of a record 4. Actual avro serialized
+ * content of the record
  */
 public class HoodieAvroDataBlock extends HoodieLogBlock {
 
@@ -216,7 +213,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     deflate();
   }
 
-  /*****************************************************DEPRECATED METHODS**********************************************/
+  /*********************************DEPRECATED METHODS***********************************/
 
   @Deprecated
   @VisibleForTesting
@@ -232,7 +229,8 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
 
   @Deprecated
   /**
-   * This method is retained to provide backwards compatibility to HoodieArchivedLogs which were written using HoodieLogFormat V1
+   * This method is retained to provide backwards compatibility to HoodieArchivedLogs which
+   * were written using HoodieLogFormat V1
    */
   public static HoodieLogBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
 

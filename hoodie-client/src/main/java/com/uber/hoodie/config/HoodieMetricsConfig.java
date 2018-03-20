@@ -29,22 +29,22 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
-  public final static String METRIC_PREFIX = "hoodie.metrics";
-  public final static String METRICS_ON = METRIC_PREFIX + ".on";
-  public final static boolean DEFAULT_METRICS_ON = false;
-  public final static String METRICS_REPORTER_TYPE = METRIC_PREFIX + ".reporter.type";
-  public final static MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE =
-      MetricsReporterType.GRAPHITE;
+  public static final String METRIC_PREFIX = "hoodie.metrics";
+  public static final String METRICS_ON = METRIC_PREFIX + ".on";
+  public static final boolean DEFAULT_METRICS_ON = false;
+  public static final String METRICS_REPORTER_TYPE = METRIC_PREFIX + ".reporter.type";
+  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = MetricsReporterType
+      .GRAPHITE;
 
   // Graphite
-  public final static String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
-  public final static String GRAPHITE_SERVER_HOST = GRAPHITE_PREFIX + ".host";
-  public final static String DEFAULT_GRAPHITE_SERVER_HOST = "localhost";
+  public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
+  public static final String GRAPHITE_SERVER_HOST = GRAPHITE_PREFIX + ".host";
+  public static final String DEFAULT_GRAPHITE_SERVER_HOST = "localhost";
 
-  public final static String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
-  public final static int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
+  public static final String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
+  public static final int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
 
-  public final static String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
+  public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
@@ -103,14 +103,14 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       HoodieMetricsConfig config = new HoodieMetricsConfig(props);
       setDefaultOnCondition(props, !props.containsKey(METRICS_ON), METRICS_ON,
           String.valueOf(DEFAULT_METRICS_ON));
-      setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_TYPE),
-          METRICS_REPORTER_TYPE, DEFAULT_METRICS_REPORTER_TYPE.name());
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_HOST),
-          GRAPHITE_SERVER_HOST, DEFAULT_GRAPHITE_SERVER_HOST);
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT),
-          GRAPHITE_SERVER_PORT, String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT),
-          GRAPHITE_SERVER_PORT, String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
+      setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_TYPE), METRICS_REPORTER_TYPE,
+          DEFAULT_METRICS_REPORTER_TYPE.name());
+      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_HOST), GRAPHITE_SERVER_HOST,
+          DEFAULT_GRAPHITE_SERVER_HOST);
+      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
+          String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
+      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
+          String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
       return config;
     }
   }

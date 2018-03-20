@@ -28,6 +28,10 @@ public class TestHoodieDataFile extends HoodieDataFile {
     this.size = size;
   }
 
+  public static HoodieDataFile newDataFile(long size) {
+    return new TestHoodieDataFile(size);
+  }
+
   @Override
   public String getPath() {
     return "/tmp/test";
@@ -43,13 +47,8 @@ public class TestHoodieDataFile extends HoodieDataFile {
     return "100";
   }
 
-
   @Override
   public long getFileSize() {
     return size;
-  }
-
-  public static HoodieDataFile newDataFile(long size) {
-    return new TestHoodieDataFile(size);
   }
 }

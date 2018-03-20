@@ -97,10 +97,14 @@ public class TestHoodieBloomIndex {
   @Test
   public void testLoadUUIDsInMemory() throws IOException {
     // Create one RDD of hoodie record
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
+    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
 
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
     HoodieRecord record1 = new HoodieRecord(
@@ -131,15 +135,14 @@ public class TestHoodieBloomIndex {
 
   @Test
   public void testLoadInvolvedFiles() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieBloomIndex index = new HoodieBloomIndex(config, jsc);
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
     // "2016/04/01": 1 file (2_0_20160401010101.parquet)
-    // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet, 4_0_20150312101010.parquet)
+    // "2015/03/12": 3 files (1_0_20150312101010.parquet, 3_0_20150312101010.parquet,
+    // 4_0_20150312101010.parquet)
     new File(basePath + "/2016/01/21").mkdirs();
     new File(basePath + "/2016/04/01").mkdirs();
     new File(basePath + "/2015/03/12").mkdirs();
@@ -194,41 +197,31 @@ public class TestHoodieBloomIndex {
 
     // no longer sorted, but should have same files.
 
-    List<Tuple2<String, BloomIndexFileInfo>> expected = Arrays.asList(
-        new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2_0_20160401010101.parquet")),
-        new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1_0_20150312101010.parquet")),
-        new Tuple2<>("2015/03/12",
-            new BloomIndexFileInfo("3_0_20150312101010.parquet", "000", "000")),
-        new Tuple2<>("2015/03/12",
-            new BloomIndexFileInfo("4_0_20150312101010.parquet", "001", "003"))
-    );
+    List<Tuple2<String, BloomIndexFileInfo>> expected = Arrays
+        .asList(new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2_0_20160401010101.parquet")),
+            new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1_0_20150312101010.parquet")),
+            new Tuple2<>("2015/03/12",
+                new BloomIndexFileInfo("3_0_20150312101010.parquet", "000", "000")),
+            new Tuple2<>("2015/03/12",
+                new BloomIndexFileInfo("4_0_20150312101010.parquet", "001", "003")));
     assertEquals(expected, filesList);
   }
 
   @Test
   public void testRangePruning() {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieBloomIndex index = new HoodieBloomIndex(config, jsc);
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
-    partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(
-        new BloomIndexFileInfo("f1"),
-        new BloomIndexFileInfo("f2", "000", "000"),
-        new BloomIndexFileInfo("f3", "001", "003"),
-        new BloomIndexFileInfo("f4", "002", "007"),
-        new BloomIndexFileInfo("f5", "009", "010")
-    ));
+    partitionToFileIndexInfo.put("2017/10/22", Arrays
+        .asList(new BloomIndexFileInfo("f1"), new BloomIndexFileInfo("f2", "000", "000"),
+            new BloomIndexFileInfo("f3", "001", "003"), new BloomIndexFileInfo("f4", "002", "007"),
+            new BloomIndexFileInfo("f5", "009", "010")));
 
-    JavaPairRDD<String, String> partitionRecordKeyPairRDD = jsc
-        .parallelize(Arrays.asList(
-            new Tuple2<>("2017/10/22", "003"),
-            new Tuple2<>("2017/10/22", "002"),
-            new Tuple2<>("2017/10/22", "005"),
-            new Tuple2<>("2017/10/22", "004")
-        ))
+    JavaPairRDD<String, String> partitionRecordKeyPairRDD = jsc.parallelize(Arrays
+        .asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
+            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004")))
         .mapToPair(t -> t);
 
     List<Tuple2<String, Tuple2<String, HoodieKey>>> comparisonKeyList = index
@@ -236,12 +229,9 @@ public class TestHoodieBloomIndex {
         .collect();
 
     assertEquals(10, comparisonKeyList.size());
-    Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(Collectors.groupingBy(
-            t -> t._2()._2().getRecordKey(),
-            Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList()
-            )
-        ));
+    Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream().collect(Collectors
+        .groupingBy(t -> t._2()._2().getRecordKey(),
+            Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(Arrays.asList("f1", "f3", "f4"), recordKeyToFileComps.get("002"));
@@ -255,10 +245,14 @@ public class TestHoodieBloomIndex {
       throws IOException, InterruptedException, ClassNotFoundException {
 
     // Create some records to use
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":32}";
+    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":32}";
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
     HoodieRecord record1 = new HoodieRecord(
         new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
@@ -272,7 +266,8 @@ public class TestHoodieBloomIndex {
     HoodieRecord record4 = new HoodieRecord(
         new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    // We write record1, record2 to a parquet file, but the bloom filter contains (record1, record2, record3).
+    // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
+    // record2, record3).
     BloomFilter filter = new BloomFilter(10000, 0.0000001);
     filter.add(record3.getRecordKey());
     String filename = writeParquetFile("2016/01/31", Arrays.asList(record1, record2), schema,
@@ -285,17 +280,18 @@ public class TestHoodieBloomIndex {
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    List<String> uuids = Arrays.asList(record1.getRecordKey(), record2.getRecordKey(),
-        record3.getRecordKey(), record4.getRecordKey());
+    List<String> uuids = Arrays
+        .asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(),
+            record4.getRecordKey());
 
     List<String> results = HoodieBloomIndexCheckFunction
         .checkCandidatesAgainstFile(jsc.hadoopConfiguration(), uuids,
-        new Path(basePath + "/2016/01/31/" + filename));
+            new Path(basePath + "/2016/01/31/" + filename));
     assertEquals(results.size(), 2);
-    assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
-    assertTrue(results.get(0).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0") || results.get(1)
+        .equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0") || results.get(1)
+        .equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
     // TODO(vc): Need more coverage on actual filenames
     //assertTrue(results.get(0)._2().equals(filename));
     //assertTrue(results.get(1)._2().equals(filename));
@@ -316,8 +312,8 @@ public class TestHoodieBloomIndex {
     try {
       bloomIndex.tagLocation(recordRDD, table);
     } catch (IllegalArgumentException e) {
-      fail(
-          "EmptyRDD should not result in IllegalArgumentException: Positive number of slices required");
+      fail("EmptyRDD should not result in IllegalArgumentException: Positive number of slices "
+          + "required");
     }
   }
 
@@ -326,10 +322,14 @@ public class TestHoodieBloomIndex {
   public void testTagLocation() throws Exception {
     // We have some records to be tagged (two different partitions)
 
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
+    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
     HoodieRecord record1 = new HoodieRecord(
         new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
@@ -388,10 +388,14 @@ public class TestHoodieBloomIndex {
   public void testCheckExists() throws Exception {
     // We have some records to be tagged (two different partitions)
 
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
+    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
     HoodieKey key1 = new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath());
     HoodieRecord record1 = new HoodieRecord(key1, rowChange1);
@@ -455,8 +459,10 @@ public class TestHoodieBloomIndex {
   @Test
   public void testBloomFilterFalseError() throws IOException, InterruptedException {
     // We have two hoodie records
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
 
     // We write record1 to a parquet file, using a bloom filter having both records
     TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
@@ -502,8 +508,7 @@ public class TestHoodieBloomIndex {
   }
 
   private String writeParquetFile(String partitionPath, String filename, List<HoodieRecord> records,
-      Schema schema,
-      BloomFilter filter, boolean createCommitTime) throws IOException {
+      Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
 
     if (filter == null) {
       filter = new BloomFilter(10000, 0.0000001);
@@ -514,11 +519,8 @@ public class TestHoodieBloomIndex {
     HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
         HoodieTestUtils.getDefaultHadoopConf());
-    HoodieParquetWriter writer = new HoodieParquetWriter(
-        commitTime,
-        new Path(basePath + "/" + partitionPath + "/" + filename),
-        config,
-        schema);
+    HoodieParquetWriter writer = new HoodieParquetWriter(commitTime,
+        new Path(basePath + "/" + partitionPath + "/" + filename), config, schema);
     int seqId = 1;
     for (HoodieRecord record : records) {
       GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();

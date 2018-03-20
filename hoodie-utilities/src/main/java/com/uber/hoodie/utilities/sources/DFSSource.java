@@ -55,10 +55,10 @@ public class DFSSource extends Source {
    */
   static class Config {
 
-    private final static String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
+    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
   }
 
-  private final static List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
+  private static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
 
   private final transient FileSystem fs;
 
@@ -73,9 +73,7 @@ public class DFSSource extends Source {
   public static JavaRDD<GenericRecord> fromAvroFiles(final AvroConvertor convertor, String pathStr,
       JavaSparkContext sparkContext) {
     JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
-        AvroKeyInputFormat.class,
-        AvroKey.class,
-        NullWritable.class,
+        AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
         sparkContext.hadoopConfiguration());
     return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
   }
@@ -106,28 +104,28 @@ public class DFSSource extends Source {
     try {
       // obtain all eligible files under root folder.
       List<FileStatus> eligibleFiles = new ArrayList<>();
-      RemoteIterator<LocatedFileStatus> fitr = fs
-          .listFiles(new Path(config.getString(Config.ROOT_INPUT_PATH_PROP)), true);
+      RemoteIterator<LocatedFileStatus> fitr = fs.listFiles(
+          new Path(config.getString(Config.ROOT_INPUT_PATH_PROP)), true);
       while (fitr.hasNext()) {
         LocatedFileStatus fileStatus = fitr.next();
-        if (fileStatus.isDirectory() ||
-            IGNORE_FILEPREFIX_LIST.stream()
-                .filter(pfx -> fileStatus.getPath().getName().startsWith(pfx)).count() > 0) {
+        if (fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream().filter(
+            pfx -> fileStatus.getPath().getName().startsWith(pfx)).count() > 0) {
           continue;
         }
         eligibleFiles.add(fileStatus);
       }
       // sort them by modification time.
       eligibleFiles.sort((FileStatus f1, FileStatus f2) -> Long.valueOf(f1.getModificationTime())
-          .compareTo(Long.valueOf(f2.getModificationTime())));
+                                                               .compareTo(Long.valueOf(
+                                                                   f2.getModificationTime())));
 
       // Filter based on checkpoint & input size, if needed
       long currentBytes = 0;
       long maxModificationTime = Long.MIN_VALUE;
       List<FileStatus> filteredFiles = new ArrayList<>();
       for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long
-            .valueOf(lastCheckpointStr.get())) {
+        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(
+            lastCheckpointStr.get())) {
           // skip processed files
           continue;
         }
@@ -150,7 +148,7 @@ public class DFSSource extends Source {
 
       // read the files out.
       String pathStr = filteredFiles.stream().map(f -> f.getPath().toString())
-          .collect(Collectors.joining(","));
+                           .collect(Collectors.joining(","));
       String schemaStr = schemaProvider.getSourceSchema().toString();
       final AvroConvertor avroConvertor = new AvroConvertor(schemaStr);
 

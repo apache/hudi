@@ -37,7 +37,7 @@ public class SimpleKeyGenerator extends KeyGenerator {
     super(config);
     this.recordKeyField = config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
     this.partitionPathField = config
-        .getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+                                  .getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
   }
 
   @Override

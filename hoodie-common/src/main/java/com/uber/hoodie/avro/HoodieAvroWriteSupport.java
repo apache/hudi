@@ -33,10 +33,10 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   private String maxRecordKey;
 
 
-  public final static String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY =
+  public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY =
       "com.uber.hoodie.bloomfilter";
-  public final static String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
-  public final static String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
+  public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
+  public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
 
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {

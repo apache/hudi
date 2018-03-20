@@ -27,8 +27,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.codehaus.jackson.map.ObjectMapper;
 
 /**
- * Marjority of this is copied from https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/common/JsonConverter.java
- * Adjusted for expected behavior of our use cases
+ * Marjority of this is copied from
+ * https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/
+ * common/JsonConverter.java Adjusted for expected behavior of our use cases
  */
 public class MercifulJsonConverter {
 
@@ -132,10 +133,10 @@ public class MercifulJsonConverter {
   }
 
   private boolean isOptional(Schema schema) {
-    return schema.getType().equals(Schema.Type.UNION) &&
-        schema.getTypes().size() == 2 &&
-        (schema.getTypes().get(0).getType().equals(Schema.Type.NULL) ||
-            schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
+    return schema.getType().equals(Schema.Type.UNION)
+        && schema.getTypes().size() == 2
+        && (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)
+        || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
   }
 
   private Schema getNonNull(Schema schema) {

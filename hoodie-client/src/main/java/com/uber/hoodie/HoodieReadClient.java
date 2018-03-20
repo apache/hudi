@@ -50,17 +50,17 @@ import scala.Tuple2;
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(HoodieReadClient.class);
+  private static final Logger logger = LogManager.getLogger(HoodieReadClient.class);
 
-  private transient final JavaSparkContext jsc;
+  private final transient JavaSparkContext jsc;
 
-  private transient final FileSystem fs;
+  private final transient FileSystem fs;
   /**
    * TODO: We need to persist the index type into hoodie.properties and be able to access the index
    * just with a simple basepath pointing to the dataset. Until, then just always assume a
    * BloomIndex
    */
-  private transient final HoodieIndex<T> index;
+  private final transient HoodieIndex<T> index;
   private final HoodieTimeline commitTimeline;
   private HoodieTable hoodieTable;
   private transient Optional<SQLContext> sqlContextOpt;
@@ -69,8 +69,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * @param basePath path to Hoodie dataset
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath) {
-    this(jsc, HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
+    this(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
         // by default we use HoodieBloomIndex
         .withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
@@ -96,9 +95,9 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     this.jsc = jsc;
     this.fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     // Create a Hoodie table which encapsulated the commits and files visible
-    this.hoodieTable = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true),
-        clientConfig);
+    this.hoodieTable = HoodieTable
+        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true),
+            clientConfig);
     this.commitTimeline = hoodieTable.getCommitTimeline().filterCompletedInstants();
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
     this.sqlContextOpt = Optional.absent();
@@ -126,33 +125,27 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    *
    * @return a dataframe
    */
-  public Dataset<Row> read(JavaRDD<HoodieKey> hoodieKeys, int parallelism)
-      throws Exception {
+  public Dataset<Row> read(JavaRDD<HoodieKey> hoodieKeys, int parallelism) throws Exception {
 
     assertSqlContext();
-    JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD =
-        index.fetchRecordLocation(hoodieKeys, hoodieTable);
-    List<String> paths = keyToFileRDD
-        .filter(keyFileTuple -> keyFileTuple._2().isPresent())
-        .map(keyFileTuple -> keyFileTuple._2().get())
-        .collect();
+    JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD = index
+        .fetchRecordLocation(hoodieKeys, hoodieTable);
+    List<String> paths = keyToFileRDD.filter(keyFileTuple -> keyFileTuple._2().isPresent())
+        .map(keyFileTuple -> keyFileTuple._2().get()).collect();
 
     // record locations might be same for multiple keys, so need a unique list
     Set<String> uniquePaths = new HashSet<>(paths);
     Dataset<Row> originalDF = sqlContextOpt.get().read()
         .parquet(uniquePaths.toArray(new String[uniquePaths.size()]));
     StructType schema = originalDF.schema();
-    JavaPairRDD<HoodieKey, Row> keyRowRDD = originalDF.javaRDD()
-        .mapToPair(row -> {
-          HoodieKey key = new HoodieKey(
-              row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD),
-              row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
-          return new Tuple2<>(key, row);
-        });
+    JavaPairRDD<HoodieKey, Row> keyRowRDD = originalDF.javaRDD().mapToPair(row -> {
+      HoodieKey key = new HoodieKey(row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD),
+          row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+      return new Tuple2<>(key, row);
+    });
 
     // Now, we need to further filter out, for only rows that match the supplied hoodie keys
-    JavaRDD<Row> rowRDD = keyRowRDD.join(keyToFileRDD, parallelism)
-        .map(tuple -> tuple._2()._1());
+    JavaRDD<Row> rowRDD = keyRowRDD.join(keyToFileRDD, parallelism).map(tuple -> tuple._2()._1());
 
     return sqlContextOpt.get().createDataFrame(rowRDD, schema);
   }

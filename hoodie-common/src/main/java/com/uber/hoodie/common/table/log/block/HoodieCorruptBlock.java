@@ -17,11 +17,10 @@
 package com.uber.hoodie.common.table.log.block;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
-import org.apache.hadoop.fs.FSDataInputStream;
-
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
  * Corrupt block is emitted whenever the scanner finds the length of the block written at the
@@ -61,6 +60,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
       Map<HeaderMetadataType, String> footer) throws IOException {
 
     return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily,
-        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
+        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
+        header, footer);
   }
 }

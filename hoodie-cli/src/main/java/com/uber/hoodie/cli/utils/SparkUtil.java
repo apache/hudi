@@ -35,13 +35,10 @@ public class SparkUtil {
    * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro
    */
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
-    String currentJar = new File(
-        SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
-        .getAbsolutePath();
-    SparkLauncher sparkLauncher =
-        new SparkLauncher().setAppResource(currentJar)
-            .setMainClass(SparkMain.class.getName())
-            .setPropertiesFile(propertiesFile);
+    String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
+                            .getAbsolutePath();
+    SparkLauncher sparkLauncher = new SparkLauncher().setAppResource(currentJar).setMainClass(SparkMain.class.getName())
+                                      .setPropertiesFile(propertiesFile);
     File libDirectory = new File(new File(currentJar).getParent(), "lib");
     for (String library : libDirectory.list()) {
       sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath());
@@ -60,8 +57,7 @@ public class SparkUtil {
     // Configure hadoop conf
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec",
-        "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
     sparkConf = HoodieWriteClient.registerClasses(sparkConf);

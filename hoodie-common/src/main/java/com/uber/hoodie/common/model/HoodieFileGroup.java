@@ -39,7 +39,6 @@ public class HoodieFileGroup implements Serializable {
     };
   }
 
-
   /**
    * Partition containing the file group.
    */
@@ -107,8 +106,8 @@ public class HoodieFileGroup implements Serializable {
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
     String maxCommitTime = lastInstant.get().getTimestamp();
-    return timeline.containsOrBeforeTimelineStarts(slice.getBaseCommitTime()) &&
-        HoodieTimeline.compareTimestamps(slice.getBaseCommitTime(),
+    return timeline.containsOrBeforeTimelineStarts(slice.getBaseCommitTime())
+        && HoodieTimeline.compareTimestamps(slice.getBaseCommitTime(),
             maxCommitTime,
             HoodieTimeline.LESSER_OR_EQUAL);
 

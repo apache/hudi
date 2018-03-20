@@ -33,13 +33,12 @@ import org.apache.log4j.Logger;
  */
 public class MetricsGraphiteReporter extends MetricsReporter {
 
+  private static Logger logger = LogManager.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
   private final HoodieWriteConfig config;
   private String serverHost;
   private int serverPort;
-
-  private static Logger logger = LogManager.getLogger(MetricsGraphiteReporter.class);
 
   public MetricsGraphiteReporter(HoodieWriteConfig config, MetricRegistry registry) {
     this.registry = registry;
@@ -49,8 +48,8 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     this.serverHost = config.getGraphiteServerHost();
     this.serverPort = config.getGraphiteServerPort();
     if (serverHost == null || serverPort == 0) {
-      throw new RuntimeException(
-          String.format("Graphite cannot be initialized with serverHost[%s] and serverPort[%s].",
+      throw new RuntimeException(String
+          .format("Graphite cannot be initialized with serverHost[%s] and serverPort[%s].",
               serverHost, serverPort));
     }
 
@@ -81,14 +80,10 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   }
 
   private GraphiteReporter createGraphiteReport() {
-    Graphite graphite = new Graphite(
-        new InetSocketAddress(serverHost, serverPort));
+    Graphite graphite = new Graphite(new InetSocketAddress(serverHost, serverPort));
     String reporterPrefix = config.getGraphiteMetricPrefix();
-    return GraphiteReporter.forRegistry(registry)
-        .prefixedWith(reporterPrefix)
-        .convertRatesTo(TimeUnit.SECONDS)
-        .convertDurationsTo(TimeUnit.MILLISECONDS)
-        .filter(MetricFilter.ALL)
-        .build(graphite);
+    return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix)
+        .convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
+        .filter(MetricFilter.ALL).build(graphite);
   }
 }

@@ -17,9 +17,8 @@
 package com.uber.hoodie.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-import javax.annotation.Nullable;
 import java.io.Serializable;
+import javax.annotation.Nullable;
 import org.apache.hadoop.fs.Path;
 
 /**

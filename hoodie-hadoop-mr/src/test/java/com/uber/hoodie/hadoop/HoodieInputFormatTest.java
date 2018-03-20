@@ -82,17 +82,17 @@ public class HoodieInputFormatTest {
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
     ensureFilesInCommit(
-        "Commit 200 has not been committed. We should not see files from this commit", files,
-        "200", 0);
+        "Commit 200 has not been committed. We should not see files from this commit", files, "200",
+        0);
     InputFormatTestUtil.commit(basePath, "200");
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
     ensureFilesInCommit(
-        "5 files have been updated to commit 200. We should see 5 files from commit 200 and 5 files from 100 commit",
-        files, "200", 5);
+        "5 files have been updated to commit 200. We should see 5 files from commit 200 and 5 "
+            + "files from 100 commit", files, "200", 5);
     ensureFilesInCommit(
-        "5 files have been updated to commit 200. We should see 5 files from commit 100 and 5 files from 200 commit",
-        files, "100", 5);
+        "5 files have been updated to commit 200. We should see 5 files from commit 100 and 5 "
+            + "files from 200 commit", files, "100", 5);
   }
 
   @Test
@@ -108,8 +108,8 @@ public class HoodieInputFormatTest {
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(
-        "We should exclude commit 100 when returning incremental pull with start commit time as 100",
-        0, files.length);
+        "We should exclude commit 100 when returning incremental pull with start commit time as "
+            + "100", 0, files.length);
   }
 
   @Test
@@ -146,8 +146,8 @@ public class HoodieInputFormatTest {
     files = inputFormat.listStatus(jobConf);
 
     assertEquals(
-        "Pulling 3 commits from 100, should get us the 3 files from 400 commit, 1 file from 300 commit and 1 file from 200 commit",
-        5, files.length);
+        "Pulling 3 commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
+            + "commit and 1 file from 200 commit", 5, files.length);
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 3 files from 400 commit",
         files, "400", 3);
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 300 commit",
@@ -159,23 +159,18 @@ public class HoodieInputFormatTest {
     files = inputFormat.listStatus(jobConf);
 
     assertEquals(
-        "Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 commits",
-        5, files.length);
-    ensureFilesInCommit(
-        "Pulling all commits from 100, should get us the 1 files from 600 commit", files, "600",
-        1);
-    ensureFilesInCommit(
-        "Pulling all commits from 100, should get us the 1 files from 500 commit", files, "500",
-        1);
-    ensureFilesInCommit(
-        "Pulling all commits from 100, should get us the 1 files from 400 commit", files, "400",
-        1);
-    ensureFilesInCommit(
-        "Pulling all commits from 100, should get us the 1 files from 300 commit", files, "300",
-        1);
-    ensureFilesInCommit(
-        "Pulling all commits from 100, should get us the 1 files from 200 commit", files, "200",
-        1);
+        "Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 "
+            + "commits", 5, files.length);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 600 commit",
+        files, "600", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 500 commit",
+        files, "500", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 400 commit",
+        files, "400", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 300 commit",
+        files, "300", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 200 commit",
+        files, "200", 1);
   }
 
   //TODO enable this after enabling predicate pushdown
@@ -183,8 +178,7 @@ public class HoodieInputFormatTest {
     // initial commit
     Schema schema = InputFormatTestUtil.readSchema("/sample1.avro");
     String commit1 = "20160628071126";
-    File partitionDir =
-        InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 10, commit1);
+    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -212,19 +206,20 @@ public class HoodieInputFormatTest {
         commit2, 2, 10);
   }
 
-  private void ensureRecordsInCommit(String msg, String commit,
-      int expectedNumberOfRecordsInCommit, int totalExpected) throws IOException {
+  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
+      int totalExpected) throws IOException {
     int actualCount = 0;
     int totalCount = 0;
     InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
     for (InputSplit split : splits) {
-      RecordReader<Void, ArrayWritable>
-          recordReader = inputFormat.getRecordReader(split, jobConf, null);
+      RecordReader<Void, ArrayWritable> recordReader = inputFormat
+          .getRecordReader(split, jobConf, null);
       Void key = recordReader.createKey();
       ArrayWritable writable = recordReader.createValue();
 
       while (recordReader.next(key, writable)) {
-        // writable returns an array with [field1, field2, _hoodie_commit_time, _hoodie_commit_seqno]
+        // writable returns an array with [field1, field2, _hoodie_commit_time,
+        // _hoodie_commit_seqno]
         // Take the commit time and compare with the one we are interested in
         if (commit.equals((writable.get()[2]).toString())) {
           actualCount++;

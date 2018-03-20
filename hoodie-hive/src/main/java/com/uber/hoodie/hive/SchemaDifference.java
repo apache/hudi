@@ -61,8 +61,8 @@ public class SchemaDifference {
   @Override
   public String toString() {
     return Objects.toStringHelper(this).add("deleteColumns", deleteColumns)
-        .add("updateColumnTypes", updateColumnTypes).add("addColumnTypes", addColumnTypes)
-        .toString();
+               .add("updateColumnTypes", updateColumnTypes).add("addColumnTypes", addColumnTypes)
+               .toString();
   }
 
   public static Builder newBuilder(MessageType storageSchema, Map<String, String> tableSchema) {

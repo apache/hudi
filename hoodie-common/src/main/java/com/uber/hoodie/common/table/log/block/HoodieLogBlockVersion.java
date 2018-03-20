@@ -14,12 +14,20 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.metrics;
+package com.uber.hoodie.common.table.log.block;
 
-/**
- * Types of the reporter. Right now we only support Graphite. We can include JMX and CSV in the
- * future.
- */
-public enum MetricsReporterType {
-  GRAPHITE, INMEMORY
+abstract class HoodieLogBlockVersion {
+
+  private final int currentVersion;
+
+  public static final int DEFAULT_VERSION = 0;
+
+  HoodieLogBlockVersion(int version) {
+    this.currentVersion = version;
+  }
+
+  int getVersion() {
+    return currentVersion;
+  }
 }
+
