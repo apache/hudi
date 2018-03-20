@@ -17,11 +17,10 @@
 package com.uber.hoodie.common.table.log.block;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
-import org.apache.hadoop.fs.FSDataInputStream;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
  * Command block issues a specific command to the scanner
@@ -30,7 +29,9 @@ public class HoodieCommandBlock extends HoodieLogBlock {
 
   private final HoodieCommandBlockTypeEnum type;
 
-  public enum HoodieCommandBlockTypeEnum {ROLLBACK_PREVIOUS_BLOCK}
+  public enum HoodieCommandBlockTypeEnum {
+    ROLLBACK_PREVIOUS_BLOCK
+  }
 
   public HoodieCommandBlock(Map<HeaderMetadataType, String> header) {
     this(Optional.empty(), null, false, Optional.empty(), header, new HashMap<>());

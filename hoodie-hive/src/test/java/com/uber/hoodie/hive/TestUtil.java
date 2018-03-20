@@ -16,6 +16,9 @@
 
 package com.uber.hoodie.hive;
 
+import static com.uber.hoodie.common.model.HoodieTestUtils.DEFAULT_TASK_PARTITIONID;
+import static org.junit.Assert.fail;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -39,6 +42,15 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.hive.util.HiveTestService;
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.commons.io.FileUtils;
@@ -57,19 +69,6 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.junit.runners.model.InitializationError;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.UUID;
-
-import static com.uber.hoodie.common.model.HoodieTestUtils.DEFAULT_TASK_PARTITIONID;
-import static org.junit.Assert.fail;
 
 @SuppressWarnings("SameParameterValue")
 public class TestUtil {
@@ -127,8 +126,7 @@ public class TestUtil {
       client.updateHiveSQL("drop table if exists " + tableName);
     }
     createdTablesSet.clear();
-    client.updateHiveSQL(
-        "drop database if exists " + hiveSyncConfig.databaseName);
+    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
     client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
   }
 
@@ -182,9 +180,8 @@ public class TestUtil {
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName
         + HiveSyncTool.SUFFIX_REALTIME_TABLE);
     HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
-    commitMetadata.getPartitionToWriteStats()
-        .forEach((key, value) -> value.stream()
-            .forEach(l -> compactionMetadata.addWriteStat(key, l)));
+    commitMetadata.getPartitionToWriteStats().forEach(
+        (key, value) -> value.stream().forEach(l -> compactionMetadata.addWriteStat(key, l)));
     createCompactionCommitFile(compactionMetadata, commitTime);
     // Write a delta commit
     HoodieCommitMetadata deltaMetadata = createLogFiles(commitMetadata.getPartitionToWriteStats(),
@@ -202,8 +199,7 @@ public class TestUtil {
   }
 
   static void addMORPartitions(int numberOfPartitions, boolean isParquetSchemaSimple,
-      boolean isLogSchemaSimple, DateTime startFrom,
-      String commitTime, String deltaCommitTime)
+      boolean isLogSchemaSimple, DateTime startFrom, String commitTime, String deltaCommitTime)
       throws IOException, URISyntaxException, InterruptedException {
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions,
         isParquetSchemaSimple, startFrom, commitTime);
@@ -211,9 +207,8 @@ public class TestUtil {
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName
         + HiveSyncTool.SUFFIX_REALTIME_TABLE);
     HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
-    commitMetadata.getPartitionToWriteStats()
-        .forEach((key, value) -> value.stream()
-            .forEach(l -> compactionMetadata.addWriteStat(key, l)));
+    commitMetadata.getPartitionToWriteStats().forEach(
+        (key, value) -> value.stream().forEach(l -> compactionMetadata.addWriteStat(key, l)));
     createCompactionCommitFile(compactionMetadata, commitTime);
     HoodieCommitMetadata deltaMetadata = createLogFiles(commitMetadata.getPartitionToWriteStats(),
         isLogSchemaSimple);
@@ -264,8 +259,8 @@ public class TestUtil {
     for (int i = 0; i < 5; i++) {
       // Create 5 files
       String fileId = UUID.randomUUID().toString();
-      Path filePath = new Path(partPath.toString() + "/" + FSUtils
-          .makeDataFileName(commitTime, DEFAULT_TASK_PARTITIONID, fileId));
+      Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeDataFileName(commitTime,
+          DEFAULT_TASK_PARTITIONID, fileId));
       generateParquetData(filePath, isParquetSchemaSimple);
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);
@@ -283,11 +278,10 @@ public class TestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
     BloomFilter filter = new BloomFilter(1000, 0.0001);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, filter);
-    ParquetWriter writer = new ParquetWriter(filePath,
-        writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE,
-        ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
-        ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION,
-        fileSystem.getConf());
+    ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE,
+        ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED, ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED,
+        ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
 
     List<IndexedRecord> testRecords = (isParquetSchemaSimple ? SchemaTestUtil
         .generateTestRecords(0, 100)
@@ -309,10 +303,10 @@ public class TestUtil {
     HoodieDataFile dataFile = new HoodieDataFile(fileSystem.getFileStatus(parquetFilePath));
     // Write a log file for this parquet file
     Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withFileId(dataFile.getFileId())
         .overBaseCommit(dataFile.getCommitTime()).withFs(fileSystem).build();
-    List<IndexedRecord> records = (isLogSchemaSimple ? SchemaTestUtil
-        .generateTestRecords(0, 100)
+    List<IndexedRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100));
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
@@ -329,37 +323,37 @@ public class TestUtil {
     }
   }
 
-  private static void createCommitFile(
-      HoodieCommitMetadata commitMetadata, String commitTime)
+  private static void createCommitFile(HoodieCommitMetadata commitMetadata, String commitTime)
       throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
         hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-            .makeCommitFileName(commitTime));
+            .makeCommitFileName(
+                commitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();
   }
 
-  private static void createCompactionCommitFile(
-      HoodieCommitMetadata commitMetadata, String commitTime)
-      throws IOException {
+  private static void createCompactionCommitFile(HoodieCommitMetadata commitMetadata,
+      String commitTime) throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
         hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-            .makeCommitFileName(commitTime));
+            .makeCommitFileName(
+                commitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();
   }
 
-  private static void createDeltaCommitFile(
-      HoodieCommitMetadata deltaCommitMetadata, String deltaCommitTime)
-      throws IOException {
+  private static void createDeltaCommitFile(HoodieCommitMetadata deltaCommitMetadata,
+      String deltaCommitTime) throws IOException {
     byte[] bytes = deltaCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
         hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
-            .makeDeltaFileName(deltaCommitTime));
+            .makeDeltaFileName(
+                deltaCommitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();

@@ -31,8 +31,7 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 public class TestFSUtils {
 
   @Rule
-  public final EnvironmentVariables environmentVariables
-      = new EnvironmentVariables();
+  public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
 
   @Test
   public void testMakeDataFileName() {
@@ -51,8 +50,10 @@ public class TestFSUtils {
     int stageId = Integer.MAX_VALUE;
     long taskAttemptId = Long.MAX_VALUE;
     String fileName = UUID.randomUUID().toString();
-    assertTrue(FSUtils.makeTempDataFileName(partitionPath, commitTime, taskPartitionId, fileName, stageId, taskAttemptId)
-        .equals(partitionPath.replace("/", "-") + "_" + fileName + "_" + taskPartitionId + "_" + commitTime + "_" + stageId + "_" + taskAttemptId + ".parquet"));
+    assertTrue(
+        FSUtils.makeTempDataFileName(partitionPath, commitTime, taskPartitionId, fileName, stageId, taskAttemptId)
+            .equals(partitionPath.replace("/", "-") + "_" + fileName + "_" + taskPartitionId + "_" + commitTime + "_"
+                + stageId + "_" + taskAttemptId + ".parquet"));
   }
 
   @Test

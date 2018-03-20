@@ -36,10 +36,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
   // used to size log files
   public static final String LOGFILE_SIZE_MAX_BYTES = "hoodie.logfile.max.size";
-  public static final String DEFAULT_LOGFILE_SIZE_MAX_BYTES = String.valueOf(1024*1024*1024); // 1 GB
+  public static final String DEFAULT_LOGFILE_SIZE_MAX_BYTES = String
+      .valueOf(1024 * 1024 * 1024); // 1 GB
   // used to size data blocks in log file
   public static final String LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = "hoodie.logfile.data.block.max.size";
-  public static final String DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = String.valueOf(256*1024*1024); // 256 MB
+  public static final String DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = String.valueOf(256 * 1024 * 1024); // 256 MB
   public static final String PARQUET_COMPRESSION_RATIO = "hoodie.parquet.compression.ratio";
   // Default compression ratio for parquet
   public static final String DEFAULT_STREAM_COMPRESSION_RATIO = String.valueOf(0.1);

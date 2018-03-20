@@ -21,12 +21,6 @@ import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.exception.HoodieException;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.util.SizeEstimator;
-
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,53 +29,63 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.util.SizeEstimator;
 
 /**
- * Used for buffering input records. Buffer limit is controlled by {@link #bufferMemoryLimit}. It internally samples
- * every {@link #RECORD_SAMPLING_RATE}th record and adjusts number of records in buffer accordingly. This is done to
- * ensure that we don't OOM.
+ * Used for buffering input records. Buffer limit is controlled by {@link #bufferMemoryLimit}. It
+ * internally samples every {@link #RECORD_SAMPLING_RATE}th record and adjusts number of records in
+ * buffer accordingly. This is done to ensure that we don't OOM.
  */
-public class BufferedIterator<K extends HoodieRecordPayload, T extends HoodieRecord<K>>
-    implements Iterator<BufferedIterator.BufferedIteratorPayload<T>> {
+public class BufferedIterator<K extends HoodieRecordPayload, T extends HoodieRecord<K>> implements
+    Iterator<BufferedIterator.BufferedIteratorPayload<T>> {
 
-  private static Logger logger = LogManager.getLogger(BufferedIterator.class);
   // interval used for polling records in the queue.
   public static final int RECORD_POLL_INTERVAL_SEC = 5;
   // rate used for sampling records to determine avg record size in bytes.
   public static final int RECORD_SAMPLING_RATE = 64;
   // maximum records that will be cached
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
-  // It indicates number of records to cache. We will be using sampled record's average size to determine how many
+  private static Logger logger = LogManager.getLogger(BufferedIterator.class);
+  // It indicates number of records to cache. We will be using sampled record's average size to
+  // determine how many
   // records we should cache and will change (increase/decrease) permits accordingly.
   @VisibleForTesting
   public final Semaphore rateLimiter = new Semaphore(1);
   // used for sampling records with "RECORD_SAMPLING_RATE" frequency.
   public final AtomicLong samplingRecordCounter = new AtomicLong(-1);
-  // indicates rate limit (number of records to cache). it is updated whenever there is a change in avg record size.
-  @VisibleForTesting
-  public int currentRateLimit = 1;
   // internal buffer to cache buffered records.
-  private final LinkedBlockingQueue<Optional<BufferedIteratorPayload<T>>> buffer = new LinkedBlockingQueue<>();
+  private final LinkedBlockingQueue<Optional<BufferedIteratorPayload<T>>> buffer = new
+      LinkedBlockingQueue<>();
   // maximum amount of memory to be used for buffering records.
   private final long bufferMemoryLimit;
+  // original iterator from where records are read for buffering.
+  private final Iterator<T> inputIterator;
+  // it holds the root cause of the exception in case either buffering records (reading from
+  // inputIterator) fails or
+  // thread reading records from buffer fails.
+  private final AtomicReference<Exception> hasFailed = new AtomicReference(null);
+  // used for indicating that all the records from buffer are read successfully.
+  private final AtomicBoolean isDone = new AtomicBoolean(false);
+  // schema used for fetching insertValue from HoodieRecord.
+  private final Schema schema;
+  // indicates rate limit (number of records to cache). it is updated whenever there is a change
+  // in avg record size.
+  @VisibleForTesting
+  public int currentRateLimit = 1;
   // indicates avg record size in bytes. It is updated whenever a new record is sampled.
   @VisibleForTesting
   public long avgRecordSizeInBytes = 0;
   // indicates number of samples collected so far.
   private long numSamples = 0;
-  // original iterator from where records are read for buffering.
-  private final Iterator<T> inputIterator;
-  // it holds the root cause of the exception in case either buffering records (reading from inputIterator) fails or
-  // thread reading records from buffer fails.
-  private final AtomicReference<Exception> hasFailed = new AtomicReference(null);
-  // used for indicating that all the records from buffer are read successfully.
-  private final AtomicBoolean isDone = new AtomicBoolean(false);
   // next record to be read from buffer.
   private BufferedIteratorPayload<T> nextRecord;
-  // schema used for fetching insertValue from HoodieRecord.
-  private final Schema schema;
 
-  public BufferedIterator(final Iterator<T> iterator, final long bufferMemoryLimit, final Schema schema) {
+  public BufferedIterator(final Iterator<T> iterator, final long bufferMemoryLimit,
+      final Schema schema) {
     this.inputIterator = iterator;
     this.bufferMemoryLimit = bufferMemoryLimit;
     this.schema = schema;
@@ -92,23 +96,28 @@ public class BufferedIterator<K extends HoodieRecordPayload, T extends HoodieRec
     return this.buffer.size();
   }
 
-  // It samples records with "RECORD_SAMPLING_RATE" frequency and computes average record size in bytes. It is used
-  // for determining how many maximum records to buffer. Based on change in avg size it may increase or decrease
+  // It samples records with "RECORD_SAMPLING_RATE" frequency and computes average record size in
+  // bytes. It is used
+  // for determining how many maximum records to buffer. Based on change in avg size it may
+  // increase or decrease
   // available permits.
   private void adjustBufferSizeIfNeeded(final T record) throws InterruptedException {
     if (this.samplingRecordCounter.incrementAndGet() % RECORD_SAMPLING_RATE != 0) {
       return;
     }
     final long recordSizeInBytes = SizeEstimator.estimate(record);
-    final long newAvgRecordSizeInBytes =
-      Math.max(1, (avgRecordSizeInBytes * numSamples + recordSizeInBytes) / (numSamples + 1));
-    final int newRateLimit =
-      (int) Math.min(RECORD_CACHING_LIMIT, Math.max(1, this.bufferMemoryLimit / newAvgRecordSizeInBytes));
-//    System.out.println("recordSizeInBytes:" + recordSizeInBytes + ":newAvgRecordSizeInBytes:" + newAvgRecordSizeInBytes
-//      + ":newRateLimit:" + newRateLimit + ":currentRateLimit:" + currentRateLimit + ":numSamples:" + numSamples
-//      + ":avgRecordSizeInBytes:" + avgRecordSizeInBytes);
+    final long newAvgRecordSizeInBytes = Math
+        .max(1, (avgRecordSizeInBytes * numSamples + recordSizeInBytes) / (numSamples + 1));
+    final int newRateLimit = (int) Math
+        .min(RECORD_CACHING_LIMIT, Math.max(1, this.bufferMemoryLimit / newAvgRecordSizeInBytes));
+    // System.out.println("recordSizeInBytes:" + recordSizeInBytes + ":newAvgRecordSizeInBytes:" +
+    // newAvgRecordSizeInBytes
+    //    + ":newRateLimit:" + newRateLimit + ":currentRateLimit:" + currentRateLimit +
+    // ":numSamples:" + numSamples
+    //    + ":avgRecordSizeInBytes:" + avgRecordSizeInBytes);
 
-    // If there is any change in number of records to cache then we will either release (if it increased) or acquire
+    // If there is any change in number of records to cache then we will either release (if it
+    // increased) or acquire
     // (if it decreased) to adjust rate limiting to newly computed value.
     if (newRateLimit > currentRateLimit) {
       rateLimiter.release(newRateLimit - currentRateLimit);
@@ -120,12 +129,14 @@ public class BufferedIterator<K extends HoodieRecordPayload, T extends HoodieRec
     numSamples++;
   }
 
-  // inserts record into internal buffer. It also fetches insert value from the record to offload computation work on to
+  // inserts record into internal buffer. It also fetches insert value from the record to offload
+  // computation work on to
   // buffering thread.
   private void insertRecord(T t) throws Exception {
     rateLimiter.acquire();
     adjustBufferSizeIfNeeded(t);
-    // We are retrieving insert value in the record buffering thread to offload computation around schema validation
+    // We are retrieving insert value in the record buffering thread to offload computation
+    // around schema validation
     // and record creation to it.
     final BufferedIteratorPayload<T> payload = new BufferedIteratorPayload<>(t, this.schema);
     buffer.put(Optional.of(payload));
@@ -198,12 +209,15 @@ public class BufferedIterator<K extends HoodieRecordPayload, T extends HoodieRec
 
   public void markAsFailed(Exception e) {
     this.hasFailed.set(e);
-    // release the permits so that if the buffering thread is waiting for permits then it will get it.
+    // release the permits so that if the buffering thread is waiting for permits then it will
+    // get it.
     this.rateLimiter.release(RECORD_CACHING_LIMIT + 1);
   }
 
-  // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
+  // Used for caching HoodieRecord along with insertValue. We need this to offload computation
+  // work to buffering thread.
   static class BufferedIteratorPayload<T extends HoodieRecord> {
+
     public T record;
     public Optional<IndexedRecord> insertValue;
     // It caches the exception seen while fetching insert value.

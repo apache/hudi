@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.config;
 
-
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
@@ -24,15 +23,14 @@ import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.metrics.MetricsReporterType;
-import org.apache.spark.storage.StorageLevel;
-
-import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
+import javax.annotation.concurrent.Immutable;
+import org.apache.spark.storage.StorageLevel;
 
 /**
  * Class storing configs for the {@link com.uber.hoodie.HoodieWriteClient}
@@ -40,9 +38,9 @@ import java.util.Properties;
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {
 
+  public static final String TABLE_NAME = "hoodie.table.name";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
-  public static final String TABLE_NAME = "hoodie.table.name";
   private static final String DEFAULT_PARALLELISM = "200";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
@@ -57,19 +55,26 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
   private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
   private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
-  private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
+  private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP =
+      "hoodie.assume.date" + ".partitioning";
   private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
   private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
   private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
-  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE = "hoodie.copyonwrite.use.temp.folder.for.create";
+  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE =
+      "hoodie.copyonwrite.use" + ".temp.folder.for.create";
   private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE = "false";
-  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE = "hoodie.copyonwrite.use.temp.folder.for.merge";
+  private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE =
+      "hoodie.copyonwrite.use" + ".temp.folder.for.merge";
   private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE = "false";
   private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
 
   private HoodieWriteConfig(Properties props) {
     super(props);
+  }
+
+  public static HoodieWriteConfig.Builder newBuilder() {
+    return new Builder();
   }
 
   /**
@@ -137,8 +142,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public boolean shouldUseTempFolderForCopyOnWrite() {
-    return shouldUseTempFolderForCopyOnWriteForCreate() ||
-        shouldUseTempFolderForCopyOnWriteForMerge();
+    return shouldUseTempFolderForCopyOnWriteForCreate()
+        || shouldUseTempFolderForCopyOnWriteForMerge();
   }
 
   public int getFinalizeWriteParallelism() {
@@ -154,8 +159,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getCleanerFileVersionsRetained() {
-    return Integer.parseInt(
-        props.getProperty(HoodieCompactionConfig.CLEANER_FILE_VERSIONS_RETAINED_PROP));
+    return Integer
+        .parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_FILE_VERSIONS_RETAINED_PROP));
   }
 
   public int getCleanerCommitsRetained() {
@@ -177,8 +182,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getCopyOnWriteInsertSplitSize() {
-    return Integer.parseInt(
-        props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE));
+    return Integer
+        .parseInt(props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE));
   }
 
   public int getCopyOnWriteRecordSizeEstimate() {
@@ -204,8 +209,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getInlineCompactDeltaCommitMax() {
-    return Integer.parseInt(
-        props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
+    return Integer
+        .parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {
@@ -340,11 +345,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public String getGraphiteMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX);
   }
-
-  public static HoodieWriteConfig.Builder newBuilder() {
-    return new Builder();
-  }
-
+  
   /**
    * memory configs
    */
@@ -486,15 +487,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder withUseTempFolderCopyOnWriteForCreate(
         boolean shouldUseTempFolderCopyOnWriteForCreate) {
-      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE, String.valueOf
-          (shouldUseTempFolderCopyOnWriteForCreate));
+      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE,
+          String.valueOf(shouldUseTempFolderCopyOnWriteForCreate));
       return this;
     }
 
     public Builder withUseTempFolderCopyOnWriteForMerge(
         boolean shouldUseTempFolderCopyOnWriteForMerge) {
-      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE, String.valueOf
-          (shouldUseTempFolderCopyOnWriteForMerge));
+      props.setProperty(HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE,
+          String.valueOf(shouldUseTempFolderCopyOnWriteForMerge));
       return this;
     }
 
@@ -510,8 +511,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM),
-          BULKINSERT_PARALLELISM,
-          DEFAULT_PARALLELISM);
+          BULKINSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP),

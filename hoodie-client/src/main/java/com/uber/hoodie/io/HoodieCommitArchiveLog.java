@@ -40,13 +40,6 @@ import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.avro.Schema;
-import org.apache.avro.file.DataFileStream;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +47,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Archiver to bound the growth of <action>.commit files
@@ -76,11 +74,9 @@ public class HoodieCommitArchiveLog {
   private HoodieLogFormat.Writer openWriter() {
     try {
       if (this.writer == null) {
-        return HoodieLogFormat.newWriterBuilder()
-            .onParentPath(archiveFilePath.getParent())
+        return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
             .withFileId(archiveFilePath.getName())
-            .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
-            .withFs(metaClient.getFs())
+            .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFs(metaClient.getFs())
             .overBaseCommit("").build();
       } else {
         return this.writer;
@@ -136,21 +132,19 @@ public class HoodieCommitArchiveLog {
         .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION))
         .filterCompletedInstants();
     Stream<HoodieInstant> instants = cleanAndRollbackTimeline.getInstants()
-        .collect(Collectors.groupingBy(s -> s.getAction()))
-        .entrySet()
-        .stream()
-        .map(i -> {
+        .collect(Collectors.groupingBy(s -> s.getAction())).entrySet().stream().map(i -> {
           if (i.getValue().size() > maxCommitsToKeep) {
             return i.getValue().subList(0, i.getValue().size() - minCommitsToKeep);
           } else {
             return new ArrayList<HoodieInstant>();
           }
-        })
-        .flatMap(i -> i.stream());
+        }).flatMap(i -> i.stream());
 
-    //TODO (na) : Add a way to return actions associated with a timeline and then merge/unify with logic above to avoid Stream.concats
+    //TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
+    // with logic above to avoid Stream.concats
     HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
-    // We cannot have any holes in the commit timeline. We cannot archive any commits which are made after the first savepoint present.
+    // We cannot have any holes in the commit timeline. We cannot archive any commits which are
+    // made after the first savepoint present.
     Optional<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxCommitsToKeep) {
       // Actually do the commits
@@ -169,16 +163,14 @@ public class HoodieCommitArchiveLog {
     log.info("Deleting instants " + archivedInstants);
     boolean success = true;
     for (HoodieInstant archivedInstant : archivedInstants) {
-      Path commitFile =
-          new Path(metaClient.getMetaPath(), archivedInstant.getFileName());
+      Path commitFile = new Path(metaClient.getMetaPath(), archivedInstant.getFileName());
       try {
         if (metaClient.getFs().exists(commitFile)) {
           success &= metaClient.getFs().delete(commitFile, false);
           log.info("Archived and deleted instant file " + commitFile);
         }
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to delete archived instant " + archivedInstant,
-            e);
+        throw new HoodieIOException("Failed to delete archived instant " + archivedInstant, e);
       }
     }
     return success;
@@ -186,8 +178,8 @@ public class HoodieCommitArchiveLog {
 
   public void archive(List<HoodieInstant> instants) throws HoodieCommitException {
     try {
-      HoodieTimeline commitTimeline =
-          metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
+      HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline()
+          .filterCompletedInstants();
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
       log.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
@@ -247,6 +239,8 @@ public class HoodieCommitArchiveLog {
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
       }
+      default:
+        throw new UnsupportedOperationException("Action not fully supported yet");
     }
     return archivedMetaWrapper;
   }
@@ -256,9 +250,8 @@ public class HoodieCommitArchiveLog {
     ObjectMapper mapper = new ObjectMapper();
     //Need this to ignore other public get() methods
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    com.uber.hoodie.avro.model.HoodieCommitMetadata avroMetaData =
-        mapper.convertValue(hoodieCommitMetadata,
-            com.uber.hoodie.avro.model.HoodieCommitMetadata.class);
+    com.uber.hoodie.avro.model.HoodieCommitMetadata avroMetaData = mapper
+        .convertValue(hoodieCommitMetadata, com.uber.hoodie.avro.model.HoodieCommitMetadata.class);
     return avroMetaData;
   }
 }

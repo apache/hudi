@@ -40,7 +40,6 @@ public class TestHoodieMetrics {
   @Test
   public void testRegisterGauge() {
     metrics.registerGauge("metric1", 123L);
-    assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString()
-        .equals("123"));
+    assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString().equals("123"));
   }
 }

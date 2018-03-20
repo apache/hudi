@@ -30,10 +30,6 @@ public class DefaultHoodieConfig implements Serializable {
     this.props = props;
   }
 
-  public Properties getProps() {
-    return props;
-  }
-
   public static void setDefaultOnCondition(Properties props, boolean condition, String propName,
       String defaultValue) {
     if (condition) {
@@ -46,6 +42,10 @@ public class DefaultHoodieConfig implements Serializable {
     if (condition) {
       props.putAll(config.getProps());
     }
+  }
+
+  public Properties getProps() {
+    return props;
   }
 
 }

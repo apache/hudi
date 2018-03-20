@@ -20,7 +20,6 @@ import com.uber.hoodie.common.util.SpillableMapUtils;
 import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Iterator;
@@ -29,8 +28,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Iterable to lazily fetch values spilled to disk.
- * This class uses RandomAccessFile to randomly access the position of
+ * Iterable to lazily fetch values spilled to disk. This class uses RandomAccessFile to randomly access the position of
  * the latest value for a key spilled to disk and returns the result.
  */
 public class LazyFileIterable<T, R> implements Iterable<R> {
@@ -63,9 +61,9 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
    */
   public class LazyFileIterator<T, R> implements Iterator<R> {
 
+    private final Converter<R> valueConverter;
     private RandomAccessFile readOnlyFileHandle;
     private Iterator<Map.Entry<T, DiskBasedMap.ValueMetadata>> metadataIterator;
-    private final Converter<R> valueConverter;
 
     public LazyFileIterator(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map,
         Converter<R> valueConverter) throws IOException {

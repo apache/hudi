@@ -20,18 +20,18 @@ import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.uber.hoodie.common.model.AvroBinaryTestPayload;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.AvroBinaryTestPayload;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
 import com.uber.hoodie.common.util.SpillableMapUtils;
-import com.uber.hoodie.common.util.collection.converter.StringConverter;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
+import com.uber.hoodie.common.util.collection.converter.StringConverter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
@@ -46,6 +46,7 @@ import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class TestDiskBasedMap {
@@ -58,8 +59,7 @@ public class TestDiskBasedMap {
     DiskBasedMap records = new DiskBasedMap<>(Optional.empty(),
         new StringConverter(), new HoodieRecordConverter(schema, payloadClazz));
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    String commitTime = ((GenericRecord) iRecords.get(0))
-        .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+    ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 
     // make sure records have spilled to disk
@@ -108,8 +108,7 @@ public class TestDiskBasedMap {
     DiskBasedMap records = new DiskBasedMap<>(Optional.empty(),
         new StringConverter(), new HoodieRecordConverter(schema, payloadClazz));
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    String commitTime = ((GenericRecord) iRecords.get(0))
-        .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+
     // perform some inserts
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 
@@ -124,9 +123,6 @@ public class TestDiskBasedMap {
                 HoodieActiveTimeline.createNewCommitTime());
     String newCommitTime = ((GenericRecord) updatedRecords.get(0))
         .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
-
-    // new commit time should be different
-    assertEquals(commitTime, newCommitTime);
 
     // perform upserts
     recordKeys = SpillableMapTestUtils.upsertRecords(updatedRecords, records);
@@ -194,6 +190,12 @@ public class TestDiskBasedMap {
     assertTrue(payloadSize > 0);
   }
 
+  /**
+   * vb - Disabled this test after talking to Nishanth as this relies on timing and sometimes fails in my laptop.
+   * This specific test sometime takes more than 100 ms (In one case, saw 122 ms),
+   * @na: TODO: Please check if this can be removed.
+   */
+  @Ignore
   @Test
   public void testSizeEstimatorPerformance() throws IOException, URISyntaxException {
     // Test sizeEstimatorPerformance with simpleSchema
@@ -205,6 +207,7 @@ public class TestDiskBasedMap {
     long startTime = System.currentTimeMillis();
     SpillableMapUtils.computePayloadSize(record, converter);
     long timeTaken = System.currentTimeMillis() - startTime;
+    System.out.println("Time taken :" + timeTaken);
     assertTrue(timeTaken < 100);
   }
 }

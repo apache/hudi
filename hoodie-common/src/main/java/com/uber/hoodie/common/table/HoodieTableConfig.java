@@ -42,7 +42,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieTableConfig implements Serializable {
 
-  private final transient static Logger log = LogManager.getLogger(HoodieTableConfig.class);
+  private static final transient Logger log = LogManager.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";

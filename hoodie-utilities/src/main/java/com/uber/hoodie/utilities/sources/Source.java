@@ -54,8 +54,7 @@ public abstract class Source implements Serializable {
    * data, as well as the checkpoint to be written as a result of that.
    */
   public abstract Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr,
-      long maxInputBytes);
+      Optional<String> lastCheckpointStr, long maxInputBytes);
 
 
   public PropertiesConfiguration getConfig() {

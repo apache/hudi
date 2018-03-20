@@ -53,8 +53,8 @@ public class CompactionOperation implements Serializable {
     this.partitionPath = partitionPath;
     this.dataFileCommitTime = dataFile.getCommitTime();
     this.dataFileSize = dataFile.getFileSize();
-    this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString()).collect(
-        Collectors.toList());
+    this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString())
+        .collect(Collectors.toList());
     this.metrics = writeConfig.getCompactionStrategy()
         .captureMetrics(dataFile, partitionPath, logFiles);
   }

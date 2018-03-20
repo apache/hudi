@@ -23,9 +23,9 @@ import java.util.Iterator;
  * inputItr classes in order to simplify the implementation of lazy iterators for mapPartitions use
  * cases. Note [SPARK-3369], which gives the reasons for backwards compatibility with regard to the
  * iterable API despite Spark's single pass nature.
- *
+ * <p>
  * Provide a way to obtain a inputItr of type O  (output), out of an inputItr of type I (input)
- *
+ * <p>
  * Things to remember: - Assumes Spark calls hasNext() to check for elements, before calling next()
  * to obtain them - Assumes hasNext() gets called atleast once. - Concrete Implementation is
  * responsible for calling inputIterator.next() and doing the processing in computeNext()

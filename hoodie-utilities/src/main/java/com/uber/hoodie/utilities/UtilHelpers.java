@@ -41,9 +41,8 @@ public class UtilHelpers {
       JavaSparkContext jssc, SourceDataFormat dataFormat, SchemaProvider schemaProvider)
       throws IOException {
     try {
-      return (Source) ConstructorUtils
-          .invokeConstructor(Class.forName(sourceClass), (Object) cfg, (Object) jssc,
-              (Object) dataFormat, (Object) schemaProvider);
+      return (Source) ConstructorUtils.invokeConstructor(Class.forName(sourceClass), (Object) cfg,
+          (Object) jssc, (Object) dataFormat, (Object) schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
@@ -52,8 +51,8 @@ public class UtilHelpers {
   public static SchemaProvider createSchemaProvider(String schemaProviderClass,
       PropertiesConfiguration cfg) throws IOException {
     try {
-      return (SchemaProvider) ConstructorUtils
-          .invokeConstructor(Class.forName(schemaProviderClass), (Object) cfg);
+      return (SchemaProvider) ConstructorUtils.invokeConstructor(Class.forName(schemaProviderClass),
+          (Object) cfg);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
     }

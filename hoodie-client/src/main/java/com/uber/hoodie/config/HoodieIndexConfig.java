@@ -40,23 +40,25 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_PARALLELISM_PROP = "hoodie.bloom.index.parallelism";
   // Disable explicit bloom index parallelism setting by default - hoodie auto computes
   public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = "0";
-  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = "hoodie.bloom.index.prune.by.ranges";
+  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP =
+      "hoodie.bloom.index.prune.by" + ".ranges";
   public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = "true";
   public static final String BLOOM_INDEX_USE_CACHING_PROP = "hoodie.bloom.index.use.caching";
   public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
-  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
+  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL =
+      "hoodie.bloom.index.input.storage" + ".level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
   // ***** HBase Index Configs *****
-  public final static String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
-  public final static String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
-  public final static String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
-  public final static String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
-  public final static String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
-  public final static String DEFAULT_HBASE_BATCH_SIZE = "100";
+  public static final String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
+  public static final String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
+  public static final String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
+  public static final String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
+  public static final String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
+  public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
 
   // ***** Bucketed Index Configs *****
-  public final static String BUCKETED_INDEX_NUM_BUCKETS_PROP = "hoodie.index.bucketed.numbuckets";
+  public static final String BUCKETED_INDEX_NUM_BUCKETS_PROP = "hoodie.index.bucketed.numbuckets";
 
   private HoodieIndexConfig(Properties props) {
     super(props);
@@ -152,12 +154,12 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP),
-          INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
+      setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP,
+          DEFAULT_INDEX_TYPE);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES),
           BLOOM_FILTER_NUM_ENTRIES, DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
-      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP),
-          BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP), BLOOM_FILTER_FPP,
+          DEFAULT_BLOOM_FILTER_FPP);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PARALLELISM_PROP),
           BLOOM_INDEX_PARALLELISM_PROP, DEFAULT_BLOOM_INDEX_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PRUNE_BY_RANGES_PROP),

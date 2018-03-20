@@ -118,10 +118,10 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
       return false;
     }
     HoodieRecord that = (HoodieRecord) o;
-    return Objects.equal(key, that.key) &&
-        Objects.equal(data, that.data) &&
-        Objects.equal(currentLocation, that.currentLocation) &&
-        Objects.equal(newLocation, that.newLocation);
+    return Objects.equal(key, that.key)
+        && Objects.equal(data, that.data)
+        && Objects.equal(currentLocation, that.currentLocation)
+        && Objects.equal(newLocation, that.newLocation);
   }
 
   @Override

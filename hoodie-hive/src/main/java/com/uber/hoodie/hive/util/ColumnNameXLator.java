@@ -26,9 +26,9 @@ public class ColumnNameXLator {
 
   public static String translateNestedColumn(String colName) {
     Map.Entry entry;
-    for (Iterator i$ = xformMap.entrySet().iterator(); i$.hasNext();
+    for (Iterator ic = xformMap.entrySet().iterator(); ic.hasNext();
         colName = colName.replaceAll((String) entry.getKey(), (String) entry.getValue())) {
-      entry = (Map.Entry) i$.next();
+      entry = (Map.Entry) ic.next();
     }
 
     return colName;

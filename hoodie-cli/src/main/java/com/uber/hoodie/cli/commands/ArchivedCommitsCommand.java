@@ -47,13 +47,11 @@ public class ArchivedCommitsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "show archived commits", help = "Read commits from archived files and show details")
-  public String showCommits(
-      @CliOption(key = {
-          "limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "10")
-      final Integer limit) throws IOException {
+  public String showCommits(@CliOption(key = {
+      "limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "10") final Integer limit)
+      throws IOException {
 
-    System.out
-        .println("===============> Showing only " + limit + " archived commits <===============");
+    System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.tableMetadata.getBasePath();
     FileStatus[] fsStatuses = FSUtils.getFs(basePath, HoodieCLI.conf)
         .globStatus(new Path(basePath + "/.hoodie/.commits_.archive*"));
@@ -61,8 +59,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
     int commits = 0;
     for (FileStatus fs : fsStatuses) {
       //read the archived file
-      HoodieLogFormat.Reader reader = HoodieLogFormat
-          .newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
+      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
           new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
@@ -71,20 +68,19 @@ public class ArchivedCommitsCommand implements CommandMarker {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
         List<IndexedRecord> records = blk.getRecords();
         readRecords.addAll(records);
-        if(commits == limit) {
+        if (commits == limit) {
           break;
         }
         commits++;
       }
-      List<String[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
-          .map(r -> readCommit(r)).collect(Collectors.toList());
+      List<String[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> readCommit(r))
+          .collect(Collectors.toList());
       allCommits.addAll(readCommits);
-      if(commits == limit) {
+      if (commits == limit) {
         break;
       }
     }
-    return HoodiePrintHelper.print(
-        new String[]{"CommitTime", "CommitType", "CommitDetails"},
+    return HoodiePrintHelper.print(new String[] {"CommitTime", "CommitType", "CommitDetails"},
         allCommits.toArray(new String[allCommits.size()][]));
   }
 
@@ -122,6 +118,8 @@ public class ArchivedCommitsCommand implements CommandMarker {
           commitDetails.add(record.get("hoodieSavePointMetadata").toString());
           break;
         }
+        default:
+          return commitDetails.toArray(new String[commitDetails.size()]);
       }
     } catch (Exception e) {
       e.printStackTrace();

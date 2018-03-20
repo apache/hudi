@@ -69,8 +69,7 @@ public class HoodieClientTestUtils {
     return keys;
   }
 
-  private static void fakeMetaFile(String basePath, String commitTime, String suffix)
-      throws IOException {
+  private static void fakeMetaFile(String basePath, String commitTime, String suffix) throws IOException {
     String parentPath = basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME;
     new File(parentPath).mkdirs();
     new File(parentPath + "/" + commitTime + suffix).createNewFile();
@@ -85,55 +84,48 @@ public class HoodieClientTestUtils {
     fakeMetaFile(basePath, commitTime, HoodieTimeline.INFLIGHT_EXTENSION);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String commitTime,
-      String fileId) throws Exception {
+  public static void fakeDataFile(String basePath, String partitionPath, String commitTime, String fileId)
+      throws Exception {
     fakeDataFile(basePath, partitionPath, commitTime, fileId, 0);
   }
 
-  public static void fakeDataFile(String basePath, String partitionPath, String commitTime,
-      String fileId, long length) throws Exception {
+  public static void fakeDataFile(String basePath, String partitionPath, String commitTime, String fileId, long length)
+      throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     new File(parentPath).mkdirs();
-    String path = String
-        .format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, 0, fileId));
+    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, 0, fileId));
     new File(path).createNewFile();
     new RandomAccessFile(path, "rw").setLength(length);
   }
 
   public static SparkConf getSparkConfForTest(String appName) {
-    SparkConf sparkConf = new SparkConf()
-        .setAppName(appName)
+    System.out.println("HIII" + "HII2");
+    SparkConf sparkConf = new SparkConf().setAppName(appName)
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .setMaster("local[1]");
     return HoodieReadClient.addHoodieSupport(sparkConf);
   }
 
-  public static HashMap<String, String> getLatestFileIDsToFullPath(String basePath,
-      HoodieTimeline commitTimeline,
+  public static HashMap<String, String> getLatestFileIDsToFullPath(String basePath, HoodieTimeline commitTimeline,
       List<HoodieInstant> commitsToReturn) throws IOException {
     HashMap<String, String> fileIdToFullPath = new HashMap<>();
     for (HoodieInstant commit : commitsToReturn) {
-      HoodieCommitMetadata metadata =
-          HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get());
+      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get());
       fileIdToFullPath.putAll(metadata.getFileIdAndFullPaths(basePath));
     }
     return fileIdToFullPath;
   }
 
-  public static Dataset<Row> readCommit(String basePath,
-      SQLContext sqlContext,
-      HoodieTimeline commitTimeline,
+  public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
       String commitTime) {
-    HoodieInstant commitInstant =
-        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
+    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       new HoodieException("No commit exists at " + commitTime);
     }
     try {
       HashMap<String, String> paths = getLatestFileIDsToFullPath(basePath, commitTimeline,
           Arrays.asList(commitInstant));
-      return sqlContext.read()
-          .parquet(paths.values().toArray(new String[paths.size()]))
+      return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
           .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
     } catch (Exception e) {
       throw new HoodieException("Error reading commit " + commitTime, e);
@@ -143,50 +135,37 @@ public class HoodieClientTestUtils {
   /**
    * Obtain all new data written into the Hoodie dataset since the given timestamp.
    */
-  public static Dataset<Row> readSince(String basePath,
-      SQLContext sqlContext,
-      HoodieTimeline commitTimeline,
+  public static Dataset<Row> readSince(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
       String lastCommitTime) {
-    List<HoodieInstant> commitsToReturn =
-        commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE)
-            .getInstants().collect(Collectors.toList());
+    List<HoodieInstant> commitsToReturn = commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE)
+        .getInstants().collect(Collectors.toList());
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
-      HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath,
-          commitTimeline, commitsToReturn);
-      return sqlContext.read()
-          .parquet(fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]))
-          .filter(
-              String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));
+      HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
+      return sqlContext.read().parquet(fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]))
+          .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime));
     } catch (IOException e) {
-      throw new HoodieException(
-          "Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
+      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
     }
   }
 
   /**
    * Reads the paths under the a hoodie dataset out as a DataFrame
    */
-  public static Dataset<Row> read(String basePath,
-      SQLContext sqlContext,
-      FileSystem fs,
-      String... paths) {
+  public static Dataset<Row> read(String basePath, SQLContext sqlContext, FileSystem fs, String... paths) {
     List<String> filteredPaths = new ArrayList<>();
     try {
       HoodieTable hoodieTable = HoodieTable
           .getHoodieTable(new HoodieTableMetaClient(fs.getConf(), basePath, true), null);
       for (String path : paths) {
         TableFileSystemView.ReadOptimizedView fileSystemView = new HoodieTableFileSystemView(
-            hoodieTable.getMetaClient(),
-            hoodieTable.getCompletedCommitTimeline(), fs.globStatus(new Path(path)));
-        List<HoodieDataFile> latestFiles = fileSystemView.getLatestDataFiles().collect(
-            Collectors.toList());
+            hoodieTable.getMetaClient(), hoodieTable.getCompletedCommitTimeline(), fs.globStatus(new Path(path)));
+        List<HoodieDataFile> latestFiles = fileSystemView.getLatestDataFiles().collect(Collectors.toList());
         for (HoodieDataFile file : latestFiles) {
           filteredPaths.add(file.getPath());
         }
       }
-      return sqlContext.read()
-          .parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
+      return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie dataset as a dataframe", e);
     }

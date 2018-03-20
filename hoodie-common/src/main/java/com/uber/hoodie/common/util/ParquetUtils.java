@@ -50,7 +50,7 @@ public class ParquetUtils {
   /**
    * Read the rowKey list from the given parquet file.
    *
-   * @param filePath The parquet file path.
+   * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
    */
   public static Set<String> readRowKeysFromParquet(Configuration configuration, Path filePath) {
@@ -116,8 +116,8 @@ public class ParquetUtils {
       if (metadata.containsKey(footerName)) {
         footerVals.add(metadata.get(footerName));
       } else {
-        throw new MetadataNotFoundException("Could not find index in Parquet footer. " +
-            "Looked for key " + footerName + " in " + parquetFilePath);
+        throw new MetadataNotFoundException("Could not find index in Parquet footer. "
+            + "Looked for key " + footerName + " in " + parquetFilePath);
       }
     }
     return footerVals;
@@ -146,7 +146,7 @@ public class ParquetUtils {
           "Could not read min/max record key out of footer correctly from %s. read) : %s",
           parquetFilePath, minMaxKeys));
     }
-    return new String[]{minMaxKeys.get(0), minMaxKeys.get(1)};
+    return new String[] {minMaxKeys.get(0), minMaxKeys.get(1)};
   }
 
   /**

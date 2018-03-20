@@ -17,46 +17,17 @@
 package com.uber.hoodie.common.table.log;
 
 /**
- * A set of feature flags associated with a log format.
- * Versions are changed when the log format changes.
- * TODO(na) - Implement policies around major/minor versions
+ * Implements logic to determine behavior for feature flags for
+ * {@link HoodieLogFormat.LogFormatVersion}.
  */
-abstract class LogFormatVersion {
-  private final int version;
+final class HoodieLogFormatVersion extends HoodieLogFormat.LogFormatVersion {
 
-  LogFormatVersion(int version) {
-    this.version = version;
-  }
-
-  public int getVersion() {
-    return version;
-  }
-
-  public abstract boolean hasMagicHeader();
-
-  public abstract boolean hasContent();
-
-  public abstract boolean hasContentLength();
-
-  public abstract boolean hasOrdinal();
-
-  public abstract boolean hasHeader();
-
-  public abstract boolean hasFooter();
-
-  public abstract boolean hasLogBlockLength();
-}
-
-/**
- * Implements logic to determine behavior for feature flags for {@link LogFormatVersion}
- */
-final class HoodieLogFormatVersion extends LogFormatVersion {
-
-  public final static int DEFAULT_VERSION = 0;
+  public static final int DEFAULT_VERSION = 0;
 
   HoodieLogFormatVersion(int version) {
     super(version);
   }
+
   @Override
   public boolean hasMagicHeader() {
     switch (super.getVersion()) {
@@ -114,8 +85,9 @@ final class HoodieLogFormatVersion extends LogFormatVersion {
         return false;
       case 1:
         return true;
+      default:
+        return false;
     }
-    return false;
   }
 
   @Override
@@ -125,7 +97,8 @@ final class HoodieLogFormatVersion extends LogFormatVersion {
         return false;
       case 1:
         return true;
+      default:
+        return false;
     }
-    return false;
   }
 }

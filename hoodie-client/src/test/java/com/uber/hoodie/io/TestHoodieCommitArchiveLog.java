@@ -77,7 +77,8 @@ public class TestHoodieCommitArchiveLog {
   public void testArchiveDatasetWithArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
     HoodieTestUtils.init(hadoopConf, basePath);
     HoodieTestDataGenerator.createCommitFile(basePath, "100");
@@ -88,8 +89,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
-    HoodieTimeline timeline =
-        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
@@ -103,8 +103,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestUtils.createInflightCleanFiles(basePath, "106", "107");
 
     //reload the timeline and get all the commmits before archive
-    timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline()
-        .filterCompletedInstants();
+    timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> originalCommits = timeline.getInstants().collect(Collectors.toList());
 
     assertEquals("Loaded 6 commits and the count should match", 12, timeline.countInstants());
@@ -118,13 +117,12 @@ public class TestHoodieCommitArchiveLog {
     assertTrue(archiveLog.archiveIfRequired());
 
     //reload the timeline and remove the remaining commits
-    timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline()
-        .filterCompletedInstants();
+    timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     originalCommits.removeAll(timeline.getInstants().collect(Collectors.toList()));
 
     //read the file
-    HoodieLogFormat.Reader reader = HoodieLogFormat
-        .newReader(fs, new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
+    HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(fs,
+        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
         HoodieArchivedMetaEntry.getClassSchema());
 
     int archivedRecordsCount = 0;
@@ -137,8 +135,7 @@ public class TestHoodieCommitArchiveLog {
       assertEquals("Archived and read records for each block are same", 8, records.size());
       archivedRecordsCount += records.size();
     }
-    assertEquals("Total archived records and total read records are the same count", 8,
-        archivedRecordsCount);
+    assertEquals("Total archived records and total read records are the same count", 8, archivedRecordsCount);
 
     //make sure the archived commits are the same as the (originalcommits - commitsleft)
     List<String> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> {
@@ -146,10 +143,8 @@ public class TestHoodieCommitArchiveLog {
     }).collect(Collectors.toList());
     Collections.sort(readCommits);
 
-    assertEquals(
-        "Read commits map should match the originalCommits - commitsLoadedFromArchival",
-        originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
-        readCommits);
+    assertEquals("Read commits map should match the originalCommits - commitsLoadedFromArchival",
+        originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()), readCommits);
 
     // verify in-flight instants after archive
     verifyInflightInstants(metaClient, 3);
@@ -168,15 +163,12 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "102");
     HoodieTestDataGenerator.createCommitFile(basePath, "103");
 
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 4 commits and the count should match", 4, timeline.countInstants());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
-    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline()
-        .filterCompletedInstants();
-    assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4,
-        timeline.countInstants());
+    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4, timeline.countInstants());
   }
 
   @Test
@@ -194,21 +186,15 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "104");
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
-    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline()
-        .filterCompletedInstants();
-    assertTrue("Archived commits should always be safe",
-        timeline.containsOrBeforeTimelineStarts("100"));
-    assertTrue("Archived commits should always be safe",
-        timeline.containsOrBeforeTimelineStarts("101"));
-    assertTrue("Archived commits should always be safe",
-        timeline.containsOrBeforeTimelineStarts("102"));
-    assertTrue("Archived commits should always be safe",
-        timeline.containsOrBeforeTimelineStarts("103"));
+    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
+    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("100"));
+    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("101"));
+    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("102"));
+    assertTrue("Archived commits should always be safe", timeline.containsOrBeforeTimelineStarts("103"));
   }
 
   @Test
@@ -227,16 +213,14 @@ public class TestHoodieCommitArchiveLog {
     HoodieTestDataGenerator.createCommitFile(basePath, "104");
     HoodieTestDataGenerator.createCommitFile(basePath, "105");
 
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
-    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline()
-        .filterCompletedInstants();
+    timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals(
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)",
-        5, timeline.countInstants());
+        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only " + "archive 100)", 5,
+        timeline.countInstants());
     assertTrue("Archived commits should always be safe",
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")));
     assertTrue("Archived commits should always be safe",
@@ -248,7 +232,7 @@ public class TestHoodieCommitArchiveLog {
   private void verifyInflightInstants(HoodieTableMetaClient metaClient, int expectedTotalInstants) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().reload()
         .getTimelineOfActions(Sets.newHashSet(HoodieTimeline.CLEAN_ACTION)).filterInflights();
-    assertEquals("Loaded inflight clean actions and the count should match",
-        expectedTotalInstants, timeline.countInstants());
+    assertEquals("Loaded inflight clean actions and the count should match", expectedTotalInstants,
+        timeline.countInstants());
   }
 }

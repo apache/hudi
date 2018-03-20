@@ -56,12 +56,11 @@ import scala.Tuple2;
  */
 public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
-  private static Logger logger = LogManager.getLogger(HoodieBloomIndex.class);
-
   // we need to limit the join such that it stays within 1.5GB per Spark partition. (SPARK-1476)
   private static final int SPARK_MAXIMUM_BYTES_PER_PARTITION = 1500 * 1024 * 1024;
   // this is how much a triplet of (partitionPath, fileId, recordKey) costs.
   private static final int BYTES_PER_PARTITION_FILE_KEY_TRIPLET = 300;
+  private static Logger logger = LogManager.getLogger(HoodieBloomIndex.class);
   private static int MAX_ITEMS_PER_SHUFFLE_PARTITION =
       SPARK_MAXIMUM_BYTES_PER_PARTITION / BYTES_PER_PARTITION_FILE_KEY_TRIPLET;
 
@@ -108,32 +107,31 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     return taggedRecordRDD;
   }
 
-  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-      JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> table) {
-    JavaPairRDD<String, String> partitionRecordKeyPairRDD =
-        hoodieKeys.mapToPair(key -> new Tuple2<>(key.getPartitionPath(), key.getRecordKey()));
+  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+      final HoodieTable<T> table) {
+    JavaPairRDD<String, String> partitionRecordKeyPairRDD = hoodieKeys
+        .mapToPair(key -> new Tuple2<>(key.getPartitionPath(), key.getRecordKey()));
 
     // Lookup indexes for all the partition/recordkey pair
-    JavaPairRDD<String, String> rowKeyFilenamePairRDD =
-        lookupIndex(partitionRecordKeyPairRDD, table);
+    JavaPairRDD<String, String> rowKeyFilenamePairRDD = lookupIndex(partitionRecordKeyPairRDD,
+        table);
 
-    JavaPairRDD<String, HoodieKey> rowKeyHoodieKeyPairRDD =
-        hoodieKeys.mapToPair(key -> new Tuple2<>(key.getRecordKey(), key));
+    JavaPairRDD<String, HoodieKey> rowKeyHoodieKeyPairRDD = hoodieKeys
+        .mapToPair(key -> new Tuple2<>(key.getRecordKey(), key));
 
-    return rowKeyHoodieKeyPairRDD.leftOuterJoin(rowKeyFilenamePairRDD)
-        .mapToPair(keyPathTuple -> {
-          Optional<String> recordLocationPath;
-          if (keyPathTuple._2._2.isPresent()) {
-            String fileName = keyPathTuple._2._2.get();
-            String partitionPath = keyPathTuple._2._1.getPartitionPath();
-            recordLocationPath = Optional.of(new Path(
-                new Path(table.getMetaClient().getBasePath(), partitionPath),
-                fileName).toUri().getPath());
-          } else {
-            recordLocationPath = Optional.absent();
-          }
-          return new Tuple2<>(keyPathTuple._2._1, recordLocationPath);
-        });
+    return rowKeyHoodieKeyPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).mapToPair(keyPathTuple -> {
+      Optional<String> recordLocationPath;
+      if (keyPathTuple._2._2.isPresent()) {
+        String fileName = keyPathTuple._2._2.get();
+        String partitionPath = keyPathTuple._2._1.getPartitionPath();
+        recordLocationPath = Optional
+            .of(new Path(new Path(table.getMetaClient().getBasePath(), partitionPath), fileName)
+                .toUri().getPath());
+      } else {
+        recordLocationPath = Optional.absent();
+      }
+      return new Tuple2<>(keyPathTuple._2._1, recordLocationPath);
+    });
   }
 
   /**
@@ -152,21 +150,21 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo = fileInfoList.stream()
         .collect(groupingBy(Tuple2::_1, mapping(Tuple2::_2, toList())));
 
-    // Step 3: Obtain a RDD, for each incoming record, that already exists, with the file id, that contains it.
+    // Step 3: Obtain a RDD, for each incoming record, that already exists, with the file id,
+    // that contains it.
     int parallelism = autoComputeParallelism(recordsPerPartition, partitionToFileInfo,
         partitionRecordKeyPairRDD);
     return findMatchingFilesForRecordKeys(hoodieTable, partitionToFileInfo,
-        partitionRecordKeyPairRDD,
-        parallelism);
+        partitionRecordKeyPairRDD, parallelism);
   }
 
   /**
    * The index lookup can be skewed in three dimensions : #files, #partitions, #records
-   *
+   * <p>
    * To be able to smoothly handle skews, we need to compute how to split each partitions into
    * subpartitions. We do it here, in a way that keeps the amount of each Spark join partition to <
    * 2GB.
-   *
+   * <p>
    * If {@link com.uber.hoodie.config.HoodieIndexConfig#BLOOM_INDEX_PARALLELISM_PROP} is specified
    * as a NON-zero number, then that is used explicitly.
    */
@@ -184,7 +182,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       // records for a partition.
       Map<String, Long> filesPerPartition = partitionToFileInfo.entrySet().stream()
           .collect(Collectors.toMap(Map.Entry::getKey, e -> Long.valueOf(e.getValue().size())));
-      long totalFiles = 0, totalRecords = 0;
+      long totalFiles = 0;
+      long totalRecords = 0;
       for (String partitionPath : recordsPerPartition.keySet()) {
         long numRecords = recordsPerPartition.get(partitionPath);
         long numFiles =
@@ -210,22 +209,22 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
   /**
    * Its crucial to pick the right parallelism.
-   *
+   * <p>
    * totalSubPartitions : this is deemed safe limit, to be nice with Spark. inputParallelism :
    * typically number of input file splits
-   *
+   * <p>
    * We pick the max such that, we are always safe, but go higher if say a there are a lot of input
    * files. (otherwise, we will fallback to number of partitions in input and end up with slow
    * performance)
    */
   private int determineParallelism(int inputParallelism, int totalSubPartitions) {
-    // If bloom index parallelism is set, use it to to check against the input parallelism and take the max
+    // If bloom index parallelism is set, use it to to check against the input parallelism and
+    // take the max
     int indexParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     int joinParallelism = Math.max(totalSubPartitions, indexParallelism);
-    logger.info("InputParallelism: ${" + inputParallelism + "}, " +
-        "IndexParallelism: ${" + config.getBloomIndexParallelism() + "}, " +
-        "TotalSubParts: ${" + totalSubPartitions + "}, " +
-        "Join Parallelism set to : " + joinParallelism);
+    logger.info("InputParallelism: ${" + inputParallelism + "}, " + "IndexParallelism: ${" + config
+        .getBloomIndexParallelism() + "}, " + "TotalSubParts: ${" + totalSubPartitions + "}, "
+        + "Join Parallelism set to : " + joinParallelism);
     return joinParallelism;
   }
 
@@ -237,36 +236,31 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       final HoodieTable<T> hoodieTable) {
     // Obtain the latest data files from all the partitions.
     List<Tuple2<String, HoodieDataFile>> dataFilesList = jsc
-        .parallelize(partitions, Math.max(partitions.size(), 1))
-        .flatMapToPair(partitionPath -> {
-          java.util.Optional<HoodieInstant> latestCommitTime =
-              hoodieTable.getCommitsTimeline().filterCompletedInstants().lastInstant();
+        .parallelize(partitions, Math.max(partitions.size(), 1)).flatMapToPair(partitionPath -> {
+          java.util.Optional<HoodieInstant> latestCommitTime = hoodieTable.getCommitsTimeline()
+              .filterCompletedInstants().lastInstant();
           List<Tuple2<String, HoodieDataFile>> filteredFiles = new ArrayList<>();
           if (latestCommitTime.isPresent()) {
-            filteredFiles =
-                hoodieTable.getROFileSystemView().getLatestDataFilesBeforeOrOn(partitionPath,
-                    latestCommitTime.get().getTimestamp())
-                    .map(f -> new Tuple2<>(partitionPath, f))
-                    .collect(toList());
+            filteredFiles = hoodieTable.getROFileSystemView()
+                .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
+                .map(f -> new Tuple2<>(partitionPath, f)).collect(toList());
           }
           return filteredFiles.iterator();
         }).collect();
 
     if (config.getBloomIndexPruneByRanges()) {
       // also obtain file ranges, if range pruning is enabled
-      return jsc.parallelize(dataFilesList, Math.max(dataFilesList.size(), 1))
-          .mapToPair(ft -> {
-            try {
-              String[] minMaxKeys = ParquetUtils
-                  .readMinMaxRecordKeys(hoodieTable.getHadoopConf(),
-                      ft._2().getFileStatus().getPath());
-              return new Tuple2<>(ft._1(),
-                  new BloomIndexFileInfo(ft._2().getFileName(), minMaxKeys[0], minMaxKeys[1]));
-            } catch (MetadataNotFoundException me) {
-              logger.warn("Unable to find range metadata in file :" + ft._2());
-              return new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2().getFileName()));
-            }
-          }).collect();
+      return jsc.parallelize(dataFilesList, Math.max(dataFilesList.size(), 1)).mapToPair(ft -> {
+        try {
+          String[] minMaxKeys = ParquetUtils
+              .readMinMaxRecordKeys(hoodieTable.getHadoopConf(), ft._2().getFileStatus().getPath());
+          return new Tuple2<>(ft._1(),
+              new BloomIndexFileInfo(ft._2().getFileName(), minMaxKeys[0], minMaxKeys[1]));
+        } catch (MetadataNotFoundException me) {
+          logger.warn("Unable to find range metadata in file :" + ft._2());
+          return new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2().getFileName()));
+        }
+      }).collect();
     } else {
       return dataFilesList.stream()
           .map(ft -> new Tuple2<>(ft._1(), new BloomIndexFileInfo(ft._2().getFileName())))
@@ -320,62 +314,60 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * (e.g: timestamp as prefix), the number of files to be compared gets cut down a lot from range
    * pruning.
    */
-  // sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on recordKey
+  // sub-partition to ensure the records can be looked up against files & also prune
+  // file<=>record comparisons based on recordKey
   // ranges in the index info.
   @VisibleForTesting
   JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
-    return partitionRecordKeyPairRDD
-        .map(partitionRecordKeyPair -> {
-          String recordKey = partitionRecordKeyPair._2();
-          String partitionPath = partitionRecordKeyPair._1();
+    return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
+      String recordKey = partitionRecordKeyPair._2();
+      String partitionPath = partitionRecordKeyPair._1();
 
-          List<BloomIndexFileInfo> indexInfos = partitionToFileIndexInfo.get(partitionPath);
-          List<Tuple2<String, Tuple2<String, HoodieKey>>> recordComparisons = new ArrayList<>();
-          if (indexInfos
-              != null) { // could be null, if there are no files in a given partition yet.
-            // for each candidate file in partition, that needs to be compared.
-            for (BloomIndexFileInfo indexInfo : indexInfos) {
-              if (shouldCompareWithFile(indexInfo, recordKey)) {
-                recordComparisons.add(
-                    new Tuple2<>(String.format("%s#%s", indexInfo.getFileName(), recordKey),
-                        new Tuple2<>(indexInfo.getFileName(),
-                            new HoodieKey(recordKey, partitionPath))));
-              }
-            }
+      List<BloomIndexFileInfo> indexInfos = partitionToFileIndexInfo.get(partitionPath);
+      List<Tuple2<String, Tuple2<String, HoodieKey>>> recordComparisons = new ArrayList<>();
+      if (indexInfos != null) { // could be null, if there are no files in a given partition yet.
+        // for each candidate file in partition, that needs to be compared.
+        for (BloomIndexFileInfo indexInfo : indexInfos) {
+          if (shouldCompareWithFile(indexInfo, recordKey)) {
+            recordComparisons.add(
+                new Tuple2<>(String.format("%s#%s", indexInfo.getFileName(), recordKey),
+                    new Tuple2<>(indexInfo.getFileName(),
+                        new HoodieKey(recordKey, partitionPath))));
           }
-          return recordComparisons;
-        })
-        .flatMapToPair(t -> t.iterator());
+        }
+      }
+      return recordComparisons;
+    }).flatMapToPair(t -> t.iterator());
   }
 
   /**
    * Find out <RowKey, filename> pair. All workload grouped by file-level.
-   *
+   * <p>
    * Join PairRDD(PartitionPath, RecordKey) and PairRDD(PartitionPath, File) & then repartition such
    * that each RDD partition is a file, then for each file, we do (1) load bloom filter, (2) load
    * rowKeys, (3) Tag rowKey
-   *
+   * <p>
    * Make sure the parallelism is atleast the groupby parallelism for tagging location
    */
   @VisibleForTesting
   JavaPairRDD<String, String> findMatchingFilesForRecordKeys(HoodieTable hoodieTable,
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      JavaPairRDD<String, String> partitionRecordKeyPairRDD,
-      int totalSubpartitions) {
+      JavaPairRDD<String, String> partitionRecordKeyPairRDD, int totalSubpartitions) {
 
     int joinParallelism = determineParallelism(partitionRecordKeyPairRDD.partitions().size(),
         totalSubpartitions);
 
-    JavaPairRDD<String, Tuple2<String, HoodieKey>> fileSortedTripletRDD = explodeRecordRDDWithFileComparisons(
-        partitionToFileIndexInfo, partitionRecordKeyPairRDD)
-        // sort further based on filename, such that all checking for the file can happen within a single partition, on-the-fly
-        .sortByKey(true, joinParallelism);
+    JavaPairRDD<String, Tuple2<String, HoodieKey>> fileSortedTripletRDD =
+        explodeRecordRDDWithFileComparisons(
+            partitionToFileIndexInfo, partitionRecordKeyPairRDD)
+            // sort further based on filename, such that all checking for the file can happen within
+            // a single partition, on-the-fly
+            .sortByKey(true, joinParallelism);
 
-    return fileSortedTripletRDD
-        .mapPartitionsWithIndex(
-            new HoodieBloomIndexCheckFunction(hoodieTable, config.getBasePath()), true)
+    return fileSortedTripletRDD.mapPartitionsWithIndex(
+        new HoodieBloomIndexCheckFunction(hoodieTable, config.getBasePath()), true)
         .flatMap(indexLookupResults -> indexLookupResults.iterator())
         .filter(lookupResult -> lookupResult.getMatchingRecordKeys().size() > 0)
         .flatMapToPair(lookupResult -> {
@@ -391,25 +383,23 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * Tag the <rowKey, filename> back to the original HoodieRecord RDD.
    */
   private JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
-      JavaPairRDD<String, String> rowKeyFilenamePairRDD,
-      JavaRDD<HoodieRecord<T>> recordRDD) {
+      JavaPairRDD<String, String> rowKeyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
     JavaPairRDD<String, HoodieRecord<T>> rowKeyRecordPairRDD = recordRDD
         .mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
-    return rowKeyRecordPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).values().map(
-        v1 -> {
-          HoodieRecord<T> record = v1._1();
-          if (v1._2().isPresent()) {
-            String filename = v1._2().get();
-            if (filename != null && !filename.isEmpty()) {
-              record.setCurrentLocation(new HoodieRecordLocation(FSUtils.getCommitTime(filename),
-                  FSUtils.getFileId(filename)));
-            }
-          }
-          return record;
+    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
+    // so we do left outer join.
+    return rowKeyRecordPairRDD.leftOuterJoin(rowKeyFilenamePairRDD).values().map(v1 -> {
+      HoodieRecord<T> record = v1._1();
+      if (v1._2().isPresent()) {
+        String filename = v1._2().get();
+        if (filename != null && !filename.isEmpty()) {
+          record.setCurrentLocation(new HoodieRecordLocation(FSUtils.getCommitTime(filename),
+              FSUtils.getFileId(filename)));
         }
-    );
+      }
+      return record;
+    });
   }
 
   @Override

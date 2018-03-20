@@ -53,25 +53,22 @@ public class HoodieTableMetaClientTest {
     assertEquals("Table name should be raw_trips", HoodieTestUtils.RAW_TRIPS_TEST_NAME,
         metaClient.getTableConfig().getTableName());
     assertEquals("Basepath should be the one assigned", basePath, metaClient.getBasePath());
-    assertEquals("Metapath should be ${basepath}/.hoodie", basePath + "/.hoodie",
-        metaClient.getMetaPath());
+    assertEquals("Metapath should be ${basepath}/.hoodie", basePath + "/.hoodie", metaClient.getMetaPath());
   }
 
   @Test
   public void checkSerDe() throws IOException, ClassNotFoundException {
     // check if this object is serialized and de-serialized, we are able to read from the file system
-    HoodieTableMetaClient deseralizedMetaClient =
-        HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
+    HoodieTableMetaClient deseralizedMetaClient = HoodieTestUtils
+        .serializeDeserialize(metaClient, HoodieTableMetaClient.class);
     assertNotNull(deseralizedMetaClient);
     HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
-    HoodieInstant instant =
-        new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createInflight(instant);
     commitTimeline.saveAsComplete(instant, Optional.of("test-detail".getBytes()));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
-    assertEquals("Commit should be 1 and completed", completedInstant,
-        commitTimeline.getInstants().findFirst().get());
+    assertEquals("Commit should be 1 and completed", completedInstant, commitTimeline.getInstants().findFirst().get());
     assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
         commitTimeline.getInstantDetails(completedInstant).get());
   }
@@ -82,8 +79,7 @@ public class HoodieTableMetaClientTest {
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertTrue("Should be empty commit timeline", activeCommitTimeline.empty());
 
-    HoodieInstant instant =
-        new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createInflight(instant);
     activeTimeline.saveAsComplete(instant, Optional.of("test-detail".getBytes()));
 
@@ -96,8 +92,7 @@ public class HoodieTableMetaClientTest {
     activeTimeline = activeTimeline.reload();
     activeCommitTimeline = activeTimeline.getCommitTimeline();
     assertFalse("Should be the 1 commit we made", activeCommitTimeline.empty());
-    assertEquals("Commit should be 1", completedInstant,
-        activeCommitTimeline.getInstants().findFirst().get());
+    assertEquals("Commit should be 1", completedInstant, activeCommitTimeline.getInstants().findFirst().get());
     assertArrayEquals("Commit value should be \"test-detail\"", "test-detail".getBytes(),
         activeCommitTimeline.getInstantDetails(completedInstant).get());
   }
@@ -118,22 +113,16 @@ public class HoodieTableMetaClientTest {
 
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
 
-    HoodieInstant instant1 =
-        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant instant2 =
-        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
-    HoodieInstant instant3 =
-        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
+    HoodieInstant instant1 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant2 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "2");
+    HoodieInstant instant3 = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
 
     assertEquals(Lists.newArrayList(instant1, instant2, instant3),
         archivedTimeline.getInstants().collect(Collectors.toList()));
 
-    assertArrayEquals(new Text("data1").getBytes(),
-        archivedTimeline.getInstantDetails(instant1).get());
-    assertArrayEquals(new Text("data2").getBytes(),
-        archivedTimeline.getInstantDetails(instant2).get());
-    assertArrayEquals(new Text("data3").getBytes(),
-        archivedTimeline.getInstantDetails(instant3).get());
+    assertArrayEquals(new Text("data1").getBytes(), archivedTimeline.getInstantDetails(instant1).get());
+    assertArrayEquals(new Text("data2").getBytes(), archivedTimeline.getInstantDetails(instant2).get());
+    assertArrayEquals(new Text("data3").getBytes(), archivedTimeline.getInstantDetails(instant3).get());
   }
 
 

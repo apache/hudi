@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.table;
 
-
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -31,7 +30,7 @@ import scala.Tuple2;
 /**
  * Information about incoming records for upsert/insert obtained either via sampling or
  * introspecting the data fully
- *
+ * <p>
  * TODO(vc): Think about obtaining this directly from index.tagLocation
  */
 public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializable {
@@ -60,11 +59,9 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
   private void buildProfile() {
 
     Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = taggedRecords
-        .mapToPair(record ->
-            new Tuple2<>(
-                new Tuple2<>(record.getPartitionPath(), Option.apply(record.getCurrentLocation())),
-                record))
-        .countByKey();
+        .mapToPair(record -> new Tuple2<>(
+            new Tuple2<>(record.getPartitionPath(), Option.apply(record.getCurrentLocation())),
+            record)).countByKey();
 
     for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts
         .entrySet()) {
