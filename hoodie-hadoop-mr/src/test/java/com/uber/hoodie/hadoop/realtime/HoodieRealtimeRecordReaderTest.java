@@ -85,9 +85,7 @@ public class HoodieRealtimeRecordReaderTest {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new Path(partitionDir.getPath()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .overBaseCommit(baseCommit)
-        .withFs(fs)
-        .build();
+        .overBaseCommit(baseCommit).withFs(fs).build();
     List<IndexedRecord> records = new ArrayList<>();
     for (int i = 0; i < numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -106,8 +104,8 @@ public class HoodieRealtimeRecordReaderTest {
   public void testReader() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils
-        .initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+        HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     File partitionDir = InputFormatTestUtil
         .prepareParquetDataset(basePath, schema, 1, 100, commitTime);
@@ -125,15 +123,15 @@ public class HoodieRealtimeRecordReaderTest {
 
     //create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
-    HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(new FileSplit(new Path(partitionDir
-        + "/fileid0_1_" + commitTime + ".parquet"), 0, 1, jobConf), basePath.getRoot().getPath(),
-        Arrays.asList(logFilePath), newCommitTime);
+    HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + commitTime + ".parquet"), 0, 1,
+            jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
 
     //create a RecordReader to be used by HoodieRealtimeRecordReader
-    RecordReader<Void, ArrayWritable> reader =
-        new MapredParquetInputFormat().
-            getRecordReader(new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()),
-                (String[]) null), jobConf, null);
+    RecordReader<Void, ArrayWritable> reader = new MapredParquetInputFormat().
+        getRecordReader(
+            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
+            jobConf, null);
     JobConf jobConf = new JobConf();
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
@@ -164,8 +162,8 @@ public class HoodieRealtimeRecordReaderTest {
   public void testReaderWithNestedAndComplexSchema() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
-    HoodieTestUtils
-        .initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+        HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -185,15 +183,15 @@ public class HoodieRealtimeRecordReaderTest {
 
     //create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
-    HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(new FileSplit(new Path(partitionDir
-        + "/fileid0_1_" + commitTime + ".parquet"), 0, 1, jobConf), basePath.getRoot().getPath(),
-        Arrays.asList(logFilePath), newCommitTime);
+    HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + commitTime + ".parquet"), 0, 1,
+            jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
 
     //create a RecordReader to be used by HoodieRealtimeRecordReader
-    RecordReader<Void, ArrayWritable> reader =
-        new MapredParquetInputFormat().
-            getRecordReader(new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()),
-                (String[]) null), jobConf, null);
+    RecordReader<Void, ArrayWritable> reader = new MapredParquetInputFormat().
+        getRecordReader(
+            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
+            jobConf, null);
     JobConf jobConf = new JobConf();
     List<Schema.Field> fields = schema.getFields();
 

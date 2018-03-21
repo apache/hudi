@@ -103,8 +103,12 @@ public class HoodieLogFile implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     HoodieLogFile that = (HoodieLogFile) o;
     return path != null ? path.equals(that.path) : that.path == null;
   }

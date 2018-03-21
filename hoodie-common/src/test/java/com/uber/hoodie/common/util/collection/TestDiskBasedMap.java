@@ -16,6 +16,9 @@
 
 package com.uber.hoodie.common.util.collection;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -23,11 +26,6 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.junit.Test;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
@@ -35,26 +33,28 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.junit.Test;
 
 public class TestDiskBasedMap {
 
   @Test
   public void testSimpleInsert() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    DiskBasedMap records = new DiskBasedMap<>(schema, HoodieAvroPayload.class.getName(),Optional.empty());
+    DiskBasedMap records = new DiskBasedMap<>(schema, HoodieAvroPayload.class.getName(),
+        Optional.empty());
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    String commitTime = ((GenericRecord)iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+    String commitTime = ((GenericRecord) iRecords.get(0))
+        .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 
     // make sure records have spilled to disk
     assertTrue(records.sizeOfFileOnDiskInBytes() > 0);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
     List<HoodieRecord> oRecords = new ArrayList<>();
-    while(itr.hasNext()) {
+    while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       oRecords.add(rec);
       assert recordKeys.contains(rec.getRecordKey());
@@ -65,9 +65,11 @@ public class TestDiskBasedMap {
   public void testSimpleUpsert() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    DiskBasedMap records = new DiskBasedMap<>(schema, HoodieAvroPayload.class.getName(),Optional.empty());
+    DiskBasedMap records = new DiskBasedMap<>(schema, HoodieAvroPayload.class.getName(),
+        Optional.empty());
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    String commitTime = ((GenericRecord)iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+    String commitTime = ((GenericRecord) iRecords.get(0))
+        .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     // perform some inserts
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
 
@@ -77,9 +79,11 @@ public class TestDiskBasedMap {
 
     // generate updates from inserts
     List<IndexedRecord> updatedRecords =
-        SchemaTestUtil.updateHoodieTestRecords(recordKeys, SchemaTestUtil.generateHoodieTestRecords(0, 100),
-            HoodieActiveTimeline.createNewCommitTime());
-    String newCommitTime = ((GenericRecord)updatedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+        SchemaTestUtil
+            .updateHoodieTestRecords(recordKeys, SchemaTestUtil.generateHoodieTestRecords(0, 100),
+                HoodieActiveTimeline.createNewCommitTime());
+    String newCommitTime = ((GenericRecord) updatedRecords.get(0))
+        .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 
     // new commit time should be different
     assertEquals(commitTime, newCommitTime);
@@ -92,14 +96,15 @@ public class TestDiskBasedMap {
 
     // Upserted records (on disk) should have the latest commit time
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    while(itr.hasNext()) {
+    while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       assert recordKeys.contains(rec.getRecordKey());
       try {
-        IndexedRecord indexedRecord = (IndexedRecord)rec.getData().getInsertValue(schema).get();
-        String latestCommitTime = ((GenericRecord)indexedRecord).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+        IndexedRecord indexedRecord = (IndexedRecord) rec.getData().getInsertValue(schema).get();
+        String latestCommitTime = ((GenericRecord) indexedRecord)
+            .get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
         assertEquals(latestCommitTime, newCommitTime);
-      } catch(IOException io) {
+      } catch (IOException io) {
         throw new UncheckedIOException(io);
       }
     }

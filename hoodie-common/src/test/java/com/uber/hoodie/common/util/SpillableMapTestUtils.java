@@ -20,24 +20,24 @@ import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 public class SpillableMapTestUtils {
 
   public static List<String> upsertRecords(List<IndexedRecord> iRecords,
-                                           Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
+      Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
     List<String> recordKeys = new ArrayList<>();
     iRecords
         .stream()
         .forEach(r -> {
-          String key = ((GenericRecord)r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = ((GenericRecord)r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
+              .toString();
           recordKeys.add(key);
           records.put(key, new HoodieRecord<>(new HoodieKey(key, partitionPath),
               new HoodieAvroPayload(Optional.of((GenericRecord) r))));

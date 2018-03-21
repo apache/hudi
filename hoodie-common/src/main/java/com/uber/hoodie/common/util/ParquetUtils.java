@@ -116,8 +116,8 @@ public class ParquetUtils {
       if (metadata.containsKey(footerName)) {
         footerVals.add(metadata.get(footerName));
       } else {
-        throw new MetadataNotFoundException("Could not find index in Parquet footer. " +
-            "Looked for key " + footerName + " in " + parquetFilePath);
+        throw new MetadataNotFoundException("Could not find index in Parquet footer. "
+            + "Looked for key " + footerName + " in " + parquetFilePath);
       }
     }
     return footerVals;

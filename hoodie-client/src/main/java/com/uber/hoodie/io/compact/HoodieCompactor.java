@@ -17,17 +17,15 @@
 package com.uber.hoodie.io.compact;
 
 import com.uber.hoodie.WriteStatus;
-import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-
 import java.io.Serializable;
 import java.util.Date;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * A HoodieCompactor runs compaction on a hoodie table
@@ -38,7 +36,7 @@ public interface HoodieCompactor extends Serializable {
    * Compact the delta files with the data files
    */
   JavaRDD<WriteStatus> compact(JavaSparkContext jsc, final HoodieWriteConfig config,
-                               HoodieTable hoodieTable, String compactionCommitTime) throws Exception;
+      HoodieTable hoodieTable, String compactionCommitTime) throws Exception;
 
 
   // Helper methods

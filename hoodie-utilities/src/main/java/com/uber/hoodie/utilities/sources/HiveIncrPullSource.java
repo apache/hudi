@@ -66,7 +66,7 @@ public class HiveIncrPullSource extends Source {
    */
   static class Config {
 
-    private final static String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
+    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
   }
 
   public HiveIncrPullSource(PropertiesConfiguration config, JavaSparkContext sparkContext,
@@ -121,10 +121,10 @@ public class HiveIncrPullSource extends Source {
       }
 
       // read the files out.
-      List<FileStatus> commitDeltaFiles = Arrays
-          .asList(fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
+      List<FileStatus> commitDeltaFiles = Arrays.asList(
+          fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
       String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString())
-          .collect(Collectors.joining(","));
+                           .collect(Collectors.joining(","));
       String schemaStr = schemaProvider.getSourceSchema().toString();
       final AvroConvertor avroConvertor = new AvroConvertor(schemaStr);
       return new ImmutablePair<>(

@@ -54,9 +54,9 @@ public class WriteStatus implements Serializable {
    * objects are collected in Spark Driver.
    *
    * @param record deflated {@code HoodieRecord} containing information that uniquely identifies
-   * it.
+   *     it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
-   * HoodieRecord} before deflation.
+   *     HoodieRecord} before deflation.
    */
   public void markSuccess(HoodieRecord record,
       Optional<Map<String, String>> optionalRecordMetadata) {
@@ -70,9 +70,9 @@ public class WriteStatus implements Serializable {
    * objects are collected in Spark Driver.
    *
    * @param record deflated {@code HoodieRecord} containing information that uniquely identifies
-   * it.
+   *     it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
-   * HoodieRecord} before deflation.
+   *     HoodieRecord} before deflation.
    */
   public void markFailure(HoodieRecord record, Throwable t,
       Optional<Map<String, String>> optionalRecordMetadata) {
@@ -106,12 +106,12 @@ public class WriteStatus implements Serializable {
     return globalError != null;
   }
 
-  public void setGlobalError(Throwable t) {
-    this.globalError = t;
-  }
-
   public Throwable getGlobalError() {
     return this.globalError;
+  }
+
+  public void setGlobalError(Throwable t) {
+    this.globalError = t;
   }
 
   public List<HoodieRecord> getWrittenRecords() {

@@ -73,8 +73,10 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
   public static final String DEFAULT_COMPACTION_MEMORY_FRACTION = "0.75";
 
   // used to choose a trade off between IO vs Memory when performing compaction process
-  // Depending on outputfile size and memory provided, choose true to avoid OOM for large file size + small memory
-  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = "compaction.lazy.block.read.enabled";
+  // Depending on outputfile size and memory provided, choose true to avoid OOM for large file
+  // size + small memory
+  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP =
+      "compaction.lazy.block" + ".read.enabled";
   public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = "true";
 
   public static final Log LOG = LogFactory.getLog(HoodieRealtimeRecordReader.class);
@@ -82,8 +84,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
   private final HashMap<String, ArrayWritable> deltaRecordMap;
   private final MessageType baseFileSchema;
 
-  public HoodieRealtimeRecordReader(HoodieRealtimeFileSplit split,
-      JobConf job,
+  public HoodieRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job,
       RecordReader<Void, ArrayWritable> realReader) {
     this.split = split;
     this.jobConf = job;
@@ -106,11 +107,9 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
    */
   private static MessageType readSchema(Configuration conf, Path parquetFilePath) {
     try {
-      return ParquetFileReader.readFooter(conf, parquetFilePath).getFileMetaData()
-          .getSchema();
+      return ParquetFileReader.readFooter(conf, parquetFilePath).getFileMetaData().getSchema();
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
-          e);
+      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
     }
   }
 
@@ -125,27 +124,27 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
         jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
         jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR),
         jobConf.get("partition_columns", ""));
-    // TODO(vc): In the future, the reader schema should be updated based on log files & be able to null out fields not present before
+    // TODO(vc): In the future, the reader schema should be updated based on log files & be able
+    // to null out fields not present before
     Schema readerSchema = generateProjectionSchema(writerSchema, projectionFields);
 
-    LOG.info(
-        String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-            split.getDeltaFilePaths(), split.getPath(), projectionFields));
-    HoodieCompactedLogRecordScanner compactedLogRecordScanner =
-        new HoodieCompactedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf),
-            split.getBasePath(),
-            split.getDeltaFilePaths(),
-            readerSchema, split.getMaxCommitTime(),
-            (long) Math.ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
-                *jobConf.getMemoryForMapTask()),
-            Boolean.valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)), false);
+    LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
+        split.getDeltaFilePaths(), split.getPath(), projectionFields));
+    HoodieCompactedLogRecordScanner compactedLogRecordScanner = new HoodieCompactedLogRecordScanner(
+        FSUtils.getFs(split.getPath().toString(), jobConf), split.getBasePath(),
+        split.getDeltaFilePaths(), readerSchema, split.getMaxCommitTime(), (long) Math.ceil(Double
+        .valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
+        * jobConf.getMemoryForMapTask()), Boolean.valueOf(jobConf
+        .get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
+        false);
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
-    // but can return records for completed commits > the commit we are trying to read (if using readCommit() API)
+    // but can return records for completed commits > the commit we are trying to read (if using
+    // readCommit() API)
     for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {
-      GenericRecord rec = (GenericRecord) hoodieRecord.getData().getInsertValue(readerSchema)
-          .get();
+      GenericRecord rec = (GenericRecord) hoodieRecord.getData().getInsertValue(readerSchema).get();
       String key = hoodieRecord.getRecordKey();
-      // we assume, a later safe record in the log, is newer than what we have in the map & replace it.
+      // we assume, a later safe record in the log, is newer than what we have in the map &
+      // replace it.
       // TODO : handle deletes here
       ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, writerSchema);
       deltaRecordMap.put(key, aWritable);
@@ -180,14 +179,13 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
     Set<String> partitioningFields = Arrays.stream(partitioningFieldsCsv.split(","))
         .collect(Collectors.toSet());
     List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
-        .filter(fn -> !partitioningFields.contains(fn)).collect(
-            Collectors.toList());
+        .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
 
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNames.size() != fieldOrders.length) {
-      throw new HoodieException(String.format(
-          "Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
-          fieldNames.size(), fieldOrders.length));
+      throw new HoodieException(String
+          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
+              fieldNames.size(), fieldOrders.length));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
     for (int ox = 0; ox < fieldOrders.length; ox++) {
@@ -287,26 +285,28 @@ public class HoodieRealtimeRecordReader implements RecordReader<Void, ArrayWrita
         }
       case FIXED:
         return new BytesWritable(((GenericFixed) value).bytes());
+      default:
+        return null;
     }
-    return null;
   }
 
   @Override
   public boolean next(Void aVoid, ArrayWritable arrayWritable) throws IOException {
-    // Call the underlying parquetReader.next - which may replace the passed in ArrayWritable with a new block of values
+    // Call the underlying parquetReader.next - which may replace the passed in ArrayWritable
+    // with a new block of values
     boolean result = this.parquetReader.next(aVoid, arrayWritable);
     if (!result) {
       // if the result is false, then there are no more records
       return false;
     } else {
-      // TODO(VC): Right now, we assume all records in log, have a matching base record. (which would be true until we have a way to index logs too)
+      // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
+      // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
       String key = arrayWritable.get()[HoodieRealtimeInputFormat.HOODIE_RECORD_KEY_COL_POS]
           .toString();
       if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("key %s, base values: %s, log values: %s",
-            key, arrayWritableToString(arrayWritable),
-            arrayWritableToString(deltaRecordMap.get(key))));
+        LOG.debug(String.format("key %s, base values: %s, log values: %s", key,
+            arrayWritableToString(arrayWritable), arrayWritableToString(deltaRecordMap.get(key))));
       }
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro ?

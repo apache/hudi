@@ -25,39 +25,39 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class SizeAwareDataInputStream {
 
-    private final DataInputStream dis;
-    private final AtomicInteger numberOfBytesRead;
+  private final DataInputStream dis;
+  private final AtomicInteger numberOfBytesRead;
 
-    public SizeAwareDataInputStream(DataInputStream dis) {
-        this.dis = dis;
-        this.numberOfBytesRead = new AtomicInteger(0);
-    }
+  public SizeAwareDataInputStream(DataInputStream dis) {
+    this.dis = dis;
+    this.numberOfBytesRead = new AtomicInteger(0);
+  }
 
-    public int readInt() throws IOException {
-        numberOfBytesRead.addAndGet(Integer.BYTES);
-        return dis.readInt();
-    }
+  public int readInt() throws IOException {
+    numberOfBytesRead.addAndGet(Integer.BYTES);
+    return dis.readInt();
+  }
 
-    public void readFully(byte b[], int off, int len) throws IOException {
-        numberOfBytesRead.addAndGet(len);
-        dis.readFully(b, off, len);
-    }
+  public void readFully(byte[] b, int off, int len) throws IOException {
+    numberOfBytesRead.addAndGet(len);
+    dis.readFully(b, off, len);
+  }
 
-    public void readFully(byte b[]) throws IOException {
-        numberOfBytesRead.addAndGet(b.length);
-        dis.readFully(b);
-    }
+  public void readFully(byte[] b) throws IOException {
+    numberOfBytesRead.addAndGet(b.length);
+    dis.readFully(b);
+  }
 
-    public int skipBytes(int n) throws IOException {
-        numberOfBytesRead.addAndGet(n);
-        return dis.skipBytes(n);
-    }
+  public int skipBytes(int n) throws IOException {
+    numberOfBytesRead.addAndGet(n);
+    return dis.skipBytes(n);
+  }
 
-    public void close() throws IOException {
-        dis.close();
-    }
+  public void close() throws IOException {
+    dis.close();
+  }
 
-    public Integer getNumberOfBytesRead() {
-        return numberOfBytesRead.get();
-    }
+  public Integer getNumberOfBytesRead() {
+    return numberOfBytesRead.get();
+  }
 }

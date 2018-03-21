@@ -37,20 +37,28 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
 
-  protected transient JavaSparkContext jsc = null;
-
-  public enum IndexType {
-    HBASE,
-    INMEMORY,
-    BLOOM,
-    BUCKETED
-  }
-
   protected final HoodieWriteConfig config;
+  protected transient JavaSparkContext jsc = null;
 
   protected HoodieIndex(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
     this.jsc = jsc;
+  }
+
+  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
+      JavaSparkContext jsc) throws HoodieIndexException {
+    switch (config.getIndexType()) {
+      case HBASE:
+        return new HBaseIndex<>(config, jsc);
+      case INMEMORY:
+        return new InMemoryHashIndex<>(config, jsc);
+      case BLOOM:
+        return new HoodieBloomIndex<>(config, jsc);
+      case BUCKETED:
+        return new BucketedIndex<>(config, jsc);
+      default:
+        throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
+    }
   }
 
   /**
@@ -107,18 +115,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
   public abstract boolean isImplicitWithStorage();
 
 
-  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(
-      HoodieWriteConfig config, JavaSparkContext jsc) throws HoodieIndexException {
-    switch (config.getIndexType()) {
-      case HBASE:
-        return new HBaseIndex<>(config, jsc);
-      case INMEMORY:
-        return new InMemoryHashIndex<>(config, jsc);
-      case BLOOM:
-        return new HoodieBloomIndex<>(config, jsc);
-      case BUCKETED:
-        return new BucketedIndex<>(config, jsc);
-    }
-    throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
+  public enum IndexType {
+    HBASE, INMEMORY, BLOOM, BUCKETED
   }
 }

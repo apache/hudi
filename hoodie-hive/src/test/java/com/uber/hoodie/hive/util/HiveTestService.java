@@ -84,8 +84,7 @@ public class HiveTestService {
   }
 
   public HiveServer2 start() throws IOException {
-    Preconditions
-        .checkState(workDir != null, "The work dir must be set before starting cluster.");
+    Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
       hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
@@ -93,8 +92,7 @@ public class HiveTestService {
 
     String localHiveLocation = getHiveLocation(workDir);
     if (clean) {
-      LOG.info(
-          "Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
+      LOG.info("Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
       File file = new File(localHiveLocation);
       FileUtils.deleteDirectory(file);
     }
@@ -134,11 +132,9 @@ public class HiveTestService {
     hadoopConf = null;
   }
 
-  private HiveConf configureHive(Configuration conf, String localHiveLocation)
-      throws IOException {
+  private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
     conf.set("hive.metastore.local", "false");
-    conf.set(HiveConf.ConfVars.METASTOREURIS.varname,
-        "thrift://" + bindIP + ":" + metastorePort);
+    conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
     conf.set(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST.varname, bindIP);
     conf.setInt(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, serverPort);
     // The following line to turn of SASL has no effect since HiveAuthFactory calls
@@ -154,8 +150,7 @@ public class HiveTestService {
     File derbyLogFile = new File(localHiveDir, "derby.log");
     derbyLogFile.createNewFile();
     setSystemProperty("derby.stream.error.file", derbyLogFile.getPath());
-    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname,
-        Files.createTempDir().getAbsolutePath());
+    conf.set(HiveConf.ConfVars.METASTOREWAREHOUSE.varname, Files.createTempDir().getAbsolutePath());
 
     return new HiveConf(conf, this.getClass());
   }
@@ -269,8 +264,8 @@ public class HiveTestService {
       int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
       int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
       boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
-      boolean useFramedTransport =
-          conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
+      boolean useFramedTransport = conf.getBoolVar(
+          HiveConf.ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
 
       // don't support SASL yet
       //boolean useSasl = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL);
@@ -282,21 +277,20 @@ public class HiveTestService {
             tcpKeepAlive ? new TServerSocketKeepAlive(address) : new TServerSocket(address);
 
       } else {
-        serverTransport =
-            tcpKeepAlive ? new TServerSocketKeepAlive(port) : new TServerSocket(port);
+        serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(port) : new TServerSocket(port);
       }
 
       TProcessor processor;
       TTransportFactory transFactory;
 
       IHMSHandler handler = (IHMSHandler) HiveMetaStore
-          .newRetryingHMSHandler("new db based metaserver", conf, true);
+                                              .newRetryingHMSHandler("new db based metaserver",
+                                                  conf, true);
 
       if (conf.getBoolVar(HiveConf.ConfVars.METASTORE_EXECUTE_SET_UGI)) {
-        transFactory = useFramedTransport ?
-            new ChainedTTransportFactory(new TFramedTransport.Factory(),
-                new TUGIContainingTransport.Factory()) :
-            new TUGIContainingTransport.Factory();
+        transFactory =
+            useFramedTransport ? new ChainedTTransportFactory(new TFramedTransport.Factory(),
+                new TUGIContainingTransport.Factory()) : new TUGIContainingTransport.Factory();
 
         processor = new TUGIBasedProcessor<IHMSHandler>(handler);
         LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
@@ -307,10 +301,11 @@ public class HiveTestService {
         LOG.info("Starting DB backed MetaStore Server");
       }
 
-      TThreadPoolServer.Args args =
-          new TThreadPoolServer.Args(serverTransport).processor(processor)
-              .transportFactory(transFactory).protocolFactory(new TBinaryProtocol.Factory())
-              .minWorkerThreads(minWorkerThreads).maxWorkerThreads(maxWorkerThreads);
+      TThreadPoolServer.Args args = new TThreadPoolServer.Args(serverTransport).processor(processor)
+                                        .transportFactory(transFactory)
+                                        .protocolFactory(new TBinaryProtocol.Factory())
+                                        .minWorkerThreads(minWorkerThreads)
+                                        .maxWorkerThreads(maxWorkerThreads);
 
       final TServer tServer = new TThreadPoolServer(args);
       executorService.submit(new Runnable() {

@@ -25,7 +25,8 @@ import java.util.List;
  * straight forward and requires a pluggable implementation to extract the partition value from HDFS
  * path.
  *
- * e.g. Hive table partitioned by datestr=yyyy-mm-dd and hdfs path /app/hoodie/dataset1/YYYY=[yyyy]/MM=[mm]/DD=[dd]
+ * e.g. Hive table partitioned by datestr=yyyy-mm-dd and hdfs path
+ * /app/hoodie/dataset1/YYYY=[yyyy]/MM=[mm]/DD=[dd]
  */
 public interface PartitionValueExtractor {
 

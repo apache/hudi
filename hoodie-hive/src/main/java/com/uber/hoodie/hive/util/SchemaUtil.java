@@ -23,14 +23,12 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Reader;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HoodieHiveSyncException;
 import com.uber.hoodie.hive.SchemaDifference;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -48,7 +46,7 @@ import parquet.schema.Type;
  */
 public class SchemaUtil {
 
-  private static Logger LOG = LoggerFactory.getLogger(SchemaUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaUtil.class);
 
   /**
    * Get the schema difference between the storage schema and hive table schema
@@ -59,19 +57,19 @@ public class SchemaUtil {
     try {
       newTableSchema = convertParquetSchemaToHiveSchema(storageSchema);
     } catch (IOException e) {
-      throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema",
-          e);
+      throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema", e);
     }
     LOG.info("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
-    SchemaDifference.Builder schemaDiffBuilder =
-        SchemaDifference.newBuilder(storageSchema, tableSchema);
+    SchemaDifference.Builder schemaDiffBuilder = SchemaDifference
+                                                     .newBuilder(storageSchema, tableSchema);
     Set<String> tableColumns = Sets.newHashSet();
 
     for (Map.Entry<String, String> field : tableSchema.entrySet()) {
       String fieldName = field.getKey().toLowerCase();
       String tickSurroundedFieldName = tickSurround(fieldName);
       if (!isFieldExistsInSchema(newTableSchema, tickSurroundedFieldName) && !partitionKeys
-          .contains(fieldName)) {
+                                                                                  .contains(
+                                                                                      fieldName)) {
         schemaDiffBuilder.deleteTableColumn(fieldName);
       } else {
         // check type
@@ -82,8 +80,8 @@ public class SchemaUtil {
             continue;
           }
           // We will log this and continue. Hive schema is a superset of all parquet schemas
-          LOG.warn("Ignoring table column " + fieldName
-              + " as its not present in the parquet schema");
+          LOG.warn(
+              "Ignoring table column " + fieldName + " as its not present in the parquet schema");
           continue;
         }
         tableColumnType = tableColumnType.replaceAll("\\s+", "");
@@ -93,11 +91,12 @@ public class SchemaUtil {
         expectedType = expectedType.replaceAll("`", "");
 
         if (!tableColumnType.equalsIgnoreCase(expectedType)) {
-          // check for incremental datasets, the schema type change is allowed as per evolution rules
+          // check for incremental datasets, the schema type change is allowed as per evolution
+          // rules
           if (!isSchemaTypeUpdateAllowed(tableColumnType, expectedType)) {
             throw new HoodieHiveSyncException(
-                "Could not convert field Type from " + tableColumnType + " to "
-                    + expectedType + " for field " + fieldName);
+                "Could not convert field Type from " + tableColumnType + " to " + expectedType
+                    + " for field " + fieldName);
           }
           schemaDiffBuilder.updateTableColumn(fieldName,
               getExpectedType(newTableSchema, tickSurroundedFieldName));
@@ -169,65 +168,62 @@ public class SchemaUtil {
   private static String convertField(final Type parquetType) {
     StringBuilder field = new StringBuilder();
     if (parquetType.isPrimitive()) {
-      final PrimitiveType.PrimitiveTypeName parquetPrimitiveTypeName =
-          parquetType.asPrimitiveType().getPrimitiveTypeName();
+      final PrimitiveType.PrimitiveTypeName parquetPrimitiveTypeName = parquetType.asPrimitiveType()
+                                                                           .getPrimitiveTypeName();
       final OriginalType originalType = parquetType.getOriginalType();
       if (originalType == OriginalType.DECIMAL) {
-        final DecimalMetadata decimalMetadata =
-            parquetType.asPrimitiveType().getDecimalMetadata();
-        return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).
-            append(" , ").append(decimalMetadata.getScale()).append(")").toString();
+        final DecimalMetadata decimalMetadata = parquetType.asPrimitiveType().getDecimalMetadata();
+        return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).append(" , ")
+                   .append(decimalMetadata.getScale()).append(")").toString();
       }
       // TODO - fix the method naming here
       return parquetPrimitiveTypeName
-          .convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {
-            @Override
-            public String convertBOOLEAN(
-                PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "boolean";
-            }
+                 .convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {
+                   @Override
+                   public String convertBOOLEAN(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "boolean";
+                   }
 
-            @Override
-            public String convertINT32(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "int";
-            }
+                   @Override
+                   public String convertINT32(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "int";
+                   }
 
-            @Override
-            public String convertINT64(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "bigint";
-            }
+                   @Override
+                   public String convertINT64(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "bigint";
+                   }
 
-            @Override
-            public String convertINT96(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "timestamp-millis";
-            }
+                   @Override
+                   public String convertINT96(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "timestamp-millis";
+                   }
 
-            @Override
-            public String convertFLOAT(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "float";
-            }
+                   @Override
+                   public String convertFLOAT(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "float";
+                   }
 
-            @Override
-            public String convertDOUBLE(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "double";
-            }
+                   @Override
+                   public String convertDOUBLE(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "double";
+                   }
 
-            @Override
-            public String convertFIXED_LEN_BYTE_ARRAY(
-                PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              return "binary";
-            }
+                   @Override
+                   public String convertFIXED_LEN_BYTE_ARRAY(
+                       PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     return "binary";
+                   }
 
-            @Override
-            public String convertBINARY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-              if (originalType == OriginalType.UTF8
-                  || originalType == OriginalType.ENUM) {
-                return "string";
-              } else {
-                return "binary";
-              }
-            }
-          });
+                   @Override
+                   public String convertBINARY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
+                     if (originalType == OriginalType.UTF8 || originalType == OriginalType.ENUM) {
+                       return "string";
+                     } else {
+                       return "binary";
+                     }
+                   }
+                 });
     } else {
       GroupType parquetGroupType = parquetType.asGroupType();
       OriginalType originalType = parquetGroupType.getOriginalType();
@@ -235,33 +231,28 @@ public class SchemaUtil {
         switch (originalType) {
           case LIST:
             if (parquetGroupType.getFieldCount() != 1) {
-              throw new UnsupportedOperationException(
-                  "Invalid list type " + parquetGroupType);
+              throw new UnsupportedOperationException("Invalid list type " + parquetGroupType);
             }
             Type elementType = parquetGroupType.getType(0);
             if (!elementType.isRepetition(Type.Repetition.REPEATED)) {
-              throw new UnsupportedOperationException(
-                  "Invalid list type " + parquetGroupType);
+              throw new UnsupportedOperationException("Invalid list type " + parquetGroupType);
             }
             return createHiveArray(elementType, parquetGroupType.getName());
           case MAP:
             if (parquetGroupType.getFieldCount() != 1 || parquetGroupType.getType(0)
-                .isPrimitive()) {
-              throw new UnsupportedOperationException(
-                  "Invalid map type " + parquetGroupType);
+                                                             .isPrimitive()) {
+              throw new UnsupportedOperationException("Invalid map type " + parquetGroupType);
             }
             GroupType mapKeyValType = parquetGroupType.getType(0).asGroupType();
-            if (!mapKeyValType.isRepetition(Type.Repetition.REPEATED) ||
-                !mapKeyValType.getOriginalType().equals(OriginalType.MAP_KEY_VALUE) ||
-                mapKeyValType.getFieldCount() != 2) {
-              throw new UnsupportedOperationException(
-                  "Invalid map type " + parquetGroupType);
+            if (!mapKeyValType.isRepetition(Type.Repetition.REPEATED)
+                    || !mapKeyValType.getOriginalType().equals(OriginalType.MAP_KEY_VALUE)
+                    || mapKeyValType.getFieldCount() != 2) {
+              throw new UnsupportedOperationException("Invalid map type " + parquetGroupType);
             }
             Type keyType = mapKeyValType.getType(0);
-            if (!keyType.isPrimitive() ||
-                !keyType.asPrimitiveType().getPrimitiveTypeName()
-                    .equals(PrimitiveType.PrimitiveTypeName.BINARY) ||
-                !keyType.getOriginalType().equals(OriginalType.UTF8)) {
+            if (!keyType.isPrimitive() || !keyType.asPrimitiveType().getPrimitiveTypeName()
+                                               .equals(PrimitiveType.PrimitiveTypeName.BINARY)
+                    || !keyType.getOriginalType().equals(OriginalType.UTF8)) {
               throw new UnsupportedOperationException(
                   "Map key type must be binary (UTF8): " + keyType);
             }
@@ -277,8 +268,7 @@ public class SchemaUtil {
             // MAP. Hence, PARQUET-113
             // dropped the requirement for having MAP_KEY_VALUE.
           default:
-            throw new UnsupportedOperationException(
-                "Cannot convert Parquet type " + parquetType);
+            throw new UnsupportedOperationException("Cannot convert Parquet type " + parquetType);
         }
       } else {
         // if no original type then it's a record
@@ -306,7 +296,8 @@ public class SchemaUtil {
     // ", "
     struct.append(">");
     String finalStr = struct.toString();
-    // Struct cannot have - in them. userstore_udr_entities has uuid in struct. This breaks the schema.
+    // Struct cannot have - in them. userstore_udr_entities has uuid in struct. This breaks the
+    // schema.
     // HDrone sync should not fail because of this.
     finalStr = finalStr.replaceAll("-", "_");
     return finalStr;
@@ -351,7 +342,7 @@ public class SchemaUtil {
       final List<Type> groupFields = groupType.getFields();
       if (groupFields.size() > 1 || (groupFields.size() == 1 && (
           elementType.getName().equals("array") || elementType.getName()
-              .equals(elementName + "_tuple")))) {
+                                                       .equals(elementName + "_tuple")))) {
         array.append(convertField(elementType));
       } else {
         array.append(convertField(groupType.getFields().get(0)));
@@ -362,8 +353,8 @@ public class SchemaUtil {
   }
 
   public static boolean isSchemaTypeUpdateAllowed(String prevType, String newType) {
-    if (prevType == null || prevType.trim().isEmpty() ||
-        newType == null || newType.trim().isEmpty()) {
+    if (prevType == null || prevType.trim().isEmpty() || newType == null || newType.trim()
+                                                                                .isEmpty()) {
       return false;
     }
     prevType = prevType.toLowerCase();
@@ -392,9 +383,8 @@ public class SchemaUtil {
     return columns.toString();
   }
 
-  public static String generateCreateDDL(MessageType storageSchema,
-      HiveSyncConfig config, String inputFormatClass,
-      String outputFormatClass, String serdeClass) throws IOException {
+  public static String generateCreateDDL(MessageType storageSchema, HiveSyncConfig config,
+      String inputFormatClass, String outputFormatClass, String serdeClass) throws IOException {
     Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema);
     String columns = generateSchemaString(storageSchema);
 
@@ -413,7 +403,7 @@ public class SchemaUtil {
     sb = sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
     sb = sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
     sb = sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '")
-        .append(config.basePath).append("'");
+             .append(config.basePath).append("'");
     return sb.toString();
   }
 
@@ -422,7 +412,8 @@ public class SchemaUtil {
       return hiveSchema.get(partitionKey);
     }
     // Default the unknown partition fields to be String
-    // TODO - all partition fields should be part of the schema. datestr is treated as special. Dont do that
+    // TODO - all partition fields should be part of the schema. datestr is treated as special.
+    // Dont do that
     return "String";
   }
 
@@ -430,8 +421,7 @@ public class SchemaUtil {
    * Read the schema from the log file on path
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-  public static MessageType readSchemaFromLogFile(FileSystem fs,
-      Path path) throws IOException {
+  public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
     Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
     HoodieAvroDataBlock lastBlock = null;
     while (reader.hasNext()) {

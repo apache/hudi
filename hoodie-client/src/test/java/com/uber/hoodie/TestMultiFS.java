@@ -58,11 +58,11 @@ public class TestMultiFS implements Serializable {
   private static MiniDFSCluster dfsCluster;
   private static DistributedFileSystem dfs;
   private static Logger logger = LogManager.getLogger(TestMultiFS.class);
+  private static JavaSparkContext jsc;
+  private static SQLContext sqlContext;
   private String tablePath = "file:///tmp/hoodie/sample-table";
   private String tableName = "hoodie_rt";
   private String tableType = HoodieTableType.COPY_ON_WRITE.name();
-  private static JavaSparkContext jsc;
-  private static SQLContext sqlContext;
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -92,7 +92,8 @@ public class TestMultiFS implements Serializable {
       hdfsTestService.stop();
       dfsCluster.shutdown();
     }
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the same JVM
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
+    // same JVM
     FileSystem.closeAll();
   }
 
@@ -104,8 +105,8 @@ public class TestMultiFS implements Serializable {
 
     // Initialize table and filesystem
     HoodieTableMetaClient
-        .initTableType(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.valueOf(tableType), tableName,
-            HoodieAvroPayload.class.getName());
+        .initTableType(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.valueOf(tableType),
+            tableName, HoodieAvroPayload.class.getName());
 
     //Create write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(dfsBasePath)
@@ -125,16 +126,15 @@ public class TestMultiFS implements Serializable {
     // Read from hdfs
     FileSystem fs = FSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultHadoopConf());
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), dfsBasePath);
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient)
-        .getCommitTimeline();
+    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
     Dataset<Row> readRecords = HoodieClientTestUtils
         .readCommit(dfsBasePath, sqlContext, timeline, readCommitTime);
     assertEquals("Should contain 100 records", readRecords.count(), records.size());
 
     // Write to local
     HoodieTableMetaClient
-        .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
-            HoodieAvroPayload.class.getName());
+        .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
+            tableName, HoodieAvroPayload.class.getName());
     HoodieWriteConfig localConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable(tableName).withIndexConfig(

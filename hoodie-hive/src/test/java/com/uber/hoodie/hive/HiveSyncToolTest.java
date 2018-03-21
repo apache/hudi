@@ -60,39 +60,39 @@ public class HiveSyncToolTest {
   @Test
   public void testSchemaConvertArray() throws IOException {
     // Testing the 3-level annotation structure
-    MessageType schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().optional(PrimitiveType.PrimitiveTypeName.INT32).named("element")
-            .named("list").named("int_list").named("ArrayOfInts");
+    MessageType schema = parquet.schema.Types.buildMessage().optionalGroup()
+                             .as(parquet.schema.OriginalType.LIST).repeatedGroup()
+                             .optional(PrimitiveType.PrimitiveTypeName.INT32).named("element")
+                             .named("list").named("int_list").named("ArrayOfInts");
 
     String schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
     // A array of arrays
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().requiredGroup().as(OriginalType.LIST).repeatedGroup()
-            .required(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list")
-            .named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST).repeatedGroup().requiredGroup()
+                 .as(OriginalType.LIST).repeatedGroup()
+                 .required(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list")
+                 .named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list_list` ARRAY< ARRAY< int>>", schemaString);
 
     // A list of integers
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeated(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("int_list")
-            .named("ArrayOfInts");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST)
+                 .repeated(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("int_list")
+                 .named("ArrayOfInts");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
     // A list of structs with two fields
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
-            .required(PrimitiveType.PrimitiveTypeName.INT32).named("num").named("element")
-            .named("tuple_list").named("ArrayOfTuples");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST).repeatedGroup()
+                 .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
+                 .required(PrimitiveType.PrimitiveTypeName.INT32).named("num").named("element")
+                 .named("tuple_list").named("ArrayOfTuples");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`tuple_list` ARRAY< STRUCT< `str` : binary, `num` : int>>", schemaString);
@@ -100,10 +100,10 @@ public class HiveSyncToolTest {
     // A list of structs with a single field
     // For this case, since the inner group name is "array", we treat the
     // element type as a one-element struct.
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
-            .named("array").named("one_tuple_list").named("ArrayOfOneTuples");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST).repeatedGroup()
+                 .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("array")
+                 .named("one_tuple_list").named("ArrayOfOneTuples");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
@@ -111,10 +111,10 @@ public class HiveSyncToolTest {
     // A list of structs with a single field
     // For this case, since the inner group name ends with "_tuple", we also treat the
     // element type as a one-element struct.
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
-            .named("one_tuple_list_tuple").named("one_tuple_list").named("ArrayOfOneTuples2");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST).repeatedGroup()
+                 .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
+                 .named("one_tuple_list_tuple").named("one_tuple_list").named("ArrayOfOneTuples2");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
@@ -122,22 +122,22 @@ public class HiveSyncToolTest {
     // A list of structs with a single field
     // Unlike the above two cases, for this the element type is the type of the
     // only field in the struct.
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
-            .named("one_tuple_list").named("one_tuple_list").named("ArrayOfOneTuples3");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST).repeatedGroup()
+                 .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str")
+                 .named("one_tuple_list").named("one_tuple_list").named("ArrayOfOneTuples3");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`one_tuple_list` ARRAY< binary>", schemaString);
 
     // A list of maps
-    schema =
-        parquet.schema.Types.buildMessage().optionalGroup().as(parquet.schema.OriginalType.LIST)
-            .repeatedGroup().as(OriginalType.MAP).repeatedGroup().as(OriginalType.MAP_KEY_VALUE)
-            .required(PrimitiveType.PrimitiveTypeName.BINARY).as(OriginalType.UTF8)
-            .named("string_key").required(PrimitiveType.PrimitiveTypeName.INT32)
-            .named("int_value").named("key_value").named("array").named("map_list")
-            .named("ArrayOfMaps");
+    schema = parquet.schema.Types.buildMessage().optionalGroup()
+                 .as(parquet.schema.OriginalType.LIST).repeatedGroup().as(OriginalType.MAP)
+                 .repeatedGroup().as(OriginalType.MAP_KEY_VALUE)
+                 .required(PrimitiveType.PrimitiveTypeName.BINARY).as(OriginalType.UTF8)
+                 .named("string_key").required(PrimitiveType.PrimitiveTypeName.INT32)
+                 .named("int_value").named("key_value").named("array").named("map_list")
+                 .named("ArrayOfMaps");
 
     schemaString = SchemaUtil.generateSchemaString(schema);
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
@@ -146,7 +146,8 @@ public class HiveSyncToolTest {
 
   @Test
   public void testBasicSync()
-      throws IOException, InitializationError, URISyntaxException, TException, InterruptedException {
+      throws IOException, InitializationError, URISyntaxException, TException,
+                 InterruptedException {
     String commitTime = "100";
     TestUtil.createCOWDataset(commitTime, 5);
     HoodieHiveClient hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
@@ -160,18 +161,17 @@ public class HiveSyncToolTest {
     assertTrue("Table " + TestUtil.hiveSyncConfig.tableName + " should exist after sync completes",
         hiveClient.doesTableExist());
     assertEquals("Hive Schema should match the dataset schema + partition field",
-        hiveClient.getTableSchema().size(),
-        hiveClient.getDataSchema().getColumns().size() + 1);
+        hiveClient.getTableSchema().size(), hiveClient.getDataSchema().getColumns().size() + 1);
     assertEquals("Table partitions should match the number of partitions we wrote", 5,
         hiveClient.scanTablePartitions().size());
     assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES",
-        commitTime,
-        hiveClient.getLastCommitTimeSynced().get());
+        commitTime, hiveClient.getLastCommitTimeSynced().get());
   }
 
   @Test
   public void testSyncIncremental()
-      throws IOException, InitializationError, URISyntaxException, TException, InterruptedException {
+      throws IOException, InitializationError, URISyntaxException, TException,
+                 InterruptedException {
     String commitTime1 = "100";
     TestUtil.createCOWDataset(commitTime1, 5);
     HoodieHiveClient hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
@@ -183,8 +183,7 @@ public class HiveSyncToolTest {
     assertEquals("Table partitions should match the number of partitions we wrote", 5,
         hiveClient.scanTablePartitions().size());
     assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES",
-        commitTime1,
-        hiveClient.getLastCommitTimeSynced().get());
+        commitTime1, hiveClient.getLastCommitTimeSynced().get());
 
     // Now lets create more parititions and these are the only ones which needs to be synced
     DateTime dateTime = DateTime.now().plusDays(6);
@@ -192,33 +191,32 @@ public class HiveSyncToolTest {
     TestUtil.addCOWPartitions(1, true, dateTime, commitTime2);
 
     // Lets do the sync
-    hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
-        TestUtil.getHiveConf(), TestUtil.fileSystem);
-    List<String> writtenPartitionsSince = hiveClient
-        .getPartitionsWrittenToSince(Optional.of(commitTime1));
+    hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
+        TestUtil.fileSystem);
+    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(
+        Optional.of(commitTime1));
     assertEquals("We should have one partition written after 100 commit", 1,
         writtenPartitionsSince.size());
     List<Partition> hivePartitions = hiveClient.scanTablePartitions();
-    List<PartitionEvent> partitionEvents = hiveClient
-        .getPartitionEvents(hivePartitions, writtenPartitionsSince);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions,
+        writtenPartitionsSince);
     assertEquals("There should be only one paritition event", 1, partitionEvents.size());
     assertEquals("The one partition event must of type ADD", PartitionEventType.ADD,
         partitionEvents.iterator().next().eventType);
 
-    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
-        TestUtil.fileSystem);
+    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
     tool.syncHoodieTable();
     // Sync should add the one partition
     assertEquals("The one partition we wrote should be added to hive", 6,
         hiveClient.scanTablePartitions().size());
-    assertEquals("The last commit that was sycned should be 101",
-        commitTime2,
+    assertEquals("The last commit that was sycned should be 101", commitTime2,
         hiveClient.getLastCommitTimeSynced().get());
   }
 
   @Test
   public void testSyncIncrementalWithSchemaEvolution()
-      throws IOException, InitializationError, URISyntaxException, TException, InterruptedException {
+      throws IOException, InitializationError, URISyntaxException, TException,
+                 InterruptedException {
     String commitTime1 = "100";
     TestUtil.createCOWDataset(commitTime1, 5);
     HoodieHiveClient hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
@@ -236,30 +234,27 @@ public class HiveSyncToolTest {
     TestUtil.addCOWPartitions(1, false, dateTime, commitTime2);
 
     // Lets do the sync
-    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
-        TestUtil.fileSystem);
+    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
     tool.syncHoodieTable();
 
-    assertEquals("Hive Schema has evolved and should not be 3 more field",
-        fields + 3,
+    assertEquals("Hive Schema has evolved and should not be 3 more field", fields + 3,
         hiveClient.getTableSchema().size());
     assertEquals("Hive Schema has evolved - Field favorite_number has evolved from int to long",
-        "BIGINT",
-        hiveClient.getTableSchema().get("favorite_number"));
+        "BIGINT", hiveClient.getTableSchema().get("favorite_number"));
     assertTrue("Hive Schema has evolved - Field favorite_movie was added",
         hiveClient.getTableSchema().containsKey("favorite_movie"));
 
     // Sync should add the one partition
     assertEquals("The one partition we wrote should be added to hive", 6,
         hiveClient.scanTablePartitions().size());
-    assertEquals("The last commit that was sycned should be 101",
-        commitTime2,
+    assertEquals("The last commit that was sycned should be 101", commitTime2,
         hiveClient.getLastCommitTimeSynced().get());
   }
 
   @Test
   public void testSyncMergeOnRead()
-      throws IOException, InitializationError, URISyntaxException, TException, InterruptedException {
+      throws IOException, InitializationError, URISyntaxException, TException,
+                 InterruptedException {
     String commitTime = "100";
     String deltaCommitTime = "101";
     TestUtil.createMORDataset(commitTime, deltaCommitTime, 5);
@@ -280,8 +275,7 @@ public class HiveSyncToolTest {
     assertEquals("Table partitions should match the number of partitions we wrote", 5,
         hiveClient.scanTablePartitions().size());
     assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES",
-        deltaCommitTime,
-        hiveClient.getLastCommitTimeSynced().get());
+        deltaCommitTime, hiveClient.getLastCommitTimeSynced().get());
 
     // Now lets create more parititions and these are the only ones which needs to be synced
     DateTime dateTime = DateTime.now().plusDays(6);
@@ -291,11 +285,10 @@ public class HiveSyncToolTest {
     TestUtil.addCOWPartitions(1, true, dateTime, commitTime2);
     TestUtil.addMORPartitions(1, true, false, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
-    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
-        TestUtil.fileSystem);
+    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
     tool.syncHoodieTable();
-    hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
-        TestUtil.getHiveConf(), TestUtil.fileSystem);
+    hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
+        TestUtil.fileSystem);
 
     assertEquals("Hive Schema should match the evolved dataset schema + partition field",
         hiveClient.getTableSchema().size(),
@@ -303,14 +296,14 @@ public class HiveSyncToolTest {
     // Sync should add the one partition
     assertEquals("The 2 partitions we wrote should be added to hive", 6,
         hiveClient.scanTablePartitions().size());
-    assertEquals("The last commit that was sycned should be 103",
-        deltaCommitTime2,
+    assertEquals("The last commit that was sycned should be 103", deltaCommitTime2,
         hiveClient.getLastCommitTimeSynced().get());
   }
 
   @Test
   public void testSyncMergeOnReadRT()
-      throws IOException, InitializationError, URISyntaxException, TException, InterruptedException {
+      throws IOException, InitializationError, URISyntaxException, TException,
+                 InterruptedException {
     String commitTime = "100";
     String deltaCommitTime = "101";
     String roTablename = TestUtil.hiveSyncConfig.tableName;
@@ -321,8 +314,7 @@ public class HiveSyncToolTest {
         TestUtil.getHiveConf(), TestUtil.fileSystem);
 
     assertFalse("Table " + TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE
-            + " should not exist initially",
-        hiveClientRT.doesTableExist());
+                    + " should not exist initially", hiveClientRT.doesTableExist());
 
     // Lets do the sync
     HiveSyncTool tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
@@ -330,8 +322,7 @@ public class HiveSyncToolTest {
     tool.syncHoodieTable();
 
     assertTrue("Table " + TestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_REALTIME_TABLE
-            + " should exist after sync completes",
-        hiveClientRT.doesTableExist());
+                   + " should exist after sync completes", hiveClientRT.doesTableExist());
 
     assertEquals("Hive Schema should match the dataset schema + partition field",
         hiveClientRT.getTableSchema().size(),
@@ -339,8 +330,7 @@ public class HiveSyncToolTest {
     assertEquals("Table partitions should match the number of partitions we wrote", 5,
         hiveClientRT.scanTablePartitions().size());
     assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES",
-        deltaCommitTime,
-        hiveClientRT.getLastCommitTimeSynced().get());
+        deltaCommitTime, hiveClientRT.getLastCommitTimeSynced().get());
 
     // Now lets create more parititions and these are the only ones which needs to be synced
     DateTime dateTime = DateTime.now().plusDays(6);
@@ -350,11 +340,10 @@ public class HiveSyncToolTest {
     TestUtil.addCOWPartitions(1, true, dateTime, commitTime2);
     TestUtil.addMORPartitions(1, true, false, dateTime, commitTime2, deltaCommitTime2);
     // Lets do the sync
-    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
-        TestUtil.fileSystem);
+    tool = new HiveSyncTool(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
     tool.syncHoodieTable();
-    hiveClientRT = new HoodieHiveClient(TestUtil.hiveSyncConfig,
-        TestUtil.getHiveConf(), TestUtil.fileSystem);
+    hiveClientRT = new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
+        TestUtil.fileSystem);
 
     assertEquals("Hive Schema should match the evolved dataset schema + partition field",
         hiveClientRT.getTableSchema().size(),
@@ -362,8 +351,7 @@ public class HiveSyncToolTest {
     // Sync should add the one partition
     assertEquals("The 2 partitions we wrote should be added to hive", 6,
         hiveClientRT.scanTablePartitions().size());
-    assertEquals("The last commit that was sycned should be 103",
-        deltaCommitTime2,
+    assertEquals("The last commit that was sycned should be 103", deltaCommitTime2,
         hiveClientRT.getLastCommitTimeSynced().get());
     TestUtil.hiveSyncConfig.tableName = roTablename;
   }

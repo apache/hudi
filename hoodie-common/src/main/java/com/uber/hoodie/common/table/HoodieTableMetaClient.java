@@ -48,7 +48,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieTableMetaClient implements Serializable {
 
-  private final transient static Logger log = LogManager.getLogger(HoodieTableMetaClient.class);
+  private static final transient Logger log = LogManager.getLogger(HoodieTableMetaClient.class);
   public static String METAFOLDER_NAME = ".hoodie";
   public static String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
 

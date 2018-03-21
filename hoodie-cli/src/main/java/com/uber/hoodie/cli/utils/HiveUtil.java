@@ -27,7 +27,7 @@ import org.joda.time.DateTime;
 
 public class HiveUtil {
 
-  private static String driverName = "org.apache.hive.jdbc.HiveDriver";
+  private static final String driverName = "org.apache.hive.jdbc.HiveDriver";
 
   static {
     try {
@@ -39,8 +39,7 @@ public class HiveUtil {
 
   private static Connection connection;
 
-  private static Connection getConnection(String jdbcUrl, String user, String pass)
-      throws SQLException {
+  private static Connection getConnection(String jdbcUrl, String user, String pass) throws SQLException {
     DataSource ds = getDatasource(jdbcUrl, user, pass);
     return ds.getConnection();
   }
@@ -54,8 +53,8 @@ public class HiveUtil {
     return ds;
   }
 
-  public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String dbName,
-      String user, String pass) throws SQLException {
+  public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String dbName, String user, String pass)
+      throws SQLException {
     Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
     ResultSet rs = null;
     Statement stmt = conn.createStatement();
@@ -64,15 +63,13 @@ public class HiveUtil {
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
       rs = stmt.executeQuery(
-          "select count(`_hoodie_commit_time`) as cnt from " + dbName + "." + source
-              .getTableConfig()
-              .getTableName());
+          "select count(`_hoodie_commit_time`) as cnt from " + dbName + "."
+              + source.getTableConfig().getTableName());
       long count = -1;
       if (rs.next()) {
         count = rs.getLong("cnt");
       }
-      System.out
-          .println("Total records in " + source.getTableConfig().getTableName() + " is " + count);
+      System.out.println("Total records in " + source.getTableConfig().getTableName() + " is " + count);
       return count;
     } finally {
       if (rs != null) {
@@ -84,22 +81,19 @@ public class HiveUtil {
     }
   }
 
-  public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String srcDb,
-      int partitions, String user, String pass) throws SQLException {
+  public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String srcDb, int partitions,
+      String user, String pass) throws SQLException {
     DateTime dateTime = DateTime.now();
-    String endDateStr =
-        dateTime.getYear() + "-" + String.format("%02d", dateTime.getMonthOfYear()) + "-" +
-            String.format("%02d", dateTime.getDayOfMonth());
+    String endDateStr = dateTime.getYear() + "-" + String.format("%02d", dateTime.getMonthOfYear()) + "-"
+                            + String.format("%02d", dateTime.getDayOfMonth());
     dateTime = dateTime.minusDays(partitions);
-    String startDateStr =
-        dateTime.getYear() + "-" + String.format("%02d", dateTime.getMonthOfYear()) + "-" +
-            String.format("%02d", dateTime.getDayOfMonth());
+    String startDateStr = dateTime.getYear() + "-" + String.format("%02d", dateTime.getMonthOfYear()) + "-"
+                              + String.format("%02d", dateTime.getDayOfMonth());
     System.out.println("Start date " + startDateStr + " and end date " + endDateStr);
     return countRecords(jdbcUrl, source, srcDb, startDateStr, endDateStr, user, pass);
   }
 
-  private static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String srcDb,
-      String startDateStr,
+  private static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String srcDb, String startDateStr,
       String endDateStr, String user, String pass) throws SQLException {
     Connection conn = HiveUtil.getConnection(jdbcUrl, user, pass);
     ResultSet rs = null;
@@ -109,9 +103,8 @@ public class HiveUtil {
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
       rs = stmt.executeQuery(
-          "select count(`_hoodie_commit_time`) as cnt from " + srcDb + "." + source.getTableConfig()
-              .getTableName() + " where datestr>'" + startDateStr + "' and datestr<='"
-              + endDateStr + "'");
+          "select count(`_hoodie_commit_time`) as cnt from " + srcDb + "." + source.getTableConfig().getTableName()
+              + " where datestr>'" + startDateStr + "' and datestr<='" + endDateStr + "'");
       if (rs.next()) {
         return rs.getLong("cnt");
       }

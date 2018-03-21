@@ -32,17 +32,15 @@ public class DataSourceTestUtils {
     try {
       String str = ((TestRawTripPayload) record.getData()).getJsonData();
       str = "{" + str.substring(str.indexOf("\"timestamp\":"));
-      return Optional
-          .of(str.replaceAll("}", ", \"partition\": \"" + record.getPartitionPath() + "\"}"));
+      return Optional.of(str.replaceAll("}",
+          ", \"partition\": \"" + record.getPartitionPath() + "\"}"));
     } catch (IOException e) {
       return Optional.empty();
     }
   }
 
   public static List<String> convertToStringList(List<HoodieRecord> records) {
-    return records.stream().map(hr -> convertToString(hr))
-        .filter(os -> os.isPresent())
-        .map(os -> os.get())
-        .collect(Collectors.toList());
+    return records.stream().map(hr -> convertToString(hr)).filter(os -> os.isPresent())
+               .map(os -> os.get()).collect(Collectors.toList());
   }
 }

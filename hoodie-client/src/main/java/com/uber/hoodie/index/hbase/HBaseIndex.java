@@ -27,12 +27,16 @@ import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieDependentSystemUnavailableException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
@@ -51,23 +55,18 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-
 /**
  * Hoodie Index implementation backed by HBase
  */
 public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
-  private final static byte[] SYSTEM_COLUMN_FAMILY = Bytes.toBytes("_s");
-  private final static byte[] COMMIT_TS_COLUMN = Bytes.toBytes("commit_ts");
-  private final static byte[] FILE_NAME_COLUMN = Bytes.toBytes("file_name");
-  private final static byte[] PARTITION_PATH_COLUMN = Bytes.toBytes("partition_path");
+
+  private static final byte[] SYSTEM_COLUMN_FAMILY = Bytes.toBytes("_s");
+  private static final byte[] COMMIT_TS_COLUMN = Bytes.toBytes("commit_ts");
+  private static final byte[] FILE_NAME_COLUMN = Bytes.toBytes("file_name");
+  private static final byte[] PARTITION_PATH_COLUMN = Bytes.toBytes("partition_path");
 
   private static Logger logger = LogManager.getLogger(HBaseIndex.class);
-
+  private static Connection hbaseConnection = null;
   private final String tableName;
 
   public HBaseIndex(HoodieWriteConfig config, JavaSparkContext jsc) {
@@ -77,13 +76,11 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-      JavaRDD<HoodieKey> hoodieKeys, HoodieTable<T> table) {
+  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+      HoodieTable<T> table) {
     //TODO : Change/Remove filterExists in HoodieReadClient() and revisit
     throw new UnsupportedOperationException("HBase index does not implement check exist");
   }
-
-  private static Connection hbaseConnection = null;
 
   private Connection getHBaseConnection() {
     Configuration hbaseConfig = HBaseConfiguration.create();
@@ -100,15 +97,15 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   /**
-   * Since we are sharing the HbaseConnection across tasks in a JVM, make sure the HbaseConnectio is closed when
-   * JVM exits
+   * Since we are sharing the HbaseConnection across tasks in a JVM, make sure the HbaseConnectio is
+   * closed when JVM exits
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
       public void run() {
         try {
           hbaseConnection.close();
-        } catch(Exception e) {
+        } catch (Exception e) {
           // fail silently for any sort of exception
         }
       }
@@ -126,101 +123,104 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     HoodieTimeline commitTimeline = hoodieTable.getCompletedCommitTimeline();
     // Check if the last commit ts for this row is 1) present in the timeline or
     // 2) is less than the first commit ts in the timeline
-    return !commitTimeline.empty() && (commitTimeline.containsInstant(
-        new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs)) ||
-        HoodieTimeline.compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(),
-            commitTs, HoodieTimeline.GREATER));
+    return !commitTimeline.empty() && (commitTimeline
+        .containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))
+        || HoodieTimeline
+        .compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(), commitTs,
+            HoodieTimeline.GREATER));
   }
 
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
   private Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>
-  locationTagFunction(HoodieTable<T> hoodieTable) {
+      locationTagFunction(
+      HoodieTable<T> hoodieTable) {
 
     return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>)
         (partitionNum, hoodieRecordIterator) -> {
 
-      Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
+          Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
 
-      // Grab the global HBase connection
-      synchronized (HBaseIndex.class) {
-        if (hbaseConnection == null || hbaseConnection.isClosed()) {
-          hbaseConnection = getHBaseConnection();
-        }
-      }
-      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
-      HTable hTable = null;
-      try {
-        hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
-        List<Get> statements = new ArrayList<>();
-        List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
-        // Do the tagging.
-        while (hoodieRecordIterator.hasNext()) {
-          HoodieRecord rec = hoodieRecordIterator.next();
-          statements.add(generateStatement(rec.getRecordKey()));
-          currentBatchOfRecords.add(rec);
-          // iterator till we reach batch size
-          if (statements.size() >= multiGetBatchSize || !hoodieRecordIterator.hasNext()) {
-            // get results for batch from Hbase
-            Result[] results = hTable.get(statements);
-            // clear statements to be GC'd
-            statements.clear();
-            for (Result result : results) {
-              // first, attempt to grab location from HBase
-              HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
-              if (result.getRow() != null) {
-                String keyFromResult = Bytes.toString(result.getRow());
-                String commitTs =
-                    Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
-                String fileId =
-                    Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
-                String partitionPath =
-                    Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
-
-                if (checkIfValidCommit(hoodieTable, commitTs)) {
-                  currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(),
-                      partitionPath), currentRecord.getData());
-                  currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
-                  taggedRecords.add(currentRecord);
-                  // the key from Result and the key being processed should be same
-                  assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
-                } else { //if commit is invalid, treat this as a new taggedRecord
-                  taggedRecords.add(currentRecord);
-                }
-              } else {
-                taggedRecords.add(currentRecord);
-              }
+          // Grab the global HBase connection
+          synchronized (HBaseIndex.class) {
+            if (hbaseConnection == null || hbaseConnection.isClosed()) {
+              hbaseConnection = getHBaseConnection();
             }
           }
-        }
-      } catch (IOException e) {
-        throw new HoodieIndexException(
-            "Failed to Tag indexed locations because of exception with HBase Client", e);
-      } finally {
-        if (hTable != null) {
+          List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+          HTable hTable = null;
           try {
-            hTable.close();
-          } catch (IOException e) {
-            // Ignore
-          }
-        }
+            hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
+            List<Get> statements = new ArrayList<>();
+            List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
+            // Do the tagging.
+            while (hoodieRecordIterator.hasNext()) {
+              HoodieRecord rec = hoodieRecordIterator.next();
+              statements.add(generateStatement(rec.getRecordKey()));
+              currentBatchOfRecords.add(rec);
+              // iterator till we reach batch size
+              if (statements.size() >= multiGetBatchSize || !hoodieRecordIterator.hasNext()) {
+                // get results for batch from Hbase
+                Result[] results = hTable.get(statements);
+                // clear statements to be GC'd
+                statements.clear();
+                for (Result result : results) {
+                  // first, attempt to grab location from HBase
+                  HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
+                  if (result.getRow() != null) {
+                    String keyFromResult = Bytes.toString(result.getRow());
+                    String commitTs = Bytes
+                        .toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
+                    String fileId = Bytes
+                        .toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
+                    String partitionPath = Bytes
+                        .toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
 
-      }
-      return taggedRecords.iterator();
-    };
+                    if (checkIfValidCommit(hoodieTable, commitTs)) {
+                      currentRecord = new HoodieRecord(
+                          new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                          currentRecord.getData());
+                      currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+                      taggedRecords.add(currentRecord);
+                      // the key from Result and the key being processed should be same
+                      assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
+                    } else { //if commit is invalid, treat this as a new taggedRecord
+                      taggedRecords.add(currentRecord);
+                    }
+                  } else {
+                    taggedRecords.add(currentRecord);
+                  }
+                }
+              }
+            }
+          } catch (IOException e) {
+            throw new HoodieIndexException(
+                "Failed to Tag indexed locations because of exception with HBase Client", e);
+          } finally {
+            if (hTable != null) {
+              try {
+                hTable.close();
+              } catch (IOException e) {
+                // Ignore
+              }
+            }
+
+          }
+          return taggedRecords.iterator();
+        };
   }
 
   @Override
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-                                              HoodieTable<T> hoodieTable) {
+      HoodieTable<T> hoodieTable) {
     return recordRDD.mapPartitionsWithIndex(locationTagFunction(hoodieTable), true);
   }
 
-  private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>> updateLocationFunction() {
-
-    return (Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>) (partition, statusIterator) -> {
-
+  private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>
+      updateLocationFunction() {
+    return (Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>) (partition,
+        statusIterator) -> {
       Integer multiPutBatchSize = config.getHbaseIndexPutBatchSize();
 
       List<WriteStatus> writeStatusList = new ArrayList<>();
@@ -292,16 +292,13 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   /**
    * Helper method to facilitate performing puts and deletes in Hbase
-   * @param hTable
-   * @param puts
-   * @param deletes
-   * @throws IOException
    */
-  private void doPutsAndDeletes(HTable hTable, List<Put> puts, List<Delete> deletes) throws IOException {
-    if(puts.size() > 0) {
+  private void doPutsAndDeletes(HTable hTable, List<Put> puts, List<Delete> deletes)
+      throws IOException {
+    if (puts.size() > 0) {
       hTable.put(puts);
     }
-    if(deletes.size() > 0) {
+    if (deletes.size() > 0) {
       hTable.delete(deletes);
     }
     hTable.flushCommits();
@@ -311,7 +308,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   @Override
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-                                             HoodieTable<T> hoodieTable) {
+      HoodieTable<T> hoodieTable) {
     return writeStatusRDD.mapPartitionsWithIndex(updateLocationFunction(), true);
   }
 
@@ -323,7 +320,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   /**
    * Only looks up by recordKey
-   * @return
    */
   @Override
   public boolean isGlobal() {
@@ -332,7 +328,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   /**
    * Mapping is available in HBase already.
-   * @return
    */
   @Override
   public boolean canIndexLogFiles() {
@@ -341,7 +336,6 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   /**
    * Index needs to be explicitly updated after storage write.
-   * @return
    */
   @Override
   public boolean isImplicitWithStorage() {

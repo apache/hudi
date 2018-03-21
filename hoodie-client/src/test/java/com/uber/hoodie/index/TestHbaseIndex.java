@@ -16,6 +16,12 @@
 
 package com.uber.hoodie.index;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.times;
+
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
@@ -23,19 +29,16 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.TableFileSystemView;
-import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.hbase.HBaseIndex;
 import com.uber.hoodie.table.HoodieTable;
+import java.io.File;
+import java.util.List;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
@@ -56,36 +59,26 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runners.MethodSorters;
 import org.mockito.Mockito;
-import scala.Tuple2;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyObject;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atMost;
-import static org.mockito.Mockito.times;
 
 /**
- * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to shutdown
- * across tests, (see one problem here : https://issues.apache.org/jira/browse/HBASE-15835).
- * Hence, the need to use MethodSorters.NAME_ASCENDING to make sure the tests run in order. Please alter
- * the order of tests running carefully.
+ * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to
+ * shutdown across tests, (see one problem here : https://issues.apache
+ * .org/jira/browse/HBASE-15835). Hence, the need to use MethodSorters.NAME_ASCENDING to make sure
+ * the tests run in order. Please alter the order of tests running carefully.
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class TestHbaseIndex {
 
   private static JavaSparkContext jsc = null;
-  private String basePath = null;
-  private transient FileSystem fs;
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
   private static String tableName = "test_table";
+  private String basePath = null;
+  private transient FileSystem fs;
   private HoodieTableMetaClient metaClient;
+
+  public TestHbaseIndex() throws Exception {
+  }
 
   @AfterClass
   public static void clean() throws Exception {
@@ -95,6 +88,20 @@ public class TestHbaseIndex {
     if (utility != null) {
       utility.shutdownMiniCluster();
     }
+  }
+
+  @BeforeClass
+  public static void init() throws Exception {
+
+    // Initialize HbaseMiniCluster
+    utility = new HBaseTestingUtility();
+    utility.startMiniCluster();
+    hbaseConfig = utility.getConnection().getConfiguration();
+    utility.createTable(TableName.valueOf(tableName), Bytes.toBytes("_s"));
+    // Initialize a local spark env
+    SparkConf sparkConf = new SparkConf().setAppName("TestHbaseIndex").setMaster("local[1]");
+    jsc = new JavaSparkContext(sparkConf);
+    jsc.hadoopConfiguration().addResource(utility.getConfiguration());
   }
 
   @After
@@ -114,23 +121,6 @@ public class TestHbaseIndex {
     metaClient = HoodieTableMetaClient
         .initTableType(utility.getConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE,
             tableName, HoodieTableConfig.DEFAULT_PAYLOAD_CLASS);
-  }
-
-  public TestHbaseIndex() throws Exception {
-  }
-
-  @BeforeClass
-  public static void init() throws Exception {
-
-    // Initialize HbaseMiniCluster
-    utility = new HBaseTestingUtility();
-    utility.startMiniCluster();
-    hbaseConfig = utility.getConnection().getConfiguration();
-    utility.createTable(TableName.valueOf(tableName), Bytes.toBytes("_s"));
-    // Initialize a local spark env
-    SparkConf sparkConf = new SparkConf().setAppName("TestHbaseIndex").setMaster("local[1]");
-    jsc = new JavaSparkContext(sparkConf);
-    jsc.hadoopConfiguration().addResource(utility.getConfiguration());
   }
 
   @Test
@@ -156,7 +146,8 @@ public class TestHbaseIndex {
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
 
-    // Now tagLocation for these records, hbaseIndex should not tag them since it was a failed commit
+    // Now tagLocation for these records, hbaseIndex should not tag them since it was a failed
+    // commit
     javaRDD = index.tagLocation(writeRecords, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
 
@@ -167,8 +158,9 @@ public class TestHbaseIndex {
     javaRDD = index.tagLocation(writeRecords, hoodieTable);
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 200);
     assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 200);
-    assertTrue(javaRDD.filter(record -> (record.getCurrentLocation() != null
-        && record.getCurrentLocation().getCommitTime().equals(newCommitTime))).distinct().count() == 200);
+    assertTrue(javaRDD.filter(
+        record -> (record.getCurrentLocation() != null && record.getCurrentLocation()
+            .getCommitTime().equals(newCommitTime))).distinct().count() == 200);
 
   }
 
@@ -200,15 +192,19 @@ public class TestHbaseIndex {
 
     // check tagged records are tagged with correct fileIds
     List<String> fileIds = writeStatues.map(status -> status.getFileId()).collect();
-    assert (javaRDD.filter(record -> record.getCurrentLocation().getFileId() == null).collect().size() == 0);
-    List<String> taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId()).distinct().collect();
+    assert (
+        javaRDD.filter(record -> record.getCurrentLocation().getFileId() == null).collect().size()
+            == 0);
+    List<String> taggedFileIds = javaRDD.map(record -> record.getCurrentLocation().getFileId())
+        .distinct().collect();
 
     // both lists should match
     assertTrue(taggedFileIds.containsAll(fileIds) && fileIds.containsAll(taggedFileIds));
     // Rollback the last commit
     writeClient.rollback(newCommitTime);
 
-    // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled back commit
+    // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
+    // back commit
     javaRDD = index.tagLocation(writeRecords, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
     assert (javaRDD.filter(record -> record.getCurrentLocation() != null).collect().size() == 0);
@@ -282,7 +278,8 @@ public class TestHbaseIndex {
     index.setHbaseConnection(hbaseConnection);
 
     // Get all the files generated
-    int numberOfDataFileIds = (int) writeStatues.map(status -> status.getFileId()).distinct().count();
+    int numberOfDataFileIds = (int) writeStatues.map(status -> status.getFileId()).distinct()
+        .count();
 
     index.updateLocation(writeStatues, hoodieTable);
     // 3 batches should be executed given batchSize = 100 and <=numberOfDataFileIds getting updated,
@@ -306,12 +303,11 @@ public class TestHbaseIndex {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(1, 1)
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
-                .withInlineCompaction(false).build())
-        .withAutoCommit(false)
+                .withInlineCompaction(false).build()).withAutoCommit(false)
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table").withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)
-                .hbaseZkPort(Integer.valueOf(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
+            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE).hbaseZkPort(
+                Integer.valueOf(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
                 .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(tableName)
                 .hbaseIndexGetBatchSize(100).hbaseIndexPutBatchSize(100).build());
   }

@@ -49,8 +49,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
 
-  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime,
-      HoodieTable<T> hoodieTable, String partitionPath) {
+  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+      String partitionPath) {
     super(config, commitTime, hoodieTable);
     this.status = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     status.setFileId(UUID.randomUUID().toString());
@@ -64,14 +64,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     }
 
     try {
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
-          commitTime,
-          new Path(config.getBasePath()),
-          new Path(config.getBasePath(), partitionPath));
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
+          new Path(config.getBasePath()), new Path(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
-      this.storageWriter =
-          HoodieStorageWriterFactory
-              .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
+      this.storageWriter = HoodieStorageWriterFactory
+          .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
     } catch (IOException e) {
       throw new HoodieInsertException(
           "Failed to initialize HoodieStorageWriter for path " + getStorageWriterPath(), e);
@@ -86,8 +83,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
    * written bytes lt max file size
    */
   public boolean canWrite(HoodieRecord record) {
-    return storageWriter.canWrite() && record.getPartitionPath()
-        .equals(status.getPartitionPath());
+    return storageWriter.canWrite() && record.getPartitionPath().equals(status.getPartitionPath());
   }
 
   /**
@@ -111,7 +107,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
         recordsDeleted++;
       }
       status.markSuccess(record, recordMetadata);
-      // deflate record payload after recording success. This will help users access payload as a part of marking
+      // deflate record payload after recording success. This will help users access payload as a
+      // part of marking
       // record successful.
       record.deflate();
     } catch (Throwable t) {
@@ -126,9 +123,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
    * Performs actions to durably, persist the current changes and returns a WriteStatus object
    */
   public WriteStatus close() {
-    logger.info(
-        "Closing the file " + status.getFileId() + " as we are done with all the records "
-            + recordsWritten);
+    logger.info("Closing the file " + status.getFileId() + " as we are done with all the records "
+        + recordsWritten);
     try {
       storageWriter.close();
 
@@ -144,8 +140,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
       return status;
     } catch (IOException e) {
-      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path,
-          e);
+      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
     }
   }
 

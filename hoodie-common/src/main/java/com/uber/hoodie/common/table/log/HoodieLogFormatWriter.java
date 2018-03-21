@@ -22,6 +22,7 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
+import java.io.IOException;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -31,15 +32,13 @@ import org.apache.hadoop.ipc.RemoteException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
-
 /**
  * HoodieLogFormatWriter can be used to append blocks to a log file Use
  * HoodieLogFormat.WriterBuilder to construct
  */
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
-  private final static Logger log = LogManager.getLogger(HoodieLogFormatWriter.class);
+  private static final Logger log = LogManager.getLogger(HoodieLogFormatWriter.class);
 
   private HoodieLogFile logFile;
   private final FileSystem fs;
@@ -71,7 +70,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       try {
         this.output = fs.append(path, bufferSize);
       } catch (RemoteException e) {
-        // this happens when either another task executor writing to this file died or data node is going down
+        // this happens when either another task executor writing to this file died or
+        // data node is going down
         if (e.getClassName().equals(AlreadyBeingCreatedException.class.getName())
             && fs instanceof DistributedFileSystem) {
           log.warn("Trying to recover log on path " + path);
@@ -120,21 +120,23 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       throws IOException, InterruptedException {
 
     // Find current version
-    LogFormatVersion currentLogFormatVersion = new HoodieLogFormatVersion(HoodieLogFormat.currentVersion);
+    HoodieLogFormat.LogFormatVersion currentLogFormatVersion = new HoodieLogFormatVersion(
+        HoodieLogFormat.currentVersion);
     long currentSize = this.output.size();
 
     // 1. Write the magic header for the start of the block
     this.output.write(HoodieLogFormat.MAGIC);
 
     // bytes for header
-    byte [] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
+    byte[] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
     // content bytes
-    byte [] content = block.getContentBytes();
+    byte[] content = block.getContentBytes();
     // bytes for footer
-    byte [] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
+    byte[] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
 
     // 2. Write the total size of the block (excluding Magic)
-    this.output.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
+    this.output
+        .writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
 
     // 3. Write the version of this log block
     this.output.writeInt(currentLogFormatVersion.getVersion());
@@ -149,7 +151,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.output.write(content);
     // 8. Write the footers for the log block
     this.output.write(footerBytes);
-    // 9. Write the total size of the log block (including magic) which is everything written until now (for reverse pointer)
+    // 9. Write the total size of the log block (including magic) which is everything written
+    // until now (for reverse pointer)
     this.output.writeLong(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
@@ -159,35 +162,27 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   /**
-   *
-   * This method returns the total LogBlock Length which is the sum of
-   * 1. Number of bytes to write version
-   * 2. Number of bytes to write ordinal
-   * 3. Length of the headers
-   * 4. Number of bytes used to write content length
-   * 5. Length of the content
-   * 6. Length of the footers
-   * 7. Number of bytes to write totalLogBlockLength
-   * @param contentLength
-   * @param headerLength
-   * @param footerLength
-   * @return
+   * This method returns the total LogBlock Length which is the sum of 1. Number of bytes to write
+   * version 2. Number of bytes to write ordinal 3. Length of the headers 4. Number of bytes used to
+   * write content length 5. Length of the content 6. Length of the footers 7. Number of bytes to
+   * write totalLogBlockLength
    */
   private int getLogBlockLength(int contentLength, int headerLength, int footerLength) {
     return
         Integer.BYTES + // Number of bytes to write version
-        Integer.BYTES + // Number of bytes to write ordinal
-        headerLength +  // Length of the headers
-        Long.BYTES + // Number of bytes used to write content length
-        contentLength + // Length of the content
-        footerLength +  // Length of the footers
-        Long.BYTES;     // Number of bytes to write totalLogBlockLength at end of block (for reverse pointer)
+            Integer.BYTES + // Number of bytes to write ordinal
+            headerLength +  // Length of the headers
+            Long.BYTES + // Number of bytes used to write content length
+            contentLength + // Length of the content
+            footerLength +  // Length of the footers
+            Long.BYTES;     // bytes to write totalLogBlockLength at end of block (for reverse ptr)
   }
 
   private Writer rolloverIfNeeded() throws IOException, InterruptedException {
     // Roll over if the size is past the threshold
     if (getCurrentSize() > sizeThreshold) {
-      //TODO - make an end marker which seals the old log file (no more appends possible to that file).
+      //TODO - make an end marker which seals the old log file (no more appends possible to that
+      // file).
       log.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
           + ". Rolling over to the next version");
       HoodieLogFile newLogFile = logFile.rollOver(fs);

@@ -35,10 +35,10 @@ public class HoodiePrompt extends DefaultPromptProvider {
         case DATASET:
           return "hoodie:" + tableName + "->";
         case SYNC:
-          return "hoodie:" + tableName + " <==> "
-              + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
+          return "hoodie:" + tableName + " <==> " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
+        default:
+          return "hoodie:" + tableName + "->";
       }
-      return "hoodie:" + tableName + "->";
     }
     return "hoodie->";
   }

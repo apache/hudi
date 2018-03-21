@@ -65,8 +65,7 @@ public class HDFSParquetImporter implements Serializable {
   private transient FileSystem fs;
   public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
-  public HDFSParquetImporter(
-      Config cfg) throws IOException {
+  public HDFSParquetImporter(Config cfg) throws IOException {
     this.cfg = cfg;
   }
 
@@ -77,9 +76,8 @@ public class HDFSParquetImporter implements Serializable {
     @Override
     public void validate(String name, String value) throws ParameterException {
       if (value == null || !validFormats.contains(value)) {
-        throw new ParameterException(String
-            .format("Invalid format type: value:%s: supported formats:%s", value,
-                validFormats));
+        throw new ParameterException(String.format(
+            "Invalid format type: value:%s: supported formats:%s", value, validFormats));
       }
     }
   }
@@ -91,9 +89,8 @@ public class HDFSParquetImporter implements Serializable {
     @Override
     public void validate(String name, String value) throws ParameterException {
       if (value == null || !validSourceTypes.contains(value)) {
-        throw new ParameterException(String
-            .format("Invalid source type: value:%s: supported source types:%s", value,
-                validSourceTypes));
+        throw new ParameterException(String.format(
+            "Invalid source type: value:%s: supported source types:%s", value, validSourceTypes));
       }
     }
   }
@@ -127,23 +124,21 @@ public class HDFSParquetImporter implements Serializable {
         "-sf"}, description = "path for Avro schema file", required = true)
     public String schemaFile = null;
     @Parameter(names = {"--format",
-        "-f"}, description = "Format for the input data.", required = false,
-        validateValueWith = FormatValidator.class)
+        "-f"}, description = "Format for the input data.", required = false, validateValueWith =
+                                                                                                FormatValidator.class)
     public String format = null;
-    @Parameter(names = {"--spark-master",
-        "-ms"}, description = "Spark master", required = false)
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory",
         "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
-    @Parameter(names = {"--retry",
-        "-rt"}, description = "number of retries", required = false)
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
 
-  public static void main(String args[]) throws Exception {
+  public static void main(String[] args) throws Exception {
     final HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
     JCommander cmd = new JCommander(cfg, args);
     if (cfg.help || args.length == 0) {
@@ -182,8 +177,7 @@ public class HDFSParquetImporter implements Serializable {
     // Read schema file.
     Path p = new Path(cfg.schemaFile);
     if (!fs.exists(p)) {
-      throw new Exception(
-          String.format("Could not find - %s - schema file.", cfg.schemaFile));
+      throw new Exception(String.format("Could not find - %s - schema file.", cfg.schemaFile));
     }
     long len = fs.getFileStatus(p).getLen();
     ByteBuffer buf = ByteBuffer.allocate((int) len);
@@ -205,8 +199,7 @@ public class HDFSParquetImporter implements Serializable {
     try {
       // Verify that targetPath is not present.
       if (fs.exists(new Path(cfg.targetPath))) {
-        throw new HoodieIOException(
-            String.format("Make sure %s is not present.", cfg.targetPath));
+        throw new HoodieIOException(String.format("Make sure %s is not present.", cfg.targetPath));
       }
       do {
         ret = dataImport(jsc);
@@ -232,7 +225,8 @@ public class HDFSParquetImporter implements Serializable {
       Properties properties = new Properties();
       properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
       properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
-      HoodieTableMetaClient.initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
+      HoodieTableMetaClient
+          .initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
       HoodieWriteClient client = createHoodieClient(jsc, cfg.targetPath, schemaStr,
           cfg.parallelism);
@@ -240,50 +234,54 @@ public class HDFSParquetImporter implements Serializable {
       Job job = Job.getInstance(jsc.hadoopConfiguration());
       // To parallelize reading file status.
       job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
-      AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(),
-          (new Schema.Parser().parse(schemaStr)));
+      AvroReadSupport
+          .setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
       ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-      JavaRDD<HoodieRecord<HoodieJsonPayload>> hoodieRecords = jsc
-          .newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class,
-              GenericRecord.class, job.getConfiguration())
-          // To reduce large number of tasks.
-          .coalesce(16 * cfg.parallelism)
-          .map(entry -> {
-                GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
-                Object partitionField = genericRecord.get(cfg.partitionKey);
-                if (partitionField == null) {
-                  throw new HoodieIOException(
-                      "partition key is missing. :" + cfg.partitionKey);
-                }
-                Object rowField = genericRecord.get(cfg.rowKey);
-                if (rowField == null) {
-                  throw new HoodieIOException(
-                      "row field is missing. :" + cfg.rowKey);
-                }
-                long ts = (long) ((Double) partitionField * 1000l);
-                String partitionPath = PARTITION_FORMATTER.format(new Date(ts));
-                return new HoodieRecord<>(
-                    new HoodieKey((String) rowField, partitionPath),
-                    new HoodieJsonPayload(genericRecord.toString()));
-              }
-          );
+      JavaRDD<HoodieRecord<HoodieJsonPayload>> hoodieRecords = jsc.newAPIHadoopFile(cfg.srcPath,
+          ParquetInputFormat.class, Void.class, GenericRecord.class, job.getConfiguration())
+                                                                   // To reduce large number of
+                                                                   // tasks.
+                                                                   .coalesce(16 * cfg.parallelism)
+                                                                   .map(entry -> {
+                                                                     GenericRecord genericRecord
+                                                                         = ((Tuple2<Void, GenericRecord>) entry)._2();
+                                                                     Object partitionField =
+                                                                         genericRecord.get(cfg.partitionKey);
+                                                                     if (partitionField == null) {
+                                                                       throw new HoodieIOException(
+                                                                           "partition key is missing. :"
+                                                                               + cfg.partitionKey);
+                                                                     }
+                                                                     Object rowField = genericRecord.get(cfg.rowKey);
+                                                                     if (rowField == null) {
+                                                                       throw new HoodieIOException(
+                                                                           "row field is missing. :" + cfg.rowKey);
+                                                                     }
+                                                                     long ts = (long) ((Double) partitionField * 1000L);
+                                                                     String partitionPath =
+                                                                         PARTITION_FORMATTER.format(new Date(ts));
+                                                                     return new HoodieRecord<>(
+                                                                         new HoodieKey(
+                                                                             (String) rowField, partitionPath),
+                                                                         new HoodieJsonPayload(
+                                                                             genericRecord.toString()));
+                                                                   });
       // Get commit time.
       String commitTime = client.startCommit();
 
       JavaRDD<WriteStatus> writeResponse = client.bulkInsert(hoodieRecords, commitTime);
       Accumulator<Integer> errors = jsc.accumulator(0);
       writeResponse.foreach(writeStatus -> {
-          if (writeStatus.hasErrors()) {
-            errors.add(1);
-            logger.error(String.format("Error processing records :writeStatus:%s",
-                writeStatus.getStat().toString()));
-          }
+        if (writeStatus.hasErrors()) {
+          errors.add(1);
+          logger.error(String.format("Error processing records :writeStatus:%s",
+              writeStatus.getStat().toString()));
+        }
       });
       if (errors.value() == 0) {
-        logger.info(String
-            .format("Dataset imported into hoodie dataset with %s commit time.",
-                commitTime));
+        logger.info(
+            String.format("Dataset imported into hoodie dataset with %s commit time.", commitTime));
         return 0;
       }
       logger.error(String.format("Import failed with %d errors.", errors.value()));
@@ -296,10 +294,10 @@ public class HDFSParquetImporter implements Serializable {
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,
       String schemaStr, int parallelism) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withParallelism(parallelism, parallelism).withSchema(schemaStr)
-        .combineInput(true, true).withIndexConfig(
+                                   .withParallelism(parallelism, parallelism).withSchema(schemaStr)
+                                   .combineInput(true, true).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .build();
+                                   .build();
     return new HoodieWriteClient(jsc, config);
   }
 }
