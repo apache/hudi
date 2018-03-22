@@ -97,7 +97,8 @@ public interface HoodieLogFormat {
     private final static Logger log = LogManager.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
-
+    // Default max log block size 512 MB
+    public static final int DEFAULT_LOG_BLOCK_SIZE_THRESHOLD = 256 * 1024 * 1024;
     // Buffer size
     private Integer bufferSize;
     // Replication for the log file

@@ -18,6 +18,7 @@ package com.uber.hoodie.common.table.log;
 
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCorruptBlock;
@@ -28,18 +29,18 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.exception.CorruptedLogFileException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
+import java.io.BufferedInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block
@@ -61,6 +62,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
+  private int logBlockSize;
 
   HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                         boolean readBlockLazily, boolean reverseReader) throws IOException {
@@ -110,6 +112,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
     int blocksize = -1;
     int type = -1;
+    this.logBlockSize = WriterBuilder.DEFAULT_LOG_BLOCK_SIZE_THRESHOLD;
     HoodieLogBlockType blockType = null;
     Map<HeaderMetadataType, String> header = null;
 
@@ -125,6 +128,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
         // 2 Read the total size of the block
         blocksize = inputStream.readInt();
+        this.logBlockSize = blocksize;
       } else {
         // 1 Read the total size of the block
         blocksize = (int) inputStream.readLong();
@@ -210,15 +214,33 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private HoodieLogBlock createCorruptBlock() throws IOException {
     log.info("Log " + logFile + " has a corrupted block at " + inputStream.getPos());
     long currentPos = inputStream.getPos();
-    long nextBlockOffset = scanForNextAvailableBlockOffset();
+    byte[] corruptedBytes;
+    int corruptedBlockSize = 0;
+    boolean done = true;
+    BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
+    do {
+      // read upto logblocksize to find next magic header
+      corruptedBytes = new byte[logBlockSize];
+      int numberOfBytesRead = bufferedInputStream.read(corruptedBytes, 0, logBlockSize);
+      int estimatedCorruptBlockSize = (int) scanForNextAvailableBlockOffset(corruptedBytes,
+          numberOfBytesRead);
+      if (numberOfBytesRead == logBlockSize && estimatedCorruptBlockSize == numberOfBytesRead) {
+        // there can be more data to read, possibly back to back corrupt blocks
+        // or different sized log block than logBlockSize
+        done = false;
+      }
+      corruptedBlockSize += estimatedCorruptBlockSize;
+    } while (!done);
     // Rewind to the initial start and read corrupted bytes till the nextBlockOffset
     inputStream.seek(currentPos);
-    log.info("Next available block in " + logFile + " starts at " + nextBlockOffset);
-    int corruptedBlockSize = (int) (nextBlockOffset - currentPos);
+    log.info("Next available block in " + logFile + " starts at " + corruptedBlockSize);
     long contentPosition = inputStream.getPos();
-    byte[] corruptedBytes = HoodieLogBlock.readOrSkipContent(inputStream, corruptedBlockSize, readBlockLazily);
-    return HoodieCorruptBlock.getBlock(logFile, inputStream, Optional.ofNullable(corruptedBytes), readBlockLazily,
-        contentPosition, corruptedBlockSize, corruptedBlockSize, new HashMap<>(), new HashMap<>());
+    corruptedBytes = HoodieLogBlock
+        .readOrSkipContent(inputStream, corruptedBlockSize, readBlockLazily);
+    return HoodieCorruptBlock
+        .getBlock(logFile, inputStream, Optional.ofNullable(corruptedBytes), readBlockLazily,
+            contentPosition, corruptedBlockSize, corruptedBlockSize, new HashMap<>(),
+            new HashMap<>());
   }
 
   private boolean isBlockCorrupt(int blocksize) throws IOException {
@@ -242,17 +264,19 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     }
   }
 
-  private long scanForNextAvailableBlockOffset() throws IOException {
-    while (true) {
-      long currentPos = inputStream.getPos();
+  private long scanForNextAvailableBlockOffset(byte[] bytes, int numberOfByesRead)
+      throws IOException {
+    int offset = 0;
+    while (offset < numberOfByesRead) {
       try {
-        boolean isEOF = readMagic();
-        return isEOF ? inputStream.getPos() : currentPos;
-      } catch (CorruptedLogFileException e) {
+        readMagic(bytes, offset);
+        return offset;
+      } catch(CorruptedLogFileException io) {
         // No luck - advance and try again
-        inputStream.seek(currentPos + 1);
+        offset++;
       }
     }
+    return offset;
   }
 
   @Override
@@ -299,24 +323,40 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private boolean readMagic() throws IOException {
     try {
-      long pos = inputStream.getPos();
+      // Get current position in inputstream
+      long currentPos = inputStream.getPos();
       // 1. Read magic header from the start of the block
-      inputStream.readFully(magicBuffer, 0, 6);
-      if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
-        inputStream.seek(pos);
-        // 1. Read old magic header from the start of the block
-        // (for backwards compatibility of older log files written without log version)
-        inputStream.readFully(oldMagicBuffer, 0, 4);
-        if (!Arrays.equals(oldMagicBuffer, HoodieLogFormat.OLD_MAGIC)) {
-          throw new CorruptedLogFileException(
-              logFile + "could not be read. Did not find the magic bytes at the start of the block");
-        }
-      }
+      inputStream.readFully(magicBuffer, 0, magicBuffer.length);
+      // New position is after moving 6 bytes
+      long newPos = currentPos + magicBuffer.length;
+      int resetSeekOffset = readMagic(magicBuffer, 0);
+      // 2. Reset seek position if HEADER was OLD_MAGIC
+      inputStream.seek(newPos + resetSeekOffset);
       return false;
     } catch (EOFException e) {
       // We have reached the EOF
       return true;
     }
+  }
+
+  private int readMagic(byte[] bytes, int offset) throws IOException {
+    int resetSeekOffset = 0;
+    // 1. Read magic header from the start of the block
+    if (!Arrays.equals(Arrays.copyOfRange(bytes, offset, offset + magicBuffer.length),
+        HoodieLogFormat.MAGIC)) {
+      // use this to seek back by 2 bytes if MAGIC HEADER matches OLD_MAGIC
+      resetSeekOffset -= 2;
+      // 1. Read old magic header from the start of the block
+      // (for backwards compatibility of older log files written without log version)
+      // Copy to oldMagicBuffer to correctly read default log version later
+      System.arraycopy(Arrays.copyOfRange(bytes, offset, offset + oldMagicBuffer.length), 0,
+          oldMagicBuffer, 0, oldMagicBuffer.length);
+      if (!Arrays.equals(oldMagicBuffer, HoodieLogFormat.OLD_MAGIC)) {
+        throw new CorruptedLogFileException(
+            logFile + "could not be read. Did not find the magic bytes at the start of the block");
+      }
+    }
+    return resetSeekOffset;
   }
 
   @Override

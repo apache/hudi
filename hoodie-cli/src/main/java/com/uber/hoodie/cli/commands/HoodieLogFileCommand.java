@@ -50,6 +50,7 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 import parquet.avro.AvroSchemaConverter;
+import parquet.schema.MessageType;
 import scala.Tuple2;
 import scala.Tuple3;
 
@@ -77,9 +78,15 @@ public class HoodieLogFileCommand implements CommandMarker {
     for (String logFilePath : logFilePaths) {
       FileStatus[] fsStatus = fs.listStatus(
           new Path(logFilePath));
-      Schema writerSchema = new AvroSchemaConverter()
-          .convert(SchemaUtil
-              .readSchemaFromLogFile(HoodieCLI.tableMetadata.getFs(), new Path(logFilePath)));
+      Schema writerSchema = null;
+      MessageType messageType = SchemaUtil
+          .readSchemaFromLogFile(HoodieCLI.tableMetadata.getFs(), new Path(logFilePath));
+      // check if this message type is null, can happen when either the log file is empty or has
+      // only corrupt blocks
+      if(messageType != null) {
+        writerSchema = new AvroSchemaConverter()
+            .convert(messageType);
+      }
       HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(fs,
           new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
 
@@ -91,6 +98,7 @@ public class HoodieLogFileCommand implements CommandMarker {
         if (n instanceof HoodieCorruptBlock) {
           try {
             instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
+            writerSchema = Schema.parse(n.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
           } catch (Exception e) {
             numCorruptBlocks++;
             instantTime = "corrupt_block_" + numCorruptBlocks;

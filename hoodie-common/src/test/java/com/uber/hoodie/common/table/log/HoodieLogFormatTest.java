@@ -515,8 +515,6 @@ public class HoodieLogFormatTest {
     block = reader.next();
     assertEquals("The read block should be a corrupt block", HoodieLogBlockType.CORRUPT_BLOCK,
         block.getBlockType());
-    corruptBlock = (HoodieCorruptBlock) block;
-    //assertEquals("", "something-else-random", new String(corruptBlock.getCorruptedBytes()));
     assertTrue("We should get the last block next", reader.hasNext());
     reader.next();
     assertFalse("We should have no more blocks left", reader.hasNext());
