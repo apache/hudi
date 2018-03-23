@@ -221,6 +221,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
+      // an estimate of the number of bytes written
+      writeStatus.getStat().setTotalUncompressedWriteBytes(recordsWritten*averageRecordSize);
+      writeStatus.getStat().setTotalWriteBytes(recordsWritten*averageRecordSize);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);

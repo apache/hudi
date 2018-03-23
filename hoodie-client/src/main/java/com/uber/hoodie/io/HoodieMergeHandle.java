@@ -249,6 +249,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       }
 
       writeStatus.getStat().setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
+      writeStatus.getStat().setTotalUncompressedWriteBytes(storageWriter.getBytesWritten());
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);

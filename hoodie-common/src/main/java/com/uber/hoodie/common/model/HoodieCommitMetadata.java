@@ -213,6 +213,16 @@ public class HoodieCommitMetadata implements Serializable {
     return totalWriteErrors;
   }
 
+  public long fetchTotalUncompressedBytesWritten() {
+    long totalUncompressedBytesWritten = 0;
+    for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
+      for (HoodieWriteStat stat : stats) {
+        totalUncompressedBytesWritten += stat.getTotalUncompressedWriteBytes();
+      }
+    }
+    return totalUncompressedBytesWritten;
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;

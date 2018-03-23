@@ -40,6 +40,7 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   // used to size data blocks in log file
   public static final String LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = "hoodie.logfile.data.block.max.size";
   public static final String DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = String.valueOf(256*1024*1024); // 256 MB
+  public static final double DEFAULT_STREAM_COMPRESSION_RATIO = 0.1;
 
   private HoodieStorageConfig(Properties props) {
     super(props);

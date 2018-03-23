@@ -121,12 +121,13 @@ public class HoodieWrapperFileSystem extends FileSystem {
     if (fsDataOutputStream instanceof SizeAwareFSDataOutputStream) {
       return fsDataOutputStream;
     }
+    openStreams.remove(path.getName());
 
     SizeAwareFSDataOutputStream os =
         new SizeAwareFSDataOutputStream(fsDataOutputStream, new Runnable() {
           @Override
           public void run() {
-            openStreams.remove(path.getName());
+            // openStreams.remove(path.getName());
           }
         });
     openStreams.put(path.getName(), os);

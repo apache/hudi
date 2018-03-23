@@ -18,7 +18,11 @@ package com.uber.hoodie.io.storage;
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -50,8 +54,29 @@ public class HoodieStorageWriterFactory {
     HoodieParquetConfig parquetConfig =
         new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
             config.getParquetBlockSize(), config.getParquetPageSize(),
-            config.getParquetMaxFileSize(), hoodieTable.getHadoopConf());
+            config.getParquetMaxFileSize(), hoodieTable.getHadoopConf(), compressionRatioPerRecord(hoodieTable));
 
     return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
+  }
+
+  private static double compressionRatioPerRecord(HoodieTable table) {
+
+    HoodieTimeline commitTimeline =
+        table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    try {
+      if (!commitTimeline.empty()) {
+        HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(commitTimeline.getInstantDetails(latestCommitTime).get());
+        if (commitMetadata.fetchTotalUncompressedBytesWritten() != 0) {
+          double compressionRatio = commitMetadata.fetchTotalBytesWritten() / commitMetadata
+              .fetchTotalUncompressedBytesWritten();
+          return compressionRatio;
+        }
+      }
+    } catch (Throwable t) {
+      // make this fail safe.
+    }
+    return HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO;
   }
 }
