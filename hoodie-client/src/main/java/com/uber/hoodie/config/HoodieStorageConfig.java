@@ -40,6 +40,9 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   // used to size data blocks in log file
   public static final String LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = "hoodie.logfile.data.block.max.size";
   public static final String DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES = String.valueOf(256*1024*1024); // 256 MB
+  public static final String PARQUET_COMPRESSION_RATIO = "hoodie.parquet.compression.ratio";
+  // Default compression ratio for parquet
+  public static final String DEFAULT_STREAM_COMPRESSION_RATIO = String.valueOf(0.1);
 
   private HoodieStorageConfig(Properties props) {
     super(props);
@@ -93,6 +96,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder parquetCompressionRatio(double parquetCompressionRatio) {
+      props.setProperty(PARQUET_COMPRESSION_RATIO, String.valueOf(parquetCompressionRatio));
+      return this;
+    }
+
     public HoodieStorageConfig build() {
       HoodieStorageConfig config = new HoodieStorageConfig(props);
       setDefaultOnCondition(props, !props.containsKey(PARQUET_FILE_MAX_BYTES),
@@ -105,6 +113,8 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
           LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES, DEFAULT_LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES);
       setDefaultOnCondition(props, !props.containsKey(LOGFILE_SIZE_MAX_BYTES),
           LOGFILE_SIZE_MAX_BYTES, DEFAULT_LOGFILE_SIZE_MAX_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(PARQUET_COMPRESSION_RATIO),
+          PARQUET_COMPRESSION_RATIO, DEFAULT_STREAM_COMPRESSION_RATIO);
       return config;
     }
   }
