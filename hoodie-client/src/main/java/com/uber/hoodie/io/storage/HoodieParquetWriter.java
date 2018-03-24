@@ -39,9 +39,7 @@ import org.apache.spark.TaskContext;
 public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
     extends ParquetWriter<IndexedRecord> implements HoodieStorageWriter<R> {
 
-  private static double STREAM_COMPRESSION_RATIO = 0.1;
   private static AtomicLong recordIndex = new AtomicLong(1);
-
 
   private final Path file;
   private final HoodieWrapperFileSystem fs;
@@ -75,7 +73,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     // We cannot accurately measure the snappy compressed output file size. We are choosing a conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the stream and the actual file size reported by HDFS
     this.maxFileSize = parquetConfig.getMaxFileSize() + Math
-        .round(parquetConfig.getMaxFileSize() * STREAM_COMPRESSION_RATIO);
+        .round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.writeSupport = parquetConfig.getWriteSupport();
     this.commitTime = commitTime;
     this.schema = schema;

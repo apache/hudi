@@ -37,6 +37,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.storage.HoodieParquetConfig;
 import com.uber.hoodie.io.storage.HoodieParquetWriter;
@@ -513,7 +514,8 @@ public class TestHoodieBloomIndex {
     String commitTime = FSUtils.getCommitTime(filename);
     HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-        HoodieTestUtils.getDefaultHadoopConf());
+        HoodieTestUtils.getDefaultHadoopConf(),
+        Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
     HoodieParquetWriter writer = new HoodieParquetWriter(
         commitTime,
         new Path(basePath + "/" + partitionPath + "/" + filename),
