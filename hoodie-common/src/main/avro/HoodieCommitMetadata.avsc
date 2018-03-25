@@ -58,7 +58,7 @@
                         "type":["null","long"]
                      },
                      {
-                        "name":"totalRecordsToBeUpdate",
+                        "name":"totalUpdatedRecordsCompacted",
                         "type":["null","long"]
                      }
                   ]

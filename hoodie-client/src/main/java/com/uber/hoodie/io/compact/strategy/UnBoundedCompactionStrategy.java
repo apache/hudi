@@ -16,13 +16,9 @@
 
 package com.uber.hoodie.io.compact.strategy;
 
-import com.google.common.collect.Maps;
-import com.uber.hoodie.common.model.HoodieDataFile;
-import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.CompactionOperation;
 import java.util.List;
-import java.util.Map;
 
 /**
  * UnBoundedCompactionStrategy will not change ordering or filter any compaction. It is a
@@ -31,13 +27,7 @@ import java.util.Map;
  *
  * @see CompactionStrategy
  */
-public class UnBoundedCompactionStrategy implements CompactionStrategy {
-
-  @Override
-  public Map<String, Object> captureMetrics(HoodieDataFile dataFile, String partitionPath,
-      List<HoodieLogFile> logFiles) {
-    return Maps.newHashMap();
-  }
+public class UnBoundedCompactionStrategy extends CompactionStrategy {
 
   @Override
   public List<CompactionOperation> orderAndFilter(HoodieWriteConfig config,

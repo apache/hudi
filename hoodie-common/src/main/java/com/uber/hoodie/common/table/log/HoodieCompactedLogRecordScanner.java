@@ -29,6 +29,7 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
+import com.uber.hoodie.common.util.HoodieTimer;
 import com.uber.hoodie.common.util.SpillableMapUtils;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
@@ -73,8 +74,14 @@ public class HoodieCompactedLogRecordScanner implements
   private final Schema readerSchema;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
+  // Total log blocks read - for metrics
+  private AtomicLong totalLogBlocks = new AtomicLong(0);
   // Total log records read - for metrics
   private AtomicLong totalLogRecords = new AtomicLong(0);
+  // Total number of rollbacks written across all log files
+  private AtomicLong totalRollbacks = new AtomicLong(0);
+  // Total number of corrupt blocks written across all log files
+  private AtomicLong totalCorruptBlocks = new AtomicLong(0);
   // Total final list of compacted/merged records
   private long totalRecordsToUpdate;
   // Latest valid instant time
@@ -84,6 +91,10 @@ public class HoodieCompactedLogRecordScanner implements
   private String payloadClassFQN;
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
+  // Stores the total time taken to perform reading and merging of log blocks
+  private long totalTimeTakenToReadAndMergeBlocks = 0L;
+  // A timer for calculating elapsed time in millis
+  public HoodieTimer timer = new HoodieTimer();
 
   public HoodieCompactedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
       Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes,
@@ -93,6 +104,8 @@ public class HoodieCompactedLogRecordScanner implements
     this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
+    this.totalLogFiles.addAndGet(logFilePaths.size());
+    timer.startTimer();
 
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -103,10 +116,10 @@ public class HoodieCompactedLogRecordScanner implements
           new HoodieLogFormatReader(fs,
               logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile)))
                   .collect(Collectors.toList()), readerSchema, readBlocksLazily, reverseReader, bufferSize);
+      HoodieLogFile logFile;
       while (logFormatReaderWrapper.hasNext()) {
-        HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
+        logFile = logFormatReaderWrapper.getLogFile();
         log.info("Scanning log file " + logFile);
-        totalLogFiles.incrementAndGet();
         // Use the HoodieLogFileReader to iterate through the blocks in the log file
         HoodieLogBlock r = logFormatReaderWrapper.next();
         if (r.getBlockType() != CORRUPT_BLOCK
@@ -164,6 +177,7 @@ public class HoodieCompactedLogRecordScanner implements
                 // and ensures the same rollback block (R1) is used to rollback both B1 & B2 with
                 // same instant_time
                 int numBlocksRolledBack = 0;
+                totalRollbacks.incrementAndGet();
                 while (!currentInstantLogBlocks.isEmpty()) {
                   HoodieLogBlock lastBlock = currentInstantLogBlocks.peek();
                   // handle corrupt blocks separately since they may not have metadata
@@ -200,6 +214,7 @@ public class HoodieCompactedLogRecordScanner implements
             break;
           case CORRUPT_BLOCK:
             log.info("Found a corrupt block in " + logFile.getPath());
+            totalCorruptBlocks.incrementAndGet();
             // If there is a corrupt block - we will assume that this was the next data block
             currentInstantLogBlocks.push(r);
             break;
@@ -216,14 +231,13 @@ public class HoodieCompactedLogRecordScanner implements
       throw new HoodieIOException("IOException when reading log file ");
     }
     this.totalRecordsToUpdate = records.size();
+    this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     log.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
-    log.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records
-        .getInMemoryMapNumEntries());
-    log.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records
-        .getCurrentInMemoryMapSize());
-    log.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records
-        .getDiskBasedMapNumEntries());
+    log.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
+    log.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
+    log.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
     log.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
+    log.debug("Total time taken for scanning and compacting log files => " + totalTimeTakenToReadAndMergeBlocks);
   }
 
   /**
@@ -307,12 +321,28 @@ public class HoodieCompactedLogRecordScanner implements
     return totalLogRecords.get();
   }
 
+  public long getTotalLogBlocks() {
+    return totalLogBlocks.get();
+  }
+
   public Map<String, HoodieRecord<? extends HoodieRecordPayload>> getRecords() {
     return records;
   }
 
   public long getTotalRecordsToUpdate() {
     return totalRecordsToUpdate;
+  }
+
+  public long getTotalRollbacks() {
+    return totalRollbacks.get();
+  }
+
+  public long getTotalCorruptBlocks() {
+    return totalCorruptBlocks.get();
+  }
+
+  public long getTotalTimeTakenToReadAndMergeBlocks() {
+    return totalTimeTakenToReadAndMergeBlocks;
   }
 }
 
