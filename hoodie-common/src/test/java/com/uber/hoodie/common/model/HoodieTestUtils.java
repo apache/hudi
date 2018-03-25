@@ -27,6 +27,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.uber.hoodie.avro.model.HoodieCleanMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -334,5 +335,26 @@ public class HoodieTestUtils {
       cal.add(Calendar.SECOND, 1);
     }
     return commits;
+  }
+
+  public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {
+    List<HoodieWriteStat> writeStatList = new ArrayList<>();
+    for (int i = 0; i < limit; i++) {
+      HoodieWriteStat writeStat = new HoodieWriteStat();
+      writeStat.setFileId(UUID.randomUUID().toString());
+      writeStat.setNumDeletes(0);
+      writeStat.setNumUpdateWrites(100);
+      writeStat.setNumWrites(100);
+      writeStat.setPath("/some/fake/path" + i);
+      writeStat.setPartitionPath("/some/fake/partition/path" + i);
+      writeStat.setTotalLogFilesCompacted(100L);
+      RuntimeStats runtimeStats = new RuntimeStats();
+      runtimeStats.setTotalScanTime(100);
+      runtimeStats.setTotalCreateTime(100);
+      runtimeStats.setTotalUpsertTime(100);
+      writeStat.setRuntimeStats(runtimeStats);
+      writeStatList.add(writeStat);
+    }
+    return writeStatList;
   }
 }

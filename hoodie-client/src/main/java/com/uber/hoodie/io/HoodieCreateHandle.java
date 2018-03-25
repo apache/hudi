@@ -22,6 +22,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -136,6 +137,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       stat.setPaths(new Path(config.getBasePath()), path, tempPath);
       stat.setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
       stat.setTotalWriteErrors(status.getFailedRecords().size());
+      RuntimeStats runtimeStats = new RuntimeStats();
+      runtimeStats.setTotalCreateTime(timer.endTimer());
+      stat.setRuntimeStats(runtimeStats);
       status.setStat(stat);
 
       return status;
