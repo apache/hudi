@@ -67,6 +67,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -658,6 +659,48 @@ public class TestMergeOnReadTable {
           .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath))
           .count() > 0);
     }
+  }
+
+  @Test
+  public void testMetadataValuesAfterInsertUpsertAndCompaction() throws Exception {
+    // insert 100 records
+    HoodieWriteConfig config = getConfig(false);
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+
+    // total time taken for creating files should be greater than 0
+    long totalCreateTime = statuses.map(writeStatus -> writeStatus.getStat().getRuntimeStats().getTotalCreateTime())
+        .reduce((a,b) -> a + b).intValue();
+    Assert.assertTrue(totalCreateTime > 0);
+
+    // Update all the 100 records
+    newCommitTime = "101";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
+    JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+    statuses = writeClient.upsert(updatedRecordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+    // total time taken for upsert all records should be greater than 0
+    long totalUpsertTime = statuses.map(writeStatus -> writeStatus.getStat().getRuntimeStats().getTotalUpsertTime())
+        .reduce((a,b) -> a + b).intValue();
+    Assert.assertTrue(totalUpsertTime > 0);
+
+    // Do a compaction
+    String commitTime = writeClient.startCompaction();
+    statuses = writeClient.compact(commitTime);
+    writeClient.commitCompaction(commitTime, statuses);
+    // total time taken for scanning log files should be greater than 0
+    long timeTakenForScanner = statuses.map(writeStatus -> writeStatus.getStat().getRuntimeStats().getTotalScanTime())
+        .reduce((a,b) -> a + b).longValue();
+    Assert.assertTrue(timeTakenForScanner > 0);
   }
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {

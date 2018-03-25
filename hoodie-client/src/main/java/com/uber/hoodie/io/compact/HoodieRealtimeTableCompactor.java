@@ -24,6 +24,7 @@ import com.google.common.collect.Sets;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -31,6 +32,7 @@ import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -46,6 +48,8 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.util.AccumulatorV2;
+import org.apache.spark.util.LongAccumulator;
 
 /**
  * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage. Computes all
@@ -57,10 +61,19 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
   private static Logger log = LogManager.getLogger(HoodieRealtimeTableCompactor.class);
+  // Accumulator to keep track of total log files for a dataset
+  private AccumulatorV2<Long, Long> totalLogFiles;
+  // Accumulator to keep track of total log file slices for a dataset
+  private AccumulatorV2<Long, Long> totalFileSlices;
 
   @Override
   public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, HoodieWriteConfig config,
       HoodieTable hoodieTable, String compactionCommitTime) throws IOException {
+
+    totalLogFiles = new LongAccumulator();
+    totalFileSlices = new LongAccumulator();
+    jsc.sc().register(totalLogFiles);
+    jsc.sc().register(totalFileSlices);
 
     List<CompactionOperation> operations = getCompactionWorkload(jsc, hoodieTable, config,
         compactionCommitTime);
@@ -117,10 +130,18 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream)
         .map(s -> {
-          s.getStat().setTotalRecordsToBeUpdate(scanner.getTotalRecordsToUpdate());
-          s.getStat().setTotalLogFiles(scanner.getTotalLogFiles());
+          s.getStat().setTotalUpdatedRecordsCompacted(scanner.getTotalRecordsToUpdate());
+          s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
           s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
           s.getStat().setPartitionPath(operation.getPartitionPath());
+          s.getStat().setTotalLogSizeCompacted((long) operation.getMetrics().get(
+              CompactionStrategy.TOTAL_LOG_FILE_SIZE));
+          s.getStat().setTotalLogBlocks(scanner.getTotalLogBlocks());
+          s.getStat().setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+          s.getStat().setTotalRollbackBlocks(scanner.getTotalRollbacks());
+          RuntimeStats runtimeStats = new RuntimeStats();
+          runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+          s.getStat().setRuntimeStats(runtimeStats);
           return s;
         }).collect(toList());
   }
@@ -145,14 +166,23 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
     TableFileSystemView.RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
-    List<CompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
-        .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
-            .getLatestFileSlices(partitionPath).map(
-                s -> new CompactionOperation(s.getDataFile().get(), partitionPath,
-                    s.getLogFiles().sorted(HoodieLogFile.getLogVersionComparator().reversed())
-                        .collect(Collectors.toList()), config))
-            .filter(c -> !c.getDeltaFilePaths().isEmpty()).collect(toList()).iterator()).collect();
+    List<CompactionOperation> operations =
+        jsc.parallelize(partitionPaths, partitionPaths.size())
+            .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
+                .getLatestFileSlices(partitionPath).map(
+                    s -> {
+                      List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile
+                          .getLogVersionComparator().reversed()).collect(Collectors.toList());
+                      totalLogFiles.add((long) logFiles.size());
+                      totalFileSlices.add(1L);
+                      return new CompactionOperation(s.getDataFile().get(), partitionPath, logFiles, config);
+                    })
+                .filter(c -> !c.getDeltaFilePaths().isEmpty())
+                .collect(toList()).iterator()).collect();
     log.info("Total of " + operations.size() + " compactions are retrieved");
+    log.info("Total number of latest files slices " + totalFileSlices.value());
+    log.info("Total number of log files " + totalLogFiles.value());
+    log.info("Total number of file slices " + totalFileSlices.value());
 
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only

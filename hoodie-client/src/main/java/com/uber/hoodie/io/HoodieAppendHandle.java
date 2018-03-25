@@ -24,6 +24,7 @@ import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
@@ -73,6 +74,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private HoodieLogFile currentLogFile;
   private Writer writer;
   private boolean doInit = true;
+  private long estimatedNumberOfBytesWritten;
 
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String fileId, Iterator<HoodieRecord<T>> recordItr) {
@@ -180,6 +182,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         logger.info("AvgRecordSize => " + averageRecordSize);
         averageRecordSize = (averageRecordSize + SizeEstimator.estimate(record)) / 2;
         doAppend(header);
+        estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
         numberOfRecords = 0;
       }
       Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
@@ -191,6 +194,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       numberOfRecords++;
     }
     doAppend(header);
+    estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
   }
 
   private void doAppend(Map<HoodieLogBlock.HeaderMetadataType, String> header) {
@@ -217,7 +221,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
+      writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
+      RuntimeStats runtimeStats = new RuntimeStats();
+      runtimeStats.setTotalUpsertTime(timer.endTimer());
+      writeStatus.getStat().setRuntimeStats(runtimeStats);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }

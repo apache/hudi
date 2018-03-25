@@ -543,7 +543,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         long durationInMs = metrics.getDurationInMs(writeContext.stop());
         metrics
             .updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(commitTime).getTime(),
-                durationInMs, metadata);
+                durationInMs, metadata, actionType);
         writeContext = null;
       }
       logger.info("Committed " + commitTime);
@@ -926,6 +926,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+    // TODO : Fix table.getActionType for MOR table type to return different actions based on delta or compaction
+    writeContext = metrics.getCommitCtx();
     JavaRDD<WriteStatus> statuses = table.compact(jsc, commitTime);
     // Trigger the insert and collect statuses
     statuses = statuses.persist(config.getWriteStatusStorageLevel());
@@ -960,9 +962,22 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         config.getBasePath(), true);
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config);
+    // TODO : Fix table.getActionType for MOR table type to return different actions based on delta or compaction and
+    // then use getTableAndInitCtx
+    Timer.Context writeContext = metrics.getCommitCtx();
     JavaRDD<WriteStatus> compactedStatuses = table.compact(jsc, compactionCommitTime);
     if (!compactedStatuses.isEmpty()) {
-      commitForceCompaction(compactedStatuses, metaClient, compactionCommitTime);
+      HoodieCommitMetadata metadata = commitForceCompaction(compactedStatuses, metaClient, compactionCommitTime);
+      long durationInMs = metrics.getDurationInMs(writeContext.stop());
+      try {
+        metrics
+            .updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(compactionCommitTime).getTime(),
+                durationInMs, metadata, HoodieActiveTimeline.COMMIT_ACTION);
+      } catch (ParseException e) {
+        throw new HoodieCommitException(
+            "Commit time is not of valid format.Failed to commit " + config.getBasePath()
+                + " at time " + compactionCommitTime, e);
+      }
       logger.info("Compacted successfully on commit " + compactionCommitTime);
     } else {
       logger.info("Compaction did not run for commit " + compactionCommitTime);
@@ -979,7 +994,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     return compactionCommitTime;
   }
 
-  private void commitForceCompaction(JavaRDD<WriteStatus> writeStatuses,
+  private HoodieCommitMetadata commitForceCompaction(JavaRDD<WriteStatus> writeStatuses,
       HoodieTableMetaClient metaClient, String compactionCommitTime) {
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(writeStatus -> writeStatus.getStat())
         .collect();
@@ -1002,6 +1017,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       throw new HoodieCompactionException(
           "Failed to commit " + metaClient.getBasePath() + " at time " + compactionCommitTime, e);
     }
+    return metadata;
   }
 
   /**
@@ -1043,9 +1059,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   }
 
   private HoodieTable getTableAndInitCtx() {
-    writeContext = metrics.getCommitCtx();
     // Create a Hoodie table which encapsulated the commits and files visible
-    return HoodieTable.getHoodieTable(
+    HoodieTable table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+    if (table.getCommitActionType() == HoodieTimeline.COMMIT_ACTION) {
+      writeContext = metrics.getCommitCtx();
+    } else {
+      writeContext = metrics.getDeltaCommitCtx();
+    }
+    return table;
   }
 }
