@@ -16,7 +16,11 @@
 
 package com.uber.hoodie.common.model;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
@@ -27,10 +31,6 @@ import java.util.Map;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.annotate.JsonAutoDetect;
-import org.codehaus.jackson.annotate.JsonMethod;
-import org.codehaus.jackson.map.DeserializationConfig.Feature;
-import org.codehaus.jackson.map.ObjectMapper;
 
 /**
  * All the metadata that gets stored along with a commit.
@@ -116,9 +116,7 @@ public class HoodieCommitMetadata implements Serializable {
       log.info("partition path is null for " + partitionToWriteStats.get(null));
       partitionToWriteStats.remove(null);
     }
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.setVisibility(JsonMethod.FIELD, JsonAutoDetect.Visibility.ANY);
-    return mapper.defaultPrettyPrintingWriter().writeValueAsString(this);
+    return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
   public static HoodieCommitMetadata fromJsonString(String jsonStr) throws IOException {
@@ -126,10 +124,7 @@ public class HoodieCommitMetadata implements Serializable {
       // For empty commit file (no data or somethings bad happen).
       return new HoodieCommitMetadata();
     }
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.configure(Feature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    mapper.setVisibility(JsonMethod.FIELD, JsonAutoDetect.Visibility.ANY);
-    return mapper.readValue(jsonStr, HoodieCommitMetadata.class);
+    return getObjectMapper().readValue(jsonStr, HoodieCommitMetadata.class);
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.
@@ -234,5 +229,12 @@ public class HoodieCommitMetadata implements Serializable {
 
   public static HoodieCommitMetadata fromBytes(byte[] bytes) throws IOException {
     return fromJsonString(new String(bytes, Charset.forName("utf-8")));
+  }
+  
+  private static ObjectMapper getObjectMapper() {
+    ObjectMapper mapper = new ObjectMapper();
+    mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+    return mapper;
   }
 }
