@@ -35,16 +35,21 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 public class HoodieTableMetaClientTest {
 
   private HoodieTableMetaClient metaClient;
   private String basePath;
 
+  @Rule
+  public TemporaryFolder tmpFolder = new TemporaryFolder();
+  
   @Before
   public void init() throws IOException {
-    metaClient = HoodieTestUtils.initOnTemp();
+    metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
     basePath = metaClient.getBasePath();
   }
 
