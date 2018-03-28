@@ -50,6 +50,7 @@ import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.BulkInsertMapFunction;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCommitArchiveLog;
+import com.uber.hoodie.io.HoodiePartitionHelper;
 import com.uber.hoodie.metrics.HoodieMetrics;
 import com.uber.hoodie.table.HoodieTable;
 import com.uber.hoodie.table.UserDefinedBulkInsertPartitioner;
@@ -59,6 +60,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -77,6 +79,7 @@ import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.storage.StorageLevel;
 import scala.Option;
 import scala.Tuple2;
+import scala.Tuple3;
 
 /**
  * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient
@@ -435,6 +438,17 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       saveWorkloadProfileMetadataToInflight(profile, hoodieTable, commitTime);
     }
 
+    // Build filter conditions for the given WorkloadProfile
+    List<Tuple3<String, String, Long>> conditions = HoodiePartitionHelper.splitWorkload(
+        profile, isUpsert, config.getUpsertWriteMaxPartitions());
+
+    // Break the spark stage into multiple stages
+    if (!conditions.isEmpty() && profile != null) {
+      logger.info("Upserting records with multiple stages: " + conditions.size());
+      return upsertRecordsInternalMultiStages(preppedRecords, commitTime, hoodieTable,
+          isUpsert, profile, conditions);
+    }
+
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(hoodieTable, isUpsert, profile);
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(preppedRecords, partitioner);
@@ -481,6 +495,72 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
                 record))
         .partitionBy(partitioner)
         .map(tuple -> tuple._2());
+  }
+
+  @SuppressWarnings("unchecked")
+  private JavaRDD<WriteStatus> upsertRecordsInternalMultiStages(JavaRDD<HoodieRecord<T>>
+      preppedRecords,
+      String commitTime,
+      HoodieTable<T> hoodieTable,
+      final boolean isUpsert,
+      WorkloadProfile profile,
+      List<Tuple3<String, String, Long>> conditions) {
+
+    List<JavaRDD<WriteStatus>> allWriteStatuses = new ArrayList<>();
+    int totalPartitions = 0;
+    long totalUpdates = 0;
+    long totalInserts = 0;
+
+    for (Tuple3<String, String, Long> condition : conditions) {
+      // Step 1: filter input records based on condition
+      JavaRDD<HoodieRecord<T>> filteredPreppedRecords = preppedRecords.filter(
+          record -> HoodiePartitionHelper.filterHoodieRecord(record, condition));
+
+      // Step 2: compute partitioned WorkloadProfile
+      WorkloadProfile partitionedProfile = new WorkloadProfile(filteredPreppedRecords);
+      logger.info("Partitioned Workload profile :" + partitionedProfile);
+      totalUpdates += partitionedProfile.getGlobalStat().getNumUpdates();
+      totalInserts += partitionedProfile.getGlobalStat().getNumInserts();
+
+      // Step 3: partition
+      final Partitioner partitioner = getPartitioner(hoodieTable, isUpsert, partitionedProfile);
+      JavaRDD<HoodieRecord<T>> partitionedRecords = partition(filteredPreppedRecords, partitioner);
+      totalPartitions += partitioner.numPartitions();
+
+      // Step 4: handle writes
+      partitionedRecords.setName(String.format(
+          "%s-%s", "PartitionedRecordsRDD", partitionedRecords.id()));
+      JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords
+          .mapPartitionsWithIndex((partition, recordItr) -> {
+            if (isUpsert) {
+              return hoodieTable
+                  .handleUpsertPartition(commitTime, partition, recordItr, partitioner);
+            } else {
+              return hoodieTable
+                  .handleInsertPartition(commitTime, partition, recordItr, partitioner);
+            }
+          }, true)
+          .flatMap(writeStatuses -> writeStatuses.iterator());
+
+      // Step 5: Trigger the DAG
+      writeStatusRDD.persist(config.getWriteStatusStorageLevel());
+      long writeStatusCount = writeStatusRDD.count();
+      logger.info("writeStatusRDD count :" + writeStatusCount);
+      allWriteStatuses.add(writeStatusRDD);
+    }
+
+    // Finally, we should not miss a single record for upserts
+    logger.info("Total inserted records: " + totalInserts);
+    logger.info("Total updated records: " + totalUpdates);
+    logger.info("Total spark partitions during upsert: " + totalPartitions);
+    assert(totalInserts == profile.getGlobalStat().getNumInserts());
+    assert(totalUpdates == profile.getGlobalStat().getNumUpdates());
+    this.metrics.updateUpsertSparkMetrics(totalPartitions, totalUpdates, totalInserts);
+
+    return updateIndexAndCommitIfNeeded(
+        jsc.union(allWriteStatuses.get(0), allWriteStatuses.subList(1, allWriteStatuses.size()))
+            .coalesce(config.getUpsertWriteMaxPartitions()),
+        hoodieTable, commitTime);
   }
 
   /**
