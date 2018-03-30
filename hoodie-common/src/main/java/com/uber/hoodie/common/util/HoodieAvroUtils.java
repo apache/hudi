@@ -102,7 +102,7 @@ public class HoodieAvroUtils {
     }
 
     Schema mergedSchema = Schema
-        .createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+        .createRecord(schema.getName()+"_hoodie", schema.getDoc(), schema.getNamespace(), false);
     mergedSchema.setFields(parentFields);
     return mergedSchema;
   }

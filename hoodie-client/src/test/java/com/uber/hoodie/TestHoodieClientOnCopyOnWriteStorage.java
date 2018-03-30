@@ -27,6 +27,7 @@ import com.google.common.collect.Iterables;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -48,8 +49,10 @@ import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.example.SpecificRecordExampleValue;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.FileInputStream;
@@ -65,9 +68,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
@@ -81,6 +86,7 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.util.AccumulatorV2;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import scala.Option;
@@ -92,8 +98,11 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
   private transient SQLContext sqlContext;
   private transient FileSystem fs;
   private String basePath = null;
-  private transient HoodieTestDataGenerator dataGen = null;
+  private transient HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
   private String[] partitionPaths = {"2016/01/01", "2016/02/02", "2016/06/02"};
+
+  @Rule
+  public TemporaryFolder folder = new TemporaryFolder();
 
   @Before
   public void init() throws IOException {
@@ -103,27 +112,34 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     //SQLContext stuff
     sqlContext = new SQLContext(jsc);
 
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath.toString(), jsc.hadoopConfiguration());
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
-    dataGen = new HoodieTestDataGenerator();
+  }
+
+  @After
+  public void clean() {
+    if (jsc != null) {
+      jsc.stop();
+    }
   }
 
 
   private HoodieWriteConfig getConfig() {
-    return getConfigBuilder().build();
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, "test-trip-table").build();
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, "test-trip-table");
+  }
+
+  private HoodieWriteConfig.Builder getConfigBuilder(String schemaString, String tableName) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaString)
+        .withParallelism(2, 2)
         .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
+            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withAutoClean(false).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
-        .forTable("test-trip-table").withIndexConfig(
+        .forTable(tableName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
   }
 
@@ -198,10 +214,10 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         Option.empty());
 
     assertFalse("If Autocommit is false, then commit should not be made automatically",
-        HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+        HoodieTestUtils.doesCommitExist(fs, basePath, newCommitTime));
     assertTrue("Commit should succeed", client.commit(newCommitTime, result));
     assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+        HoodieTestUtils.doesCommitExist(fs, basePath, newCommitTime));
 
     newCommitTime = "002";
     client.startCommitWithTime(newCommitTime);
@@ -210,10 +226,10 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(records, 1);
     result = client.upsert(updateRecords, newCommitTime);
     assertFalse("If Autocommit is false, then commit should not be made automatically",
-        HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+        HoodieTestUtils.doesCommitExist(fs, basePath, newCommitTime));
     assertTrue("Commit should succeed", client.commit(newCommitTime, result));
     assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+        HoodieTestUtils.doesCommitExist(fs, basePath, newCommitTime));
   }
 
   @Test
@@ -881,23 +897,23 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
     // Rollback commit3
     client.rollback(commitTime3);
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime3));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime3, file31) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime3, file32) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime3, file33));
 
     // simulate partial failure, where .inflight was not deleted, but data files were.
     HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
     client.rollback(commitTime3);
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime3));
 
     // Rollback commit2
     client.rollback(commitTime2);
-    assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
+    assertFalse(HoodieTestUtils.doesCommitExist(fs, basePath, commitTime2));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime2));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime2, file21) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime2, file22) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime2, file23));
 
     // simulate partial failure, where only .commit => .inflight renaming succeeded, leaving a
     // .inflight commit and a bunch of data files around.
@@ -907,19 +923,19 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     file23 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime2, "id23");
 
     client.rollback(commitTime2);
-    assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
+    assertFalse(HoodieTestUtils.doesCommitExist(fs, basePath, commitTime2));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime2));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime2, file21) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime2, file22) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime2, file23));
 
     // Let's rollback commit1, Check results
     client.rollback(commitTime1);
-    assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime1));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+    assertFalse(HoodieTestUtils.doesCommitExist(fs, basePath, commitTime1));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime1));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime1, file11) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime1, file12) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime1, file13));
   }
 
 
@@ -963,33 +979,33 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     new HoodieWriteClient(jsc, config, false);
 
     // Check results, nothing changed
-    assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-    assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-    assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+    assertTrue(HoodieTestUtils.doesCommitExist(fs, basePath, commitTime1));
+    assertTrue(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime2));
+    assertTrue(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime3));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime3, file31) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime3, file32) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime3, file33));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime2, file21) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime2, file22) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime2, file23));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime1, file11) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime1, file12) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime1, file13));
 
     // Turn auto rollback on
     new HoodieWriteClient(jsc, config, true);
-    assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22) ||
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12) &&
-        HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+    assertTrue(HoodieTestUtils.doesCommitExist(fs, basePath, commitTime1));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime2));
+    assertFalse(HoodieTestUtils.doesInflightExist(fs, basePath, commitTime3));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime3, file31) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime3, file32) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime3, file33));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime2, file21) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime2, file22) ||
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime2, file23));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/01", commitTime1, file11) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/02", commitTime1, file12) &&
+        HoodieTestUtils.doesDataFileExist(fs, basePath, "2016/05/06", commitTime1, file13));
   }
 
 
@@ -1228,8 +1244,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
     assertEquals("Must not clean any files", 0,
         getCleanStat(hoodieCleanStatsOne, partitionPaths[1]).getSuccessDeleteFiles().size());
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[1], "000", file1P1C0));
 
     // make next commit, with 1 insert & 1 update per partition
     HoodieTestUtils.createCommitFiles(basePath, "001");
@@ -1250,10 +1266,10 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         getCleanStat(hoodieCleanStatsTwo, partitionPaths[0]).getSuccessDeleteFiles().size());
     assertEquals("Must clean 1 file", 1,
         getCleanStat(hoodieCleanStatsTwo, partitionPaths[1]).getSuccessDeleteFiles().size());
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file2P0C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[1], "001", file2P1C1));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0C0));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[1], "000", file1P1C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
     HoodieTestUtils.createCommitFiles(basePath, "002");
@@ -1269,16 +1285,16 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     List<HoodieCleanStat> hoodieCleanStatsThree = table.clean(jsc);
     assertEquals("Must clean two files", 2,
         getCleanStat(hoodieCleanStatsThree, partitionPaths[0]).getSuccessDeleteFiles().size());
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file1P0C0));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file2P0C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "002", file3P0C2));
 
     // No cleaning on partially written file, with no commit.
     HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "003", file3P0C2); // update
     List<HoodieCleanStat> hoodieCleanStatsFour = table.clean(jsc);
     assertEquals("Must not clean any files", 0,
         getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "002", file3P0C2));
   }
 
   @Test
@@ -1317,7 +1333,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     List<HoodieCleanStat> hoodieCleanStats = table.clean(jsc);
     assertEquals("Must clean three files, one parquet and 2 log files", 3,
         getCleanStat(hoodieCleanStats, partitionPaths[0]).getSuccessDeleteFiles().size());
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0));
     assertFalse(HoodieTestUtils
         .doesLogFileExist(basePath, partitionPaths[0], "000", file2P0L0, Optional.empty()));
     assertFalse(HoodieTestUtils
@@ -1346,8 +1362,8 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         getCleanStat(hoodieCleanStatsOne, partitionPaths[0]).getSuccessDeleteFiles().size());
     assertEquals("Must not clean any files", 0,
         getCleanStat(hoodieCleanStatsOne, partitionPaths[1]).getSuccessDeleteFiles().size());
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[1], "000", file1P1C0));
 
     // make next commit, with 1 insert & 1 update per partition
     HoodieTestUtils.createCommitFiles(basePath, "001");
@@ -1366,10 +1382,10 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         getCleanStat(hoodieCleanStatsTwo, partitionPaths[0]).getSuccessDeleteFiles().size());
     assertEquals("Must not clean any files", 0,
         getCleanStat(hoodieCleanStatsTwo, partitionPaths[1]).getSuccessDeleteFiles().size());
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "001", file2P1C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[1], "000", file1P1C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file2P0C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[1], "001", file2P1C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[1], "000", file1P1C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
     HoodieTestUtils.createCommitFiles(basePath, "002");
@@ -1387,7 +1403,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         "Must not clean any file. We have to keep 1 version before the latest commit time to keep",
         0, getCleanStat(hoodieCleanStatsThree, partitionPaths[0]).getSuccessDeleteFiles().size());
 
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
     HoodieTestUtils.createCommitFiles(basePath, "003");
@@ -1405,21 +1421,21 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
         "Must not clean one old file", 1,
         getCleanStat(hoodieCleanStatsFour, partitionPaths[0]).getSuccessDeleteFiles().size());
 
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "000", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file2P0C1));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "002", file3P0C2));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "003", file4P0C3));
+    assertFalse(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "000", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "002", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file2P0C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "002", file2P0C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "002", file3P0C2));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "003", file4P0C3));
 
     // No cleaning on partially written file, with no commit.
     HoodieTestUtils.createDataFile(basePath, partitionPaths[0], "004", file3P0C2); // update
     List<HoodieCleanStat> hoodieCleanStatsFive = table.clean(jsc);
     assertEquals("Must not clean any files", 0,
         getCleanStat(hoodieCleanStatsFive, partitionPaths[0]).getSuccessDeleteFiles().size());
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file1P0C0));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, partitionPaths[0], "001", file2P0C1));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file1P0C0));
+    assertTrue(HoodieTestUtils.doesDataFileExist(fs, basePath, partitionPaths[0], "001", file2P0C1));
   }
 
   @Test
@@ -1552,6 +1568,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     assertEquals("All temp files are deleted.",0, getTotalTempFiles());
   }
 
+  @Test
   public void testCommitWritesRelativePaths() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
@@ -1570,7 +1587,7 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
 
     assertTrue("Commit should succeed", client.commit(commitTime, result));
     assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+        HoodieTestUtils.doesCommitExist(fs, basePath, commitTime));
 
     // Get parquet file paths from commit metadata
     String actionType = table.getCommitActionType();
@@ -1594,6 +1611,25 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     for (String pathName : paths.values()) {
       assertTrue(commitPathNames.contains(pathName));
     }
+  }
+
+  @Test
+  public void shouldCompactTableWithSpecificRecord() throws Exception {
+    HoodieWriteConfig config =
+        getConfigBuilder(SpecificRecordExampleValue.getClassSchema().toString(),
+            "example-specificvalue-table").build();
+    HoodieWriteClient client = new HoodieWriteClient<>(jsc, config);
+
+    insertNewDataSpecificRecord(client, 10);
+    // should compact small file
+    boolean success = insertNewDataSpecificRecord(client, 10);
+    assertTrue(success);
+  }
+
+  private boolean insertNewDataSpecificRecord(HoodieWriteClient client, int nb) throws IOException {
+    String commitTime = client.startCommit();
+    JavaRDD<WriteStatus> insert = client.insert(jsc.parallelize(dataGen.generateInsertsSpecificRecord(nb)), commitTime);
+    return client.commit(commitTime, insert);
   }
 
   private HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo,
@@ -1631,13 +1667,4 @@ public class TestHoodieClientOnCopyOnWriteStorage implements Serializable {
     return fs.listStatus(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME)).length;
   }
 
-  @After
-  public void clean() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
-  }
 }

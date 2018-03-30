@@ -194,9 +194,13 @@ public class HoodieTestUtils {
         + HoodieTimeline.COMMIT_EXTENSION;
   }
 
-  public static final boolean doesDataFileExist(String basePath, String partitionPath,
-      String commitTime, String fileID) throws IOException {
-    return new File(getDataFilePath(basePath, partitionPath, commitTime, fileID)).exists();
+  public static final boolean doesDataFileExist(FileSystem fs, String basePath,
+      String partitionPath, String commitTime, String fileID) {
+    try {
+      return fs.exists(new Path(getDataFilePath(basePath, partitionPath, commitTime, fileID)));
+    } catch (IllegalArgumentException | IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public static final boolean doesLogFileExist(String basePath, String partitionPath,
@@ -204,14 +208,22 @@ public class HoodieTestUtils {
     return new File(getLogFilePath(basePath, partitionPath, commitTime, fileID, version)).exists();
   }
 
-  public static final boolean doesCommitExist(String basePath, String commitTime) {
-    return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
-        + HoodieTimeline.COMMIT_EXTENSION).exists();
+  public static final boolean doesCommitExist(FileSystem fs, String basePath, String commitTime) {
+    try {
+      return fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+          + commitTime + HoodieTimeline.COMMIT_EXTENSION));
+    } catch (IllegalArgumentException | IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
-  public static final boolean doesInflightExist(String basePath, String commitTime) {
-    return new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
-        + HoodieTimeline.INFLIGHT_EXTENSION).exists();
+  public static final boolean doesInflightExist(FileSystem fs, String basePath, String commitTime) {
+    try {
+      return fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
+          + HoodieTimeline.INFLIGHT_EXTENSION));
+    } catch (IllegalArgumentException | IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public static String makeInflightTestFileName(String instant) {

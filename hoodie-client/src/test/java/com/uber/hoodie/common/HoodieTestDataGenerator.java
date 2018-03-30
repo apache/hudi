@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common;
 
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
@@ -25,6 +26,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.example.SpecificRecordExampleValue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -220,6 +222,22 @@ public class HoodieTestDataGenerator {
     } finally {
       os.close();
     }
+  }
+  
+  public List<HoodieRecord> generateInsertsSpecificRecord(int n) throws IOException {
+    List<HoodieRecord> inserts = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      HoodieRecord record = new HoodieRecord(key, new HoodieAvroPayload(Optional.of(newSpecificRecordValue())));
+      inserts.add(record);
+    }
+    return inserts;
+  }
+
+  private SpecificRecordExampleValue newSpecificRecordValue() {
+    return SpecificRecordExampleValue.newBuilder().setId(UUID.randomUUID().toString())
+        .setName("Test Name").build();
   }
 
   public String[] getPartitionPaths() {
