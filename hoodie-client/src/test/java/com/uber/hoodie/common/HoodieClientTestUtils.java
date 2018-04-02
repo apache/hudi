@@ -99,7 +99,6 @@ public class HoodieClientTestUtils {
   }
 
   public static SparkConf getSparkConfForTest(String appName) {
-    System.out.println("HIII" + "HII2");
     SparkConf sparkConf = new SparkConf().setAppName(appName)
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .setMaster("local[1]");
@@ -125,6 +124,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths = getLatestFileIDsToFullPath(basePath, commitTimeline,
           Arrays.asList(commitInstant));
+      System.out.println("Path :" + paths.values());
       return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
           .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
     } catch (Exception e) {

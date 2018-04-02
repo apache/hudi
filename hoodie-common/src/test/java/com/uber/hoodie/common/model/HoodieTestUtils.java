@@ -34,6 +34,7 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
@@ -45,6 +46,7 @@ import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -309,5 +311,16 @@ public class HoodieTestUtils {
       }
     }
     return returns.toArray(new FileStatus[returns.size()]);
+  }
+
+  public static List<String> monotonicIncreasingCommitTimestamps(int numTimestamps, int startSecsDelta) {
+    Calendar cal = Calendar.getInstance();
+    cal.add(Calendar.SECOND, startSecsDelta);
+    List<String> commits = new ArrayList<>();
+    for (int i = 0; i < numTimestamps; i++) {
+      commits.add(HoodieActiveTimeline.COMMIT_FORMATTER.format(cal.getTime()));
+      cal.add(Calendar.SECOND, 1);
+    }
+    return commits;
   }
 }
