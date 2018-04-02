@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.InetAddress;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Date;
@@ -94,7 +95,9 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
     }
     writeOnlyFileHandle.createNewFile();
 
-    log.info("Spilling to file location " + writeOnlyFileHandle.getAbsolutePath());
+    log.info(
+        "Spilling to file location " + writeOnlyFileHandle.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
+            .getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName() + ")");
     // Open file in readFromDisk-only mode
     readOnlyFileHandle = new RandomAccessFile(filePath, "r");
     readOnlyFileHandle.seek(0);
