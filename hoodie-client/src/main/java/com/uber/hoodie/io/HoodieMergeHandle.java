@@ -135,8 +135,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     try {
       // Load the new records in a map
       logger.info("MaxMemoryPerPartitionMerge => " + config.getMaxMemoryPerPartitionMerge());
-      this.keyToNewRecords = new ExternalSpillableMap<>(config.getMaxMemoryPerPartitionMerge(),
-          Optional.empty(), new StringConverter(), new HoodieRecordConverter(schema, config.getPayloadClass()));
+      this.keyToNewRecords = new ExternalSpillableMap<>(config.getMaxMemoryPerPartitionMerge(), Optional.empty(),
+          new StringConverter(), new HoodieRecordConverter(schema, config.getPayloadClass()));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -148,7 +148,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       // update the new location of the record, so we know where to find it next
       record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
     }
-    logger.debug("Number of entries in MemoryBasedMap => "
+    logger.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
         + "Total size in bytes of MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize()
@@ -156,7 +156,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries()
         + "Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
-
     return partitionPath;
   }
 
@@ -186,7 +185,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   }
 
   /**
-   * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
+   * Go through an old record. Here if we detect a newer version shows up, we write the new one to
+   * the file.
    */
   public void write(GenericRecord oldRecord) {
     String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
