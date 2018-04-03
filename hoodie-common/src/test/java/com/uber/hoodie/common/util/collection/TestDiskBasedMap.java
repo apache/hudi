@@ -51,12 +51,14 @@ import org.junit.Test;
 
 public class TestDiskBasedMap {
 
+  private static final String BASE_OUTPUT_PATH = "/tmp/";
+
   @Test
   public void testSimpleInsert() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
-    DiskBasedMap records = new DiskBasedMap<>(Optional.empty(),
+    DiskBasedMap records = new DiskBasedMap<>(BASE_OUTPUT_PATH,
         new StringConverter(), new HoodieRecordConverter(schema, payloadClazz));
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
@@ -78,7 +80,7 @@ public class TestDiskBasedMap {
     Schema schema = getSimpleSchema();
     String payloadClazz = HoodieAvroPayload.class.getName();
 
-    DiskBasedMap records = new DiskBasedMap<>(Optional.empty(),
+    DiskBasedMap records = new DiskBasedMap<>(BASE_OUTPUT_PATH,
         new StringConverter(), new HoodieRecordConverter(schema, payloadClazz));
     List<HoodieRecord> hoodieRecords = SchemaTestUtil
         .generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
@@ -105,7 +107,7 @@ public class TestDiskBasedMap {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
-    DiskBasedMap records = new DiskBasedMap<>(Optional.empty(),
+    DiskBasedMap records = new DiskBasedMap<>(BASE_OUTPUT_PATH,
         new StringConverter(), new HoodieRecordConverter(schema, payloadClazz));
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
 
@@ -191,9 +193,7 @@ public class TestDiskBasedMap {
   }
 
   /**
-   * vb - Disabled this test after talking to Nishanth as this relies on timing and sometimes fails in my laptop.
-   * This specific test sometime takes more than 100 ms (In one case, saw 122 ms),
-   * @na: TODO: Please check if this can be removed.
+   * @na: Leaving this test here for a quick performance test
    */
   @Ignore
   @Test

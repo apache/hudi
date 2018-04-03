@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -49,8 +48,6 @@ import org.apache.log4j.Logger;
 public final class DiskBasedMap<T, R> implements Map<T, R> {
 
   private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
-  // Default file path prefix to put the spillable file
-  private static String DEFAULT_BASE_FILE_PATH = "/tmp/";
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
   // Key converter to convert key type to bytes
@@ -70,17 +67,12 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
   private String filePath;
 
 
-  protected DiskBasedMap(Optional<String> baseFilePath,
+  protected DiskBasedMap(String baseFilePath,
       Converter<T> keyConverter, Converter<R> valueConverter) throws IOException {
     this.valueMetadataMap = new HashMap<>();
-
-    if (!baseFilePath.isPresent()) {
-      baseFilePath = Optional.of(DEFAULT_BASE_FILE_PATH);
-    }
-    this.filePath = baseFilePath.get() + UUID.randomUUID().toString();
-    File writeOnlyFileHandle = new File(filePath);
+    File writeOnlyFileHandle = new File(baseFilePath, UUID.randomUUID().toString());
+    this.filePath = writeOnlyFileHandle.getPath();
     initFile(writeOnlyFileHandle);
-
     this.fileOutputStream = new FileOutputStream(writeOnlyFileHandle, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream);
     this.filePosition = new AtomicLong(0L);
@@ -93,8 +85,10 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
     if (writeOnlyFileHandle.exists()) {
       writeOnlyFileHandle.delete();
     }
+    if (!writeOnlyFileHandle.getParentFile().exists()) {
+      writeOnlyFileHandle.getParentFile().mkdir();
+    }
     writeOnlyFileHandle.createNewFile();
-
     log.info(
         "Spilling to file location " + writeOnlyFileHandle.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
             .getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName() + ")");
