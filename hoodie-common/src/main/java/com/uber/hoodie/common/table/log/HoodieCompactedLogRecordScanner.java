@@ -42,7 +42,6 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
@@ -98,7 +97,7 @@ public class HoodieCompactedLogRecordScanner implements
 
   public HoodieCompactedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
       Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes,
-      boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
+      boolean readBlocksLazily, boolean reverseReader, int bufferSize, String spillableMapBasePath) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
@@ -109,7 +108,7 @@ public class HoodieCompactedLogRecordScanner implements
 
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
-      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, Optional.empty(),
+      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath,
           new StringConverter(), new HoodieRecordConverter(readerSchema, payloadClassFQN));
       // iterate over the paths
       HoodieLogFormatReader logFormatReaderWrapper =

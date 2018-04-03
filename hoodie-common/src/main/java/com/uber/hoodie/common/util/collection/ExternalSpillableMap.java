@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -64,7 +63,7 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
   // Flag to determine whether to stop re-estimating payload size
   private boolean shouldEstimatePayloadSize = true;
 
-  public ExternalSpillableMap(Long maxInMemorySizeInBytes, Optional<String> baseFilePath,
+  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath,
       Converter<T> keyConverter, Converter<R> valueConverter) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.diskBasedMap = new DiskBasedMap<>(baseFilePath, keyConverter, valueConverter);
