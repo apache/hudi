@@ -48,7 +48,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   // Property to set the max memory for dfs inputstream buffer size
   public static final String MAX_DFS_STREAM_BUFFER_SIZE_PROP = "hoodie.memory.dfs.buffer.max.size";
   public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
-
+  public static final String SPILLABLE_MAP_BASE_PATH_PROP = "hoodie.memory.spillable.map.path";
+  // Default file path prefix for spillable file
+  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
 
   private HoodieMemoryConfig(Properties props) {
     super(props);
@@ -77,13 +79,13 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withMaxMemoryFractionPerPartitionMerge(long maxMemoryFractionPerPartitionMerge) {
+    public Builder withMaxMemoryFractionPerPartitionMerge(double maxMemoryFractionPerPartitionMerge) {
       props.setProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP,
           String.valueOf(maxMemoryFractionPerPartitionMerge));
       return this;
     }
 
-    public Builder withMaxMemoryFractionPerCompaction(long maxMemoryFractionPerCompaction) {
+    public Builder withMaxMemoryFractionPerCompaction(double maxMemoryFractionPerCompaction) {
       props.setProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP,
           String.valueOf(maxMemoryFractionPerCompaction));
       return this;
@@ -155,6 +157,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props,
           !props.containsKey(MAX_DFS_STREAM_BUFFER_SIZE_PROP),
           MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
+      setDefaultOnCondition(props,
+          !props.containsKey(SPILLABLE_MAP_BASE_PATH_PROP),
+          SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH);
       return config;
     }
   }

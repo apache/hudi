@@ -30,6 +30,7 @@ import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
 import com.uber.hoodie.common.util.collection.converter.StringConverter;
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -48,13 +50,22 @@ import org.junit.runners.MethodSorters;
 public class TestExternalSpillableMap {
 
   private static final String FAILURE_OUTPUT_PATH = "/tmp/test_fail";
+  private static final String BASE_OUTPUT_PATH = "/tmp/";
+
+  @BeforeClass
+  public static void cleanUp() {
+    File file = new File(BASE_OUTPUT_PATH);
+    file.delete();
+    file = new File(FAILURE_OUTPUT_PATH);
+    file.delete();
+  }
 
   @Test
   public void simpleInsertTest() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.empty(), new StringConverter(),
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
             new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -76,7 +87,7 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
             new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -114,7 +125,7 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.empty(), new StringConverter(),
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
             new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -169,7 +180,7 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+        new ExternalSpillableMap<>(16L, FAILURE_OUTPUT_PATH, new StringConverter(),
             new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -188,7 +199,7 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
             new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<String> recordKeys = new ArrayList<>();
@@ -241,7 +252,7 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
             new HoodieRecordConverter(schema, payloadClazz)); //16B
 
     List<String> recordKeys = new ArrayList<>();

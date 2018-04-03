@@ -118,7 +118,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
         metaClient.getBasePath(), operation.getDeltaFilePaths(), readerSchema, maxInstantTime,
         config.getMaxMemoryPerCompaction(), config.getCompactionLazyBlockReadEnabled(),
-        config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize());
+        config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
+        config.getSpillableMapBasePath());
     if (!scanner.iterator().hasNext()) {
       return Lists.<WriteStatus>newArrayList();
     }

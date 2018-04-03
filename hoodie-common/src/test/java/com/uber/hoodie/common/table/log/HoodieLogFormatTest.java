@@ -77,6 +77,7 @@ public class HoodieLogFormatTest {
   private Path partitionPath;
   private static String basePath;
   private int bufferSize = 4096;
+  private static final String BASE_OUTPUT_PATH = "/tmp/";
 
   private Boolean readBlocksLazily = true;
 
@@ -401,7 +402,7 @@ public class HoodieLogFormatTest {
     // scan all log blocks (across multiple log files)
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
         logFiles.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()), schema, "100",
-        10240L, readBlocksLazily, false, bufferSize);
+        10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
 
     List<IndexedRecord> scannedRecords = new ArrayList<>();
     for (HoodieRecord record : scanner) {
@@ -527,7 +528,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "100", 10240L, readBlocksLazily, false, bufferSize);
+        "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -587,7 +588,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "102", 10240L, readBlocksLazily, false, bufferSize);
+        "102", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We read 200 records from 2 write batches", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -665,7 +666,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "103", 10240L, true, false, bufferSize);
+        "103", 10240L, true, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 200 records", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -719,7 +720,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "102", 10240L, readBlocksLazily, false, bufferSize);
+        "102", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We still would read 200 records", 200, scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(200);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -739,7 +740,7 @@ public class HoodieLogFormatTest {
 
     readKeys.clear();
     scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema, "101", 10240L, readBlocksLazily,
-        false, bufferSize);
+        false, bufferSize, BASE_OUTPUT_PATH);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records after rollback of delete", 200, readKeys.size());
   }
@@ -800,7 +801,7 @@ public class HoodieLogFormatTest {
 
     // all data must be rolled back before merge
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "100", 10240L, readBlocksLazily, false, bufferSize);
+        "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would have scanned 0 records because of rollback", 0, scanner.getTotalLogRecords());
 
     final List<String> readKeys = new ArrayList<>();
@@ -849,7 +850,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "100", 10240L, readBlocksLazily, false, bufferSize);
+        "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
@@ -881,7 +882,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "100", 10240L, readBlocksLazily, false, bufferSize);
+        "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We still would read 100 records", 100, scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(100);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
@@ -931,7 +932,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "101", 10240L, readBlocksLazily, false, bufferSize);
+        "101", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
@@ -1019,7 +1020,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
-        "101", 10240L, readBlocksLazily, false, bufferSize);
+        "101", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 

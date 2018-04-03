@@ -375,6 +375,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
   }
 
+  public String getSpillableMapBasePath() {
+    return props.getProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP);
+  }
+
   public static class Builder {
 
     private final Properties props = new Properties();
