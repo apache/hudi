@@ -71,6 +71,7 @@ public class HoodieRealtimeRecordReaderTest {
   @Before
   public void setUp() {
     jobConf = new JobConf();
+    jobConf.set(HoodieRealtimeRecordReader.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1 * 1024 * 1024));
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath.getRoot().getAbsolutePath(), hadoopConf);
   }
