@@ -87,7 +87,7 @@ public class HoodieCompactedLogRecordScanner implements
 
   public HoodieCompactedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
       Schema readerSchema, String latestInstantTime, Long maxMemorySizeInBytes,
-      boolean readBlocksLazily, boolean reverseReader) {
+      boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
@@ -102,7 +102,7 @@ public class HoodieCompactedLogRecordScanner implements
       HoodieLogFormatReader logFormatReaderWrapper =
           new HoodieLogFormatReader(fs,
               logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile)))
-                  .collect(Collectors.toList()), readerSchema, readBlocksLazily, reverseReader);
+                  .collect(Collectors.toList()), readerSchema, readBlocksLazily, reverseReader, bufferSize);
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
         log.info("Scanning log file " + logFile);

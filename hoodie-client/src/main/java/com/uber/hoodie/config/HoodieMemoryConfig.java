@@ -45,6 +45,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   public static final String MAX_MEMORY_FOR_MERGE_PROP = "hoodie.memory.merge.max.size";
   // Property to set the max memory for compaction
   public static final String MAX_MEMORY_FOR_COMPACTION_PROP = "hoodie.memory.compaction.max.size";
+  // Property to set the max memory for dfs inputstream buffer size
+  public static final String MAX_DFS_STREAM_BUFFER_SIZE_PROP = "hoodie.memory.dfs.buffer.max.size";
+  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
 
 
   private HoodieMemoryConfig(Properties props) {
@@ -83,6 +86,12 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
     public Builder withMaxMemoryFractionPerCompaction(long maxMemoryFractionPerCompaction) {
       props.setProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP,
           String.valueOf(maxMemoryFractionPerCompaction));
+      return this;
+    }
+
+    public Builder withMaxDFSStreamBufferSize(int maxStreamBufferSize) {
+      props.setProperty(MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+          String.valueOf(maxStreamBufferSize));
       return this;
     }
 
@@ -143,6 +152,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
           !props.containsKey(MAX_MEMORY_FOR_COMPACTION_PROP),
           MAX_MEMORY_FOR_COMPACTION_PROP, String.valueOf(
               getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP))));
+      setDefaultOnCondition(props,
+          !props.containsKey(MAX_DFS_STREAM_BUFFER_SIZE_PROP),
+          MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
       return config;
     }
   }

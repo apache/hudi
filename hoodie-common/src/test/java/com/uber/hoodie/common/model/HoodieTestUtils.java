@@ -122,12 +122,19 @@ public class HoodieTestUtils {
     }
   }
 
-  public static final void createInflightCleanFiles(String basePath, String... commitTimes) throws IOException {
+  public static final void createInflightCleanFiles(String basePath, Configuration configuration, String... commitTimes)
+      throws IOException {
     for (String commitTime : commitTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
+      Path commitFile = new Path((basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
           .makeInflightCleanerFileName(
-              commitTime)).createNewFile();
+              commitTime)));
+      FileSystem fs = FSUtils.getFs(basePath, configuration);
+      FSDataOutputStream os = fs.create(commitFile, true);
     }
+  }
+
+  public static final void createInflightCleanFiles(String basePath, String... commitTimes) throws IOException {
+    createInflightCleanFiles(basePath, HoodieTestUtils.getDefaultHadoopConf(), commitTimes);
   }
 
   public static final String createNewDataFile(String basePath, String partitionPath, String commitTime)
@@ -214,10 +221,11 @@ public class HoodieTestUtils {
     return instant + TEST_EXTENSION + HoodieTimeline.INFLIGHT_EXTENSION;
   }
 
-  public static void createCleanFiles(String basePath, String commitTime) throws IOException {
+  public static void createCleanFiles(String basePath, String commitTime, Configuration configuration)
+      throws IOException {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
-    FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(commitFile, true);
     try {
       HoodieCleanStat cleanStats = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
@@ -231,6 +239,10 @@ public class HoodieTestUtils {
     } finally {
       os.close();
     }
+  }
+
+  public static void createCleanFiles(String basePath, String commitTime) throws IOException {
+    createCleanFiles(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
   }
 
   public static String makeTestFileName(String instant) {
