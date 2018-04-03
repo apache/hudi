@@ -369,6 +369,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
             props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP));
   }
 
+  public int getMaxDFSStreamBufferSize() {
+    return Integer
+        .valueOf(
+            props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
+  }
+
   public static class Builder {
 
     private final Properties props = new Properties();
@@ -466,6 +472,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       props.putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
+      return this;
+    }
+
+    public Builder withMemoryConfig(HoodieMemoryConfig memoryConfig) {
+      props.putAll(memoryConfig.getProps());
+      isMemoryConfigSet = true;
       return this;
     }
 

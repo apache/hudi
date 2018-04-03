@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.avro.model.HoodieArchivedMetaEntry;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -29,7 +30,6 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.io.IOException;
@@ -42,23 +42,57 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 public class TestHoodieCommitArchiveLog {
 
   private String basePath;
-  private FileSystem fs;
   private Configuration hadoopConf;
+  //NOTE : Be careful in using DFS (FileSystem.class) vs LocalFs(RawLocalFileSystem.class)
+  //The implementation and gurantees of many API's differ, for example check rename(src,dst)
+  // We need to use DFS here instead of LocalFs since the FsDataInputStream.getWrappedStream() returns a
+  // FsDataInputStream instead of a InputStream and thus throws java.lang.ClassCastException:
+  // org.apache.hadoop.fs.FSDataInputStream cannot be cast to org.apache.hadoop.fs.FSInputStream
+  private static MiniDFSCluster dfsCluster;
+  private static DistributedFileSystem dfs;
+  private static HdfsTestService hdfsTestService;
+
+  @AfterClass
+  public static void cleanUp() throws Exception {
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+      dfsCluster.shutdown();
+    }
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
+    // same JVM
+    FileSystem.closeAll();
+  }
+
+  @BeforeClass
+  public static void setUpDFS() throws IOException {
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
+    // same JVM
+    FileSystem.closeAll();
+    if (hdfsTestService == null) {
+      hdfsTestService = new HdfsTestService();
+      dfsCluster = hdfsTestService.start(true);
+      // Create a temp folder as the base path
+      dfs = dfsCluster.getFileSystem();
+    }
+  }
 
   @Before
   public void init() throws Exception {
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = FSUtils.getFs(basePath, hadoopConf);
+    hadoopConf = dfs.getConf();
     HoodieTestUtils.init(hadoopConf, basePath);
   }
 
@@ -68,7 +102,7 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").build();
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg,
-        new HoodieTableMetaClient(fs.getConf(), cfg.getBasePath(), true));
+        new HoodieTableMetaClient(dfs.getConf(), cfg.getBasePath(), true));
     boolean result = archiveLog.archiveIfRequired();
     assertTrue(result);
   }
@@ -81,26 +115,26 @@ public class TestHoodieCommitArchiveLog {
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
     HoodieTestUtils.init(hadoopConf, basePath);
-    HoodieTestDataGenerator.createCommitFile(basePath, "100");
-    HoodieTestDataGenerator.createCommitFile(basePath, "101");
-    HoodieTestDataGenerator.createCommitFile(basePath, "102");
-    HoodieTestDataGenerator.createCommitFile(basePath, "103");
-    HoodieTestDataGenerator.createCommitFile(basePath, "104");
-    HoodieTestDataGenerator.createCommitFile(basePath, "105");
+    HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "101", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "103", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "104", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "105", dfs.getConf());
 
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
 
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
-    HoodieTestUtils.createCleanFiles(basePath, "100");
-    HoodieTestUtils.createInflightCleanFiles(basePath, "101");
-    HoodieTestUtils.createCleanFiles(basePath, "101");
-    HoodieTestUtils.createCleanFiles(basePath, "102");
-    HoodieTestUtils.createCleanFiles(basePath, "103");
-    HoodieTestUtils.createCleanFiles(basePath, "104");
-    HoodieTestUtils.createCleanFiles(basePath, "105");
-    HoodieTestUtils.createInflightCleanFiles(basePath, "106", "107");
+    HoodieTestUtils.createCleanFiles(basePath, "100", dfs.getConf());
+    HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "101");
+    HoodieTestUtils.createCleanFiles(basePath, "101", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(basePath, "102", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(basePath, "103", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(basePath, "104", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(basePath, "105", dfs.getConf());
+    HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "106", "107");
 
     //reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
@@ -112,7 +146,7 @@ public class TestHoodieCommitArchiveLog {
     verifyInflightInstants(metaClient, 3);
 
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg,
-        new HoodieTableMetaClient(fs.getConf(), basePath, true));
+        new HoodieTableMetaClient(dfs.getConf(), basePath, true));
 
     assertTrue(archiveLog.archiveIfRequired());
 
@@ -121,7 +155,7 @@ public class TestHoodieCommitArchiveLog {
     originalCommits.removeAll(timeline.getInstants().collect(Collectors.toList()));
 
     //read the file
-    HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(fs,
+    HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(dfs,
         new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
         HoodieArchivedMetaEntry.getClassSchema());
 
@@ -156,12 +190,12 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
-    HoodieTestDataGenerator.createCommitFile(basePath, "100");
-    HoodieTestDataGenerator.createCommitFile(basePath, "101");
-    HoodieTestDataGenerator.createCommitFile(basePath, "102");
-    HoodieTestDataGenerator.createCommitFile(basePath, "103");
+    HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "101", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "103", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 4 commits and the count should match", 4, timeline.countInstants());
@@ -177,14 +211,14 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
-    HoodieTestDataGenerator.createCommitFile(basePath, "100");
-    HoodieTestDataGenerator.createCommitFile(basePath, "101");
-    HoodieTestDataGenerator.createCommitFile(basePath, "102");
-    HoodieTestDataGenerator.createCommitFile(basePath, "103");
-    HoodieTestDataGenerator.createCommitFile(basePath, "104");
-    HoodieTestDataGenerator.createCommitFile(basePath, "105");
+    HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "101", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "103", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "104", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "105", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
@@ -203,15 +237,15 @@ public class TestHoodieCommitArchiveLog {
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
             HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
-    HoodieTestDataGenerator.createCommitFile(basePath, "100");
-    HoodieTestDataGenerator.createCommitFile(basePath, "101");
-    HoodieTestDataGenerator.createSavepointFile(basePath, "101");
-    HoodieTestDataGenerator.createCommitFile(basePath, "102");
-    HoodieTestDataGenerator.createCommitFile(basePath, "103");
-    HoodieTestDataGenerator.createCommitFile(basePath, "104");
-    HoodieTestDataGenerator.createCommitFile(basePath, "105");
+    HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "101", dfs.getConf());
+    HoodieTestDataGenerator.createSavepointFile(basePath, "101", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "102", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "103", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "104", dfs.getConf());
+    HoodieTestDataGenerator.createCommitFile(basePath, "105", dfs.getConf());
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());

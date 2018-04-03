@@ -38,6 +38,7 @@ import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -116,9 +117,14 @@ public class HoodieTestDataGenerator {
   }
 
   public static void createCommitFile(String basePath, String commitTime) throws IOException {
+    createCommitFile(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
+  }
+
+  public static void createCommitFile(String basePath, String commitTime, Configuration configuration)
+      throws IOException {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime));
-    FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     try {
@@ -130,9 +136,14 @@ public class HoodieTestDataGenerator {
   }
 
   public static void createSavepointFile(String basePath, String commitTime) throws IOException {
+    createSavepointFile(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
+  }
+
+  public static void createSavepointFile(String basePath, String commitTime, Configuration configuration)
+      throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
         + "/" + HoodieTimeline.makeSavePointFileName(commitTime));
-    FileSystem fs = FSUtils.getFs(basePath, HoodieTestUtils.getDefaultHadoopConf());
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     try {

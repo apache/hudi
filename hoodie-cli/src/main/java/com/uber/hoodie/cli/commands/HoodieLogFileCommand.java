@@ -92,6 +92,9 @@ public class HoodieLogFileCommand implements CommandMarker {
         if (n instanceof HoodieCorruptBlock) {
           try {
             instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
+            if (instantTime == null) {
+              throw new Exception("Invalid instant time " + instantTime);
+            }
           } catch (Exception e) {
             numCorruptBlocks++;
             instantTime = "corrupt_block_" + numCorruptBlocks;
@@ -172,7 +175,8 @@ public class HoodieLogFileCommand implements CommandMarker {
               .getTimestamp(),
           Long.valueOf(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES),
           Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
-          Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED));
+          Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
+          Integer.valueOf(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Optional<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
         if (allRecords.size() >= limit) {
