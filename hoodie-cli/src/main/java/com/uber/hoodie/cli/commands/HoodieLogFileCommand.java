@@ -20,6 +20,7 @@ import com.beust.jcommander.internal.Maps;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.HoodiePrintHelper;
+import com.uber.hoodie.cli.TableHeader;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -36,6 +37,7 @@ import com.uber.hoodie.hive.util.SchemaUtil;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,8 +67,12 @@ public class HoodieLogFileCommand implements CommandMarker {
   @CliCommand(value = "show logfile metadata", help = "Read commit metadata from log files")
   public String showLogFileCommits(
       @CliOption(key = "logFilePathPattern", mandatory = true, help = "Fully qualified path for the log file") final
-      String logFilePathPattern)
-      throws IOException {
+      String logFilePathPattern,
+      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
+      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
+      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
+      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false")
+      final boolean headerOnly) throws IOException {
 
     FileSystem fs = HoodieCLI.tableMetadata.getFs();
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
@@ -120,7 +126,7 @@ public class HoodieLogFileCommand implements CommandMarker {
         }
       }
     }
-    String[][] rows = new String[totalEntries + 1][];
+    List<Comparable[]> rows = new ArrayList<>();
     int i = 0;
     ObjectMapper objectMapper = new ObjectMapper();
     for (Map.Entry<String, List<Tuple3<HoodieLogBlockType,
@@ -129,19 +135,25 @@ public class HoodieLogFileCommand implements CommandMarker {
       String instantTime = entry.getKey().toString();
       for (Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>,
           Map<HeaderMetadataType, String>>, Integer> tuple3 : entry.getValue()) {
-        String[] output = new String[5];
+        Comparable[] output = new Comparable[5];
         output[0] = instantTime;
-        output[1] = String.valueOf(tuple3._3());
+        output[1] = tuple3._3();
         output[2] = tuple3._1().toString();
         output[3] = objectMapper.writeValueAsString(tuple3._2()._1());
         output[4] = objectMapper.writeValueAsString(tuple3._2()._2());
-        rows[i] = output;
+        rows.add(output);
         i++;
       }
     }
-    return HoodiePrintHelper
-        .print(new String[] {"InstantTime", "RecordCount", "BlockType", "HeaderMetadata", "FooterMetadata"},
-            rows);
+
+    TableHeader header = new TableHeader()
+        .addTableHeaderField("InstantTime")
+        .addTableHeaderField("RecordCount")
+        .addTableHeaderField("BlockType")
+        .addTableHeaderField("HeaderMetadata")
+        .addTableHeaderField("FooterMetadata");
+
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
   @CliCommand(value = "show logfile records", help = "Read records from log files")

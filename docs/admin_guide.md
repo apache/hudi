@@ -79,9 +79,9 @@ To view some basic information about the last 10 commits,
 
 
 ```
-hoodie:trips->commits show
+hoodie:trips->commits show --sortBy "Total Bytes Written" --desc true --limit 10
     ________________________________________________________________________________________________________________________________________________________________________
-    | CommitTime    | Total Written (B)| Total Files Added| Total Files Updated| Total Partitions Written| Total Records Written| Total Update Records Written| Total Errors|
+    | CommitTime    | Total Bytes Written| Total Files Added| Total Files Updated| Total Partitions Written| Total Records Written| Total Update Records Written| Total Errors|
     |=======================================================================================================================================================================|
     ....
     ....
@@ -105,7 +105,7 @@ To understand how the writes spread across specific partiions,
 
 
 ```
-hoodie:trips->commit showpartitions --commit 20161005165855
+hoodie:trips->commit showpartitions --commit 20161005165855 --sortBy "Total Bytes Written" --desc true --limit 10
     __________________________________________________________________________________________________________________________________________
     | Partition Path| Total Files Added| Total Files Updated| Total Records Inserted| Total Records Updated| Total Bytes Written| Total Errors|
     |=========================================================================================================================================|
@@ -117,7 +117,7 @@ If you need file level granularity , we can do the following
 
 
 ```
-hoodie:trips->commit showfiles --commit 20161005165855
+hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
     ________________________________________________________________________________________________________________________________________________________
     | Partition Path| File ID                             | Previous Commit| Total Records Updated| Total Records Written| Total Bytes Written| Total Errors|
     |=======================================================================================================================================================|
@@ -131,7 +131,7 @@ Since Hoodie directly manages file sizes for HDFS dataset, it might be good to g
 
 
 ```
-hoodie:trips->stats filesizes --partitionPath 2016/09/01
+hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc true --limit 10
     ________________________________________________________________________________________________
     | CommitTime    | Min     | 10th    | 50th    | avg     | 95th    | Max     | NumFiles| StdDev  |
     |===============================================================================================|
