@@ -35,8 +35,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -71,7 +73,7 @@ public class HoodieRealtimeRecordReaderTest {
   @Before
   public void setUp() {
     jobConf = new JobConf();
-    jobConf.set(HoodieRealtimeRecordReader.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1 * 1024 * 1024));
+    jobConf.set(AbstractRealtimeRecordReader.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1 * 1024 * 1024));
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath.getRoot().getAbsolutePath(), hadoopConf);
   }
@@ -82,12 +84,18 @@ public class HoodieRealtimeRecordReaderTest {
   private HoodieLogFormat.Writer writeLogFile(File partitionDir, Schema schema, String fileId,
       String baseCommit, String newCommit, int numberOfRecords)
       throws InterruptedException, IOException {
+    return writeLogFile(partitionDir, schema, fileId, baseCommit, newCommit, numberOfRecords, 0);
+  }
+
+  private HoodieLogFormat.Writer writeLogFile(File partitionDir, Schema schema, String fileId,
+      String baseCommit, String newCommit, int numberOfRecords, int offset)
+      throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
         .onParentPath(new Path(partitionDir.getPath()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
         .overBaseCommit(baseCommit).withFs(fs).build();
     List<IndexedRecord> records = new ArrayList<>();
-    for (int i = 0; i < numberOfRecords; i++) {
+    for (int i = offset; i < offset + numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
     }
     Schema writeSchema = records.get(0).getSchema();
@@ -142,8 +150,7 @@ public class HoodieRealtimeRecordReaderTest {
     jobConf.set("partition_columns", "datestr");
 
     //validate record reader compaction
-    HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf,
-        reader);
+    HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
 
     //use reader to read base Parquet File and log file, merge in flight and return latest commit
     //here all 100 records should be updated, see above
@@ -156,6 +163,90 @@ public class HoodieRealtimeRecordReaderTest {
       key = recordReader.createKey();
       value = recordReader.createValue();
     }
+  }
+
+  @Test
+  public void testUnMergedReader() throws Exception {
+    // initial commit
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+        HoodieTableType.MERGE_ON_READ);
+    String commitTime = "100";
+    final int numRecords = 1000;
+    final int firstBatchLastRecordKey = numRecords - 1;
+    final int secondBatchLastRecordKey = 2 * numRecords - 1;
+    File partitionDir = InputFormatTestUtil
+        .prepareParquetDataset(basePath, schema, 1, numRecords, commitTime);
+    InputFormatTestUtil.commit(basePath, commitTime);
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    // insert new records to log file
+    String newCommitTime = "101";
+    HoodieLogFormat.Writer writer = writeLogFile(partitionDir, schema, "fileid0", commitTime,
+        newCommitTime, numRecords, numRecords);
+    long size = writer.getCurrentSize();
+    writer.close();
+    assertTrue("block - size should be > 0", size > 0);
+
+    //create a split with baseFile (parquet file written earlier) and new log file(s)
+    String logFilePath = writer.getLogFile().getPath().toString();
+    HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + commitTime + ".parquet"), 0, 1,
+            jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
+
+    //create a RecordReader to be used by HoodieRealtimeRecordReader
+    RecordReader<Void, ArrayWritable> reader =
+        new MapredParquetInputFormat().getRecordReader(
+            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
+            jobConf, null);
+    JobConf jobConf = new JobConf();
+    List<Schema.Field> fields = schema.getFields();
+    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+    String postions = fields.stream().map(f -> String.valueOf(f.pos()))
+        .collect(Collectors.joining(","));
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+    jobConf.set("partition_columns", "datestr");
+    // Enable merge skipping.
+    jobConf.set("hoodie.realtime.merge.skip", "true");
+
+    //validate unmerged record reader
+    RealtimeUnmergedRecordReader recordReader = new RealtimeUnmergedRecordReader(split, jobConf, reader);
+
+    //use reader to read base Parquet File and log file
+    //here all records should be present. Also ensure log records are in order.
+    Void key = recordReader.createKey();
+    ArrayWritable value = recordReader.createValue();
+    int numRecordsAtCommit1 = 0;
+    int numRecordsAtCommit2 = 0;
+    Set<Integer> seenKeys = new HashSet<>();
+    Integer lastSeenKeyFromLog = firstBatchLastRecordKey;
+    while (recordReader.next(key, value)) {
+      Writable[] values = value.get();
+      String gotCommit = values[0].toString();
+      String keyStr = values[2].toString();
+      Integer gotKey = Integer.parseInt(keyStr.substring("key".length()));
+      if (gotCommit.equals(newCommitTime)) {
+        numRecordsAtCommit2++;
+        Assert.assertTrue(gotKey > firstBatchLastRecordKey);
+        Assert.assertTrue(gotKey <= secondBatchLastRecordKey);
+        Assert.assertEquals(gotKey.intValue(), lastSeenKeyFromLog + 1);
+        lastSeenKeyFromLog++;
+      } else {
+        numRecordsAtCommit1++;
+        Assert.assertTrue(gotKey >= 0);
+        Assert.assertTrue(gotKey <= firstBatchLastRecordKey);
+      }
+      // Ensure unique key
+      Assert.assertFalse(seenKeys.contains(gotKey));
+      seenKeys.add(gotKey);
+      key = recordReader.createKey();
+      value = recordReader.createValue();
+    }
+    Assert.assertEquals(numRecords, numRecordsAtCommit1);
+    Assert.assertEquals(numRecords, numRecordsAtCommit2);
+    Assert.assertEquals(2 * numRecords, seenKeys.size());
   }
 
   @Test
@@ -203,8 +294,7 @@ public class HoodieRealtimeRecordReaderTest {
     jobConf.set("partition_columns", "datestr");
 
     // validate record reader compaction
-    HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf,
-        reader);
+    HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
 
     // use reader to read base Parquet File and log file, merge in flight and return latest commit
     // here the first 50 records should be updated, see above

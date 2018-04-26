@@ -16,39 +16,35 @@
 
 package com.uber.hoodie.func;
 
+import static com.uber.hoodie.func.LazyInsertIterable.getTransformFunction;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.function.Function;
+import java.util.Optional;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
+import scala.Tuple2;
 
-public class TestBufferedIteratorExecutor {
+public class TestBoundedInMemoryExecutor {
 
   private final HoodieTestDataGenerator hoodieTestDataGenerator = new HoodieTestDataGenerator();
   private final String commitTime = HoodieActiveTimeline.createNewCommitTime();
-  private ExecutorService executorService = null;
-
-  @Before
-  public void beforeTest() {
-    this.executorService = Executors.newFixedThreadPool(1);
-  }
+  private SparkBoundedInMemoryExecutor<HoodieRecord,
+        Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer> executor = null;
 
   @After
   public void afterTest() {
-    if (this.executorService != null) {
-      this.executorService.shutdownNow();
-      this.executorService = null;
+    if (this.executor != null) {
+      this.executor.shutdownNow();
+      this.executor = null;
     }
   }
 
@@ -59,21 +55,32 @@ public class TestBufferedIteratorExecutor {
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
-    BufferedIteratorExecutor bufferedIteratorExecutor = new BufferedIteratorExecutor(hoodieWriteConfig,
-        hoodieRecords.iterator(), LazyInsertIterable.bufferedItrPayloadTransform(HoodieTestDataGenerator.avroSchema),
-        executorService);
-    Function<BufferedIterator, Integer> function = (bufferedIterator) -> {
-      Integer count = 0;
-      while (bufferedIterator.hasNext()) {
-        count++;
-        bufferedIterator.next();
-      }
-      return count;
-    };
-    Future<Integer> future = bufferedIteratorExecutor.start(function);
+    BoundedInMemoryQueueConsumer<Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer> consumer =
+        new BoundedInMemoryQueueConsumer<Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer>() {
+
+          private int count = 0;
+
+          @Override
+          protected void consumeOneRecord(Tuple2<HoodieRecord, Optional<IndexedRecord>> record) {
+            count++;
+          }
+
+          @Override
+          protected void finish() {
+          }
+
+          @Override
+          protected Integer getResult() {
+            return count;
+          }
+        };
+
+    executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig,
+        hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.avroSchema));
+    int result = executor.execute();
     // It should buffer and write 100 records
-    Assert.assertEquals((int) future.get(), 100);
+    Assert.assertEquals(result, 100);
     // There should be no remaining records in the buffer
-    Assert.assertFalse(bufferedIteratorExecutor.isRemaining());
+    Assert.assertFalse(executor.isRemaining());
   }
 }

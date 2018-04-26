@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.func;
 
+import com.uber.hoodie.common.util.queue.BoundedInMemoryQueue;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.util.Iterator;
@@ -23,7 +24,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to
- * read from a parquet file. This is used in {@link BufferedIterator}
+ * read from a parquet file. This is used in {@link BoundedInMemoryQueue}
  */
 public class ParquetReaderIterator<T> implements Iterator<T> {
 

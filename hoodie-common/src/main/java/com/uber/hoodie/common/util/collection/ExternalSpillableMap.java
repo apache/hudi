@@ -17,6 +17,7 @@
 package com.uber.hoodie.common.util.collection;
 
 import com.twitter.common.objectsize.ObjectSizeCalculator;
+import com.uber.hoodie.common.util.SizeEstimator;
 import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import java.io.IOException;
@@ -56,6 +57,10 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
   private final Converter<T> keyConverter;
   // Value converter to convert value type to bytes
   private final Converter<R> valueConverter;
+  // Size Estimator for key type
+  private final SizeEstimator<T> keySizeEstimator;
+  // Size Estimator for key types
+  private final SizeEstimator<R> valueSizeEstimator;
   // current space occupied by this map in-memory
   private Long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
@@ -64,7 +69,8 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
   private boolean shouldEstimatePayloadSize = true;
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath,
-      Converter<T> keyConverter, Converter<R> valueConverter) throws IOException {
+      Converter<T> keyConverter, Converter<R> valueConverter,
+      SizeEstimator<T> keySizeEstimator, SizeEstimator<R> valueSizeEstimator) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.diskBasedMap = new DiskBasedMap<>(baseFilePath, keyConverter, valueConverter);
     this.maxInMemorySizeInBytes = (long) Math
@@ -72,6 +78,8 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
     this.currentInMemoryMapSize = 0L;
     this.keyConverter = keyConverter;
     this.valueConverter = valueConverter;
+    this.keySizeEstimator = keySizeEstimator;
+    this.valueSizeEstimator = valueSizeEstimator;
   }
 
   /**
@@ -146,7 +154,7 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
         // At first, use the sizeEstimate of a record being inserted into the spillable map.
         // Note, the converter may over estimate the size of a record in the JVM
         this.estimatedPayloadSize =
-            keyConverter.sizeEstimate(key) + valueConverter.sizeEstimate(value);
+            keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
         log.info("Estimated Payload size => " + estimatedPayloadSize);
       } else if (shouldEstimatePayloadSize
           && inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
