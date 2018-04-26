@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.func.payload;
+package com.uber.hoodie.common.util;
 
-import org.apache.avro.generic.GenericRecord;
+import com.twitter.common.objectsize.ObjectSizeCalculator;
 
 /**
- * BufferedIteratorPayload that takes GenericRecord as input and GenericRecord as output
+ * Default implementation of size-estimator that uses Twitter's ObjectSizeCalculator
+ * @param <T>
  */
-public class GenericRecordBufferedIteratorPayload
-    extends AbstractBufferedIteratorPayload<GenericRecord, GenericRecord> {
+public class DefaultSizeEstimator<T> implements SizeEstimator<T> {
 
-  public GenericRecordBufferedIteratorPayload(GenericRecord record) {
-    super(record);
-    this.outputPayload = record;
+  @Override
+  public long sizeEstimate(T t)  {
+    return ObjectSizeCalculator.getObjectSize(t);
   }
 }

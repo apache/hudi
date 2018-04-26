@@ -14,21 +14,18 @@
  *  limitations under the License.
  */
 
-package com.uber.hoodie.common.util.collection.converter;
+package com.uber.hoodie.common.util;
 
 /**
- * A converter interface to getBytes or deserialize a payload. This is used in {@link
- * com.uber.hoodie.common.util.collection.ExternalSpillableMap} to spillToDisk
+ * An interface to estimate the size of payload in memory
+ * @param <T>
  */
-public interface Converter<T> {
+public interface SizeEstimator<T> {
 
   /**
-   * This method is used to convert a payload to bytes
+   * This method is used to estimate the size of a payload in memory.
+   * The default implementation returns the total allocated size, in bytes, of the object
+   * and all other objects reachable from it
    */
-  byte[] getBytes(T t);
-
-  /**
-   * This method is used to convert the serialized payload (in bytes) to the actual payload instance
-   */
-  T getData(byte[] bytes);
+  long sizeEstimate(T t);
 }

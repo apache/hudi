@@ -73,12 +73,11 @@ import org.junit.runners.Parameterized;
 @RunWith(Parameterized.class)
 public class HoodieLogFormatTest {
 
+  private static final String BASE_OUTPUT_PATH = "/tmp/";
+  private static String basePath;
   private FileSystem fs;
   private Path partitionPath;
-  private static String basePath;
   private int bufferSize = 4096;
-  private static final String BASE_OUTPUT_PATH = "/tmp/";
-
   private Boolean readBlocksLazily = true;
 
   public HoodieLogFormatTest(Boolean readBlocksLazily) {
@@ -87,7 +86,7 @@ public class HoodieLogFormatTest {
 
   @Parameterized.Parameters(name = "LogBlockReadMode")
   public static Collection<Boolean[]> data() {
-    return Arrays.asList(new Boolean[][] {{true}, {false}});
+    return Arrays.asList(new Boolean[][]{{true}, {false}});
   }
 
   @BeforeClass
@@ -400,7 +399,7 @@ public class HoodieLogFormatTest {
     writer.close();
 
     // scan all log blocks (across multiple log files)
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath,
         logFiles.stream().map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()), schema, "100",
         10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
 
@@ -527,7 +526,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -587,7 +586,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "102", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We read 200 records from 2 write batches", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -665,7 +664,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "103", 10240L, true, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 200 records", 200, scanner.getTotalLogRecords());
     Set<String> readKeys = new HashSet<>(200);
@@ -719,7 +718,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "102", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We still would read 200 records", 200, scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(200);
@@ -739,8 +738,8 @@ public class HoodieLogFormatTest {
     writer = writer.appendBlock(commandBlock);
 
     readKeys.clear();
-    scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema, "101", 10240L, readBlocksLazily,
-        false, bufferSize, BASE_OUTPUT_PATH);
+    scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema, "101",
+        10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals("Stream collect should return all 200 records after rollback of delete", 200, readKeys.size());
   }
@@ -800,7 +799,7 @@ public class HoodieLogFormatTest {
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
     // all data must be rolled back before merge
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would have scanned 0 records because of rollback", 0, scanner.getTotalLogRecords());
 
@@ -849,7 +848,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
@@ -881,7 +880,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "100", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We still would read 100 records", 100, scanner.getTotalLogRecords());
     final List<String> readKeys = new ArrayList<>(100);
@@ -931,7 +930,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "101", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
@@ -1019,7 +1018,7 @@ public class HoodieLogFormatTest {
     List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION,
         "100").map(s -> s.getPath().toString()).collect(Collectors.toList());
 
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs, basePath, allLogFiles, schema,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, basePath, allLogFiles, schema,
         "101", 10240L, readBlocksLazily, false, bufferSize, BASE_OUTPUT_PATH);
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }

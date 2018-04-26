@@ -24,8 +24,8 @@ import com.uber.hoodie.cli.TableHeader;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
+import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCorruptBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
@@ -187,7 +187,7 @@ public class HoodieLogFileCommand implements CommandMarker {
 
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
-      HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
+      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs,
           HoodieCLI.tableMetadata.getBasePath(), logFilePaths, readerSchema,
           HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get()
               .getTimestamp(),

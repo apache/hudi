@@ -25,7 +25,9 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
@@ -66,7 +68,8 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -88,7 +91,8 @@ public class TestExternalSpillableMap {
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -126,7 +130,8 @@ public class TestExternalSpillableMap {
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
@@ -181,7 +186,8 @@ public class TestExternalSpillableMap {
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, FAILURE_OUTPUT_PATH, new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -200,7 +206,8 @@ public class TestExternalSpillableMap {
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
@@ -253,7 +260,8 @@ public class TestExternalSpillableMap {
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk

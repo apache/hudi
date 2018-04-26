@@ -18,6 +18,7 @@ package com.uber.hoodie.common.table.log.block;
 
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.ByteArrayOutputStream;
@@ -219,7 +220,7 @@ public abstract class HoodieLogBlock {
 
   /**
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
-   * {@link com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner}
+   * {@link HoodieMergedLogRecordScanner}
    */
   public static byte[] readOrSkipContent(FSDataInputStream inputStream,
       Integer contentLength, boolean readBlockLazily) throws IOException {
