@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.common.util.collection.converter;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -32,10 +31,5 @@ public class StringConverter implements Converter<String> {
   @Override
   public String getData(byte[] bytes) {
     return new String(bytes);
-  }
-
-  @Override
-  public long sizeEstimate(String s) {
-    return ObjectSizeCalculator.getObjectSize(s);
   }
 }

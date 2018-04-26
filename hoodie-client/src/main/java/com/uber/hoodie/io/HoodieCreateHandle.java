@@ -90,15 +90,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Optional<IndexedRecord> insertValue,
-      Optional<Exception> getInsertValueException) {
+  public void write(HoodieRecord record, Optional<IndexedRecord> avroRecord) {
     Optional recordMetadata = record.getData().getMetadata();
     try {
-      // throws exception if there was any exception while fetching insert value
-      if (getInsertValueException.isPresent()) {
-        throw getInsertValueException.get();
-      }
-      Optional<IndexedRecord> avroRecord = insertValue;
       if (avroRecord.isPresent()) {
         storageWriter.writeAvroWithMetadata(avroRecord.get(), record);
         // update the new location of record, so we know where to find it next

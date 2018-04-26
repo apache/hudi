@@ -28,7 +28,7 @@ import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
-import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
+import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -115,7 +115,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     log.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());
-    HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs,
         metaClient.getBasePath(), operation.getDeltaFilePaths(), readerSchema, maxInstantTime,
         config.getMaxMemoryPerCompaction(), config.getCompactionLazyBlockReadEnabled(),
         config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
@@ -131,7 +131,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream)
         .map(s -> {
-          s.getStat().setTotalUpdatedRecordsCompacted(scanner.getTotalRecordsToUpdate());
+          s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
           s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
           s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
           s.getStat().setPartitionPath(operation.getPartitionPath());

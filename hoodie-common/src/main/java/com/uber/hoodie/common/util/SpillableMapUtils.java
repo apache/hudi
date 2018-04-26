@@ -20,7 +20,6 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.collection.DiskBasedMap;
-import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import com.uber.hoodie.exception.HoodieCorruptedDataException;
 import java.io.IOException;
@@ -99,8 +98,8 @@ public class SpillableMapUtils {
    * Compute a bytes representation of the payload by serializing the contents This is used to estimate the size of the
    * payload (either in memory or when written to disk)
    */
-  public static <R> long computePayloadSize(R value, Converter<R> valueConverter) throws IOException {
-    return valueConverter.sizeEstimate(value);
+  public static <R> long computePayloadSize(R value, SizeEstimator<R> valueSizeEstimator) throws IOException {
+    return valueSizeEstimator.sizeEstimate(value);
   }
 
   /**
