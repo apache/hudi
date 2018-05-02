@@ -30,7 +30,6 @@ import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
 import com.uber.hoodie.common.util.collection.converter.StringConverter;
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
@@ -180,12 +179,6 @@ public class TestExternalSpillableMap {
     while (itr.hasNext()) {
       throw new IOException("Testing failures...");
     }
-  }
-
-  @Test
-  public void simpleTestWithExceptionValidateFileIsRemoved() throws Exception {
-    File file = new File(FAILURE_OUTPUT_PATH);
-    assertFalse(file.exists());
   }
 
   @Test

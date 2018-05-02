@@ -46,6 +46,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final Integer bufferSize;
   private final Short replication;
   private FSDataOutputStream output;
+  private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
   /**
    * @param fs
@@ -69,6 +70,18 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       try {
         this.output = fs.append(path, bufferSize);
       } catch (RemoteException e) {
+        if (e.getMessage().contains(APPEND_UNAVAILABLE_EXCEPTION_MESSAGE)) {
+          // This issue happens when all replicas for a file are down and/or being decommissioned.
+          // The fs.append() API could append to the last block for a file. If the last block is full, a new block is
+          // appended to. In a scenario when a lot of DN's are decommissioned, it can happen that DN's holding all
+          // replicas for a block/file are decommissioned together. During this process, all these blocks will start to
+          // get replicated to other active DataNodes but this process might take time (can be of the order of few
+          // hours). During this time, if a fs.append() API is invoked for a file whose last block is eligible to be
+          // appended to, then the NN will throw an exception saying that it couldn't find any active replica with the
+          // last block. Find more information here : https://issues.apache.org/jira/browse/HDFS-6325
+          log.warn("Failed to open an append stream to the log file. Opening a new log file..", e);
+          createNewFile();
+        }
         // this happens when either another task executor writing to this file died or
         // data node is going down
         if (e.getClassName().equals(AlreadyBeingCreatedException.class.getName())
@@ -86,9 +99,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       } catch (IOException ioe) {
         if (ioe.getMessage().equalsIgnoreCase("Not supported")) {
           log.info("Append not supported. Opening a new log file..");
-          this.logFile = logFile.rollOver(fs);
-          this.output = fs.create(this.logFile.getPath(), false, bufferSize, replication,
-              WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
+          createNewFile();
         } else {
           throw ioe;
         }
@@ -190,6 +201,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       return new HoodieLogFormatWriter(fs, newLogFile, bufferSize, replication, sizeThreshold);
     }
     return this;
+  }
+
+  private void createNewFile() throws IOException {
+    this.logFile = logFile.rollOver(fs);
+    this.output = fs.create(this.logFile.getPath(), false, bufferSize, replication,
+        WriterBuilder.DEFAULT_SIZE_THRESHOLD, null);
   }
 
   @Override
