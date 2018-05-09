@@ -19,77 +19,66 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
 /**
- * A set of data/base files + set of log files, that make up an unit for all operations
+ * A set of data/base files + set of log files with the same "file-id", that make up an unit for all operations.
+ *
+ * A file-group is identified by an unique file-Id within a partition. It has one or more file-slices.
+ *
+ * 3. Exactly one file-slice for a file-group provides the latest snapshot view (A view which is capable of providing
+ *    all the latest records in that file-group).
+ * 4. A file-group can have at-most one pending compaction.
+ * 5. The latest file-slice in a file-group will include all of
+ *    (a) the data-file corresponding to the last committed instant before a compaction request instant (if present)
+ *    (b) the set of log-files due to delta-instants after the instant (a) but before compaction request instant
+ *    (c) the set of log-files written after compaction request instant
  */
 public class HoodieFileGroup implements Serializable {
-
-  public static Comparator<String> getReverseCommitTimeComparator() {
-    return (o1, o2) -> {
-      // reverse the order
-      return o2.compareTo(o1);
-    };
-  }
 
   /**
    * Partition containing the file group.
    */
   private final String partitionPath;
-
   /**
    * uniquely identifies the file group
    */
   private final String id;
-
   /**
    * Slices of files in this group, sorted with greater commit first.
    */
-  private final TreeMap<String, FileSlice> fileSlices;
-
+  private final NavigableMap<String, FileSlice> fileSlices;
   /**
    * Timeline, based on which all getter work
    */
   private final HoodieTimeline timeline;
 
-  /**
-   * The last completed instant, that acts as a high watermark for all getters
-   */
-  private final Optional<HoodieInstant> lastInstant;
-
-  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
+  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline,
+      Map<String, FileSlice> fileSliceMap) {
     this.partitionPath = partitionPath;
     this.id = id;
-    this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
+    TreeMap<String, FileSlice> sortedFileSliceMap = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
+    sortedFileSliceMap.putAll(fileSliceMap);
+    this.fileSlices = Collections.unmodifiableNavigableMap(sortedFileSliceMap);
     this.timeline = timeline;
-    this.lastInstant = timeline.lastInstant();
   }
 
-  /**
-   * Add a new datafile into the file group
-   */
-  public void addDataFile(HoodieDataFile dataFile) {
-    if (!fileSlices.containsKey(dataFile.getCommitTime())) {
-      fileSlices.put(dataFile.getCommitTime(), new FileSlice(dataFile.getCommitTime(), id));
-    }
-    fileSlices.get(dataFile.getCommitTime()).setDataFile(dataFile);
+  public static Comparator<String> getReverseCommitTimeComparator() {
+    return getCommitTimeComparator().reversed();
   }
 
-  /**
-   * Add a new log file into the group
-   */
-  public void addLogFile(HoodieLogFile logFile) {
-    if (!fileSlices.containsKey(logFile.getBaseCommitTime())) {
-      fileSlices.put(logFile.getBaseCommitTime(), new FileSlice(logFile.getBaseCommitTime(), id));
-    }
-    fileSlices.get(logFile.getBaseCommitTime()).addLogFile(logFile);
+  public static Comparator<String> getCommitTimeComparator() {
+    return (o1, o2) -> {
+      return o1.compareTo(o2);
+    };
   }
 
   public String getId() {
@@ -105,7 +94,7 @@ public class HoodieFileGroup implements Serializable {
    * data file - There are some log files, that are based off a commit or delta commit
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
-    String maxCommitTime = lastInstant.get().getTimestamp();
+    String maxCommitTime = timeline.lastInstant().get().getTimestamp();
     return timeline.containsOrBeforeTimelineStarts(slice.getBaseCommitTime())
         && HoodieTimeline.compareTimestamps(slice.getBaseCommitTime(),
         maxCommitTime,
@@ -126,11 +115,34 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Gets the latest slice - this can contain either
+   * Provides a stream of all file slices (both committed/uncommitted), sorted reverse base commit time.
+   */
+  public Stream<FileSlice> getAllRawFileSlices() {
+    if (!timeline.empty()) {
+      return fileSlices.entrySet().stream()
+          .map(sliceEntry -> sliceEntry.getValue());
+    }
+    return Stream.empty();
+  }
+
+  /**
+   * Gets the latest committed slice - this can contain either
    * <p>
    * - just the log files without data file - (or) data file with 0 or more log files
    */
   public Optional<FileSlice> getLatestFileSlice() {
+    // there should always be one
+    return getAllFileSlices().findFirst();
+  }
+
+  /**
+   * Gets the latest slice - this can contain either
+   * <p>
+   * - just the log files without data file - (or) data file with 0 or more log files
+   *  This can return a file-slice which need not be committed.
+   * </p>
+   */
+  public Optional<FileSlice> getLatestRawFileSlice() {
     // there should always be one
     return getAllFileSlices().findFirst();
   }
