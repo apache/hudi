@@ -95,6 +95,16 @@ public class TestHoodieBloomIndex {
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
   }
 
+  @After
+  public void clean() {
+    if (basePath != null) {
+      new File(basePath).delete();
+    }
+    if (jsc != null) {
+      jsc.stop();
+    }
+  }
+
   @Test
   public void testLoadUUIDsInMemory() throws IOException {
     // Create one RDD of hoodie record
@@ -135,7 +145,7 @@ public class TestHoodieBloomIndex {
   @Test
   public void testLoadInvolvedFiles() throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieBloomIndex index = new HoodieBloomIndex(config, jsc);
+    HoodieBloomIndex index = new HoodieBloomIndex(config);
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
@@ -171,8 +181,8 @@ public class TestHoodieBloomIndex {
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, table);
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
     // Still 0, as no valid commit
     assertEquals(filesList.size(), 0);
 
@@ -181,7 +191,8 @@ public class TestHoodieBloomIndex {
     new File(basePath + "/.hoodie/20160401010101.commit").createNewFile();
     new File(basePath + "/.hoodie/20150312101010.commit").createNewFile();
 
-    filesList = index.loadInvolvedFiles(partitions, table);
+    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    filesList = index.loadInvolvedFiles(partitions, jsc, table);
     assertEquals(filesList.size(), 4);
     // these files will not have the key ranges
     assertNull(filesList.get(0)._2().getMaxRecordKey());
@@ -205,7 +216,7 @@ public class TestHoodieBloomIndex {
   public void testRangePruning() {
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieBloomIndex index = new HoodieBloomIndex(config, jsc);
+    HoodieBloomIndex index = new HoodieBloomIndex(config);
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
@@ -290,13 +301,13 @@ public class TestHoodieBloomIndex {
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, jsc);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
 
     try {
-      bloomIndex.tagLocation(recordRDD, table);
+      bloomIndex.tagLocation(recordRDD, jsc, table);
     } catch (IllegalArgumentException e) {
       fail("EmptyRDD should not result in IllegalArgumentException: Positive number of slices " + "required");
     }
@@ -332,11 +343,11 @@ public class TestHoodieBloomIndex {
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, jsc);
-    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, table);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
+    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
     // Should not find any files
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -350,9 +361,9 @@ public class TestHoodieBloomIndex {
 
     // We do the tag again
     metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metadata, config);
+    table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
-    taggedRecordRDD = bloomIndex.tagLocation(recordRDD, table);
+    taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -397,11 +408,11 @@ public class TestHoodieBloomIndex {
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, jsc);
-    JavaPairRDD<HoodieKey, Optional<String>> taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, table);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
+    JavaPairRDD<HoodieKey, Optional<String>> taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, jsc, table);
 
     // Should not find any files
     for (Tuple2<HoodieKey, Optional<String>> record : taggedRecordRDD.collect()) {
@@ -415,8 +426,8 @@ public class TestHoodieBloomIndex {
 
     // We do the tag again
     metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metadata, config);
-    taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, table);
+    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, jsc, table);
 
     // Check results
     for (Tuple2<HoodieKey, Optional<String>> record : taggedRecordRDD.collect()) {
@@ -465,10 +476,10 @@ public class TestHoodieBloomIndex {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, jsc);
-    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, table);
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
+    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
     // Check results
     for (HoodieRecord record : taggedRecordRDD.collect()) {
@@ -524,15 +535,5 @@ public class TestHoodieBloomIndex {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + ".commit").createNewFile();
     }
     return filename;
-  }
-
-  @After
-  public void clean() {
-    if (jsc != null) {
-      jsc.stop();
-    }
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
   }
 }

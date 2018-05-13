@@ -30,18 +30,17 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 public class HoodieStorageWriterFactory {
 
-  public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R>
-      getStorageWriter(String commitTime, Path path, HoodieTable<T> hoodieTable,
+  public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
+      String commitTime, Path path, HoodieTable<T> hoodieTable,
       HoodieWriteConfig config, Schema schema) throws IOException {
     //TODO - based on the metadata choose the implementation of HoodieStorageWriter
     // Currently only parquet is supported
     return newParquetStorageWriter(commitTime, path, config, schema, hoodieTable);
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R>
-      newParquetStorageWriter(
-      String commitTime, Path path, HoodieWriteConfig config, Schema schema,
-      HoodieTable hoodieTable) throws IOException {
+  private static <T extends HoodieRecordPayload,
+      R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(String commitTime, Path path,
+      HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable) throws IOException {
     BloomFilter filter = new BloomFilter(config.getBloomFilterNumEntries(),
         config.getBloomFilterFPP());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(

@@ -26,8 +26,7 @@ import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.common.model.HoodieTableType;
-import com.uber.hoodie.common.table.HoodieTableConfig;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -74,7 +73,6 @@ public class TestHbaseIndex {
   private static String tableName = "test_table";
   private String basePath = null;
   private transient FileSystem fs;
-  private HoodieTableMetaClient metaClient;
 
   public TestHbaseIndex() throws Exception {
   }
@@ -117,9 +115,7 @@ public class TestHbaseIndex {
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     // Initialize table
-    metaClient = HoodieTableMetaClient
-        .initTableType(utility.getConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE, tableName,
-            HoodieTableConfig.DEFAULT_PAYLOAD_CLASS);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
   }
 
   @Test
@@ -132,13 +128,14 @@ public class TestHbaseIndex {
 
     // Load to memory
     HoodieWriteConfig config = getConfig();
-    HBaseIndex index = new HBaseIndex(config, jsc);
+    HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
     writeClient.startCommit();
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Test tagLocation without any entries in index
-    JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
 
     // Insert 200 records
@@ -147,14 +144,15 @@ public class TestHbaseIndex {
 
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a failed
     // commit
-    javaRDD = index.tagLocation(writeRecords, hoodieTable);
+    javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
 
     // Now commit this & update location of records inserted and validate no errors
     writeClient.commit(newCommitTime, writeStatues);
-
     // Now tagLocation for these records, hbaseIndex should tag them correctly
-    javaRDD = index.tagLocation(writeRecords, hoodieTable);
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 200);
     assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 200);
     assertTrue(javaRDD.filter(
@@ -169,14 +167,14 @@ public class TestHbaseIndex {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // Load to memory
     HoodieWriteConfig config = getConfig();
-    HBaseIndex index = new HBaseIndex(config, jsc);
+    HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
 
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Insert 200 records
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
@@ -184,9 +182,9 @@ public class TestHbaseIndex {
 
     // commit this upsert
     writeClient.commit(newCommitTime, writeStatues);
-
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
     // Now tagLocation for these records, hbaseIndex should tag them
-    JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, hoodieTable);
+    JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 200);
 
     // check tagged records are tagged with correct fileIds
@@ -199,9 +197,10 @@ public class TestHbaseIndex {
     // Rollback the last commit
     writeClient.rollback(newCommitTime);
 
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
     // Now tagLocation for these records, hbaseIndex should not tag them since it was a rolled
     // back commit
-    javaRDD = index.tagLocation(writeRecords, hoodieTable);
+    javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
     assert (javaRDD.filter(record -> record.getCurrentLocation() != null).collect().size() == 0);
   }
@@ -211,7 +210,7 @@ public class TestHbaseIndex {
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = getConfig();
-    HBaseIndex index = new HBaseIndex(config, jsc);
+    HBaseIndex index = new HBaseIndex(config);
 
     // Mock hbaseConnection and related entities
     Connection hbaseConnection = Mockito.mock(Connection.class);
@@ -228,15 +227,15 @@ public class TestHbaseIndex {
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 250);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Insert 250 records
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
 
     // Now tagLocation for these records, hbaseIndex should tag them
-    index.tagLocation(writeRecords, hoodieTable);
+    index.tagLocation(writeRecords, jsc, hoodieTable);
 
     // 3 batches should be executed given batchSize = 100 and parallelism = 1
     Mockito.verify(table, times(3)).get((List<Get>) anyObject());
@@ -248,15 +247,15 @@ public class TestHbaseIndex {
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = getConfig();
-    HBaseIndex index = new HBaseIndex(config, jsc);
+    HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 250);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Insert 200 records
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
@@ -276,7 +275,7 @@ public class TestHbaseIndex {
     // Get all the files generated
     int numberOfDataFileIds = (int) writeStatues.map(status -> status.getFileId()).distinct().count();
 
-    index.updateLocation(writeStatues, hoodieTable);
+    index.updateLocation(writeStatues, jsc, hoodieTable);
     // 3 batches should be executed given batchSize = 100 and <=numberOfDataFileIds getting updated,
     // so each fileId ideally gets updates
     Mockito.verify(table, atMost(numberOfDataFileIds)).put((List<Put>) anyObject());

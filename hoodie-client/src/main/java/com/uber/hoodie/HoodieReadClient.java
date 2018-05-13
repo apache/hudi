@@ -94,10 +94,11 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     this.jsc = jsc;
     this.fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     // Create a Hoodie table which encapsulated the commits and files visible
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
     this.hoodieTable = HoodieTable
-        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true),
-            clientConfig);
-    this.commitTimeline = hoodieTable.getCommitTimeline().filterCompletedInstants();
+        .getHoodieTable(metaClient,
+            clientConfig, jsc);
+    this.commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
     this.sqlContextOpt = Optional.absent();
   }
@@ -128,7 +129,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
 
     assertSqlContext();
     JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD = index
-        .fetchRecordLocation(hoodieKeys, hoodieTable);
+        .fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
     List<String> paths = keyToFileRDD.filter(keyFileTuple -> keyFileTuple._2().isPresent())
         .map(keyFileTuple -> keyFileTuple._2().get()).collect();
 
@@ -156,7 +157,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * file
    */
   public JavaPairRDD<HoodieKey, Optional<String>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
-    return index.fetchRecordLocation(hoodieKeys, hoodieTable);
+    return index.fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
   }
 
   /**
@@ -180,6 +181,6 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    */
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords)
       throws HoodieIndexException {
-    return index.tagLocation(hoodieRecords, hoodieTable);
+    return index.tagLocation(hoodieRecords, jsc, hoodieTable);
   }
 }

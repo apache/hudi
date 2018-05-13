@@ -30,6 +30,7 @@ import com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 import org.junit.Test;
@@ -127,7 +128,7 @@ public class TestHoodieCompactionStrategy {
       Map<Long, List<Long>> sizesMap) {
     List<CompactionOperation> operations = Lists.newArrayList(sizesMap.size());
     sizesMap.forEach((k, v) -> {
-      operations.add(new CompactionOperation(TestHoodieDataFile.newDataFile(k),
+      operations.add(new CompactionOperation(Optional.of(TestHoodieDataFile.newDataFile(k)),
           partitionPaths[new Random().nextInt(partitionPaths.length - 1)],
           v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList()), config));
     });
