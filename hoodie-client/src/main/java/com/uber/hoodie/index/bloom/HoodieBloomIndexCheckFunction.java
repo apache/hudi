@@ -20,11 +20,11 @@ package com.uber.hoodie.index.bloom;
 
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.func.LazyIterableIterator;
-import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -48,10 +48,10 @@ public class HoodieBloomIndexCheckFunction implements
 
   private final String basePath;
 
-  private final HoodieTable table;
+  private final HoodieTableMetaClient metaClient;
 
-  public HoodieBloomIndexCheckFunction(HoodieTable table, String basePath) {
-    this.table = table;
+  public HoodieBloomIndexCheckFunction(HoodieTableMetaClient metaClient, String basePath) {
+    this.metaClient = metaClient;
     this.basePath = basePath;
   }
 
@@ -121,7 +121,7 @@ public class HoodieBloomIndexCheckFunction implements
       try {
         Path filePath = new Path(basePath + "/" + partitionPath + "/" + fileName);
         bloomFilter = ParquetUtils
-            .readBloomFilterFromParquetMetadata(table.getHadoopConf(), filePath);
+            .readBloomFilterFromParquetMetadata(metaClient.getHadoopConf(), filePath);
         candidateRecordKeys = new ArrayList<>();
         currentFile = fileName;
         currentParitionPath = partitionPath;
@@ -169,7 +169,7 @@ public class HoodieBloomIndexCheckFunction implements
                   .debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
             }
             ret.add(new IndexLookupResult(currentFile,
-                checkCandidatesAgainstFile(table.getHadoopConf(), candidateRecordKeys, filePath)));
+                checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath)));
 
             initState(fileName, partitionPath);
             if (bloomFilter.mightContain(recordKey)) {
@@ -182,7 +182,7 @@ public class HoodieBloomIndexCheckFunction implements
           }
         }
 
-        // handle case, where we ran out of input, finish pending work, update return val
+        // handle case, where we ran out of input, close pending work, update return val
         if (!inputItr.hasNext()) {
           Path filePath = new Path(basePath + "/" + currentParitionPath + "/" + currentFile);
           logger.info(
@@ -192,7 +192,7 @@ public class HoodieBloomIndexCheckFunction implements
             logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
           }
           ret.add(new IndexLookupResult(currentFile,
-              checkCandidatesAgainstFile(table.getHadoopConf(), candidateRecordKeys, filePath)));
+              checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath)));
         }
 
       } catch (Throwable e) {
