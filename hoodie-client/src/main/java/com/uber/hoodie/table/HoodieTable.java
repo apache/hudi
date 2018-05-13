@@ -31,9 +31,9 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieSavepointException;
+import com.uber.hoodie.index.HoodieIndex;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
@@ -54,19 +54,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
+  protected final HoodieIndex<T> index;
 
-  protected HoodieTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
-    this.metaClient = metaClient;
+    this.metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
+    this.index = HoodieIndex.createIndex(config, jsc);
   }
 
   public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config, JavaSparkContext jsc) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieCopyOnWriteTable<>(config, metaClient);
+        return new HoodieCopyOnWriteTable<>(config, jsc);
       case MERGE_ON_READ:
-        return new HoodieMergeOnReadTable<>(config, metaClient);
+        return new HoodieMergeOnReadTable<>(config, jsc);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
@@ -124,21 +126,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the completed (commit + compaction) view of the file system for this table
    */
   public TableFileSystemView getCompletedFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCommitsTimeline());
+    return new HoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline());
   }
 
   /**
    * Get only the completed (no-inflights) commit timeline
    */
   public HoodieTimeline getCompletedCommitTimeline() {
-    return getCommitsTimeline().filterCompletedInstants();
+    return metaClient.getCommitsTimeline().filterCompletedInstants();
   }
 
   /**
    * Get only the inflights (no-completed) commit timeline
    */
   public HoodieTimeline getInflightCommitTimeline() {
-    return getCommitsTimeline().filterInflights();
+    return metaClient.getCommitsTimeline().filterInflights();
   }
 
   /**
@@ -190,49 +192,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Get the commit timeline visible for this table
+   * Return the index
    */
-  public HoodieTimeline getCommitsTimeline() {
-    switch (metaClient.getTableType()) {
-      case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
-      case MERGE_ON_READ:
-        // We need to include the parquet files written out in delta commits
-        // Include commit action to be able to start doing a MOR over a COW dataset - no
-        // migration required
-        return getActiveTimeline().getCommitsTimeline();
-      default:
-        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-    }
-  }
-
-  /**
-   * Get the compacted commit timeline visible for this table
-   */
-  public HoodieTimeline getCommitTimeline() {
-    switch (metaClient.getTableType()) {
-      case COPY_ON_WRITE:
-      case MERGE_ON_READ:
-        // We need to include the parquet files written out in delta commits in tagging
-        return getActiveTimeline().getCommitTimeline();
-      default:
-        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
-    }
-  }
-
-  /**
-   * Gets the commit action type
-   */
-  public String getCommitActionType() {
-    switch (metaClient.getTableType()) {
-      case COPY_ON_WRITE:
-        return HoodieActiveTimeline.COMMIT_ACTION;
-      case MERGE_ON_READ:
-        return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
-      default:
-        throw new HoodieCommitException(
-            "Could not commit on unknown storage type " + metaClient.getTableType());
-    }
+  public HoodieIndex<T> getIndex() {
+    return index;
   }
 
   /**

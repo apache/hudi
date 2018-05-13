@@ -213,10 +213,10 @@ public class HoodieTestDataGenerator {
 
   /**
    * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned list
+   *
    * @param commitTime Commit Timestamp
    * @param n Number of updates (including dups)
    * @return list of hoodie record updates
-   * @throws IOException
    */
   public List<HoodieRecord> generateUpdates(String commitTime, Integer n) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
@@ -230,10 +230,10 @@ public class HoodieTestDataGenerator {
 
   /**
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
+   *
    * @param commitTime Commit Timestamp
    * @param n Number of unique records
    * @return list of hoodie record updates
-   * @throws IOException
    */
   public List<HoodieRecord> generateUniqueUpdates(String commitTime, Integer n) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();

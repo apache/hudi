@@ -243,7 +243,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     }
   }
 
-  public void close() {
+  @Override
+  public WriteStatus close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
       Iterator<String> pendingRecordsItr = keyToNewRecords.keySet().iterator();
@@ -269,6 +270,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       writeStatus.getStat().setRuntimeStats(runtimeStats);
+      return writeStatus;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
@@ -283,6 +285,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     return (this.tempPath == null) ? this.newFilePath : this.tempPath;
   }
 
+  @Override
   public WriteStatus getWriteStatus() {
     return writeStatus;
   }

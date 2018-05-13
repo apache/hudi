@@ -25,13 +25,13 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieDependentSystemUnavailableException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -77,7 +77,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   @Override
   public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-      HoodieTable<T> table) {
+      JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
     //TODO : Change/Remove filterExists in HoodieReadClient() and revisit
     throw new UnsupportedOperationException("HBase index does not implement check exist");
   }
@@ -119,8 +119,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         .addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
-  private boolean checkIfValidCommit(HoodieTable<T> hoodieTable, String commitTs) {
-    HoodieTimeline commitTimeline = hoodieTable.getCompletedCommitTimeline();
+  private boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
+    HoodieTimeline commitTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
     // Check if the last commit ts for this row is 1) present in the timeline or
     // 2) is less than the first commit ts in the timeline
     return !commitTimeline.empty() && (commitTimeline
@@ -133,8 +133,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
-  private Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>
-      locationTagFunction(HoodieTable<T> hoodieTable) {
+  private Function2<Integer, Iterator<HoodieRecord<T>>,
+      Iterator<HoodieRecord<T>>> locationTagFunction(HoodieTableMetaClient metaClient) {
 
     return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>)
         (partitionNum, hoodieRecordIterator) -> {
@@ -176,7 +176,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                     String partitionPath = Bytes
                         .toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
 
-                    if (checkIfValidCommit(hoodieTable, commitTs)) {
+                    if (checkIfValidCommit(metaClient, commitTs)) {
                       currentRecord = new HoodieRecord(
                           new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                           currentRecord.getData());
@@ -211,13 +211,12 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-      HoodieTable<T> hoodieTable) {
-    return recordRDD.mapPartitionsWithIndex(locationTagFunction(hoodieTable), true);
+  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
+      HoodieTableMetaClient metaClient) {
+    return recordRDD.mapPartitionsWithIndex(locationTagFunction(metaClient), true);
   }
 
-  private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>
-      updateLocationFunction() {
+  private Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>> updateLocationFunction() {
     return (Function2<Integer, Iterator<WriteStatus>, Iterator<WriteStatus>>) (partition,
         statusIterator) -> {
       Integer multiPutBatchSize = config.getHbaseIndexPutBatchSize();
@@ -306,8 +305,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-      HoodieTable<T> hoodieTable) {
+  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
+      HoodieTableMetaClient metaClient) {
     return writeStatusRDD.mapPartitionsWithIndex(updateLocationFunction(), true);
   }
 

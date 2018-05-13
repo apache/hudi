@@ -24,10 +24,10 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -59,13 +59,14 @@ public class BucketedIndex<T extends HoodieRecordPayload> extends HoodieIndex<T>
 
   @Override
   public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-      HoodieTable<T> table) {
+      JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
     return hoodieKeys.mapToPair(hk -> new Tuple2<>(hk, Optional.of(getBucket(hk.getRecordKey()))));
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException {
+  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
+      HoodieTableMetaClient metaClient)
+      throws HoodieIndexException {
     return recordRDD.map(record -> {
       String bucket = getBucket(record.getRecordKey());
       //HACK(vc) a non-existent commit is provided here.
@@ -75,8 +76,9 @@ public class BucketedIndex<T extends HoodieRecordPayload> extends HoodieIndex<T>
   }
 
   @Override
-  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException {
+  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
+      HoodieTableMetaClient metaClient)
+      throws HoodieIndexException {
     return writeStatusRDD;
   }
 

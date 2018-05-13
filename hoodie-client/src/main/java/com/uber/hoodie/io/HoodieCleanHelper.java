@@ -38,7 +38,7 @@ import org.apache.log4j.Logger;
 
 /**
  * Cleaner is responsible for garbage collecting older files in a given partition path, such that
- * <p> 1) It provides sufficient time for existing queries running on older versions, to finish <p>
+ * <p> 1) It provides sufficient time for existing queries running on older versions, to close <p>
  * 2) It bounds the growth of the files in the file system <p> TODO: Should all cleaning be done
  * based on {@link com.uber.hoodie.common.model.HoodieCommitMetadata}
  */
