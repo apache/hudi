@@ -43,25 +43,25 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
   private static ConcurrentMap<HoodieKey, HoodieRecordLocation> recordLocationMap;
 
-  public InMemoryHashIndex(HoodieWriteConfig config, JavaSparkContext jsc) {
-    super(config, jsc);
+  public InMemoryHashIndex(HoodieWriteConfig config) {
+    super(config);
     recordLocationMap = new ConcurrentHashMap<>();
   }
 
   @Override
   public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-      final HoodieTable<T> table) {
+      JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
     throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
+  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
       HoodieTable<T> hoodieTable) {
     return recordRDD.mapPartitionsWithIndex(this.new LocationTagFunction(), true);
   }
 
   @Override
-  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
+  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
       HoodieTable<T> hoodieTable) {
     return writeStatusRDD.map(new Function<WriteStatus, WriteStatus>() {
       @Override

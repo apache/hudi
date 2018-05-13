@@ -38,24 +38,23 @@ import org.apache.spark.api.java.JavaSparkContext;
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
 
   protected final HoodieWriteConfig config;
-  protected transient JavaSparkContext jsc = null;
 
-  protected HoodieIndex(HoodieWriteConfig config, JavaSparkContext jsc) {
+  protected HoodieIndex(HoodieWriteConfig config) {
     this.config = config;
-    this.jsc = jsc;
   }
+
 
   public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
       JavaSparkContext jsc) throws HoodieIndexException {
     switch (config.getIndexType()) {
       case HBASE:
-        return new HBaseIndex<>(config, jsc);
+        return new HBaseIndex<>(config);
       case INMEMORY:
-        return new InMemoryHashIndex<>(config, jsc);
+        return new InMemoryHashIndex<>(config);
       case BLOOM:
-        return new HoodieBloomIndex<>(config, jsc);
+        return new HoodieBloomIndex<>(config);
       case BUCKETED:
-        return new BucketedIndex<>(config, jsc);
+        return new BucketedIndex<>(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -68,22 +67,23 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * file
    */
   public abstract JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
-      JavaRDD<HoodieKey> hoodieKeys, final HoodieTable<T> table);
+      JavaRDD<HoodieKey> hoodieKeys, final JavaSparkContext jsc, HoodieTable<T> hoodieTable);
 
   /**
    * Looks up the index and tags each incoming record with a location of a file that contains the
    * row (if it is actually present)
    */
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+      JavaSparkContext jsc, HoodieTable<T> hoodieTable) throws HoodieIndexException;
 
   /**
    * Extracts the location of written records, and updates the index.
    * <p>
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
-  public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-      HoodieTable<T> hoodieTable) throws HoodieIndexException;
+  public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
+      HoodieTable<T> hoodieTable)
+      throws HoodieIndexException;
 
   /**
    * Rollback the efffects of the commit made at commitTime.

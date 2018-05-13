@@ -415,7 +415,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     assertEquals("2 files needs to be committed.", 2, statuses.size());
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
     TableFileSystemView.ReadOptimizedView fileSystemView = table.getROFileSystemView();
     List<HoodieDataFile> files = fileSystemView.getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3)
         .collect(Collectors.toList());
@@ -519,7 +519,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("2 files needs to be committed.", 2, statuses.size());
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     List<HoodieDataFile> files = table.getROFileSystemView()
         .getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3)
         .collect(Collectors.toList());
@@ -544,7 +544,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
     String commitTime = "000";
     client.startCommitWithTime(commitTime);
@@ -559,9 +559,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
         HoodieTestUtils.doesCommitExist(basePath, commitTime));
 
     // Get parquet file paths from commit metadata
-    String actionType = table.getCommitActionType();
+    String actionType = metaClient.getCommitActionType();
     HoodieInstant commitInstant = new HoodieInstant(false, actionType, commitTime);
-    HoodieTimeline commitTimeline = table.getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(commitTimeline.getInstantDetails(commitInstant).get());
     String basePath = table.getMetaClient().getBasePath();

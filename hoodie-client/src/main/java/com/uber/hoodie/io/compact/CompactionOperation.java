@@ -18,11 +18,13 @@ package com.uber.hoodie.io.compact;
 
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -33,10 +35,10 @@ import java.util.stream.Collectors;
  */
 public class CompactionOperation implements Serializable {
 
-  private String dataFileCommitTime;
-  private long dataFileSize;
+  private Optional<String> dataFileCommitTime;
+  private Optional<Long> dataFileSize;
   private List<String> deltaFilePaths;
-  private String dataFilePath;
+  private Optional<String> dataFilePath;
   private String fileId;
   private String partitionPath;
   private Map<String, Object> metrics;
@@ -46,24 +48,32 @@ public class CompactionOperation implements Serializable {
   public CompactionOperation() {
   }
 
-  public CompactionOperation(HoodieDataFile dataFile, String partitionPath,
+  public CompactionOperation(Optional<HoodieDataFile> dataFile, String partitionPath,
       List<HoodieLogFile> logFiles, HoodieWriteConfig writeConfig) {
-    this.dataFilePath = dataFile.getPath();
-    this.fileId = dataFile.getFileId();
+    if (dataFile.isPresent()) {
+      this.dataFilePath = Optional.of(dataFile.get().getPath());
+      this.fileId = dataFile.get().getFileId();
+      this.dataFileCommitTime = Optional.of(dataFile.get().getCommitTime());
+      this.dataFileSize = Optional.of(dataFile.get().getFileSize());
+    } else {
+      assert logFiles.size() > 0;
+      this.dataFilePath = Optional.empty();
+      this.fileId = FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath());
+      this.dataFileCommitTime = Optional.empty();
+      this.dataFileSize = Optional.empty();
+    }
     this.partitionPath = partitionPath;
-    this.dataFileCommitTime = dataFile.getCommitTime();
-    this.dataFileSize = dataFile.getFileSize();
     this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString())
         .collect(Collectors.toList());
     this.metrics = writeConfig.getCompactionStrategy()
-        .captureMetrics(dataFile, partitionPath, logFiles);
+        .captureMetrics(writeConfig, dataFile, partitionPath, logFiles);
   }
 
-  public String getDataFileCommitTime() {
+  public Optional<String> getDataFileCommitTime() {
     return dataFileCommitTime;
   }
 
-  public long getDataFileSize() {
+  public Optional<Long> getDataFileSize() {
     return dataFileSize;
   }
 
@@ -71,7 +81,7 @@ public class CompactionOperation implements Serializable {
     return deltaFilePaths;
   }
 
-  public String getDataFilePath() {
+  public Optional<String> getDataFilePath() {
     return dataFilePath;
   }
 

@@ -16,7 +16,7 @@
 
 package com.uber.hoodie.func;
 
-import static com.uber.hoodie.func.LazyInsertIterable.getTransformFunction;
+import static com.uber.hoodie.func.CopyOnWriteLazyInsertIterable.getTransformFunction;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 

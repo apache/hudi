@@ -16,7 +16,7 @@
 
 package com.uber.hoodie.func;
 
-import static com.uber.hoodie.func.LazyInsertIterable.getTransformFunction;
+import static com.uber.hoodie.func.CopyOnWriteLazyInsertIterable.getTransformFunction;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -38,7 +38,7 @@ public class TestBoundedInMemoryExecutor {
   private final HoodieTestDataGenerator hoodieTestDataGenerator = new HoodieTestDataGenerator();
   private final String commitTime = HoodieActiveTimeline.createNewCommitTime();
   private SparkBoundedInMemoryExecutor<HoodieRecord,
-        Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer> executor = null;
+      Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer> executor = null;
 
   @After
   public void afterTest() {

@@ -19,6 +19,7 @@ package com.uber.hoodie.func;
 import static org.junit.Assert.fail;
 
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -29,11 +30,14 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -41,6 +45,7 @@ import org.junit.rules.TemporaryFolder;
 public class TestUpdateMapFunction {
 
   private String basePath = null;
+  private transient JavaSparkContext jsc = null;
 
   @Before
   public void init() throws Exception {
@@ -49,6 +54,18 @@ public class TestUpdateMapFunction {
     folder.create();
     this.basePath = folder.getRoot().getAbsolutePath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
+    // Initialize a local spark env
+    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestUpdateMapFunction"));
+  }
+
+  @After
+  public void clean() {
+    if (basePath != null) {
+      new File(basePath).delete();
+    }
+    if (jsc != null) {
+      jsc.stop();
+    }
   }
 
   @Test
@@ -56,7 +73,7 @@ public class TestUpdateMapFunction {
     // Create a bunch of records with a old version of schema
     HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(HoodieTestUtils.getDefaultHadoopConf(), basePath);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metaClient);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -82,7 +99,7 @@ public class TestUpdateMapFunction {
     String fileId = insertResult.next().get(0).getFileId();
     System.out.println(fileId);
 
-    table = new HoodieCopyOnWriteTable(config, metaClient);
+    table = new HoodieCopyOnWriteTable(config, jsc);
     // New content with values for the newly added field
     recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";

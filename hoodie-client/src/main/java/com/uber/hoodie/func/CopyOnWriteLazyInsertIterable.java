@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -43,15 +44,15 @@ import scala.Tuple2;
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new
  * files.
  */
-public class LazyInsertIterable<T extends HoodieRecordPayload> extends
+public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload> extends
     LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
-  private final HoodieWriteConfig hoodieConfig;
-  private final String commitTime;
-  private final HoodieTable<T> hoodieTable;
-  private Set<String> partitionsCleaned;
+  protected final HoodieWriteConfig hoodieConfig;
+  protected final String commitTime;
+  protected final HoodieTable<T> hoodieTable;
+  protected Set<String> partitionsCleaned;
 
-  public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
+  public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
       String commitTime, HoodieTable<T> hoodieTable) {
     super(sortedRecordItr);
     this.partitionsCleaned = new HashSet<>();
@@ -89,7 +90,7 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends
       final Schema schema = HoodieIOHandle.createHoodieWriteSchema(hoodieConfig);
       bufferedIteratorExecutor =
           new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr,
-              new InsertHandler(), getTransformFunction(schema));
+              getInsertHandler(), getTransformFunction(schema));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
       assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;
@@ -107,15 +108,19 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends
 
   }
 
+  protected CopyOnWriteInsertHandler getInsertHandler() {
+    return new CopyOnWriteInsertHandler();
+  }
+
   /**
    * Consumes stream of hoodie records from in-memory queue and
    * writes to one or more create-handles
    */
-  private class InsertHandler extends
+  protected class CopyOnWriteInsertHandler extends
       BoundedInMemoryQueueConsumer<Tuple2<HoodieRecord<T>, Optional<IndexedRecord>>, List<WriteStatus>> {
 
-    private final List<WriteStatus> statuses = new ArrayList<>();
-    private HoodieCreateHandle handle;
+    protected final List<WriteStatus> statuses = new ArrayList<>();
+    protected HoodieIOHandle handle;
 
     @Override
     protected void consumeOneRecord(Tuple2<HoodieRecord<T>, Optional<IndexedRecord>> payload) {
@@ -132,7 +137,8 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends
 
       // lazily initialize the handle, for the first time
       if (handle == null) {
-        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath());
+        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(), UUID
+            .randomUUID().toString());
       }
 
       if (handle.canWrite(payload._1())) {
@@ -142,7 +148,8 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends
         // handle is full.
         statuses.add(handle.close());
         // Need to handle the rejected payload & open new handle
-        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath());
+        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(), UUID
+            .randomUUID().toString());
         handle.write(insertPayload, payload._2()); // we should be able to write 1 payload.
       }
     }
