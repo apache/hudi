@@ -247,7 +247,8 @@ public class TestHoodieMergeHandleDuplicateRecords {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    Dataset<Row> dataSet = HoodieClientTestUtils.read(basePath, sqlContext, fs, fullPartitionPaths);
+    Dataset<Row> dataSet = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs,
+        fullPartitionPaths);
     return dataSet;
   }
 

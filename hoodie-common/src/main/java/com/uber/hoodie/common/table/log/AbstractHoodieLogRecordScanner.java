@@ -91,13 +91,12 @@ public abstract class AbstractHoodieLogRecordScanner {
   private AtomicLong totalCorruptBlocks = new AtomicLong(0);
   // Store the last instant log blocks (needed to implement rollback)
   private Deque<HoodieLogBlock> currentInstantLogBlocks = new ArrayDeque<>();
-
   // Progress
   private float progress = 0.0f;
 
-  public AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths,
-      Schema readerSchema, String latestInstantTime,
-      boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
+  // TODO (NA) - Change this to a builder, this constructor is too long
+  public AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);

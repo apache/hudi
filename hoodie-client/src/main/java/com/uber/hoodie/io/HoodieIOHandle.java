@@ -16,6 +16,8 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -26,7 +28,9 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
+import java.util.Optional;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -103,4 +107,25 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   public Schema getSchema() {
     return schema;
   }
+
+  /**
+   * Determines whether we can accept the incoming records, into the current file, depending on
+   * <p>
+   * - Whether it belongs to the same partitionPath as existing records - Whether the current file
+   * written bytes lt max file size
+   */
+  public boolean canWrite(HoodieRecord record) {
+    return false;
+  }
+
+  /**
+   * Perform the actual writing of the given record into the backing file.
+   */
+  public void write(HoodieRecord record, Optional<IndexedRecord> insertValue) {
+    // NO_OP
+  }
+
+  public abstract WriteStatus close();
+
+  public abstract WriteStatus getWriteStatus();
 }

@@ -247,6 +247,13 @@ public class FSUtils {
     return LOG_FILE_PREFIX + String.format("%s_%s%s*", fileId, commitTime, logFileExtension);
   }
 
+  public static boolean isLogFile(Path logPath) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
+    if (!matcher.find()) {
+      return false;
+    }
+    return true;
+  }
 
   /**
    * Get the latest log file written from the list of log files passed in
