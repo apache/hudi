@@ -27,11 +27,12 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
+import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
-import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
+import com.uber.hoodie.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum;
+import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
@@ -39,6 +40,7 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.exception.HoodieUpsertException;
+import com.uber.hoodie.func.MergeOnReadLazyInsertIterable;
 import com.uber.hoodie.io.HoodieAppendHandle;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import java.io.IOException;
@@ -77,8 +79,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   // UpsertPartitioner for MergeOnRead table type
   private MergeOnReadUpsertPartitioner mergeOnReadUpsertPartitioner;
 
-  public HoodieMergeOnReadTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    super(config, metaClient);
+  public HoodieMergeOnReadTable(HoodieWriteConfig config, JavaSparkContext jsc) {
+    super(config, jsc);
   }
 
   @Override
@@ -106,6 +108,17 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       appendHandle.close();
       return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus()))
           .iterator();
+    }
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleInsert(String commitTime,
+      Iterator<HoodieRecord<T>> recordItr) throws Exception {
+    // If canIndeLogFiles, write inserts to log files else write inserts to parquet files
+    if (index.canIndexLogFiles()) {
+      return new MergeOnReadLazyInsertIterable<>(recordItr, config, commitTime, this);
+    } else {
+      return super.handleInsert(commitTime, recordItr);
     }
   }
 
@@ -180,29 +193,44 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
               case HoodieTimeline.DELTA_COMMIT_ACTION:
                 try {
                   HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                      this.getCommitTimeline().getInstantDetails(
+                      metaClient.getCommitTimeline().getInstantDetails(
                           new HoodieInstant(true, instant.getAction(), instant.getTimestamp()))
                           .get());
 
                   // read commit file and (either append delete blocks or delete file)
-                  Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
+                  final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
                   Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
 
-                  // we do not know fileIds for inserts (first inserts are parquet files), delete
-                  // all parquet files for the corresponding failed commit, if present (same as COW)
-                  filesToDeletedStatus = super
-                      .deleteCleanedFiles(partitionPath, Arrays.asList(commit));
+                  // In case all data was inserts and the commit failed, there is no partition stats
+                  if (commitMetadata.getPartitionToWriteStats().size() == 0) {
+                    super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, Arrays.asList(commit));
+                  }
 
                   // append rollback blocks for updates
                   if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
                     commitMetadata.getPartitionToWriteStats().get(partitionPath).stream()
                         .filter(wStat -> {
-                          return wStat != null
+                          if (wStat != null
                               && wStat.getPrevCommit() != HoodieWriteStat.NULL_COMMIT
-                              && wStat.getPrevCommit() != null;
-                        }).forEach(wStat -> {
-                          HoodieLogFormat.Writer writer = null;
+                              && wStat.getPrevCommit() != null) {
+                            return true;
+                          }
+                          // we do not know fileIds for inserts (first inserts are either log files or parquet files),
+                          // delete all files for the corresponding failed commit, if present (same as COW)
                           try {
+                            super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, Arrays.asList(commit));
+                          } catch (IOException io) {
+                            throw new UncheckedIOException(io);
+                          }
+                          return false;
+                        })
+                        .forEach(wStat -> {
+                          Writer writer = null;
+                          try {
+                            // TODO : wStat.getPrevCommit() might not give the right commit time in the following
+                            // scenario if a compaction was scheduled, the new commitTime will be used to write the
+                            // new log file. In this case, the commit time for the log file is the
+                            // getBaseCommitTimeForAppendLog()
                             writer = HoodieLogFormat.newWriterBuilder().onParentPath(
                                 new Path(this.getMetaClient().getBasePath(), partitionPath))
                                 .withFileId(wStat.getFileId()).overBaseCommit(wStat.getPrevCommit())
@@ -210,15 +238,15 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
                             Long numRollbackBlocks = 0L;
                             // generate metadata
-                            Map<HoodieLogBlock.HeaderMetadataType, String> header =
+                            Map<HeaderMetadataType, String> header =
                                 Maps.newHashMap();
-                            header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME,
+                            header.put(HeaderMetadataType.INSTANT_TIME,
                                 metaClient.getActiveTimeline().lastInstant().get().getTimestamp());
-                            header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME,
+                            header.put(HeaderMetadataType.TARGET_INSTANT_TIME,
                                 commit);
-                            header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE, String
+                            header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE, String
                                 .valueOf(
-                                    HoodieCommandBlock.HoodieCommandBlockTypeEnum
+                                    HoodieCommandBlockTypeEnum
                                         .ROLLBACK_PREVIOUS_BLOCK
                                         .ordinal()));
                             // if update belongs to an existing log file
@@ -291,6 +319,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       if (!commitTimeline.empty()) {
         HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
         // find smallest file in partition and append to it
+
+        // TODO - check if index.isglobal then small files are log files too
         Optional<FileSlice> smallFileSlice = getRTFileSystemView()
             .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).filter(
                 fileSlice -> fileSlice.getLogFiles().count() < 1
@@ -320,4 +350,5 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
           .collect(Collectors.toList());
     }
   }
+
 }

@@ -53,10 +53,10 @@ public class WriteStatus implements Serializable {
    * aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
    * objects are collected in Spark Driver.
    *
-   * @param record                 deflated {@code HoodieRecord} containing information that uniquely identifies
-   *                               it.
+   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies
+   * it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
-   *                               HoodieRecord} before deflation.
+   * HoodieRecord} before deflation.
    */
   public void markSuccess(HoodieRecord record,
       Optional<Map<String, String>> optionalRecordMetadata) {
@@ -69,10 +69,10 @@ public class WriteStatus implements Serializable {
    * aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
    * objects are collected in Spark Driver.
    *
-   * @param record                 deflated {@code HoodieRecord} containing information that uniquely identifies
-   *                               it.
+   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies
+   * it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
-   *                               HoodieRecord} before deflation.
+   * HoodieRecord} before deflation.
    */
   public void markFailure(HoodieRecord record, Throwable t,
       Optional<Map<String, String>> optionalRecordMetadata) {
