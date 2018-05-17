@@ -26,6 +26,7 @@ import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.func.LazyIterableIterator;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -64,16 +65,9 @@ public class HoodieBloomIndexCheckFunction implements
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
-        Set<String> fileRowKeys = ParquetUtils.readRowKeysFromParquet(configuration, filePath);
-        logger.info("Loading " + fileRowKeys.size() + " row keys from " + filePath);
-        if (logger.isDebugEnabled()) {
-          logger.debug("Keys from " + filePath + " => " + fileRowKeys);
-        }
-        for (String rowKey : candidateRecordKeys) {
-          if (fileRowKeys.contains(rowKey)) {
-            foundRecordKeys.add(rowKey);
-          }
-        }
+        Set<String> fileRowKeys = ParquetUtils.filterParquetRowKeys(configuration, filePath,
+            new HashSet<>(candidateRecordKeys));
+        foundRecordKeys.addAll(fileRowKeys);
         logger.info("After checking with row keys, we have " + foundRecordKeys.size()
             + " results, for file " + filePath + " => " + foundRecordKeys);
         if (logger.isDebugEnabled()) {
