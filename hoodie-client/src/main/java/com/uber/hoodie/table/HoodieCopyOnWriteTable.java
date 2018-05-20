@@ -27,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -640,13 +641,18 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      * Remembers what type each bucket is for later.
      */
     private HashMap<Integer, BucketInfo> bucketInfoMap;
+    /**
+     * Rolling stats for files
+     */
+    protected HoodieRollingStatMetadata rollingStatMetadata;
+    protected long averageRecordSize;
 
     UpsertPartitioner(WorkloadProfile profile) {
       updateLocationToBucket = new HashMap<>();
       partitionPathToInsertBuckets = new HashMap<>();
       bucketInfoMap = new HashMap<>();
       globalStat = profile.getGlobalStat();
-
+      rollingStatMetadata = getRollingStats();
       assignUpdates(profile);
       assignInserts(profile);
 
@@ -679,7 +685,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     private void assignInserts(WorkloadProfile profile) {
       // for new inserts, compute buckets depending on how many records we have for each partition
       Set<String> partitionPaths = profile.getPartitionPaths();
-      long averageRecordSize = averageBytesPerRecord();
+      averageRecordSize = averageBytesPerRecord();
       logger.info("AvgRecordSize => " + averageRecordSize);
       for (String partitionPath : partitionPaths) {
         WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
@@ -790,7 +796,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      * Obtains the average record size based on records written during last commit. Used for
      * estimating how many records pack into one file.
      */
-    private long averageBytesPerRecord() {
+    protected long averageBytesPerRecord() {
       long avgSize = 0L;
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getCommitTimeline()
           .filterCompletedInstants();
@@ -849,5 +855,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         return targetBuckets.get(0).bucketNumber;
       }
     }
+  }
+
+  protected HoodieRollingStatMetadata getRollingStats() {
+    return null;
   }
 }

@@ -27,6 +27,7 @@ import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.model.ActionType;
 import com.uber.hoodie.common.model.HoodieArchivedLogFile;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
@@ -253,6 +254,8 @@ public class HoodieCommitArchiveLog {
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     com.uber.hoodie.avro.model.HoodieCommitMetadata avroMetaData = mapper
         .convertValue(hoodieCommitMetadata, com.uber.hoodie.avro.model.HoodieCommitMetadata.class);
+    // Do not archive Rolling Stats
+    avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, null);
     return avroMetaData;
   }
 }

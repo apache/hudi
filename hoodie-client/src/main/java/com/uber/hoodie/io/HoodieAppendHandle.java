@@ -89,6 +89,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private int maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
   private Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+  // Set the base commit time as the current commitTime for new inserts into log files
+  private String baseCommitTime = commitTime;
+  // default is false
+  private boolean isUpsert;
 
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String fileId, Iterator<HoodieRecord<T>> recordItr) {
@@ -99,10 +103,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     this.fileId = fileId;
     this.fileSystemView = hoodieTable.getRTFileSystemView();
     this.recordItr = recordItr;
+    this.isUpsert = true;
   }
 
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable) {
     this(config, commitTime, hoodieTable, UUID.randomUUID().toString(), null);
+    // override to false
+    this.isUpsert = false;
   }
 
   private void init(HoodieRecord record) {
@@ -110,8 +117,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       this.partitionPath = record.getPartitionPath();
       // extract some information from the first record
       Optional<FileSlice> fileSlice = fileSystemView.getLatestFileSlices(partitionPath)
-          .filter(fileSlice1 -> fileSlice1.getDataFile().get().getFileId().equals(fileId)).findFirst();
-      String baseCommitTime = commitTime;
+          .filter(fileSlice1 -> {
+            if (fileSlice1.getDataFile().isPresent()) {
+              return fileSlice1.getDataFile().get().getFileId().equals(fileId);
+            } else {
+              return fileSlice1.getLogFiles().findFirst().get().getFileId().equals(fileId);
+            }
+          }).findFirst();
       if (fileSlice.isPresent()) {
         baseCommitTime = fileSlice.get().getBaseInstantForLogAppend();
       } else {
@@ -119,7 +131,6 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         fileSlice = Optional.of(new FileSlice(baseCommitTime, this.fileId));
         logger.info("New InsertHandle for partition :" + partitionPath);
       }
-      writeStatus.getStat().setPrevCommit(baseCommitTime);
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
       writeStatus.getStat().setFileId(fileId);
@@ -235,9 +246,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       if (writer != null) {
         writer.close();
       }
-      writeStatus.getStat().setPrevCommit(commitTime);
       writeStatus.getStat().setFileId(this.fileId);
-      writeStatus.getStat().setNumWrites(recordsWritten);
+      if (!isUpsert) {
+        writeStatus.getStat().setNumWrites(recordsWritten);
+      } else {
+        writeStatus.getStat().setNumUpdateWrites(recordsWritten);
+      }
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
