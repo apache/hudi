@@ -19,6 +19,7 @@ package com.uber.hoodie.common.util;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidHoodiePathException;
@@ -33,7 +34,9 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -385,5 +388,27 @@ public class FSUtils {
 
   public static Long getSizeInMB(long sizeInBytes) {
     return sizeInBytes / (1024 * 1024);
+  }
+
+  public static Optional<HoodieRollingStatMetadata> getLastRollingStat(String basePath, FileSystem fs) throws
+      IOException {
+    List<FileStatus> fileStatuses = Arrays.asList(fs.listStatus(new Path(basePath + "/.hoodie/rolling/")));
+    Arrays.asList(fileStatuses).sort((FileStatus f1, FileStatus f2)  -> {
+        return f1.getPath().getName() > f2.getPath().getName();
+      });
+    FileStatus fileStatus = fileStatuses.stream().findFirst().get();
+    Optional<byte[]> rollingStats = readDataFromPath(fs, fileStatus.getPath());
+    if (rollingStats.isPresent()) {
+      return Optional.of(HoodieRollingStatMetadata.fromBytes(rollingStats.get()));
+    }
+    return Optional.empty();
+  }
+
+  public static Optional<byte[]> readDataFromPath(FileSystem fs, Path detailPath) {
+    try (FSDataInputStream is = fs.open(detailPath)) {
+      return Optional.of(IOUtils.toByteArray(is));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not read commit details from " + detailPath, e);
+    }
   }
 }
