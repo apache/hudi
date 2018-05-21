@@ -30,8 +30,6 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieRollingStat;
-import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -69,7 +67,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.yarn.webapp.hamlet.Hamlet.P;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -505,11 +502,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             writeStatus.getPartitionPath(), writeStatus.getStat())).collect();
 
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-//    for (Tuple2<String, HoodieWriteStat> stat : stats) {
-//      metadata.addWriteStat(stat._1(), stat._2());
-//      rollingStatMetadata.addRollingStat(stat._1, new HoodieRollingStat(stat._2.getFileId(), stat._2.getNumWrites(),
-//          stat._2.getNumUpdateWrites()));
-//    }
+    for (Tuple2<String, HoodieWriteStat> stat : stats) {
+      metadata.addWriteStat(stat._1(), stat._2());
+    }
 
     // Finalize write
     final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
@@ -907,14 +902,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     activeTimeline.createInflight(new HoodieInstant(true, commitActionType, commitTime));
   }
 
-  public void startRollingStatWithTime(String commitTime) {
-    logger.info("Generate a new rolling stat " + commitTime);
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    activeTimeline.createFileInMetaPath("rolling_stat.committime", Optional.empty());
-  }
-
   /**
    * Provides a new commit time for a compaction (commit) operation
    */
@@ -1088,58 +1075,4 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
     return table;
   }
-
-  private HoodieRollingStatMetadata updateRollingStats(String actionType, HoodieCommitMetadata metadata, List<Tuple2<String,
-      HoodieWriteStat>> stats) throws IOException {
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    // 0. All of the rolling stat management is only done by the DELTA commit other wise there might be race conditions
-    HoodieRollingStatMetadata rollingStatMetadata = new HoodieRollingStatMetadata(actionType);
-    // 1. Look up previous rolling stat metadata file
-    // 2. Look up the previous compaction/commit and get the HoodieCommitMetadata from there.
-    // 3. Now, first read the existing rolling stats and merge it with compaction/commit metadata and then merge ther
-    // result of this with the current metadata.
-
-    // Need to do this on very commit (delta or commit) to support COW and MOR.
-    for (Tuple2<String, HoodieWriteStat> stat : stats) {
-      metadata.addWriteStat(stat._1(), stat._2());
-      HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat._2().getFileId(), stat._2().getNumWrites(),
-          stat._2().getNumUpdateWrites(), stat._2().getTotalWriteBytes());
-      rollingStatMetadata.addRollingStat(stat._1, hoodieRollingStat);
-    }
-//    if (actionType == HoodieTimeline.DELTA_COMMIT_ACTION) {
-//      Optional<HoodieInstant> lastDeltaInstant = table.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
-//      if (lastDeltaInstant.isPresent()) {
-//        HoodieCommitMetadata mergedMetadata = new HoodieCommitMetadata();
-//        HoodieTimeline timeline = table.getActiveTimeline().getCommitTimeline().filterCompletedInstants()
-//            .findInstantsAfter
-//            (lastDeltaInstant
-//            .get().getTimestamp(), 100);
-//        timeline.getInstants().forEach(instant -> {
-//          HoodieCommitMetadata metadata1 = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get());
-//          for (Map.Entry<String, List<HoodieWriteStat>> partitionStats : metadata1.getPartitionToWriteStats().entrySet
-//              ()) {
-//            for (HoodieWriteStat stat : partitionStats.getValue()) {
-//              mergedMetadata.addWriteStat(partitionStats.getKey(), stat);
-//            }
-//          }
-//        });
-//      }
-//    }
-    // the last rolling stat should be present in the completed timeline
-    Optional<HoodieRollingStatMetadata> lastRollingStat = FSUtils.getLastRollingStat(config.getBasePath(), fs);
-    if (lastRollingStat.isPresent()) {
-      rollingStatMetadata = lastRollingStat.get().merge(rollingStatMetadata);
-    }
-
-    // save rolling stat metadata
-    return rollingStatMetadata;
-  }
-
-  // delta write started
-  // check rolling stats
-  // scheduled compaction so start writing to new log file
-
-
 }
