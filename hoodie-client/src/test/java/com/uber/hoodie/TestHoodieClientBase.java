@@ -184,9 +184,9 @@ public class TestHoodieClientBase implements Serializable {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
       List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-      HoodieTable.getHoodieTable(metaClient, writeConfig);
+      HoodieTable.getHoodieTable(metaClient, writeConfig, jsc);
       JavaRDD<HoodieRecord> taggedRecords =
-          index.tagLocation(jsc.parallelize(records, 1), HoodieTable.getHoodieTable(metaClient, writeConfig));
+          index.tagLocation(jsc.parallelize(records, 1), jsc, metaClient);
       return taggedRecords.collect();
     };
   }
@@ -348,7 +348,7 @@ public class TestHoodieClientBase implements Serializable {
         fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
       }
       assertEquals("Must contain " + expTotalRecords + " records", expTotalRecords,
-          HoodieClientTestUtils.read(basePath, sqlContext, fs, fullPartitionPaths).count());
+          HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
 
       // Check that the incremental consumption from prevCommitTime
       assertEquals("Incremental consumption from " + prevCommitTime

@@ -72,7 +72,7 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     this.schema = schema;
   }
 
-  private static Configuration registerFileSystem(Path file, Configuration conf) {
+  public static Configuration registerFileSystem(Path file, Configuration conf) {
     Configuration returnConf = new Configuration(conf);
     String scheme = FSUtils.getFs(file.toString(), conf).getScheme();
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",

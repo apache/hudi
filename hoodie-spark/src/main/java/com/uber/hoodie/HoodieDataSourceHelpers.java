@@ -24,7 +24,6 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.table.HoodieTable;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
@@ -66,15 +65,13 @@ public class HoodieDataSourceHelpers {
    * could be fed into the datasource options.
    */
   public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
-    HoodieTable table = HoodieTable
-        .getHoodieTable(new HoodieTableMetaClient(fs.getConf(), basePath, true),
-            null);
-    if (table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
-      return table.getActiveTimeline().getTimelineOfActions(
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+    if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
+      return metaClient.getActiveTimeline().getTimelineOfActions(
           Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
               HoodieActiveTimeline.DELTA_COMMIT_ACTION));
     } else {
-      return table.getCommitTimeline().filterCompletedInstants();
+      return metaClient.getCommitTimeline().filterCompletedInstants();
     }
   }
 }

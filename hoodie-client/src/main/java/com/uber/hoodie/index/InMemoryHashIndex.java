@@ -22,8 +22,8 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -50,19 +50,19 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
   @Override
   public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-      final HoodieTable<T> table) {
+      JavaSparkContext jsc, HoodieTableMetaClient metaClient) {
     throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
-      HoodieTable<T> hoodieTable) {
+  public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
+      HoodieTableMetaClient metaClient) {
     return recordRDD.mapPartitionsWithIndex(this.new LocationTagFunction(), true);
   }
 
   @Override
-  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-      HoodieTable<T> hoodieTable) {
+  public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
+      HoodieTableMetaClient metaClient) {
     return writeStatusRDD.map(new Function<WriteStatus, WriteStatus>() {
       @Override
       public WriteStatus call(WriteStatus writeStatus) {

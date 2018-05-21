@@ -25,7 +25,10 @@ import java.util.stream.Stream;
 
 /**
  * Within a file group, a slice is a combination of data file written at a commit time and list of
- * log files, containing changes to the data file from that commit time
+ * log files, containing changes to the data file from that commit time.
+ * File Slice represents a collection of files that when merged will give the snapshot view of the file-group as
+ * of the latest instant in that file-slice. With asynchronous compaction, the latest file slice will also include
+ * the set of log files written after the compaction request instant.
  */
 public class FileSlice implements Serializable {
 
@@ -45,16 +48,31 @@ public class FileSlice implements Serializable {
   private HoodieDataFile dataFile;
 
   /**
+   * Outstanding Compaction request instant time
+   * For a given file-slice, only one compaction request can be outstanding.
+   */
+  private String outstandingCompactionInstant;
+
+  /**
    * List of appendable log files with real time data - Sorted with greater log version first -
    * Always empty for copy_on_write storage.
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
+  /**
+   * Construct a file-slice from fileId only
+   * @param fileId
+   */
+  public FileSlice(String fileId) {
+    this(null, fileId);
+  }
+
   public FileSlice(String baseCommitTime, String fileId) {
     this.fileId = fileId;
     this.baseCommitTime = baseCommitTime;
     this.dataFile = null;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getLogVersionComparator());
+    this.outstandingCompactionInstant = null;
+    this.logFiles = new TreeSet<>(HoodieLogFile.getBaseInstantAndLogVersionComparator());
   }
 
   public void setDataFile(HoodieDataFile dataFile) {
@@ -81,10 +99,26 @@ public class FileSlice implements Serializable {
     return Optional.ofNullable(dataFile);
   }
 
+  public String getOutstandingCompactionInstant() {
+    return outstandingCompactionInstant;
+  }
+
+  public void setOutstandingCompactionInstant(String outstandingCompactionInstant) {
+    this.outstandingCompactionInstant = outstandingCompactionInstant;
+  }
+
+  public String getBaseInstantForLogAppend() {
+    if (outstandingCompactionInstant != null) {
+      return outstandingCompactionInstant;
+    }
+    return baseCommitTime;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FileSlice {");
     sb.append("baseCommitTime=").append(baseCommitTime);
+    sb.append(", outstandingCompactionInstant=").append(outstandingCompactionInstant);
     sb.append(", dataFile='").append(dataFile).append('\'');
     sb.append(", logFiles='").append(logFiles).append('\'');
     sb.append('}');
