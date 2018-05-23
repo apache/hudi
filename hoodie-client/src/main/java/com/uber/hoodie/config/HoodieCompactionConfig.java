@@ -104,6 +104,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "24";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = String.valueOf(128);
   private static final String DEFAULT_MIN_COMMITS_TO_KEEP = String.valueOf(96);
+  public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP = "hoodie.compaction.daybased.target"
+      + ".partitions";
+  // 500GB of target IO per compaction (both read and write)
+  public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = String.valueOf(10);
 
   private HoodieCompactionConfig(Properties props) {
     super(props);
@@ -230,6 +234,12 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withTargetPartitionsPerDayBasedCompaction(int targetPartitionsPerCompaction) {
+      props.setProperty(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP,
+          String.valueOf(targetPartitionsPerCompaction));
+      return this;
+    }
+
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP), AUTO_CLEAN_PROP,
@@ -269,6 +279,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(COMPACTION_REVERSE_LOG_READ_ENABLED_PROP),
           COMPACTION_REVERSE_LOG_READ_ENABLED_PROP, DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP),
+          TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP, DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
 
       HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
       Preconditions.checkArgument(Integer.parseInt(props.getProperty(MAX_COMMITS_TO_KEEP)) > Integer

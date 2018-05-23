@@ -17,6 +17,7 @@
 
 package com.uber.hoodie.io.compact.strategy;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.compact.CompactionOperation;
@@ -26,39 +27,46 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * This strategy orders compactions in reverse order of creation of Hive Partitions. It helps to
  * compact data in latest partitions first and then older capped at the Total_IO allowed.
  */
-public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
+public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
   private static String datePartitionFormat = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
-  private static Comparator<CompactionOperation> comparator = (CompactionOperation leftC,
-      CompactionOperation rightC) -> {
+  private static Comparator<String> comparator = (String leftPartition,
+      String rightPartition) -> {
     try {
       Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
-          .parse(leftC.getPartitionPath());
+          .parse(leftPartition);
       Date right = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
-          .parse(rightC.getPartitionPath());
+          .parse(rightPartition);
       return left.after(right) ? -1 : right.after(left) ? 1 : 0;
     } catch (ParseException e) {
       throw new HoodieException("Invalid Partition Date Format", e);
     }
   };
 
-  public Comparator<CompactionOperation> getComparator() {
+  @VisibleForTesting
+  public Comparator<String> getComparator() {
     return comparator;
   }
 
   @Override
   public List<CompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<CompactionOperation> operations) {
-    // Iterate through the operations and accept operations as long as we are within the IO limit
-    return super.orderAndFilter(writeConfig,
-        operations.stream().sorted(comparator).collect(Collectors.toList()));
+    // Iterate through the operations and accept operations as long as we are within the configured target partitions
+    // limit
+    List<CompactionOperation> filteredList = operations.stream()
+        .collect(Collectors.groupingBy(CompactionOperation::getPartitionPath)).entrySet().stream()
+        .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getTargetPartitionsPerDayBasedCompaction())
+        .flatMap(e -> e.getValue().stream())
+        .collect(Collectors.toList());
+    return filteredList;
   }
 }

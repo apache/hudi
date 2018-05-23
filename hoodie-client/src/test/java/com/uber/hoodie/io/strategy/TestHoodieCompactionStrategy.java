@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
+import org.junit.Assert;
 import org.junit.Test;
 
 public class TestHoodieCompactionStrategy {
@@ -109,17 +110,33 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(110 * MB, Lists.newArrayList());
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
-        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
-        .build();
-    List<CompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
+            .withTargetPartitionsPerDayBasedCompaction(1)
+            .build()).build();
+
+    List<CompactionOperation> operations = Lists.newArrayList(sizesMap.size());
+    int partitionPathIndex = 0;
+    for (Map.Entry<Long, List<Long>> entry : sizesMap.entrySet()) {
+      operations.add(new CompactionOperation(Optional.of(TestHoodieDataFile.newDataFile(entry.getKey())),
+          partitionPaths[(partitionPathIndex % (partitionPaths.length - 1))],
+          entry.getValue().stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList()), writeConfig));
+      partitionPathIndex++;
+    }
     List<CompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations);
 
     assertTrue("DayBasedCompactionStrategy should have resulted in fewer compactions",
         returned.size() < operations.size());
+    Assert.assertEquals("DayBasedCompactionStrategy should have resulted in fewer compactions",
+        returned.size(), 2);
 
-    int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1), returned.get(0));
+    int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(), returned
+        .get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
     assertTrue("DayBasedCompactionStrategy should sort partitions in descending order", comparision >= 0);
   }
