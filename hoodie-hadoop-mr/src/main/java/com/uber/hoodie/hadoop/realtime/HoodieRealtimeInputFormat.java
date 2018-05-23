@@ -24,6 +24,7 @@ import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieException;
@@ -108,7 +109,13 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
           .getRelativePartitionPath(new Path(metaClient.getBasePath()), partitionPath);
 
       try {
-        Stream<FileSlice> latestFileSlices = fsView.getLatestFileSlices(relPartitionPath);
+        // Both commit and delta-commits are included - pick the latest completed one
+        Optional<HoodieInstant> latestCompletedInstant =
+            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+        Stream<FileSlice> latestFileSlices = latestCompletedInstant.map(instant ->
+            fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
+            .orElse(Stream.empty());
 
         // subgroup splits again by file id & match with log files.
         Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits

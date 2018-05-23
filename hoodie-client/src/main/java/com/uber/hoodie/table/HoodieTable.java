@@ -119,7 +119,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the real time view of the file system for this table
    */
   public TableFileSystemView.RealtimeView getRTFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitTimeline());
+    return new HoodieTableFileSystemView(metaClient,
+        metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants());
   }
 
   /**
@@ -140,7 +141,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get only the inflights (no-completed) commit timeline
    */
   public HoodieTimeline getInflightCommitTimeline() {
-    return metaClient.getCommitsTimeline().filterInflights();
+    return metaClient.getCommitsTimeline().filterInflightsExcludingCompaction();
   }
 
   /**

@@ -230,7 +230,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                     // This needs to be done since GlobalIndex at the moment does not store the latest commit time
                     Map<String, String> fileIdToLatestCommitTimeMap =
                         hoodieIndex.isGlobal() ? this.getRTFileSystemView().getLatestFileSlices(partitionPath)
-                            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseCommitTime)) : null;
+                            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime)) : null;
                     commitMetadata.getPartitionToWriteStats().get(partitionPath).stream()
                         .filter(wStat -> {
                           if (wStat != null
@@ -341,7 +341,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
 
         // TODO - check if index.isglobal then small files are log files too
         Optional<FileSlice> smallFileSlice = getRTFileSystemView()
-            .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).filter(
+            // Use the merged file-slice for small file selection
+            .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).filter(
                 fileSlice -> fileSlice.getLogFiles().count() < 1
                     && fileSlice.getDataFile().get().getFileSize() < config
                     .getParquetSmallFileLimit()).sorted((FileSlice left, FileSlice right) ->

@@ -65,6 +65,11 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   protected HashMap<String, HoodieFileGroup> fileGroupMap;
 
   /**
+   * File Id to pending compaction instant time
+   */
+  private final Map<String, String> fileIdToPendingCompactionInstantTime;
+
+  /**
    * Create a file system view, as of the given timeline
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
@@ -73,6 +78,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     this.visibleActiveTimeline = visibleActiveTimeline;
     this.fileGroupMap = new HashMap<>();
     this.partitionToFileGroupsMap = new HashMap<>();
+    //TODO: vb Will be implemented in next PR
+    this.fileIdToPendingCompactionInstantTime = new HashMap<>();
   }
 
 
@@ -128,13 +135,18 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
 
     List<HoodieFileGroup> fileGroups = new ArrayList<>();
     fileIdSet.forEach(pair -> {
-      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), pair.getValue(),
-          visibleActiveTimeline);
+      String fileId = pair.getValue();
+      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), fileId, visibleActiveTimeline);
       if (dataFiles.containsKey(pair)) {
         dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
       }
       if (logFiles.containsKey(pair)) {
         logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
+      }
+      if (fileIdToPendingCompactionInstantTime.containsKey(fileId)) {
+        // If there is no delta-commit after compaction request, this step would ensure a new file-slice appears
+        // so that any new ingestion uses the correct base-instant
+        group.addNewFileSliceAtInstant(fileIdToPendingCompactionInstantTime.get(fileId));
       }
       fileGroups.add(group);
     });
@@ -165,19 +177,37 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
   }
 
+  /**
+   * With async compaction, it is possible to see partial/complete data-files due to inflight-compactions, Ignore
+   * those data-files
+   *
+   * @param dataFile Data File
+   */
+  private boolean isDataFileDueToPendingCompaction(HoodieDataFile dataFile) {
+    String compactionInstantTime = fileIdToPendingCompactionInstantTime.get(dataFile.getFileId());
+    if ((null != compactionInstantTime) && dataFile.getCommitTime().equals(compactionInstantTime)) {
+      return true;
+    }
+    return false;
+  }
+
   @Override
   public Stream<HoodieDataFile> getLatestDataFiles(final String partitionPath) {
     return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getLatestDataFile())
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(fileGroup -> {
+          return fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
+        })
+        .filter(Optional::isPresent)
         .map(Optional::get);
   }
 
   @Override
   public Stream<HoodieDataFile> getLatestDataFiles() {
     return fileGroupMap.values().stream()
-        .map(fileGroup -> fileGroup.getLatestDataFile())
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(fileGroup -> {
+          return fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
+        })
+        .filter(Optional::isPresent)
         .map(Optional::get);
   }
 
@@ -185,16 +215,29 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
       String maxCommitTime) {
     return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getLatestDataFileBeforeOrOn(maxCommitTime))
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(fileGroup -> {
+          return fileGroup.getAllDataFiles()
+              .filter(dataFile ->
+                  HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
+                      maxCommitTime,
+                      HoodieTimeline.LESSER_OR_EQUAL))
+              .filter(df -> !isDataFileDueToPendingCompaction(df))
+              .findFirst();
+        })
+        .filter(Optional::isPresent)
         .map(Optional::get);
   }
 
   @Override
   public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
     return fileGroupMap.values().stream()
-        .map(fileGroup -> fileGroup.getLatestDataFileInRange(commitsToReturn))
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .map(fileGroup -> {
+          return fileGroup.getAllDataFiles()
+              .filter(dataFile -> commitsToReturn.contains(dataFile.getCommitTime())
+                  && !isDataFileDueToPendingCompaction(dataFile))
+              .findFirst();
+        })
+        .filter(Optional::isPresent)
         .map(Optional::get);
   }
 
@@ -202,15 +245,63 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
     return getAllFileGroups(partitionPath)
         .map(fileGroup -> fileGroup.getAllDataFiles())
-        .flatMap(dataFileList -> dataFileList);
+        .flatMap(dataFileList -> dataFileList)
+        .filter(df -> !isDataFileDueToPendingCompaction(df));
   }
 
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
     return getAllFileGroups(partitionPath)
         .map(fileGroup -> fileGroup.getLatestFileSlice())
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .map(this::filterDataFileAfterPendingCompaction);
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> {
+          FileSlice fileSlice = fileGroup.getLatestFileSlice().get();
+          // if the file-group is under compaction, pick the latest before compaction instant time.
+          if (isFileSliceAfterPendingCompaction(fileSlice)) {
+            String compactionInstantTime = fileIdToPendingCompactionInstantTime.get(fileSlice.getFileId());
+            return fileGroup.getLatestFileSliceBefore(compactionInstantTime);
+          }
+          return Optional.of(fileSlice);
+        })
         .map(Optional::get);
+  }
+
+  /**
+   * Returns true if the file-group is under pending-compaction and the file-slice' baseInstant matches
+   * compaction Instant
+   * @param fileSlice File Slice
+   * @return
+   */
+  private boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
+    String compactionInstantTime = fileIdToPendingCompactionInstantTime.get(fileSlice.getFileId());
+    if ((null != compactionInstantTime) && fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * With async compaction, it is possible to see partial/complete data-files due to inflight-compactions,
+   * Ignore those data-files
+   * @param fileSlice File Slice
+   * @return
+   */
+  private FileSlice filterDataFileAfterPendingCompaction(FileSlice fileSlice) {
+    if (isFileSliceAfterPendingCompaction(fileSlice)) {
+      // Data file is filtered out of the file-slice as the corresponding compaction
+      // instant not completed yet.
+      FileSlice transformed = new FileSlice(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+      fileSlice.getLogFiles().forEach(lf -> transformed.addLogFile(lf));
+      return transformed;
+    }
+    return fileSlice;
   }
 
   @Override
@@ -218,7 +309,61 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       String maxCommitTime) {
     return getAllFileGroups(partitionPath)
         .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .map(this::filterDataFileAfterPendingCompaction);
+  }
+
+  /**
+   * Helper to merge last 2 file-slices. These 2 file-slices do not have compaction done yet.
+   *
+   * @param lastSlice        Latest File slice for a file-group
+   * @param penultimateSlice Penultimate file slice for a file-group in commit timeline order
+   */
+  private static FileSlice mergeCompactionPendingFileSlices(FileSlice lastSlice, FileSlice penultimateSlice) {
+    FileSlice merged = new FileSlice(penultimateSlice.getBaseInstantTime(), penultimateSlice.getFileId());
+    if (penultimateSlice.getDataFile().isPresent()) {
+      merged.setDataFile(penultimateSlice.getDataFile().get());
+    }
+    // Add Log files from penultimate and last slices
+    penultimateSlice.getLogFiles().forEach(lf -> merged.addLogFile(lf));
+    lastSlice.getLogFiles().forEach(lf -> merged.addLogFile(lf));
+    return merged;
+  }
+
+  /**
+   * If the file-slice is because of pending compaction instant, this method merges the file-slice with the one before
+   * the compaction instant time
+   * @param fileGroup File Group for which the file slice belongs to
+   * @param fileSlice File Slice which needs to be merged
+   * @return
+   */
+  private FileSlice getMergedFileSlice(HoodieFileGroup fileGroup, FileSlice fileSlice) {
+    // if the file-group is under construction, pick the latest before compaction instant time.
+    if (fileIdToPendingCompactionInstantTime.containsKey(fileSlice.getFileId())) {
+      String compactionInstantTime = fileIdToPendingCompactionInstantTime.get(fileSlice.getFileId());
+      if (fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
+        Optional<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
+        if (prevFileSlice.isPresent()) {
+          return mergeCompactionPendingFileSlices(fileSlice, prevFileSlice.get());
+        }
+      }
+    }
+    return fileSlice;
+  }
+
+  @Override
+  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> {
+          Optional<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+          // if the file-group is under construction, pick the latest before compaction instant time.
+          if (fileSlice.isPresent()) {
+            fileSlice = Optional.of(getMergedFileSlice(fileGroup, fileSlice.get()));
+          }
+          return fileSlice;
+        })
+        .filter(Optional::isPresent)
         .map(Optional::get);
   }
 
@@ -226,7 +371,6 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
     return fileGroupMap.values().stream()
         .map(fileGroup -> fileGroup.getLatestFileSliceInRange(commitsToReturn))
-        .filter(dataFileOpt -> dataFileOpt.isPresent())
         .map(Optional::get);
   }
 
@@ -259,5 +403,16 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       throw new HoodieIOException(
           "Failed to list data files in partition " + partitionPathStr, e);
     }
+  }
+
+  /**
+   * Used by tests to add pending compaction entries TODO: This method is temporary and should go away in subsequent
+   * Async Compaction PR
+   *
+   * @param fileId                File Id
+   * @param compactionInstantTime Compaction Instant Time
+   */
+  protected void addPendingCompactionFileId(String fileId, String compactionInstantTime) {
+    fileIdToPendingCompactionInstantTime.put(fileId, compactionInstantTime);
   }
 }

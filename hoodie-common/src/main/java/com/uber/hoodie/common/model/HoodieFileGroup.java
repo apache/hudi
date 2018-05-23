@@ -73,6 +73,16 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
+   * Potentially add a new file-slice by adding base-instant time
+   * A file-slice without any data-file and log-files can exist (if a compaction just got requested)
+   */
+  public void addNewFileSliceAtInstant(String baseInstantTime) {
+    if (!fileSlices.containsKey(baseInstantTime)) {
+      fileSlices.put(baseInstantTime, new FileSlice(baseInstantTime, id));
+    }
+  }
+
+  /**
    * Add a new datafile into the file group
    */
   public void addDataFile(HoodieDataFile dataFile) {
@@ -106,11 +116,25 @@ public class HoodieFileGroup implements Serializable {
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
     String maxCommitTime = lastInstant.get().getTimestamp();
-    return timeline.containsOrBeforeTimelineStarts(slice.getBaseCommitTime())
-        && HoodieTimeline.compareTimestamps(slice.getBaseCommitTime(),
+    return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime())
+        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(),
         maxCommitTime,
         HoodieTimeline.LESSER_OR_EQUAL);
 
+  }
+
+  /**
+   * Get all the the file slices including in-flight ones as seen in underlying file-system
+   */
+  public Stream<FileSlice> getAllFileSlicesIncludingInflight() {
+    return fileSlices.entrySet().stream().map(sliceEntry -> sliceEntry.getValue());
+  }
+
+  /**
+   * Get latest file slices including in-flight ones
+   */
+  public Optional<FileSlice> getLatestFileSlicesIncludingInflight() {
+    return getAllFileSlicesIncludingInflight().findFirst();
   }
 
   /**
@@ -141,15 +165,29 @@ public class HoodieFileGroup implements Serializable {
   public Optional<FileSlice> getLatestFileSliceBeforeOrOn(String maxCommitTime) {
     return getAllFileSlices()
         .filter(slice ->
-            HoodieTimeline.compareTimestamps(slice.getBaseCommitTime(),
+            HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(),
                 maxCommitTime,
                 HoodieTimeline.LESSER_OR_EQUAL))
         .findFirst();
   }
 
+  /**
+   * Obtain the latest file slice, upto a commitTime i.e < maxInstantTime
+   * @param maxInstantTime Max Instant Time
+   * @return
+   */
+  public Optional<FileSlice> getLatestFileSliceBefore(String maxInstantTime) {
+    return getAllFileSlices()
+        .filter(slice ->
+            HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(),
+                maxInstantTime,
+                HoodieTimeline.LESSER))
+        .findFirst();
+  }
+
   public Optional<FileSlice> getLatestFileSliceInRange(List<String> commitRange) {
     return getAllFileSlices()
-        .filter(slice -> commitRange.contains(slice.getBaseCommitTime()))
+        .filter(slice -> commitRange.contains(slice.getBaseInstantTime()))
         .findFirst();
   }
 
@@ -160,47 +198,6 @@ public class HoodieFileGroup implements Serializable {
     return getAllFileSlices()
         .filter(slice -> slice.getDataFile().isPresent())
         .map(slice -> slice.getDataFile().get());
-  }
-
-  /**
-   * Get the latest committed data file
-   */
-  public Optional<HoodieDataFile> getLatestDataFile() {
-    return getAllDataFiles().findFirst();
-  }
-
-  /**
-   * Get the latest data file, that is <=  max commit time
-   */
-  public Optional<HoodieDataFile> getLatestDataFileBeforeOrOn(String maxCommitTime) {
-    return getAllDataFiles()
-        .filter(dataFile ->
-            HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
-                maxCommitTime,
-                HoodieTimeline.LESSER_OR_EQUAL))
-        .findFirst();
-  }
-
-  /**
-   * Get the latest data file, that is contained within the provided commit range.
-   */
-  public Optional<HoodieDataFile> getLatestDataFileInRange(List<String> commitRange) {
-    return getAllDataFiles()
-        .filter(dataFile -> commitRange.contains(dataFile.getCommitTime()))
-        .findFirst();
-  }
-
-  /**
-   * Obtain the latest log file (based on latest committed data file), currently being appended to
-   *
-   * @return logfile if present, empty if no log file has been opened already.
-   */
-  public Optional<HoodieLogFile> getLatestLogFile() {
-    Optional<FileSlice> latestSlice = getLatestFileSlice();
-    if (latestSlice.isPresent() && latestSlice.get().getLogFiles().count() > 0) {
-      return latestSlice.get().getLogFiles().findFirst();
-    }
-    return Optional.empty();
   }
 
   @Override
