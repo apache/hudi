@@ -398,7 +398,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       });
 
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      Optional<HoodieInstant> instant = activeTimeline.filterInflights().lastInstant();
+      Optional<HoodieInstant> instant = activeTimeline.filterInflightsExcludingCompaction().lastInstant();
       activeTimeline.saveToInflight(instant.get(),
           Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException io) {
@@ -692,7 +692,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline();
+    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsAndCompactionTimeline();
 
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION,
         savepointTime);
@@ -709,8 +709,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     rollback(commitsToRollback);
 
     // Make sure the rollback was successful
-    Optional<HoodieInstant> lastInstant = activeTimeline.reload().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant();
+    Optional<HoodieInstant> lastInstant = activeTimeline.reload().getCommitsAndCompactionTimeline()
+        .filterCompletedAndCompactionInstants().lastInstant();
     Preconditions.checkArgument(lastInstant.isPresent());
     Preconditions.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
         savepointTime + "is not the last commit after rolling back " + commitsToRollback
@@ -1051,7 +1051,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   private void rollbackInflightCommits() {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterInflights();
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterInflightsExcludingCompaction();
     List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     Collections.reverse(commits);

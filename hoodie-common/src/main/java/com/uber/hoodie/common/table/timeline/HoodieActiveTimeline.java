@@ -95,7 +95,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     this(metaClient,
         new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
             INFLIGHT_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
-            CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION});
+            CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION});
   }
 
   /**
@@ -118,10 +118,22 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   /**
    * Get all instants (commits, delta commits) that produce new data, in the active timeline *
+   *
    */
   public HoodieTimeline getCommitsTimeline() {
     return getTimelineOfActions(
         Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
+  }
+
+  /**
+   * Get all instants (commits, delta commits, in-flight/request compaction) that produce new data, in the active
+   * timeline *
+   * With Async compaction a requested/inflight compaction-instant is a valid baseInstant for a file-slice as there
+   * could be delta-commits with that baseInstant.
+   */
+  public HoodieTimeline getCommitsAndCompactionTimeline() {
+    return getTimelineOfActions(
+        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION));
   }
 
   /**
@@ -130,7 +142,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(
-        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION,
+        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
             SAVEPOINT_ACTION, ROLLBACK_ACTION));
   }
 
@@ -200,7 +212,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     log.info("Marking instant complete " + instant);
     Preconditions.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    moveInflightToComplete(instant, HoodieTimeline.getCompletedInstant(instant), data);
+    transitionState(instant, HoodieTimeline.getCompletedInstant(instant), data);
     log.info("Completed " + instant);
   }
 
@@ -211,7 +223,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void deleteInflight(HoodieInstant instant) {
-    log.info("Deleting in-flight " + instant);
+    Preconditions.checkArgument(instant.isInflight());
+    deleteInstantFile(instant);
+  }
+
+  public void deleteCompactionRequested(HoodieInstant instant) {
+    Preconditions.checkArgument(instant.isRequested());
+    Preconditions.checkArgument(instant.getAction() == HoodieTimeline.COMPACTION_ACTION);
+    deleteInstantFile(instant);
+  }
+
+  private void deleteInstantFile(HoodieInstant instant) {
+    log.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
     try {
       boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
@@ -232,24 +255,43 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
-  protected void moveInflightToComplete(HoodieInstant inflight, HoodieInstant completed,
+  public void revertFromInflightToRequested(HoodieInstant inflightInstant, HoodieInstant requestedInstant,
       Optional<byte[]> data) {
-    Path commitFilePath = new Path(metaClient.getMetaPath(), completed.getFileName());
+    Preconditions.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    transitionState(inflightInstant, requestedInstant, data);
+  }
+
+  public void transitionFromRequestedToInflight(HoodieInstant requestedInstant, HoodieInstant inflightInstant,
+      Optional<byte[]> data) {
+    Preconditions.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    transitionState(requestedInstant, inflightInstant, data);
+  }
+
+  protected void moveInflightToComplete(HoodieInstant inflightInstant, HoodieInstant commitInstant,
+      Optional<byte[]> data) {
+    transitionState(inflightInstant, commitInstant, data);
+  }
+
+  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant,
+      Optional<byte[]> data) {
+    Preconditions.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
+    Path commitFilePath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
     try {
       // open a new file and write the commit metadata in
-      Path inflightCommitFile = new Path(metaClient.getMetaPath(), inflight.getFileName());
-      createFileInMetaPath(inflight.getFileName(), data);
+      Path inflightCommitFile = new Path(metaClient.getMetaPath(), fromInstant.getFileName());
+      createFileInMetaPath(fromInstant.getFileName(), data);
       boolean success = metaClient.getFs().rename(inflightCommitFile, commitFilePath);
       if (!success) {
         throw new HoodieIOException(
             "Could not rename " + inflightCommitFile + " to " + commitFilePath);
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not complete " + inflight, e);
+      throw new HoodieIOException("Could not complete " + fromInstant, e);
     }
   }
 
   protected void moveCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
+    Preconditions.checkArgument(completed.getTimestamp().equals(inflight.getTimestamp()));
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), inflight.getFileName());
     try {
       if (!metaClient.getFs().exists(inFlightCommitFilePath)) {
@@ -266,6 +308,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void saveToInflight(HoodieInstant instant, Optional<byte[]> content) {
+    createFileInMetaPath(instant.getFileName(), content);
+  }
+
+  public void saveToRequested(HoodieInstant instant, Optional<byte[]> content) {
+    Preconditions.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     createFileInMetaPath(instant.getFileName(), content);
   }
 

@@ -18,10 +18,12 @@ package com.uber.hoodie.common.table;
 
 import com.uber.hoodie.common.table.timeline.HoodieDefaultTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import java.io.Serializable;
 import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * HoodieTimeline is a view of meta-data instants in the hoodie dataset. Instants are specific
@@ -42,6 +44,10 @@ public interface HoodieTimeline extends Serializable {
   String ROLLBACK_ACTION = "rollback";
   String SAVEPOINT_ACTION = "savepoint";
   String INFLIGHT_EXTENSION = ".inflight";
+  // With Async Compaction, compaction instant can be in 3 states :
+  // (compaction-requested), (compaction-inflight), (completed)
+  String COMPACTION_ACTION = "compaction";
+  String REQUESTED_EXTENSION = ".requested";
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -54,6 +60,12 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_COMPACTION_SUFFIX =
+      StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
+  String REQUESTED_COMPACTION_EXTENSION =
+      StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
+  String INFLIGHT_COMPACTION_EXTENSION =
+      StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
 
   /**
    * Filter this timeline to just include the in-flights
@@ -63,12 +75,33 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterInflights();
 
   /**
+   * Filter this timeline to just include the in-flights excluding compaction instants
+   *
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction inflights
+   */
+  HoodieTimeline filterInflightsExcludingCompaction();
+
+  /**
    * Filter this timeline to just include the completed instants
    *
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedInstants();
 
+  /**
+   * Filter this timeline to just include the completed + compaction (inflight + requested) instants
+   * A RT filesystem view is constructed with this timeline so that file-slice after pending compaction-requested
+   * instant-time is also considered valid. A RT file-system view for reading must then merge the file-slices before
+   * and after pending compaction instant so that all delta-commits are read.
+   * @return New instance of HoodieTimeline with just completed instants
+   */
+  HoodieTimeline filterCompletedAndCompactionInstants();
+
+  /**
+   * Filter this timeline to just include inflight and requested compaction instants
+   * @return
+   */
+  HoodieTimeline filterPendingCompactionTimeline();
 
   /**
    * Create a new Timeline with instants after startTs and before or on endTs
@@ -157,45 +190,60 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(false, instant.getAction(), instant.getTimestamp());
   }
 
+  static HoodieInstant getCompactionRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, timestamp);
+  }
+
+  static HoodieInstant getCompactionInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
+  }
 
   static HoodieInstant getInflightInstant(final HoodieInstant instant) {
     return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
   }
 
   static String makeCommitFileName(String commitTime) {
-    return commitTime + HoodieTimeline.COMMIT_EXTENSION;
+    return StringUtils.join(commitTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
   static String makeInflightCommitFileName(String commitTime) {
-    return commitTime + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
+    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 
   static String makeCleanerFileName(String instant) {
-    return instant + HoodieTimeline.CLEAN_EXTENSION;
+    return StringUtils.join(instant, HoodieTimeline.CLEAN_EXTENSION);
   }
 
   static String makeInflightCleanerFileName(String instant) {
-    return instant + HoodieTimeline.INFLIGHT_CLEAN_EXTENSION;
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION);
   }
 
   static String makeRollbackFileName(String instant) {
-    return instant + HoodieTimeline.ROLLBACK_EXTENSION;
+    return StringUtils.join(instant, HoodieTimeline.ROLLBACK_EXTENSION);
   }
 
   static String makeInflightRollbackFileName(String instant) {
-    return instant + HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION;
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
   }
 
   static String makeInflightSavePointFileName(String commitTime) {
-    return commitTime + HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION;
+    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
   }
 
   static String makeSavePointFileName(String commitTime) {
-    return commitTime + HoodieTimeline.SAVEPOINT_EXTENSION;
+    return StringUtils.join(commitTime, HoodieTimeline.SAVEPOINT_EXTENSION);
   }
 
   static String makeInflightDeltaFileName(String commitTime) {
-    return commitTime + HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION;
+    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
+  }
+
+  static String makeInflightCompactionFileName(String commitTime) {
+    return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
+  }
+
+  static String makeRequestedCompactionFileName(String commitTime) {
+    return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
   }
 
   static String makeDeltaFileName(String commitTime) {
@@ -211,8 +259,6 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static String makeFileNameAsInflight(String fileName) {
-    return fileName + HoodieTimeline.INFLIGHT_EXTENSION;
+    return StringUtils.join(fileName, HoodieTimeline.INFLIGHT_EXTENSION);
   }
-
-
 }

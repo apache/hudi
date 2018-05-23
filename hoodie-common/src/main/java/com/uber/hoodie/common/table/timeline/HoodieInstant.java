@@ -30,7 +30,19 @@ import org.apache.hadoop.fs.FileStatus;
  */
 public class HoodieInstant implements Serializable {
 
-  private boolean isInflight = false;
+  /**
+   * Instant State
+   */
+  public enum State {
+    // Requested State (valid state for Compaction)
+    REQUESTED,
+    // Inflight instant
+    INFLIGHT,
+    // Committed instant
+    COMPLETED
+  }
+
+  private State state = State.COMPLETED;
   private String action;
   private String timestamp;
 
@@ -49,21 +61,35 @@ public class HoodieInstant implements Serializable {
       // This is to support backwards compatibility on how in-flight commit files were written
       // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight
       action = "commit";
-      isInflight = true;
+      state = State.INFLIGHT;
     } else if (action.contains(HoodieTimeline.INFLIGHT_EXTENSION)) {
-      isInflight = true;
+      state = State.INFLIGHT;
       action = action.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
+    } else if (action.equals(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX)) {
+      state = State.REQUESTED;
+      action = action.replace(HoodieTimeline.REQUESTED_EXTENSION, "");
     }
   }
 
   public HoodieInstant(boolean isInflight, String action, String timestamp) {
-    this.isInflight = isInflight;
+    //TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
+    this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
+    this.action = action;
+    this.timestamp = timestamp;
+  }
+
+  public HoodieInstant(State state, String action, String timestamp) {
+    this.state = state;
     this.action = action;
     this.timestamp = timestamp;
   }
 
   public boolean isInflight() {
-    return isInflight;
+    return state == State.INFLIGHT;
+  }
+
+  public boolean isRequested() {
+    return state == State.REQUESTED;
   }
 
   public String getAction() {
@@ -79,20 +105,28 @@ public class HoodieInstant implements Serializable {
    */
   public String getFileName() {
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
-      return isInflight ? HoodieTimeline.makeInflightCommitFileName(timestamp)
+      return isInflight() ? HoodieTimeline.makeInflightCommitFileName(timestamp)
           : HoodieTimeline.makeCommitFileName(timestamp);
     } else if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
-      return isInflight ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
+      return isInflight() ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
           : HoodieTimeline.makeCleanerFileName(timestamp);
     } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
-      return isInflight ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
+      return isInflight() ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
           : HoodieTimeline.makeRollbackFileName(timestamp);
     } else if (HoodieTimeline.SAVEPOINT_ACTION.equals(action)) {
-      return isInflight ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
+      return isInflight() ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
           : HoodieTimeline.makeSavePointFileName(timestamp);
     } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
-      return isInflight ? HoodieTimeline.makeInflightDeltaFileName(timestamp)
+      return isInflight() ? HoodieTimeline.makeInflightDeltaFileName(timestamp)
           : HoodieTimeline.makeDeltaFileName(timestamp);
+    } else if (HoodieTimeline.COMPACTION_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightCompactionFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedCompactionFileName(timestamp);
+      } else {
+        return HoodieTimeline.makeCommitFileName(timestamp);
+      }
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }
@@ -106,18 +140,18 @@ public class HoodieInstant implements Serializable {
       return false;
     }
     HoodieInstant that = (HoodieInstant) o;
-    return isInflight == that.isInflight
+    return state == that.state
         && Objects.equals(action, that.action)
         && Objects.equals(timestamp, that.timestamp);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(isInflight, action, timestamp);
+    return Objects.hash(state, action, timestamp);
   }
 
   @Override
   public String toString() {
-    return "[" + ((isInflight) ? "==>" : "") + timestamp + "__" + action + "]";
+    return "[" + ((isInflight() || isRequested()) ? "==>" : "") + timestamp + "__" + action + "__" + state + "]";
   }
 }

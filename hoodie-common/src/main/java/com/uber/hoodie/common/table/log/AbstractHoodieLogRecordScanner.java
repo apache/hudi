@@ -64,6 +64,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Reader schema for the records
   private final Schema readerSchema;
   // Latest valid instant time
+  // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
   private final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log

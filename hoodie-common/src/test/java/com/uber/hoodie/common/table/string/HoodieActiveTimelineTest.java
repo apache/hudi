@@ -80,7 +80,7 @@ public class HoodieActiveTimelineTest {
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete),
         timeline.getCommitTimeline().filterCompletedInstants().getInstants());
     HoodieTestUtils.assertStreamEquals("Check the instants stream", Stream.of(instant5),
-        timeline.getCommitTimeline().filterInflights().getInstants());
+        timeline.getCommitTimeline().filterInflightsExcludingCompaction().getInstants());
   }
 
   @Test
@@ -106,7 +106,7 @@ public class HoodieActiveTimelineTest {
         timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2).getInstants()
             .map(HoodieInstant::getTimestamp));
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitTimeline().filterInflights().empty());
+    assertFalse(timeline.getCommitTimeline().filterInflightsExcludingCompaction().empty());
     assertEquals("", 12, timeline.countInstants());
     HoodieTimeline activeCommitTimeline = timeline.getCommitTimeline().filterCompletedInstants();
     assertEquals("", 10, activeCommitTimeline.countInstants());
