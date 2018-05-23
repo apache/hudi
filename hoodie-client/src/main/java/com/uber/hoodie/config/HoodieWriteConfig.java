@@ -237,6 +237,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
 
+  public int getTargetPartitionsPerDayBasedCompaction() {
+    return Integer
+        .parseInt(props.getProperty(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP));
+  }
+
   /**
    * index properties
    **/
