@@ -595,8 +595,9 @@ public class TestMergeOnReadTable {
 
     roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
     dataFilesToRead = roView.getLatestDataFiles();
+    List<HoodieDataFile> dataFilesList = dataFilesToRead.collect(Collectors.toList());
     assertTrue("RealtimeTableView should list the parquet files we wrote in the delta commit",
-        dataFilesToRead.findAny().isPresent());
+        dataFilesList.size() > 0);
 
     /**
      * Write 2 (only updates + inserts, written to .log file + correction of existing parquet
@@ -624,7 +625,8 @@ public class TestMergeOnReadTable {
     roView = new HoodieTableFileSystemView(metaClient,
         hoodieTable.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants(), allFiles);
     dataFilesToRead = roView.getLatestDataFiles();
-    Map<String, Long> parquetFileIdToNewSize = dataFilesToRead.collect(
+    List<HoodieDataFile> newDataFilesList = dataFilesToRead.collect(Collectors.toList());
+    Map<String, Long> parquetFileIdToNewSize = newDataFilesList.stream().collect(
         Collectors.toMap(HoodieDataFile::getFileId, HoodieDataFile::getFileSize));
 
     assertTrue(parquetFileIdToNewSize.entrySet().stream()

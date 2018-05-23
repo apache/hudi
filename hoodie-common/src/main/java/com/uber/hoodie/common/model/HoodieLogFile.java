@@ -94,10 +94,16 @@ public class HoodieLogFile implements Serializable {
         FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion)));
   }
 
-  public static Comparator<HoodieLogFile> getLogVersionComparator() {
+  public static Comparator<HoodieLogFile> getBaseInstantAndLogVersionComparator() {
     return (o1, o2) -> {
-      // reverse the order
-      return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
+      String baseInstantTime1 = o1.getBaseCommitTime();
+      String baseInstantTime2 = o2.getBaseCommitTime();
+      if (baseInstantTime1.equals(baseInstantTime2)) {
+        // reverse the order by log-version when base-commit is same
+        return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
+      }
+      // reverse the order by base-commits
+      return new Integer(baseInstantTime2.compareTo(baseInstantTime1));
     };
   }
 

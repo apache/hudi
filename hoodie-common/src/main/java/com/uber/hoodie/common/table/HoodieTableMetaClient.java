@@ -275,6 +275,23 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Get the commit + pending-compaction timeline visible for this table.
+   * A RT filesystem view is constructed with this timeline so that file-slice after pending compaction-requested
+   * instant-time is also considered valid. A RT file-system view for reading must then merge the file-slices before
+   * and after pending compaction instant so that all delta-commits are read.
+   */
+  public HoodieTimeline getCommitsAndCompactionTimeline() {
+    switch (this.getTableType()) {
+      case COPY_ON_WRITE:
+        return getActiveTimeline().getCommitTimeline();
+      case MERGE_ON_READ:
+        return getActiveTimeline().getCommitsAndCompactionTimeline();
+      default:
+        throw new HoodieException("Unsupported table type :" + this.getTableType());
+    }
+  }
+
+  /**
    * Get the compacted commit timeline visible for this table
    */
   public HoodieTimeline getCommitTimeline() {
