@@ -26,6 +26,7 @@ import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -48,6 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -71,6 +73,7 @@ public class TestHoodieClientBase implements Serializable {
   public void init() throws IOException {
     // Initialize a local spark env
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieClient"));
+    jsc.setLogLevel("ERROR");
 
     //SQLContext stuff
     sqlContext = new SQLContext(jsc);
@@ -80,7 +83,14 @@ public class TestHoodieClientBase implements Serializable {
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
     fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
+    if (fs instanceof LocalFileSystem) {
+      LocalFileSystem lfs = (LocalFileSystem) fs;
+      // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
+      // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
+      // So, for the tests, we enforce checksum verification to circumvent the problem
+      lfs.setVerifyChecksum(true);
+    }
+    HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, getTableType());
     dataGen = new HoodieTestDataGenerator();
   }
 
@@ -112,7 +122,7 @@ public class TestHoodieClientBase implements Serializable {
    *
    * @param statuses List of Write Status
    */
-  void assertNoWriteErrors(List<WriteStatus> statuses) {
+  static void assertNoWriteErrors(List<WriteStatus> statuses) {
     // Verify there are no errors
     for (WriteStatus status : statuses) {
       assertFalse("Errors found in write of " + status.getFileId(), status.hasErrors());
@@ -432,5 +442,9 @@ public class TestHoodieClientBase implements Serializable {
   interface Function3<R, T1, T2, T3> {
 
     R apply(T1 v1, T2 v2, T3 v3) throws IOException;
+  }
+
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.COPY_ON_WRITE;
   }
 }

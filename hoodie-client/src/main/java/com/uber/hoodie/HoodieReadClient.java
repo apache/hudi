@@ -17,11 +17,13 @@
 package com.uber.hoodie;
 
 import com.google.common.base.Optional;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -32,6 +34,8 @@ import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -182,5 +186,18 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> hoodieRecords)
       throws HoodieIndexException {
     return index.tagLocation(hoodieRecords, jsc, hoodieTable);
+  }
+
+  /**
+   * Return all pending compactions with instant time for clients to decide what to compact next.
+   * @return
+   */
+  public List<Pair<String, HoodieCompactionPlan>> getPendingCompactions() {
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        hoodieTable.getMetaClient().getBasePath(), true);
+    return CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
+        .map(instantWorkloadPair ->
+            Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))
+        .collect(Collectors.toList());
   }
 }

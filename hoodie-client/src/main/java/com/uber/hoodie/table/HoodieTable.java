@@ -223,13 +223,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Run Compaction on the table. Compaction arranges the data so that it is optimized for data
    * access
-   * @deprecated Will be replaced with newer APIs
-   */
-  @Deprecated
-  public abstract JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String commitTime);
-
-  /**
-   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access
    *
    * @param jsc                   Spark Context
    * @param compactionInstantTime Instant Time
