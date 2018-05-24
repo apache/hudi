@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
@@ -33,9 +34,12 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
+import com.uber.hoodie.common.util.AvroUtils;
+import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +48,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
@@ -234,19 +239,26 @@ public class HoodieTableFileSystemViewTest {
     commitTimeline.saveAsComplete(deltaInstant2, Optional.empty());
     commitTimeline.saveAsComplete(deltaInstant3, Optional.empty());
 
-    // Fake delta-ingestion after compaction-requested
+    refreshFsView(null);
+    List<FileSlice> fileSlices = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
     String compactionRequestedTime = "4";
     String compactDataFileName = FSUtils.makeDataFileName(compactionRequestedTime, 1, fileId);
+    List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
+    partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
+    HoodieCompactionPlan compactionPlan = CompactionUtils.buildFromFileSlices(partitionFileSlicesPairs,
+        Optional.empty(), Optional.empty());
     HoodieInstant compactionInstant = null;
     if (isCompactionInFlight) {
       // Create a Data-file but this should be skipped by view
       new File(basePath + "/" + partitionPath + "/" + compactDataFileName).createNewFile();
       compactionInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
-      commitTimeline.saveToInflight(compactionInstant, Optional.empty());
+      commitTimeline.saveToInflight(compactionInstant, AvroUtils.serializeCompactionWorkload(compactionPlan));
     } else {
       compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
-      commitTimeline.saveToRequested(compactionInstant, Optional.empty());
+      commitTimeline.saveToRequested(compactionInstant, AvroUtils.serializeCompactionWorkload(compactionPlan));
     }
+
+    // Fake delta-ingestion after compaction-requested
     String deltaInstantTime4 = "5";
     String deltaInstantTime5 = "6";
     List<String> allInstantTimes = Arrays.asList(instantTime1, deltaInstantTime1, deltaInstantTime2,
@@ -260,7 +272,6 @@ public class HoodieTableFileSystemViewTest {
     commitTimeline.saveAsComplete(deltaInstant4, Optional.empty());
     commitTimeline.saveAsComplete(deltaInstant5, Optional.empty());
     refreshFsView(null);
-    fsView.addPendingCompactionFileId(fileId, compactionRequestedTime);
 
     List<HoodieDataFile> dataFiles = roView.getAllDataFiles(partitionPath).collect(Collectors.toList());
     if (skipCreatingDataFile) {
@@ -367,7 +378,6 @@ public class HoodieTableFileSystemViewTest {
     commitTimeline.saveToInflight(new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION,
         inflightDeltaInstantTime), Optional.empty());
     refreshFsView(null);
-    fsView.addPendingCompactionFileId(fileId, compactionRequestedTime);
 
     List<FileSlice> allRawFileSlices = getAllRawFileSlices(partitionPath).collect(Collectors.toList());
     dataFiles = allRawFileSlices.stream().flatMap(slice -> {

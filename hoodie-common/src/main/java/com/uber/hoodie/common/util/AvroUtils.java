@@ -174,7 +174,7 @@ public class AvroUtils {
     return Optional.of(baos.toByteArray());
   }
 
-  public static HoodieCompactionPlan deserializeHoodieCompactionPlan(byte[] bytes)
+  public static HoodieCompactionPlan deserializeCompactionPlan(byte[] bytes)
       throws IOException {
     return deserializeAvroMetadata(bytes, HoodieCompactionPlan.class);
   }
