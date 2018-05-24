@@ -18,9 +18,10 @@
 package com.uber.hoodie.io.compact.strategy;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.uber.hoodie.avro.model.HoodieCompactionOperation;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
-import com.uber.hoodie.io.compact.CompactionOperation;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Comparator;
@@ -58,12 +59,12 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   }
 
   @Override
-  public List<CompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
-      List<CompactionOperation> operations) {
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+      List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Iterate through the operations and accept operations as long as we are within the configured target partitions
     // limit
-    List<CompactionOperation> filteredList = operations.stream()
-        .collect(Collectors.groupingBy(CompactionOperation::getPartitionPath)).entrySet().stream()
+    List<HoodieCompactionOperation> filteredList = operations.stream()
+        .collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet().stream()
         .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getTargetPartitionsPerDayBasedCompaction())
         .flatMap(e -> e.getValue().stream())
         .collect(Collectors.toList());

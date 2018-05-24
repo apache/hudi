@@ -17,13 +17,11 @@
 package com.uber.hoodie.io.compact;
 
 import com.uber.hoodie.WriteStatus;
-import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
+import java.io.IOException;
 import java.io.Serializable;
-import java.util.Date;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -34,17 +32,31 @@ public interface HoodieCompactor extends Serializable {
 
   /**
    * Compact the delta files with the data files
+   *
+   * @deprecated : Will be removed in next PR
    */
+  @Deprecated
   JavaRDD<WriteStatus> compact(JavaSparkContext jsc, final HoodieWriteConfig config,
       HoodieTable hoodieTable, String compactionCommitTime) throws Exception;
 
+  /**
+   * Generate a new compaction plan for scheduling
+   *
+   * @param jsc                  Spark Context
+   * @param hoodieTable          Hoodie Table
+   * @param config               Hoodie Write Configuration
+   * @param compactionCommitTime scheduled compaction commit time
+   * @return Compaction Plan
+   * @throws IOException when encountering errors
+   */
+  HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc,
+      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime)
+      throws IOException;
 
-  // Helper methods
-  default String startCompactionCommit(HoodieTable hoodieTable) {
-    String commitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
-    HoodieActiveTimeline activeTimeline = hoodieTable.getActiveTimeline();
-    activeTimeline
-        .createInflight(new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime));
-    return commitTime;
-  }
+  /**
+   * Execute compaction operations and report back status
+   */
+  JavaRDD<WriteStatus> compact(JavaSparkContext jsc,
+      HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieWriteConfig config,
+      String compactionCommitTime) throws IOException;
 }
