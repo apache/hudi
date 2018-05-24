@@ -22,6 +22,7 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Set;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -29,15 +30,6 @@ import org.apache.spark.api.java.JavaSparkContext;
  * A HoodieCompactor runs compaction on a hoodie table
  */
 public interface HoodieCompactor extends Serializable {
-
-  /**
-   * Compact the delta files with the data files
-   *
-   * @deprecated : Will be removed in next PR
-   */
-  @Deprecated
-  JavaRDD<WriteStatus> compact(JavaSparkContext jsc, final HoodieWriteConfig config,
-      HoodieTable hoodieTable, String compactionCommitTime) throws Exception;
 
   /**
    * Generate a new compaction plan for scheduling
@@ -50,7 +42,8 @@ public interface HoodieCompactor extends Serializable {
    * @throws IOException when encountering errors
    */
   HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc,
-      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime)
+      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime,
+      Set<String> fileIdsWithPendingCompactions)
       throws IOException;
 
   /**
@@ -58,5 +51,5 @@ public interface HoodieCompactor extends Serializable {
    */
   JavaRDD<WriteStatus> compact(JavaSparkContext jsc,
       HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieWriteConfig config,
-      String compactionCommitTime) throws IOException;
+      String compactionInstantTime) throws IOException;
 }

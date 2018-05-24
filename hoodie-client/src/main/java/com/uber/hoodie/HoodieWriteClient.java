@@ -19,8 +19,10 @@ package com.uber.hoodie;
 import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.uber.hoodie.avro.model.HoodieCleanMetadata;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.avro.model.HoodieRollbackMetadata;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.HoodieCleanStat;
@@ -97,6 +99,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
   private transient Timer.Context writeContext = null;
+  private transient Timer.Context compactionTimer;
 
   /**
    * @param jsc
@@ -478,13 +481,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Commit changes performed at the given commitTime marker
    */
   public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
-      Optional<HashMap<String, String>> extraMetadata) {
+      Optional<Map<String, String>> extraMetadata) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
     return commit(commitTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
   }
 
   private boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
-      Optional<HashMap<String, String>> extraMetadata, String actionType) {
+      Optional<Map<String, String>> extraMetadata, String actionType) {
 
     logger.info("Commiting " + commitTime);
     // Create a Hoodie table which encapsulated the commits and files visible
@@ -525,7 +528,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       // Do a inline compaction if enabled
       if (config.isInlineCompaction()) {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
-        forceCompact();
+        forceCompact(extraMetadata);
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
       }
@@ -685,7 +688,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Delete a compaction request that is pending.
    *
    * NOTE - This is an Admin operation.
-   * With async compaction, this is expected to be called with async compaction and ingestion shutdown.
+   * With async compaction, this is expected to be called with async compaction and write shutdown.
    * Otherwise, async compactor could fail with errors
    *
    * @param compactionTime - delete the compaction time
@@ -729,7 +732,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
 
-    // Rollback to savepoint is expected to be a manual operation and no concurrent ingestion or compaction is expected
+    // Rollback to savepoint is expected to be a manual operation and no concurrent write or compaction is expected
     // to be running. Rollback to savepoint also removes any pending compaction actions that are generated after
     // savepoint time. Allowing pending compaction to be retained is not safe as those workload could be referencing
     // file-slices that will be rolled-back as part of this operation
@@ -811,8 +814,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
-      String lastCommit = commitsToRollback.get(commitsToRollback.size() - 1);
-      if (!commitTimeline.empty() && !commitTimeline
+      String lastCommit = null;
+      if (!commitsToRollback.isEmpty()) {
+        lastCommit = commitsToRollback.get(commitsToRollback.size() - 1);
+      }
+
+      if ((lastCommit != null) && !commitTimeline.empty() && !commitTimeline
           .findInstantsAfter(lastCommit, Integer.MAX_VALUE).empty()) {
         throw new HoodieRollbackException(
             "Found commits after time :" + lastCommit + ", please rollback greater commits first");
@@ -820,7 +827,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
       List<String> inflights = inflightCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
-      if (!inflights.isEmpty() && inflights.indexOf(lastCommit) != inflights.size() - 1) {
+      if ((lastCommit != null) && !inflights.isEmpty() && (inflights.indexOf(lastCommit) != inflights.size() - 1)) {
         throw new HoodieRollbackException("Found in-flight commits after time :" + lastCommit
             + ", please rollback greater commits first");
       }
@@ -940,141 +947,109 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     return commitTime;
   }
 
-  public void startCommitWithTime(String commitTime) {
+  public void startCommitWithTime(String instantTime) {
     if (rollbackInFlight) {
       // Only rollback inflight commit/delta-commits. Do not touch compaction commits
       rollbackInflightCommits();
     }
-    logger.info("Generate a new commit time " + commitTime);
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
+    logger.info("Generate a new instant time " + instantTime);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath());
+    // if there are pending compactions, their instantTime must not be greater than that of this instant time
+    metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending -> {
+      Preconditions.checkArgument(
+          HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), instantTime, HoodieTimeline.LESSER),
+          "Latest pending compaction instant time must be earlier "
+              + "than this instant time. Latest Compaction :" + latestPending + ",  Ingesting at " + instantTime);
+    });
+    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     String commitActionType = table.getMetaClient().getCommitActionType();
-    activeTimeline.createInflight(new HoodieInstant(true, commitActionType, commitTime));
+    activeTimeline.createInflight(new HoodieInstant(true, commitActionType, instantTime));
+  }
+
+
+  /**
+   * Schedules a new compaction instant
+   * @param extraMetadata
+   * @return
+   */
+  public Optional<String> scheduleCompaction(Optional<Map<String, String>> extraMetadata) throws IOException {
+    String instantTime = HoodieActiveTimeline.createNewCommitTime();
+    logger.info("Generate a new instant time " + instantTime);
+    boolean notEmpty = scheduleCompactionAtInstant(instantTime, extraMetadata);
+    return notEmpty ? Optional.of(instantTime) : Optional.empty();
   }
 
   /**
-   * Provides a new commit time for a compaction (commit) operation
+   * Schedules a new compaction instant with passed-in instant time
+   * @param instantTime     Compaction Instant Time
+   * @param extraMetadata   Extra Metadata to be stored
    */
-  public String startCompaction() {
-    String commitTime = HoodieActiveTimeline.createNewCommitTime();
-    logger.info("Generate a new commit time " + commitTime);
-    startCompactionWithTime(commitTime);
-    return commitTime;
+  public boolean scheduleCompactionAtInstant(String instantTime, Optional<Map<String, String>> extraMetadata)
+      throws IOException {
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        config.getBasePath(), true);
+    // if there are inflight writes, their instantTime must not be less than that of compaction instant time
+    metaClient.getActiveTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
+      Preconditions.checkArgument(
+          HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
+          "Earliest write inflight instant time must be later "
+              + "than compaction time. Earliest :" + earliestInflight + ", Compaction scheduled at " + instantTime);
+    });
+    // Committed and pending compaction instants should have strictly lower timestamps
+    List<HoodieInstant> conflictingInstants =
+        metaClient.getActiveTimeline().getCommitsAndCompactionTimeline().getInstants().filter(instant ->
+        HoodieTimeline.compareTimestamps(instant.getTimestamp(), instantTime,
+            HoodieTimeline.GREATER_OR_EQUAL)).collect(Collectors.toList());
+    Preconditions.checkArgument(conflictingInstants.isEmpty(),
+        "Following instants have timestamps >= compactionInstant. Instants :"
+            + conflictingInstants);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieCompactionPlan workload = table.scheduleCompaction(jsc, instantTime);
+    if (workload != null && (workload.getOperations() != null) && (!workload.getOperations().isEmpty())) {
+      extraMetadata.ifPresent(workload::setExtraMetadata);
+      HoodieInstant compactionInstant =
+          new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
+      metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
+          AvroUtils.serializeCompactionPlan(workload));
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Since MOR tableType default to {@link HoodieTimeline#DELTA_COMMIT_ACTION}, we need to
-   * explicitly set to {@link HoodieTimeline#COMMIT_ACTION} for compaction
+   * Performs Compaction for the workload stored in instant-time
+   * @param compactionInstantTime   Compaction Instant Time
+   * @return
+   * @throws IOException
    */
-  public void startCompactionWithTime(String commitTime) {
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    String commitActionType = HoodieTimeline.COMMIT_ACTION;
-    activeTimeline.createInflight(new HoodieInstant(true, commitActionType, commitTime));
+  public JavaRDD<WriteStatus> compact(String compactionInstantTime) throws IOException {
+    return compact(compactionInstantTime, config.shouldAutoCommit());
   }
 
   /**
-   * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
-   * asynchronously. Please always use this serially before or after an insert/upsert action.
+   * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
    */
-  public JavaRDD<WriteStatus> compact(String commitTime) throws IOException {
-    // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    // TODO : Fix table.getActionType for MOR table type to return different actions based on delta or compaction
-    writeContext = metrics.getCommitCtx();
-    JavaRDD<WriteStatus> statuses = table.compact(jsc, commitTime);
-    // Trigger the insert and collect statuses
-    statuses = statuses.persist(config.getWriteStatusStorageLevel());
-    String actionType = HoodieActiveTimeline.COMMIT_ACTION;
-    commitOnAutoCommit(commitTime, statuses, actionType);
-    return statuses;
-  }
-
-  /**
-   * Commit a compaction operation
-   */
-  public void commitCompaction(String commitTime, JavaRDD<WriteStatus> writeStatuses,
-      Optional<HashMap<String, String>> extraMetadata) {
-    String commitCompactionActionType = HoodieActiveTimeline.COMMIT_ACTION;
-    commit(commitTime, writeStatuses, extraMetadata, commitCompactionActionType);
-  }
-
-  /**
-   * Commit a compaction operation
-   */
-  public void commitCompaction(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
-    String commitCompactionActionType = HoodieActiveTimeline.COMMIT_ACTION;
-    commit(commitTime, writeStatuses, Optional.empty(), commitCompactionActionType);
-  }
-
-  /**
-   * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
-   * asynchronously. Please always use this serially before or after an insert/upsert action.
-   */
-  private void forceCompact(String compactionCommitTime) throws IOException {
-    // Create a Hoodie table which encapsulated the commits and files visible
+  public void commitCompaction(String compactionInstantTime, JavaRDD<WriteStatus> writeStatuses,
+      Optional<Map<String, String>> extraMetadata) throws IOException {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         config.getBasePath(), true);
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    // TODO : Fix table.getActionType for MOR table type to return different actions based on delta or compaction and
-    // then use getTableAndInitCtx
-    Timer.Context writeContext = metrics.getCommitCtx();
-    JavaRDD<WriteStatus> compactedStatuses = table.compact(jsc, compactionCommitTime);
-    if (!compactedStatuses.isEmpty()) {
-      HoodieCommitMetadata metadata = commitForceCompaction(compactedStatuses, metaClient, compactionCommitTime);
-      long durationInMs = metrics.getDurationInMs(writeContext.stop());
-      try {
-        metrics
-            .updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(compactionCommitTime).getTime(),
-                durationInMs, metadata, HoodieActiveTimeline.COMMIT_ACTION);
-      } catch (ParseException e) {
-        throw new HoodieCommitException(
-            "Commit time is not of valid format.Failed to commit " + config.getBasePath()
-                + " at time " + compactionCommitTime, e);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+        timeline.getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
+    // Merge extra meta-data passed by user with the one already in inflight compaction
+    Optional<Map<String, String>> mergedMetaData = extraMetadata.map(m -> {
+      Map<String, String> merged = new HashMap<>();
+      Map<String, String> extraMetaDataFromInstantFile = compactionPlan.getExtraMetadata();
+      if (extraMetaDataFromInstantFile != null) {
+        merged.putAll(extraMetaDataFromInstantFile);
       }
-      logger.info("Compacted successfully on commit " + compactionCommitTime);
-    } else {
-      logger.info("Compaction did not run for commit " + compactionCommitTime);
-    }
-  }
-
-  /**
-   * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
-   * asynchronously. Please always use this serially before or after an insert/upsert action.
-   */
-  private String forceCompact() throws IOException {
-    String compactionCommitTime = startCompaction();
-    forceCompact(compactionCommitTime);
-    return compactionCommitTime;
-  }
-
-  private HoodieCommitMetadata commitForceCompaction(JavaRDD<WriteStatus> writeStatuses,
-      HoodieTableMetaClient metaClient, String compactionCommitTime) {
-    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(writeStatus -> writeStatus.getStat())
-        .collect();
-
-    HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
-    for (HoodieWriteStat stat : updateStatusMap) {
-      metadata.addWriteStat(stat.getPartitionPath(), stat);
-    }
-
-    logger.info("Compaction finished with result " + metadata);
-
-    logger.info("Committing Compaction " + compactionCommitTime);
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-
-    try {
-      activeTimeline.saveAsComplete(
-          new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, compactionCommitTime),
-          Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } catch (IOException e) {
-      throw new HoodieCompactionException(
-          "Failed to commit " + metaClient.getBasePath() + " at time " + compactionCommitTime, e);
-    }
-    return metadata;
+      // Overwrite/Merge with the user-passed meta-data
+      merged.putAll(m);
+      return Optional.of(merged);
+    }).orElseGet(() -> Optional.ofNullable(compactionPlan.getExtraMetadata()));
+    commitCompaction(writeStatuses, table, compactionInstantTime, true, mergedMetaData);
   }
 
   /**
@@ -1126,5 +1101,159 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       writeContext = metrics.getDeltaCommitCtx();
     }
     return table;
+  }
+
+  /**
+   * Compaction specific private methods
+   */
+
+  /**
+   * Ensures compaction instant is in expected state and performs Compaction for the workload stored in instant-time
+   * @param compactionInstantTime   Compaction Instant Time
+   * @return
+   * @throws IOException
+   */
+  private JavaRDD<WriteStatus> compact(String compactionInstantTime, boolean autoCommit) throws IOException {
+    // Create a Hoodie table which encapsulated the commits and files visible
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        config.getBasePath(), true);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTimeline pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
+    if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
+      //inflight compaction - Needs to rollback first deleting new parquet files before we run compaction.
+      rollbackInflightCompaction(inflightInstant, table);
+      // refresh table
+      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
+      table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
+    }
+
+    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+    if (pendingCompactionTimeline.containsInstant(instant)) {
+      return runCompaction(instant, metaClient.getActiveTimeline(), autoCommit);
+    } else {
+      throw new IllegalStateException("No Compaction request available at " + compactionInstantTime
+          + " to run compaction");
+    }
+  }
+
+  /**
+   * Perform compaction operations as specified in the compaction commit file
+   *
+   * @param compactionInstant  Compacton Instant time
+   * @param activeTimeline Active Timeline
+   * @param autoCommit         Commit after compaction
+   * @return RDD of Write Status
+   */
+  private JavaRDD<WriteStatus> runCompaction(
+      HoodieInstant compactionInstant, HoodieActiveTimeline activeTimeline, boolean autoCommit) throws IOException {
+    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+        activeTimeline.getInstantAuxiliaryDetails(compactionInstant).get());
+    // Mark instant as compaction inflight
+    activeTimeline.transitionCompactionRequestedToInflight(compactionInstant);
+    compactionTimer = metrics.getCompactionCtx();
+    // Create a Hoodie table which encapsulated the commits and files visible
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        config.getBasePath(), true);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    JavaRDD<WriteStatus> statuses = table.compact(jsc, compactionInstant.getTimestamp(), compactionPlan);
+    // Force compaction action
+    statuses.persist(config.getWriteStatusStorageLevel());
+    // pass extra-metada so that it gets stored in commit file automatically
+    commitCompaction(statuses, table, compactionInstant.getTimestamp(), autoCommit,
+        Optional.ofNullable(compactionPlan.getExtraMetadata()));
+    return statuses;
+  }
+
+  /**
+   * Commit Compaction and track metrics
+   *
+   * @param compactedStatuses    Compaction Write status
+   * @param table                Hoodie Table
+   * @param compactionCommitTime Compaction Commit Time
+   * @param autoCommit           Auto Commit
+   * @param extraMetadata        Extra Metadata to store
+   */
+  protected void commitCompaction(JavaRDD<WriteStatus> compactedStatuses, HoodieTable<T> table,
+      String compactionCommitTime, boolean autoCommit, Optional<Map<String, String>> extraMetadata) {
+    if (autoCommit) {
+      HoodieCommitMetadata metadata =
+          doCompactionCommit(compactedStatuses, table.getMetaClient(), compactionCommitTime, extraMetadata);
+      if (compactionTimer != null) {
+        long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
+        try {
+          metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(compactionCommitTime).getTime(),
+              durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
+        } catch (ParseException e) {
+          throw new HoodieCommitException(
+              "Commit time is not of valid format.Failed to commit compaction " + config.getBasePath()
+                  + " at time " + compactionCommitTime, e);
+        }
+      }
+      logger.info("Compacted successfully on commit " + compactionCommitTime);
+    } else {
+      logger.info("Compaction did not run for commit " + compactionCommitTime);
+    }
+  }
+
+  /**
+   * Rollback partial compactions
+   * @param inflightInstant Inflight Compaction Instant
+   * @param table Hoodie Table
+   */
+  private void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable table) throws IOException {
+    table.rollback(jsc, ImmutableList.copyOf(new String[] { inflightInstant.getTimestamp() }));
+    // Revert instant state file
+    table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
+  }
+
+  private HoodieCommitMetadata doCompactionCommit(JavaRDD<WriteStatus> writeStatuses,
+      HoodieTableMetaClient metaClient, String compactionCommitTime, Optional<Map<String, String>> extraMetadata) {
+    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(writeStatus -> writeStatus.getStat())
+        .collect();
+
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
+    for (HoodieWriteStat stat : updateStatusMap) {
+      metadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+
+    // Copy extraMetadata
+    extraMetadata.ifPresent(m -> {
+      m.entrySet().stream().forEach(e -> {
+        metadata.addMetadata(e.getKey(), e.getValue());
+      });
+    });
+
+    logger.info("Compaction finished with result " + metadata);
+
+    logger.info("Committing Compaction " + compactionCommitTime);
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    try {
+      activeTimeline.transitionCompactionInflightToComplete(
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionCommitTime),
+          Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      throw new HoodieCompactionException(
+          "Failed to commit " + metaClient.getBasePath() + " at time " + compactionCommitTime, e);
+    }
+    return metadata;
+  }
+
+  /**
+   * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
+   * asynchronously. Please always use this serially before or after an insert/upsert action.
+   */
+  private Optional<String> forceCompact(Optional<Map<String, String>> extraMetadata) throws IOException {
+    Optional<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
+    compactionInstantTimeOpt.ifPresent(compactionInstantTime -> {
+      try {
+        compact(compactionInstantTime);
+      } catch (IOException ioe) {
+        throw new HoodieIOException(ioe.getMessage(), ioe);
+      }
+    });
+    return compactionInstantTimeOpt;
   }
 }
