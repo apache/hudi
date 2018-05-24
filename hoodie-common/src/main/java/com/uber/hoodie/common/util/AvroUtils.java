@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.uber.hoodie.avro.model.HoodieCleanMetadata;
 import com.uber.hoodie.avro.model.HoodieCleanPartitionMetadata;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.avro.model.HoodieRollbackMetadata;
 import com.uber.hoodie.avro.model.HoodieRollbackPartitionMetadata;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
@@ -142,6 +143,10 @@ public class AvroUtils {
         partitionMetadataBuilder.build());
   }
 
+  public static Optional<byte[]> serializeCompactionWorkload(HoodieCompactionPlan compactionWorkload)
+      throws IOException {
+    return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
+  }
 
   public static Optional<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata)
       throws IOException {
@@ -169,6 +174,11 @@ public class AvroUtils {
     return Optional.of(baos.toByteArray());
   }
 
+  public static HoodieCompactionPlan deserializeHoodieCompactionPlan(byte[] bytes)
+      throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieCompactionPlan.class);
+  }
+
   public static HoodieCleanMetadata deserializeHoodieCleanMetadata(byte[] bytes)
       throws IOException {
     return deserializeAvroMetadata(bytes, HoodieCleanMetadata.class);
@@ -188,5 +198,4 @@ public class AvroUtils {
         .checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
     return fileReader.next();
   }
-
 }
