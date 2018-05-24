@@ -22,7 +22,6 @@ import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.io.Serializable;
 import java.util.List;
@@ -92,7 +91,7 @@ public abstract class CompactionStrategy implements Serializable {
   public HoodieCompactionPlan generateCompactionPlan(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Strategy implementation can overload this method to set specific compactor-id
-    return HoodieCompactionPlan.newBuilder().setCompactorId(HoodieCompactionConfig.DEFAULT_COMPACTOR_ID)
+    return HoodieCompactionPlan.newBuilder()
         .setOperations(orderAndFilter(writeConfig, operations, pendingCompactionPlans))
         .build();
   }
