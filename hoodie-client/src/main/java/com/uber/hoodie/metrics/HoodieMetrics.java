@@ -38,6 +38,7 @@ public class HoodieMetrics {
   public String commitTimerName = null;
   public String deltaCommitTimerName = null;
   public String finalizeTimerName = null;
+  public String compactionTimerName = null;
   private HoodieWriteConfig config = null;
   private String tableName = null;
   private Timer rollbackTimer = null;
@@ -45,6 +46,7 @@ public class HoodieMetrics {
   private Timer commitTimer = null;
   private Timer deltaCommitTimer = null;
   private Timer finalizeTimer = null;
+  private Timer compactionTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
     this.config = config;
@@ -56,6 +58,7 @@ public class HoodieMetrics {
       this.commitTimerName = getMetricsName("timer", HoodieTimeline.COMMIT_ACTION);
       this.deltaCommitTimerName = getMetricsName("timer", HoodieTimeline.DELTA_COMMIT_ACTION);
       this.finalizeTimerName = getMetricsName("timer", "finalize");
+      this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
     }
   }
 
@@ -68,6 +71,13 @@ public class HoodieMetrics {
       rollbackTimer = createTimer(rollbackTimerName);
     }
     return rollbackTimer == null ? null : rollbackTimer.time();
+  }
+
+  public Timer.Context getCompactionCtx() {
+    if (config.isMetricsOn() && compactionTimer == null) {
+      compactionTimer = createTimer(commitTimerName);
+    }
+    return compactionTimer == null ? null : compactionTimer.time();
   }
 
   public Timer.Context getCleanCtx() {

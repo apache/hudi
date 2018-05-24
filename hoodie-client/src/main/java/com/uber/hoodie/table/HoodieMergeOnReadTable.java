@@ -36,6 +36,7 @@ import com.uber.hoodie.common.table.log.block.HoodieCommandBlock.HoodieCommandBl
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -148,19 +150,11 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     logger.info("Compacting merge on read table " + config.getBasePath());
     HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
     try {
-      return compactor.generateCompactionPlan(jsc, this, config, instantTime);
+      return compactor.generateCompactionPlan(jsc, this, config, instantTime,
+          new HashSet<>(((HoodieTableFileSystemView)getRTFileSystemView())
+              .getFileIdToPendingCompaction().keySet()));
     } catch (IOException e) {
       throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
-    }
-  }
-
-  @Override
-  public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionCommitTime) {
-    HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
-    try {
-      return compactor.compact(jsc, config, this, compactionCommitTime);
-    } catch (IOException e) {
-      throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }
   }
 
@@ -185,7 +179,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     }
     Map<String, HoodieInstant> commitsAndCompactions = this.getActiveTimeline()
         .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
-            HoodieActiveTimeline.DELTA_COMMIT_ACTION)).getInstants()
+            HoodieActiveTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION)).getInstants()
         .filter(i -> commits.contains(i.getTimestamp()))
         .collect(Collectors.toMap(i -> i.getTimestamp(), i -> i));
 
@@ -219,6 +213,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
 
             switch (instant.getAction()) {
               case HoodieTimeline.COMMIT_ACTION:
+              case HoodieTimeline.COMPACTION_ACTION:
                 try {
                   Map<FileStatus, Boolean> results = super
                       .deleteCleanedFiles(partitionPath, Arrays.asList(commit));

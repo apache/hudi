@@ -168,11 +168,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String commitTime) {
-    throw new HoodieNotSupportedException("Compaction is not supported from a CopyOnWrite table");
-  }
-
-  @Override
   public JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionInstantTime,
       HoodieCompactionPlan compactionPlan) {
     throw new HoodieNotSupportedException("Compaction is not supported from a CopyOnWrite table");
