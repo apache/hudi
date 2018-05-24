@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.table.view;
 
+import com.google.common.collect.ImmutableMap;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
@@ -23,6 +24,8 @@ import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
@@ -41,6 +44,8 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Common abstract implementation for multiple TableFileSystemView Implementations. 2 possible
@@ -54,6 +59,8 @@ import org.apache.hadoop.fs.Path;
 public class HoodieTableFileSystemView implements TableFileSystemView,
     TableFileSystemView.ReadOptimizedView,
     TableFileSystemView.RealtimeView, Serializable {
+
+  private static Logger log = LogManager.getLogger(HoodieTableFileSystemView.class);
 
   protected HoodieTableMetaClient metaClient;
   // This is the commits that will be visible for all views extending this view
@@ -78,10 +85,15 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     this.visibleActiveTimeline = visibleActiveTimeline;
     this.fileGroupMap = new HashMap<>();
     this.partitionToFileGroupsMap = new HashMap<>();
-    //TODO: vb Will be implemented in next PR
-    this.fileIdToPendingCompactionInstantTime = new HashMap<>();
-  }
 
+    // Build fileId to Pending Compaction Instants
+    List<HoodieInstant> pendingCompactionInstants =
+        metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
+    this.fileIdToPendingCompactionInstantTime = ImmutableMap.copyOf(
+        CompactionUtils.getAllPendingCompactionOperations(metaClient).entrySet().stream().map(entry -> {
+          return Pair.of(entry.getKey(), entry.getValue().getKey());
+        }).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+  }
 
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
@@ -403,16 +415,5 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       throw new HoodieIOException(
           "Failed to list data files in partition " + partitionPathStr, e);
     }
-  }
-
-  /**
-   * Used by tests to add pending compaction entries TODO: This method is temporary and should go away in subsequent
-   * Async Compaction PR
-   *
-   * @param fileId                File Id
-   * @param compactionInstantTime Compaction Instant Time
-   */
-  protected void addPendingCompactionFileId(String fileId, String compactionInstantTime) {
-    fileIdToPendingCompactionInstantTime.put(fileId, compactionInstantTime);
   }
 }

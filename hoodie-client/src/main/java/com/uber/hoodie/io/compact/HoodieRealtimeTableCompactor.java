@@ -41,7 +41,6 @@ import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -49,6 +48,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -95,7 +95,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    log.info("Compactor " + compactionPlan.getCompactorId() + " running, Compacting " + operations + " files");
+    log.info("Compactor compacting " + operations + " files");
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionCommitTime))
         .flatMap(writeStatusesItr -> writeStatusesItr.iterator());
@@ -217,7 +217,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // TODO: In subsequent PRs, pending Compaction plans will be wired in. Strategy can look at pending compaction
     // plans to schedule next compaction plan
     HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
-        new ArrayList<>());
+        CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
     if (compactionPlan.getOperations().isEmpty()) {
       log.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
     }

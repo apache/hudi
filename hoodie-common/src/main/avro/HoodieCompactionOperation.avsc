@@ -3,11 +3,7 @@
    "type":"record",
    "name":"HoodieCompactionPlan",
    "fields":[
-      {
-         "name":"compactorId",
-         "type":["null","string"]
-      },
-      {
+     {
          "name":"operations",
          "type":["null", {
             "type":"array",

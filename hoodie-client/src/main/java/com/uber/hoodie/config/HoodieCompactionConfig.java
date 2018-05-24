@@ -108,7 +108,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       + ".partitions";
   // 500GB of target IO per compaction (both read and write)
   public static final String DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = String.valueOf(10);
-  public static final String DEFAULT_COMPACTOR_ID = "default";
 
   private HoodieCompactionConfig(Properties props) {
     super(props);
