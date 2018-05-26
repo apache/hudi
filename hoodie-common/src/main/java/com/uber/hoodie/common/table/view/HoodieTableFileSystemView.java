@@ -257,6 +257,22 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   }
 
   @Override
+  public Stream<HoodieDataFile> getLatestDataFilesOn(String partitionPath, String instantTime) {
+    return getAllFileGroups(partitionPath)
+        .map(fileGroup -> {
+          return fileGroup.getAllDataFiles()
+              .filter(dataFile ->
+                  HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
+                      instantTime,
+                      HoodieTimeline.EQUAL))
+              .filter(df -> !isDataFileDueToPendingCompaction(df))
+              .findFirst();
+        })
+        .filter(Optional::isPresent)
+        .map(Optional::get);
+  }
+
+  @Override
   public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
     return getAllFileGroups(partitionPath)
         .map(fileGroup -> fileGroup.getAllDataFiles())

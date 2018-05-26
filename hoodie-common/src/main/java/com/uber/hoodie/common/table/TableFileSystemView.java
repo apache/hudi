@@ -52,6 +52,12 @@ public interface TableFileSystemView {
         String maxCommitTime);
 
     /**
+     * Stream all the latest version data files in the given partition with precondition that
+     * instant time of file matches passed in instant time.
+     */
+    Stream<HoodieDataFile> getLatestDataFilesOn(String partitionPath, String instantTime);
+
+    /**
      * Stream all the latest data files pass
      */
     Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
