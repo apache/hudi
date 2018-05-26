@@ -174,6 +174,8 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Helper methods to compare instants
    **/
+  BiPredicate<String, String> EQUAL =
+      (commit1, commit2) -> commit1.compareTo(commit2) == 0;
   BiPredicate<String, String> GREATER_OR_EQUAL =
       (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
   BiPredicate<String, String> GREATER = (commit1, commit2) -> commit1.compareTo(commit2) > 0;
