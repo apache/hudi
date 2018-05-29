@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common.table.view;
 
+import com.uber.hoodie.common.HoodieFileGroupBuilder;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
@@ -128,15 +129,15 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
 
     List<HoodieFileGroup> fileGroups = new ArrayList<>();
     fileIdSet.forEach(pair -> {
-      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), pair.getValue(),
-          visibleActiveTimeline);
+      HoodieFileGroupBuilder groupBuilder =
+          new HoodieFileGroupBuilder(pair.getKey(), pair.getValue(), metaClient, visibleActiveTimeline);
       if (dataFiles.containsKey(pair)) {
-        dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
+        dataFiles.get(pair).forEach(dataFile -> groupBuilder.withDataFile(dataFile));
       }
       if (logFiles.containsKey(pair)) {
-        logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
+        logFiles.get(pair).forEach(logFile -> groupBuilder.withLogFile(logFile));
       }
-      fileGroups.add(group);
+      fileGroups.add(groupBuilder.build());
     });
 
     // add to the cache.

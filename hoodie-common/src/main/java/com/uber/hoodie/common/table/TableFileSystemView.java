@@ -69,7 +69,7 @@ public interface TableFileSystemView {
   interface RealtimeView {
 
     /**
-     * Stream all the latest file slices in the given partition
+     * Stream all the latest committed file slices in the given partition
      */
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
@@ -86,7 +86,7 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);
 
     /**
-     * Stream all the file slices for a given partition, latest or not.
+     * Stream all the committed file slices for a given partition, latest or not.
      */
     Stream<FileSlice> getAllFileSlices(String partitionPath);
   }

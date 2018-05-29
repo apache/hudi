@@ -173,7 +173,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                 .getLatestFileSlices(partitionPath).map(
                     s -> {
                       List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile
-                          .getLogVersionComparator().reversed()).collect(Collectors.toList());
+                          .getBaseInstantAndLogVersionComparator().reversed()).collect(Collectors.toList());
                       totalLogFiles.add((long) logFiles.size());
                       totalFileSlices.add(1L);
                       return new CompactionOperation(s.getDataFile().get(), partitionPath, logFiles, config);
