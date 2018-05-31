@@ -241,13 +241,17 @@ public class TestCompactionUtils {
   }
 
   private void scheduleCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
-    metaClient.getActiveTimeline().saveToRequested(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
-        AvroUtils.serializeCompactionWorkload(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(
+        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
+        AvroUtils.serializeCompactionPlan(compactionPlan));
   }
 
   private void scheduleInflightCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
-    metaClient.getActiveTimeline().saveToInflight(new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, instantTime),
-        AvroUtils.serializeCompactionWorkload(compactionPlan));
+    metaClient.getActiveTimeline().saveToCompactionRequested(
+        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
+        AvroUtils.serializeCompactionPlan(compactionPlan));
+    metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(
+        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
   }
 
   private HoodieCompactionPlan createCompactionPlan(String instantId, int numFileIds) {

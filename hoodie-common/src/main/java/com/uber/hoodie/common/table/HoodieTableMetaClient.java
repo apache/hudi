@@ -22,14 +22,20 @@ import com.uber.hoodie.common.SerializableConfiguration;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -54,6 +60,7 @@ public class HoodieTableMetaClient implements Serializable {
   private static final transient Logger log = LogManager.getLogger(HoodieTableMetaClient.class);
   public static String METAFOLDER_NAME = ".hoodie";
   public static String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
+  public static String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
 
   private String basePath;
   private transient FileSystem fs;
@@ -133,6 +140,13 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getMetaPath() {
     return metaPath;
+  }
+
+  /**
+   * @return Auxiliary Meta path
+   */
+  public String getMetaAuxiliaryPath() {
+    return basePath + File.separator + AUXILIARYFOLDER_NAME;
   }
 
   /**
@@ -242,6 +256,13 @@ public class HoodieTableMetaClient implements Serializable {
     if (!fs.exists(temporaryFolder)) {
       fs.mkdirs(temporaryFolder);
     }
+
+    // Always create auxiliary folder which is needed to track compaction workloads (stats and any metadata in future)
+    final Path auxiliaryFolder = new Path(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
+    if (!fs.exists(auxiliaryFolder)) {
+      fs.mkdirs(auxiliaryFolder);
+    }
+
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
@@ -320,6 +341,30 @@ public class HoodieTableMetaClient implements Serializable {
     }
   }
 
+
+  /**
+   * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects
+   *
+   * @param fs                 FileSystem
+   * @param metaPath           Meta Path where hoodie instants are present
+   * @param includedExtensions Included hoodie extensions
+   * @return List of Hoodie Instants generated
+   * @throws IOException in case of failure
+   */
+  public static List<HoodieInstant> scanHoodieInstantsFromFileSystem(
+      FileSystem fs, Path metaPath, Set<String> includedExtensions) throws IOException {
+    return Arrays.stream(
+        HoodieTableMetaClient
+            .scanFiles(fs, metaPath, path -> {
+              // Include only the meta files with extensions that needs to be included
+              String extension = FSUtils.getFileExtension(path.getName());
+              return includedExtensions.contains(extension);
+            })).sorted(Comparator.comparing(
+                // Sort the meta-data by the instant time (first part of the file name)
+                fileStatus -> FSUtils.getInstantTime(fileStatus.getPath().getName())))
+        // create HoodieInstantMarkers from FileStatus, which extracts properties
+        .map(HoodieInstant::new).collect(Collectors.toList());
+  }
 
   @Override
   public boolean equals(Object o) {
