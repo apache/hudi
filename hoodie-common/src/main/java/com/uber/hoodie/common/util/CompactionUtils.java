@@ -21,6 +21,7 @@ import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.IOException;
@@ -114,7 +115,8 @@ public class CompactionUtils {
     return pendingCompactionInstants.stream().map(instant -> {
       try {
         HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-            metaClient.getActiveTimeline().getInstantDetails(instant).get());
+            metaClient.getActiveTimeline().getInstantAuxiliaryDetails(
+                HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         return Pair.of(instant, compactionPlan);
       } catch (IOException e) {
         throw new HoodieException(e);
