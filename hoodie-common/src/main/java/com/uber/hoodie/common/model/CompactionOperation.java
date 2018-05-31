@@ -106,7 +106,7 @@ public class CompactionOperation implements Serializable {
     op.dataFilePath = Optional.ofNullable(operation.getDataFilePath());
     op.deltaFilePaths = new ArrayList<>(operation.getDeltaFilePaths());
     op.fileId = operation.getFileId();
-    op.metrics = new HashMap<>(operation.getMetrics());
+    op.metrics = operation.getMetrics() == null ? new HashMap<>() : new HashMap<>(operation.getMetrics());
     op.partitionPath = operation.getPartitionPath();
     return op;
   }
