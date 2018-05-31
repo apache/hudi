@@ -138,6 +138,15 @@ public class HoodieTestDataGenerator {
     }
   }
 
+  public static void createCompactionRequestedFile(String basePath, String commitTime, Configuration configuration)
+      throws IOException {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeRequestedCompactionFileName(commitTime));
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FSDataOutputStream os = fs.create(commitFile, true);
+    os.close();
+  }
+
   public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
       Configuration configuration) throws IOException {
     Path commitFile = new Path(

@@ -303,7 +303,7 @@ public class TestClientRollback extends TestHoodieClientBase {
         && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
 
     // Turn auto rollback on
-    new HoodieWriteClient(jsc, config, true);
+    new HoodieWriteClient(jsc, config, true).startCommit();
     assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
     assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
     assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
