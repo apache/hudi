@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -25,14 +26,17 @@ import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -48,6 +52,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
   private final TableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
+  private final Map<String, CompactionOperation> fileIdToPendingCompactionOperations;
   private HoodieTable<T> hoodieTable;
   private HoodieWriteConfig config;
 
@@ -56,8 +61,11 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
     this.fileSystemView = hoodieTable.getCompletedFileSystemView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
     this.config = config;
+    this.fileIdToPendingCompactionOperations =
+        ((HoodieTableFileSystemView)hoodieTable.getRTFileSystemView()).getFileIdToPendingCompaction().entrySet()
+            .stream().map(entry -> Pair.of(entry.getKey(), entry.getValue().getValue()))
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
-
 
   /**
    * Selects the older versions of files for cleaning, such that it bounds the number of versions of
@@ -81,8 +89,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
         FileSlice nextSlice = fileSliceIterator.next();
-        HoodieDataFile dataFile = nextSlice.getDataFile().get();
-        if (savepointedFiles.contains(dataFile.getFileName())) {
+        Optional<HoodieDataFile> dataFile = nextSlice.getDataFile();
+        if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
         }
@@ -91,12 +99,16 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        HoodieDataFile dataFile = nextSlice.getDataFile().get();
-        deletePaths.add(dataFile.getFileStatus().getPath().toString());
-        if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-          // If merge on read, then clean the log files for the commits as well
-          deletePaths.addAll(nextSlice.getLogFiles().map(file -> file.getPath().toString())
-              .collect(Collectors.toList()));
+        if (!isFileSliceNeededForPendingCompaction(nextSlice)) {
+          if (nextSlice.getDataFile().isPresent()) {
+            HoodieDataFile dataFile = nextSlice.getDataFile().get();
+            deletePaths.add(dataFile.getFileStatus().getPath().toString());
+          }
+          if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+            // If merge on read, then clean the log files for the commits as well
+            deletePaths.addAll(nextSlice.getLogFiles().map(file -> file.getPath().toString())
+                .collect(Collectors.toList()));
+          }
         }
       }
     }
@@ -133,17 +145,21 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
           .collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
         List<FileSlice> fileSliceList = fileGroup.getAllFileSlices().collect(Collectors.toList());
-        HoodieDataFile dataFile = fileSliceList.get(0).getDataFile().get();
-        String lastVersion = dataFile.getCommitTime();
+
+        if (fileSliceList.isEmpty()) {
+          continue;
+        }
+
+        String lastVersion = fileSliceList.get(0).getBaseInstantTime();
         String lastVersionBeforeEarliestCommitToRetain = getLatestVersionBeforeCommit(fileSliceList,
             earliestCommitToRetain);
 
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
         // i.e always spare the last commit.
         for (FileSlice aSlice : fileSliceList) {
-          HoodieDataFile aFile = aSlice.getDataFile().get();
-          String fileCommitTime = aFile.getCommitTime();
-          if (savepointedFiles.contains(aFile.getFileName())) {
+          Optional<HoodieDataFile> aFile = aSlice.getDataFile();
+          String fileCommitTime = aSlice.getBaseInstantTime();
+          if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
             // do not clean up a savepoint data file
             continue;
           }
@@ -159,11 +175,14 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
           }
 
           // Always keep the last commit
-          if (HoodieTimeline
+          if (!isFileSliceNeededForPendingCompaction(aSlice)
+              && HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime,
                   HoodieTimeline.GREATER)) {
             // this is a commit, that should be cleaned.
-            deletePaths.add(aFile.getFileStatus().getPath().toString());
+            if (aFile.isPresent()) {
+              deletePaths.add(aFile.get().getFileStatus().getPath().toString());
+            }
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
               deletePaths.addAll(aSlice.getLogFiles().map(file -> file.getPath().toString())
@@ -183,7 +202,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
   private String getLatestVersionBeforeCommit(List<FileSlice> fileSliceList,
       HoodieInstant commitTime) {
     for (FileSlice file : fileSliceList) {
-      String fileCommitTime = file.getDataFile().get().getCommitTime();
+      String fileCommitTime = file.getBaseInstantTime();
       if (HoodieTimeline
           .compareTimestamps(commitTime.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
         // fileList is sorted on the reverse, so the first commit we find <= commitTime is the
@@ -225,5 +244,20 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
           .nthInstant(commitTimeline.countInstants() - commitsRetained);
     }
     return earliestCommitToRetain;
+  }
+
+  /**
+   * Determine if file slice needed to be preserved for pending compaction
+   * @param fileSlice File Slice
+   * @return true if file slice needs to be preserved, false otherwise.
+   */
+  private boolean isFileSliceNeededForPendingCompaction(FileSlice fileSlice) {
+    CompactionOperation op = fileIdToPendingCompactionOperations.get(fileSlice.getFileId());
+    if (null != op) {
+      // If file slice's instant time is newer or same as that of operation, do not clean
+      return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), op.getBaseInstantTime(),
+          HoodieTimeline.GREATER_OR_EQUAL);
+    }
+    return false;
   }
 }
