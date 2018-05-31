@@ -84,6 +84,10 @@ public class HoodieInstant implements Serializable {
     this.timestamp = timestamp;
   }
 
+  public boolean isCompleted() {
+    return state == State.COMPLETED;
+  }
+
   public boolean isInflight() {
     return state == State.INFLIGHT;
   }

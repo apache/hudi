@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.common;
 
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
@@ -23,6 +24,8 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import java.io.IOException;
@@ -130,6 +133,21 @@ public class HoodieTestDataGenerator {
     try {
       // Write empty commit metadata
       os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } finally {
+      os.close();
+    }
+  }
+
+  public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
+      Configuration configuration) throws IOException {
+    Path commitFile = new Path(
+        basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
+    FileSystem fs = FSUtils.getFs(basePath, configuration);
+    FSDataOutputStream os = fs.create(commitFile, true);
+    HoodieCompactionPlan workload = new HoodieCompactionPlan();
+    try {
+      // Write empty commit metadata
+      os.writeBytes(new String(AvroUtils.serializeCompactionPlan(workload).get(), StandardCharsets.UTF_8));
     } finally {
       os.close();
     }

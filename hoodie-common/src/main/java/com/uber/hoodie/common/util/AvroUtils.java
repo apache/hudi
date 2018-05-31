@@ -143,7 +143,7 @@ public class AvroUtils {
         partitionMetadataBuilder.build());
   }
 
-  public static Optional<byte[]> serializeCompactionWorkload(HoodieCompactionPlan compactionWorkload)
+  public static Optional<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload)
       throws IOException {
     return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
   }
