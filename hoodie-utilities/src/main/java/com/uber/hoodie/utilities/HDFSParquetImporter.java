@@ -26,24 +26,21 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.HoodieJsonPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
-import com.uber.hoodie.index.HoodieIndex;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
@@ -52,21 +49,148 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetInputFormat;
-import org.apache.spark.Accumulator;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
+/**
+ * Loads data from Parquet Sources
+ */
 public class HDFSParquetImporter implements Serializable {
 
+  public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
   private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
   private final Config cfg;
   private transient FileSystem fs;
-  public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
 
   public HDFSParquetImporter(Config cfg) throws IOException {
     this.cfg = cfg;
+  }
+
+  public static void main(String[] args) throws Exception {
+    final Config cfg = new Config();
+    JCommander cmd = new JCommander(cfg, args);
+    if (cfg.help || args.length == 0) {
+      cmd.usage();
+      System.exit(1);
+    }
+    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
+    dataImporter.dataImport(UtilHelpers.buildSparkContext(cfg.tableName, cfg.sparkMaster, cfg.sparkMemory), cfg.retry);
+  }
+
+  public int dataImport(JavaSparkContext jsc, int retry) throws Exception {
+    this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
+    int ret = -1;
+    try {
+      // Verify that targetPath is not present.
+      if (fs.exists(new Path(cfg.targetPath))) {
+        throw new HoodieIOException(String.format("Make sure %s is not present.", cfg.targetPath));
+      }
+      do {
+        ret = dataImport(jsc);
+      } while (ret != 0 && retry-- > 0);
+    } catch (Throwable t) {
+      logger.error(t);
+    }
+    return ret;
+  }
+
+  @VisibleForTesting
+  protected int dataImport(JavaSparkContext jsc) throws IOException {
+    try {
+      if (fs.exists(new Path(cfg.targetPath))) {
+        // cleanup target directory.
+        fs.delete(new Path(cfg.targetPath), true);
+      }
+
+      //Get schema.
+      String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
+
+      // Initialize target hoodie table.
+      Properties properties = new Properties();
+      properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
+      properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
+      HoodieTableMetaClient
+          .initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
+
+      HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr,
+          cfg.parallelism, Optional.empty());
+
+      JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
+      // Get instant time.
+      String instantTime = client.startCommit();
+      JavaRDD<WriteStatus> writeResponse = load(client, instantTime, hoodieRecords);
+      return UtilHelpers.handleErrors(jsc, instantTime, writeResponse);
+    } catch (Throwable t) {
+      logger.error("Error occurred.", t);
+    }
+    return -1;
+  }
+
+  protected JavaRDD<HoodieRecord<HoodieRecordPayload>> buildHoodieRecordsForImport(
+      JavaSparkContext jsc, String schemaStr) throws IOException {
+    Job job = Job.getInstance(jsc.hadoopConfiguration());
+    // Allow recursive directories to be found
+    job.getConfiguration().set(FileInputFormat.INPUT_DIR_RECURSIVE, "true");
+    // To parallelize reading file status.
+    job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
+    AvroReadSupport
+        .setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
+    ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
+
+    return jsc.newAPIHadoopFile(cfg.srcPath,
+        ParquetInputFormat.class, Void.class, GenericRecord.class, job.getConfiguration())
+        // To reduce large number of
+        // tasks.
+        .coalesce(16 * cfg.parallelism)
+        .map(entry -> {
+          GenericRecord genericRecord
+              = ((Tuple2<Void, GenericRecord>) entry)._2();
+          Object partitionField =
+              genericRecord.get(cfg.partitionKey);
+          if (partitionField == null) {
+            throw new HoodieIOException(
+                "partition key is missing. :"
+                    + cfg.partitionKey);
+          }
+          Object rowField = genericRecord.get(cfg.rowKey);
+          if (rowField == null) {
+            throw new HoodieIOException(
+                "row field is missing. :" + cfg.rowKey);
+          }
+          String partitionPath = partitionField.toString();
+          logger.info("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          if (partitionField instanceof Number) {
+            try {
+              long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
+              partitionPath =
+                  PARTITION_FORMATTER.format(new Date(ts));
+            } catch (NumberFormatException nfe) {
+              logger.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+            }
+          }
+          return new HoodieRecord<>(
+              new HoodieKey(
+                  (String) rowField, partitionPath),
+              new HoodieJsonPayload(
+                  genericRecord.toString()));
+        });
+  }
+
+  /**
+   * Imports records to Hoodie dataset
+   *
+   * @param client        Hoodie Client
+   * @param instantTime   Instant Time
+   * @param hoodieRecords Hoodie Records
+   * @param <T>           Type
+   */
+  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client,
+      String instantTime, JavaRDD<HoodieRecord<T>> hoodieRecords) {
+    if (cfg.command.toLowerCase().equals("insert")) {
+      return client.insert(hoodieRecords, instantTime);
+    }
+    return client.upsert(hoodieRecords, instantTime);
   }
 
   public static class FormatValidator implements IValueValidator<String> {
@@ -97,6 +221,10 @@ public class HDFSParquetImporter implements Serializable {
 
   public static class Config implements Serializable {
 
+    @Parameter(names = {"--command", "-c"},
+        description = "Write command Valid values are insert(default)/upsert",
+        required = false)
+    public String command = "INSERT";
     @Parameter(names = {"--src-path",
         "-sp"}, description = "Base path for the input dataset", required = true)
     public String srcPath = null;
@@ -136,168 +264,5 @@ public class HDFSParquetImporter implements Serializable {
     public int retry = 0;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
-  }
-
-  public static void main(String[] args) throws Exception {
-    final HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
-    JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
-    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
-    dataImporter.dataImport(dataImporter.getSparkContext(), cfg.retry);
-  }
-
-  private JavaSparkContext getSparkContext() {
-    SparkConf sparkConf = new SparkConf().setAppName("hoodie-data-importer-" + cfg.tableName);
-    sparkConf.setMaster(cfg.sparkMaster);
-
-    if (cfg.sparkMaster.startsWith("yarn")) {
-      sparkConf.set("spark.eventLog.overwrite", "true");
-      sparkConf.set("spark.eventLog.enabled", "true");
-    }
-
-    sparkConf.set("spark.driver.maxResultSize", "2g");
-    sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-
-    // Configure hadoop conf
-    sparkConf.set("spark.hadoop.mapred.output.compress", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec",
-        "org.apache.hadoop.io.compress.GzipCodec");
-    sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
-
-    sparkConf = HoodieWriteClient.registerClasses(sparkConf);
-    return new JavaSparkContext(sparkConf);
-  }
-
-  private String getSchema() throws Exception {
-    // Read schema file.
-    Path p = new Path(cfg.schemaFile);
-    if (!fs.exists(p)) {
-      throw new Exception(String.format("Could not find - %s - schema file.", cfg.schemaFile));
-    }
-    long len = fs.getFileStatus(p).getLen();
-    ByteBuffer buf = ByteBuffer.allocate((int) len);
-    FSDataInputStream inputStream = null;
-    try {
-      inputStream = fs.open(p);
-      inputStream.readFully(0, buf.array(), 0, buf.array().length);
-    } finally {
-      if (inputStream != null) {
-        inputStream.close();
-      }
-    }
-    return new String(buf.array());
-  }
-
-  public int dataImport(JavaSparkContext jsc, int retry) throws Exception {
-    this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
-    int ret = -1;
-    try {
-      // Verify that targetPath is not present.
-      if (fs.exists(new Path(cfg.targetPath))) {
-        throw new HoodieIOException(String.format("Make sure %s is not present.", cfg.targetPath));
-      }
-      do {
-        ret = dataImport(jsc);
-      } while (ret != 0 && retry-- > 0);
-    } catch (Throwable t) {
-      logger.error(t);
-    }
-    return ret;
-  }
-
-  @VisibleForTesting
-  protected int dataImport(JavaSparkContext jsc) throws IOException {
-    try {
-      if (fs.exists(new Path(cfg.targetPath))) {
-        // cleanup target directory.
-        fs.delete(new Path(cfg.targetPath), true);
-      }
-
-      //Get schema.
-      String schemaStr = getSchema();
-
-      // Initialize target hoodie table.
-      Properties properties = new Properties();
-      properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
-      properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
-      HoodieTableMetaClient
-          .initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
-
-      HoodieWriteClient client = createHoodieClient(jsc, cfg.targetPath, schemaStr,
-          cfg.parallelism);
-
-      Job job = Job.getInstance(jsc.hadoopConfiguration());
-      // To parallelize reading file status.
-      job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
-      AvroReadSupport
-          .setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
-      ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
-
-      JavaRDD<HoodieRecord<HoodieJsonPayload>> hoodieRecords = jsc.newAPIHadoopFile(cfg.srcPath,
-          ParquetInputFormat.class, Void.class, GenericRecord.class, job.getConfiguration())
-          // To reduce large number of
-          // tasks.
-          .coalesce(16 * cfg.parallelism)
-          .map(entry -> {
-            GenericRecord genericRecord
-                = ((Tuple2<Void, GenericRecord>) entry)._2();
-            Object partitionField =
-                genericRecord.get(cfg.partitionKey);
-            if (partitionField == null) {
-              throw new HoodieIOException(
-                  "partition key is missing. :"
-                      + cfg.partitionKey);
-            }
-            Object rowField = genericRecord.get(cfg.rowKey);
-            if (rowField == null) {
-              throw new HoodieIOException(
-                  "row field is missing. :" + cfg.rowKey);
-            }
-            long ts = (long) ((Double) partitionField * 1000L);
-            String partitionPath =
-                PARTITION_FORMATTER.format(new Date(ts));
-            return new HoodieRecord<>(
-                new HoodieKey(
-                    (String) rowField, partitionPath),
-                new HoodieJsonPayload(
-                    genericRecord.toString()));
-          });
-      // Get commit time.
-      String commitTime = client.startCommit();
-
-      JavaRDD<WriteStatus> writeResponse = client.bulkInsert(hoodieRecords, commitTime);
-      Accumulator<Integer> errors = jsc.accumulator(0);
-      writeResponse.foreach(writeStatus -> {
-        if (writeStatus.hasErrors()) {
-          errors.add(1);
-          logger.error(String.format("Error processing records :writeStatus:%s",
-              writeStatus.getStat().toString()));
-        }
-      });
-      if (errors.value() == 0) {
-        logger.info(
-            String.format("Dataset imported into hoodie dataset with %s commit time.", commitTime));
-        return 0;
-      }
-      logger.error(String.format("Import failed with %d errors.", errors.value()));
-    } catch (Throwable t) {
-      logger.error("Error occurred.", t);
-    }
-    return -1;
-  }
-
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,
-      String schemaStr, int parallelism) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withParallelism(parallelism, parallelism).withSchema(schemaStr)
-        .combineInput(true, true).withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .build();
-    return new HoodieWriteClient(jsc, config);
   }
 }

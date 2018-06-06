@@ -29,14 +29,17 @@ import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
+import scala.collection.JavaConverters;
 
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
 
   private static Logger log = LogManager.getLogger(HDFSParquetImportCommand.class);
 
-  @CliCommand(value = "hdfsparquetimport", help = "Imports hdfs dataset to a hoodie dataset")
+  @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
   public String convert(
+      @CliOption(key = "upsert", mandatory = false, unspecifiedDefaultValue = "false",
+          help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
       @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset") final String srcPath,
       @CliOption(key = "srcType", mandatory = true, help = "Source type for the input dataset") final String srcType,
       @CliOption(key = "targetPath", mandatory = true, help = "Base path for the target hoodie dataset") final String
@@ -59,10 +62,16 @@ public class HDFSParquetImportCommand implements CommandMarker {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
     String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
-        scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+        JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
+
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    sparkLauncher.addAppArgs(SparkCommand.IMPORT.toString(), srcPath, targetPath, tableName, tableType, rowKeyField,
+    String cmd = SparkCommand.IMPORT.toString();
+    if (useUpsert) {
+      cmd = SparkCommand.UPSERT.toString();
+    }
+
+    sparkLauncher.addAppArgs(cmd, srcPath, targetPath, tableName, tableType, rowKeyField,
         partitionPathField, parallelism, schemaFilePath, sparkMemory, retry);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
