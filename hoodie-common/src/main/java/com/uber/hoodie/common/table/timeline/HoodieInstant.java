@@ -149,6 +149,10 @@ public class HoodieInstant implements Serializable {
         && Objects.equals(timestamp, that.timestamp);
   }
 
+  public State getState() {
+    return state;
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(state, action, timestamp);
