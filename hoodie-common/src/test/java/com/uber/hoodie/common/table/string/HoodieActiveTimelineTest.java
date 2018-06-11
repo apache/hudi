@@ -34,6 +34,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.junit.rules.TemporaryFolder;
 
 public class HoodieActiveTimelineTest {
 
@@ -41,15 +42,12 @@ public class HoodieActiveTimelineTest {
   private HoodieTableMetaClient metaClient;
   @Rule
   public final ExpectedException exception = ExpectedException.none();
-
+  @Rule
+  public TemporaryFolder tmpFolder = new TemporaryFolder();
+  
   @Before
   public void setUp() throws Exception {
-    this.metaClient = HoodieTestUtils.initOnTemp();
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    metaClient.getFs().delete(new Path(this.metaClient.getBasePath()), true);
+    this.metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
   }
 
   @Test

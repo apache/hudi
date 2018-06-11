@@ -44,7 +44,9 @@ import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class HoodieTableFileSystemViewTest {
@@ -54,10 +56,13 @@ public class HoodieTableFileSystemViewTest {
   private TableFileSystemView fsView;
   private TableFileSystemView.ReadOptimizedView roView;
   private TableFileSystemView.RealtimeView rtView;
+  
+  @Rule
+  public TemporaryFolder tmpFolder = new TemporaryFolder();
 
   @Before
   public void init() throws IOException {
-    metaClient = HoodieTestUtils.initOnTemp();
+    metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());;
     basePath = metaClient.getBasePath();
     fsView = new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());

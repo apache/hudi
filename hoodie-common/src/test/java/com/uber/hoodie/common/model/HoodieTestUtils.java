@@ -83,6 +83,11 @@ public class HoodieTestUtils {
     return new Configuration();
   }
 
+  public static HoodieTableMetaClient init(String basePath)
+      throws IOException {
+    return initTableType(getDefaultHadoopConf(), basePath, HoodieTableType.COPY_ON_WRITE);
+  }
+  
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath) throws IOException {
     return initTableType(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
@@ -94,14 +99,6 @@ public class HoodieTestUtils {
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
     properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
-  }
-
-  public static HoodieTableMetaClient initOnTemp() throws IOException {
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    String basePath = folder.getRoot().getAbsolutePath();
-    return HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
   }
 
   public static String makeNewCommitTime() {
