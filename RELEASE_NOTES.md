@@ -1,3 +1,41 @@
+Release 0.4.2
+------------------------------------
+
+### Highlights
+ * Parallelize Parquet writing & input record read resulting in upto 2x performance improvement
+ * Better out-of-box configs to support upto 500GB upserts, improved ROPathFilter performance 
+ * Added a union mode for RT View, that supports near-real time event ingestion without update semantics
+ * Added a tuning guide with suggestions for oft-encountered problems
+ * New configs for configs for compression ratio, index storage levels
+ 
+### Full PR List 
+
+ * **@jianxu** - Use hadoopConf in HoodieTableMetaClient and related tests #343
+ * **@jianxu** - Add more options in HoodieWriteConfig #341
+ * **@n3nash** - Adding a tool to read/inspect a HoodieLogFile #328
+ * **@ovj** - Parallelizing parquet write and spark's external read operation. #294
+ * **@n3nash** - Fixing memory leak due to HoodieLogFileReader holding on to a logblock #346
+ * **@kaushikd49** - DeduplicateRecords based on recordKey if global index is used #345 
+ * **@jianxu** - Checking storage level before persisting preppedRecords #358
+ * **@n3nash** -  Adding config for parquet compression ratio #366 
+ * **@xjodoin** - Replace deprecated jackson version #367 
+ * **@n3nash** - Making ExternalSpillableMap generic for any datatype #350 
+ * **@bvaradar** - CodeStyle formatting to conform to basic Checkstyle rules. #360 
+ * **@vinothchandar** -  Update release notes for 0.4.1 (post) #371  
+ * **@bvaradar** - Issue-329 : Refactoring TestHoodieClientOnCopyOnWriteStorage and adding test-cases #372 
+ * **@n3nash** - Parallelized read-write operations in Hoodie Merge phase #370 
+ * **@n3nash** - Using BufferedFsInputStream to wrap FSInputStream for FSDataInputStream #373 
+ * **@suniluber** -  Fix for updating duplicate records in same/different files in same pa… #380 
+ * **@bvaradar** - Fixit : Add Support for ordering and limiting results in CLI show commands #383
+ * **@n3nash** - Adding metrics for MOR and COW #365  
+ * **@n3nash** - Adding a fix/workaround when fs.append() unable to return a valid outputstream #388  
+ * **@n3nash** - Minor fixes for MergeOnRead MVP release readiness #387 
+ * **@bvaradar** - Issue-257: Support union mode in HoodieRealtimeRecordReader for pure insert workloads #379 
+ * **@n3nash** - Enabling global index for MOR #389 
+ * **@suniluber** - Added a new filter function to filter by record keys when reading parquet file #395 
+ * **@vinothchandar** - Improving out of box experience for data source #295  
+ * **@xjodoin** - Fix wrong use of TemporaryFolder junit rule #411  
+
 Release 0.4.1
 ------------------------------------
 
