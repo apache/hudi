@@ -63,22 +63,22 @@ public class HoodieRealtimeFileSplit extends FileSplit {
   }
 
   private static void writeString(String str, DataOutput out) throws IOException {
-    byte[] pathBytes = str.getBytes(StandardCharsets.UTF_8);
-    out.writeInt(pathBytes.length);
-    out.write(pathBytes);
+    byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+    out.writeInt(bytes.length);
+    out.write(bytes);
   }
 
   private static String readString(DataInput in) throws IOException {
-    byte[] pathBytes = new byte[in.readInt()];
-    in.readFully(pathBytes);
-    return new String(pathBytes, StandardCharsets.UTF_8);
+    byte[] bytes = new byte[in.readInt()];
+    in.readFully(bytes);
+    return new String(bytes, StandardCharsets.UTF_8);
   }
 
 
   @Override
   public void write(DataOutput out) throws IOException {
     super.write(out);
-
+    writeString(basePath, out);
     writeString(maxCommitTime, out);
     out.writeInt(deltaFilePaths.size());
     for (String logFilePath : deltaFilePaths) {
@@ -89,7 +89,7 @@ public class HoodieRealtimeFileSplit extends FileSplit {
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
-
+    basePath = readString(in);
     maxCommitTime = readString(in);
     int totalLogFiles = in.readInt();
     deltaFilePaths = new ArrayList<>(totalLogFiles);

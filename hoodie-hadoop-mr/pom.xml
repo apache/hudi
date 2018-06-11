@@ -80,6 +80,11 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.twitter.common</groupId>
+      <artifactId>objectsize</artifactId>
+      <version>0.0.12</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
     </dependency>
@@ -114,6 +119,7 @@
                 <includes>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.twitter:parquet-avro</include>
+                  <include>com.twitter.common:objectsize</include>
                 </includes>
               </artifactSet>
             </configuration>
