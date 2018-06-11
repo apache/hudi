@@ -31,9 +31,4 @@ public interface Converter<T> {
    * This method is used to convert the serialized payload (in bytes) to the actual payload instance
    */
   T getData(byte[] bytes);
-
-  /**
-   * This method is used to estimate the size of a payload in memory
-   */
-  long sizeEstimate(T t);
 }

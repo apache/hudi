@@ -29,9 +29,12 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -50,10 +53,28 @@ public class ParquetUtils {
   /**
    * Read the rowKey list from the given parquet file.
    *
-   * @param filePath The parquet file path.
+   * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
+   * @return Set          Set of row keys
    */
   public static Set<String> readRowKeysFromParquet(Configuration configuration, Path filePath) {
+    return filterParquetRowKeys(configuration, filePath, new HashSet<>());
+  }
+
+  /**
+   * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty,
+   * then this will return all the rowkeys.
+   *
+   * @param filePath              The parquet file path.
+   * @param configuration         configuration to build fs object
+   * @param filter                record keys filter
+   * @return Set                  Set of row keys matching candidateRecordKeys
+   */
+  public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
+    Optional<RecordKeysFilterFunction> filterFunction = Optional.empty();
+    if (CollectionUtils.isNotEmpty(filter)) {
+      filterFunction = Optional.of(new RecordKeysFilterFunction(filter));
+    }
     Configuration conf = new Configuration(configuration);
     conf.addResource(getFs(filePath.toString(), conf).getConf());
     Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
@@ -66,7 +87,10 @@ public class ParquetUtils {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          rowKeys.add(((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString());
+          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
+            rowKeys.add(recordKey);
+          }
         }
         obj = reader.read();
       }
@@ -116,8 +140,8 @@ public class ParquetUtils {
       if (metadata.containsKey(footerName)) {
         footerVals.add(metadata.get(footerName));
       } else {
-        throw new MetadataNotFoundException("Could not find index in Parquet footer. " +
-            "Looked for key " + footerName + " in " + parquetFilePath);
+        throw new MetadataNotFoundException("Could not find index in Parquet footer. "
+            + "Looked for key " + footerName + " in " + parquetFilePath);
       }
     }
     return footerVals;
@@ -146,7 +170,7 @@ public class ParquetUtils {
           "Could not read min/max record key out of footer correctly from %s. read) : %s",
           parquetFilePath, minMaxKeys));
     }
-    return new String[]{minMaxKeys.get(0), minMaxKeys.get(1)};
+    return new String[] {minMaxKeys.get(0), minMaxKeys.get(1)};
   }
 
   /**
@@ -177,5 +201,21 @@ public class ParquetUtils {
       }
     }
     return records;
+  }
+
+  static class RecordKeysFilterFunction implements Function<String, Boolean> {
+    private final Set<String> candidateKeys;
+
+    RecordKeysFilterFunction(Set<String> candidateKeys) {
+      this.candidateKeys = candidateKeys;
+    }
+
+    @Override
+    public Boolean apply(String recordKey) {
+      if (candidateKeys.contains(recordKey)) {
+        return true;
+      }
+      return false;
+    }
   }
 }

@@ -19,25 +19,25 @@ package com.uber.hoodie.func;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
+import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.HoodieCreateHandle;
 import com.uber.hoodie.io.HoodieIOHandle;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
-import org.apache.spark.TaskContext$;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.function.Function;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.spark.TaskContext;
+import scala.Tuple2;
 
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new
@@ -46,12 +46,10 @@ import java.util.concurrent.Future;
 public class LazyInsertIterable<T extends HoodieRecordPayload> extends
     LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
-  private static Logger logger = LogManager.getLogger(LazyInsertIterable.class);
   private final HoodieWriteConfig hoodieConfig;
   private final String commitTime;
   private final HoodieTable<T> hoodieTable;
   private Set<String> partitionsCleaned;
-  private HoodieCreateHandle handle;
 
   public LazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
       String commitTime, HoodieTable<T> hoodieTable) {
@@ -62,104 +60,105 @@ public class LazyInsertIterable<T extends HoodieRecordPayload> extends
     this.hoodieTable = hoodieTable;
   }
 
+  /**
+   * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
+   * expensive operations of transformation to the reader thread.
+   */
+  static <T extends HoodieRecordPayload> Function<HoodieRecord<T>,
+      Tuple2<HoodieRecord<T>, Optional<IndexedRecord>>> getTransformFunction(Schema schema) {
+    return hoodieRecord -> {
+      try {
+        return new Tuple2<HoodieRecord<T>, Optional<IndexedRecord>>(hoodieRecord,
+            hoodieRecord.getData().getInsertValue(schema));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    };
+  }
+
   @Override
   protected void start() {
   }
 
   @Override
   protected List<WriteStatus> computeNext() {
-    // Need to set current spark thread's TaskContext into newly launched thread so that new thread can access
-    // TaskContext properties.
-    final TaskContext sparkThreadTaskContext = TaskContext.get();
     // Executor service used for launching writer thread.
-    final ExecutorService writerService = Executors.newFixedThreadPool(1);
+    BoundedInMemoryExecutor<HoodieRecord<T>,
+        Tuple2<HoodieRecord<T>, Optional<IndexedRecord>>, List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
-      // Used for buffering records which is controlled by HoodieWriteConfig#WRITE_BUFFER_LIMIT_BYTES.
-      final BufferedIterator<T, HoodieRecord<T>> bufferedIterator =
-          new BufferedIterator<>(inputItr, hoodieConfig.getWriteBufferLimitBytes(),
-              HoodieIOHandle.createHoodieWriteSchema(hoodieConfig));
-      Future<List<WriteStatus>> writerResult =
-          writerService.submit(
-              () -> {
-                logger.info("starting hoodie writer thread");
-                // Passing parent thread's TaskContext to newly launched thread for it to access original TaskContext
-                // properties.
-                TaskContext$.MODULE$.setTaskContext(sparkThreadTaskContext);
-                List<WriteStatus> statuses = new LinkedList<>();
-                try {
-                  statuses.addAll(handleWrite(bufferedIterator));
-                  logger.info("hoodie write is done; notifying reader thread");
-                  return statuses;
-                } catch (Exception e) {
-                  logger.error("error writing hoodie records", e);
-                  bufferedIterator.markAsFailed(e);
-                  throw e;
-                }
-              });
-      // Buffering records into internal buffer. This can throw exception either if reading records from spark fails or
-      // if writing buffered records into parquet file fails.
-      bufferedIterator.startBuffering();
-      logger.info("waiting for hoodie write to finish");
-      final List<WriteStatus> result = writerResult.get();
-      assert result != null && !result.isEmpty() && !bufferedIterator.hasNext();
+      final Schema schema = HoodieIOHandle.createHoodieWriteSchema(hoodieConfig);
+      bufferedIteratorExecutor =
+          new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr,
+              new InsertHandler(), getTransformFunction(schema));
+      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
+      assert result != null && !result.isEmpty() && !bufferedIteratorExecutor.isRemaining();
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      writerService.shutdownNow();
-    }
-  }
-
-  private List<WriteStatus> handleWrite(final BufferedIterator<T, HoodieRecord<T>> bufferedIterator) {
-    List<WriteStatus> statuses = new ArrayList<>();
-    while (bufferedIterator.hasNext()) {
-      final BufferedIterator.BufferedIteratorPayload<HoodieRecord<T>> payload = bufferedIterator.next();
-
-      // clean up any partial failures
-      if (!partitionsCleaned.contains(payload.record.getPartitionPath())) {
-        // This insert task could fail multiple times, but Spark will faithfully retry with
-        // the same data again. Thus, before we open any files under a given partition, we
-        // first delete any files in the same partitionPath written by same Spark partition
-        HoodieIOHandle.cleanupTmpFilesFromCurrentCommit(hoodieConfig,
-            commitTime,
-            payload.record.getPartitionPath(),
-            TaskContext.getPartitionId(),
-            hoodieTable);
-        partitionsCleaned.add(payload.record.getPartitionPath());
-      }
-
-      // lazily initialize the handle, for the first time
-      if (handle == null) {
-        handle =
-            new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, payload.record.getPartitionPath());
-      }
-
-      if (handle.canWrite(payload.record)) {
-        // write the payload, if the handle has capacity
-        handle.write(payload.record, payload.insertValue, payload.exception);
-      } else {
-        // handle is full.
-        statuses.add(handle.close());
-        // Need to handle the rejected payload & open new handle
-        handle =
-            new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, payload.record.getPartitionPath());
-        handle.write(payload.record, payload.insertValue, payload.exception); // we should be able to write 1 payload.
+      if (null != bufferedIteratorExecutor) {
+        bufferedIteratorExecutor.shutdownNow();
       }
     }
-
-    // If we exited out, because we ran out of records, just close the pending handle.
-    if (!bufferedIterator.hasNext()) {
-      if (handle != null) {
-        statuses.add(handle.close());
-      }
-    }
-
-    assert statuses.size() > 0 && !bufferedIterator.hasNext(); // should never return empty statuses
-    return statuses;
   }
 
   @Override
   protected void end() {
 
+  }
+
+  /**
+   * Consumes stream of hoodie records from in-memory queue and
+   * writes to one or more create-handles
+   */
+  private class InsertHandler extends
+      BoundedInMemoryQueueConsumer<Tuple2<HoodieRecord<T>, Optional<IndexedRecord>>, List<WriteStatus>> {
+
+    private final List<WriteStatus> statuses = new ArrayList<>();
+    private HoodieCreateHandle handle;
+
+    @Override
+    protected void consumeOneRecord(Tuple2<HoodieRecord<T>, Optional<IndexedRecord>> payload) {
+      final HoodieRecord insertPayload = payload._1();
+      // clean up any partial failures
+      if (!partitionsCleaned.contains(insertPayload.getPartitionPath())) {
+        // This insert task could fail multiple times, but Spark will faithfully retry with
+        // the same data again. Thus, before we open any files under a given partition, we
+        // first delete any files in the same partitionPath written by same Spark partition
+        HoodieIOHandle.cleanupTmpFilesFromCurrentCommit(hoodieConfig, commitTime, insertPayload.getPartitionPath(),
+            TaskContext.getPartitionId(), hoodieTable);
+        partitionsCleaned.add(insertPayload.getPartitionPath());
+      }
+
+      // lazily initialize the handle, for the first time
+      if (handle == null) {
+        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath());
+      }
+
+      if (handle.canWrite(payload._1())) {
+        // write the payload, if the handle has capacity
+        handle.write(insertPayload, payload._2());
+      } else {
+        // handle is full.
+        statuses.add(handle.close());
+        // Need to handle the rejected payload & open new handle
+        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath());
+        handle.write(insertPayload, payload._2()); // we should be able to write 1 payload.
+      }
+    }
+
+    @Override
+    protected void finish() {
+      if (handle != null) {
+        statuses.add(handle.close());
+      }
+      handle = null;
+      assert statuses.size() > 0;
+    }
+
+    @Override
+    protected List<WriteStatus> getResult() {
+      return statuses;
+    }
   }
 }

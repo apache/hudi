@@ -25,9 +25,7 @@ import org.springframework.stereotype.Component;
 public class UtilsCommand implements CommandMarker {
 
   @CliCommand(value = "utils loadClass", help = "Load a class")
-  public String loadClass(
-      @CliOption(key = {"class"}, help = "Check mode") final String clazz
-  ) throws Exception {
+  public String loadClass(@CliOption(key = {"class"}, help = "Check mode") final String clazz) throws Exception {
     Class klass = Class.forName(clazz);
     return klass.getProtectionDomain().getCodeSource().getLocation().toExternalForm();
   }

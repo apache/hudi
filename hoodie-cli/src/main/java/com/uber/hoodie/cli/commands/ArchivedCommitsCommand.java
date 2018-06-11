@@ -19,6 +19,7 @@ package com.uber.hoodie.cli.commands;
 import com.uber.hoodie.avro.model.HoodieArchivedMetaEntry;
 import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.HoodiePrintHelper;
+import com.uber.hoodie.cli.TableHeader;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
@@ -26,6 +27,7 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
@@ -48,21 +50,21 @@ public class ArchivedCommitsCommand implements CommandMarker {
 
   @CliCommand(value = "show archived commits", help = "Read commits from archived files and show details")
   public String showCommits(
+      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "10") final Integer limit,
+      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
+      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {
-          "limit"}, mandatory = false, help = "Limit commits", unspecifiedDefaultValue = "10")
-      final Integer limit) throws IOException {
+          "headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly)
+      throws IOException {
 
-    System.out
-        .println("===============> Showing only " + limit + " archived commits <===============");
+    System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.tableMetadata.getBasePath();
     FileStatus[] fsStatuses = FSUtils.getFs(basePath, HoodieCLI.conf)
         .globStatus(new Path(basePath + "/.hoodie/.commits_.archive*"));
-    List<String[]> allCommits = new ArrayList<>();
-    int commits = 0;
+    List<Comparable[]> allCommits = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       //read the archived file
-      HoodieLogFormat.Reader reader = HoodieLogFormat
-          .newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
+      HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(FSUtils.getFs(basePath, HoodieCLI.conf),
           new HoodieLogFile(fs.getPath()), HoodieArchivedMetaEntry.getClassSchema());
 
       List<IndexedRecord> readRecords = new ArrayList<>();
@@ -71,61 +73,59 @@ public class ArchivedCommitsCommand implements CommandMarker {
         HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
         List<IndexedRecord> records = blk.getRecords();
         readRecords.addAll(records);
-        if(commits == limit) {
-          break;
-        }
-        commits++;
       }
-      List<String[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r)
-          .map(r -> readCommit(r)).collect(Collectors.toList());
+      List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> readCommit(r))
+          .collect(Collectors.toList());
       allCommits.addAll(readCommits);
-      if(commits == limit) {
-        break;
-      }
     }
-    return HoodiePrintHelper.print(
-        new String[]{"CommitTime", "CommitType", "CommitDetails"},
-        allCommits.toArray(new String[allCommits.size()][]));
+
+    TableHeader header = new TableHeader().addTableHeaderField("CommitTime")
+        .addTableHeaderField("CommitType")
+        .addTableHeaderField("CommitDetails");
+
+    return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, allCommits);
   }
 
-  private String[] readCommit(GenericRecord record) {
-    List<String> commitDetails = new ArrayList<>();
+  private Comparable[] readCommit(GenericRecord record) {
+    List<Object> commitDetails = new ArrayList<>();
     try {
       switch (record.get("actionType").toString()) {
         case HoodieTimeline.CLEAN_ACTION: {
-          commitDetails.add(record.get("commitTime").toString());
+          commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
           commitDetails.add(record.get("hoodieCleanMetadata").toString());
           break;
         }
         case HoodieTimeline.COMMIT_ACTION: {
-          commitDetails.add(record.get("commitTime").toString());
+          commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
           commitDetails.add(record.get("hoodieCommitMetadata").toString());
           break;
         }
         case HoodieTimeline.DELTA_COMMIT_ACTION: {
-          commitDetails.add(record.get("commitTime").toString());
+          commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
           commitDetails.add(record.get("hoodieCommitMetadata").toString());
           break;
         }
         case HoodieTimeline.ROLLBACK_ACTION: {
-          commitDetails.add(record.get("commitTime").toString());
+          commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
           commitDetails.add(record.get("hoodieRollbackMetadata").toString());
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
-          commitDetails.add(record.get("commitTime").toString());
+          commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
           commitDetails.add(record.get("hoodieSavePointMetadata").toString());
           break;
         }
+        default:
+          return commitDetails.toArray(new Comparable[commitDetails.size()]);
       }
     } catch (Exception e) {
       e.printStackTrace();
     }
-    return commitDetails.toArray(new String[commitDetails.size()]);
+    return commitDetails.toArray(new Comparable[commitDetails.size()]);
   }
 }

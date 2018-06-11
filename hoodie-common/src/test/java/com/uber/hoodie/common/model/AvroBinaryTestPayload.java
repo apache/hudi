@@ -47,7 +47,8 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+      throws IOException {
     return getInsertValue(schema);
   }
 

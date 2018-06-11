@@ -22,6 +22,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -49,8 +50,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
 
-  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime,
-      HoodieTable<T> hoodieTable, String partitionPath) {
+  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+      String partitionPath) {
     super(config, commitTime, hoodieTable);
     this.status = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     status.setFileId(UUID.randomUUID().toString());
@@ -64,14 +65,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     }
 
     try {
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs,
-          commitTime,
-          new Path(config.getBasePath()),
-          new Path(config.getBasePath(), partitionPath));
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
+          new Path(config.getBasePath()), new Path(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
-      this.storageWriter =
-          HoodieStorageWriterFactory
-              .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
+      this.storageWriter = HoodieStorageWriterFactory
+          .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
     } catch (IOException e) {
       throw new HoodieInsertException(
           "Failed to initialize HoodieStorageWriter for path " + getStorageWriterPath(), e);
@@ -81,27 +79,20 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
   /**
    * Determines whether we can accept the incoming records, into the current file, depending on
-   *
+   * <p>
    * - Whether it belongs to the same partitionPath as existing records - Whether the current file
    * written bytes lt max file size
    */
   public boolean canWrite(HoodieRecord record) {
-    return storageWriter.canWrite() && record.getPartitionPath()
-        .equals(status.getPartitionPath());
+    return storageWriter.canWrite() && record.getPartitionPath().equals(status.getPartitionPath());
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Optional<IndexedRecord> insertValue,
-      Optional<Exception> getInsertValueException) {
+  public void write(HoodieRecord record, Optional<IndexedRecord> avroRecord) {
     Optional recordMetadata = record.getData().getMetadata();
     try {
-      // throws exception if there was any exception while fetching insert value
-      if (getInsertValueException.isPresent()) {
-        throw getInsertValueException.get();
-      }
-      Optional<IndexedRecord> avroRecord = insertValue;
       if (avroRecord.isPresent()) {
         storageWriter.writeAvroWithMetadata(avroRecord.get(), record);
         // update the new location of record, so we know where to find it next
@@ -111,7 +102,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
         recordsDeleted++;
       }
       status.markSuccess(record, recordMetadata);
-      // deflate record payload after recording success. This will help users access payload as a part of marking
+      // deflate record payload after recording success. This will help users access payload as a
+      // part of marking
       // record successful.
       record.deflate();
     } catch (Throwable t) {
@@ -126,9 +118,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
    * Performs actions to durably, persist the current changes and returns a WriteStatus object
    */
   public WriteStatus close() {
-    logger.info(
-        "Closing the file " + status.getFileId() + " as we are done with all the records "
-            + recordsWritten);
+    logger.info("Closing the file " + status.getFileId() + " as we are done with all the records "
+        + recordsWritten);
     try {
       storageWriter.close();
 
@@ -140,12 +131,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       stat.setPaths(new Path(config.getBasePath()), path, tempPath);
       stat.setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
       stat.setTotalWriteErrors(status.getFailedRecords().size());
+      RuntimeStats runtimeStats = new RuntimeStats();
+      runtimeStats.setTotalCreateTime(timer.endTimer());
+      stat.setRuntimeStats(runtimeStats);
       status.setStat(stat);
 
       return status;
     } catch (IOException e) {
-      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path,
-          e);
+      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
     }
   }
 

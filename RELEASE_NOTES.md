@@ -1,4 +1,40 @@
-Release 0.4.0 
+Release 0.4.1
+------------------------------------
+
+### Highlights
+
+ * Good enhancements for merge-on-read write path : spillable map for merging, evolvable log format, rollback support
+ * Cloud file systems should now work out-of-box for copy-on-write tables, with configs picked up from SparkContext
+ * Compaction action is no more, multiple delta commits now lead to a commit upon compaction
+ * API level changes include : compaction api, new prepped APIs for higher plugability for advanced clients
+
+
+### Full PR List
+
+ * **@n3nash** - Separated rollback as a table operation, implement rollback for MOR #247
+ * **@n3nash** - Implementing custom payload/merge hooks abstractions for application #275
+ * **@vinothchandar** - Reformat project & tighten code style guidelines #280
+ * **@n3nash** - Separating out compaction() API #282
+ * **@n3nash** - Enable hive sync even if there is no compaction commit #286
+ * **@n3nash** - Partition compaction strategy #281
+ * **@n3nash** - Removing compaction action type and associated compaction timeline operations, replace with commit action type #288
+ * **@vinothchandar** - Multi/Cloud FS Support for Copy-On-Write tables #293
+ * **@vinothchandar** - Update Gemfile.lock #298
+ * **@n3nash** - Reducing memory footprint required in HoodieAvroDataBlock and HoodieAppendHandle #290
+ * **@jianxu** - Add FinalizeWrite in HoodieCreateHandle for COW tables #285
+ * **@n3nash** - Adding global indexing to HbaseIndex implementation #318
+ * **@n3nash** - Small File Size correction handling for MOR table type #299
+ * **@jianxu** - Use FastDateFormat for thread safety #320
+ * **@vinothchandar** - Fix formatting in HoodieWriteClient #322
+ * **@n3nash** - Write smaller sized multiple blocks to log file instead of a large one #317
+ * **@n3nash** - Added support for Disk Spillable Compaction to prevent OOM issues #289
+ * **@jianxu** - Add new APIs in HoodieReadClient and HoodieWriteClient #327
+ * **@jianxu** - Handle inflight clean instants during Hoodie instants archiving #332
+ * **@n3nash** - Introducing HoodieLogFormat V2 with versioning support #331
+ * **@n3nash** - Re-factoring Compaction as first level API in WriteClient similar to upsert/insert #330
+
+
+Release 0.4.0
 ------------------------------------
 
 ### Highlights 

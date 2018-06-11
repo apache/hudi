@@ -16,6 +16,9 @@
 
 package com.uber.hoodie.io.strategy;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import com.beust.jcommander.internal.Lists;
 import com.google.common.collect.Maps;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -25,20 +28,16 @@ import com.uber.hoodie.io.compact.strategy.BoundedIOCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.DayBasedCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
-import org.junit.Test;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 public class TestHoodieCompactionStrategy {
 
   private static final long MB = 1024 * 1024L;
-  private String [] partitionPaths = {"2017/01/01", "2017/01/02", "2017/01/03"};
+  private String[] partitionPaths = {"2017/01/01", "2017/01/02", "2017/01/03"};
 
   @Test
   public void testUnBounded() {
@@ -48,9 +47,8 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     UnBoundedCompactionStrategy strategy = new UnBoundedCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
-        .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
     List<CompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<CompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations);
     assertEquals("UnBounded should not re-order or filter", operations, returned);
@@ -64,23 +62,19 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     BoundedIOCompactionStrategy strategy = new BoundedIOCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
-        .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
-                .withTargetIOPerCompactionInMB(400).build()).build();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
+        .build();
     List<CompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<CompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations);
 
-    assertTrue("BoundedIOCompaction should have resulted in fewer compactions",
-        returned.size() < operations.size());
-    assertEquals("BoundedIOCompaction should have resulted in 2 compactions being chosen",
-        2, returned.size());
+    assertTrue("BoundedIOCompaction should have resulted in fewer compactions", returned.size() < operations.size());
+    assertEquals("BoundedIOCompaction should have resulted in 2 compactions being chosen", 2, returned.size());
     // Total size of all the log files
-    Long returnedSize = returned.stream()
-        .map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB)).map(s -> (Long) s)
-        .reduce((size1, size2) -> size1 + size2).orElse(0L);
-    assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB",
-        610, (long) returnedSize);
+    Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
+        .map(s -> (Long) s).reduce((size1, size2) -> size1 + size2).orElse(0L);
+    assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB", 610,
+        (long) returnedSize);
   }
 
   @Test
@@ -91,23 +85,20 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     LogFileSizeBasedCompactionStrategy strategy = new LogFileSizeBasedCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
-        .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
-                .withTargetIOPerCompactionInMB(400).build()).build();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
+        .build();
     List<CompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<CompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations);
 
     assertTrue("LogFileSizeBasedCompactionStrategy should have resulted in fewer compactions",
         returned.size() < operations.size());
-    assertEquals("LogFileSizeBasedCompactionStrategy should have resulted in 1 compaction",
-        1, returned.size());
+    assertEquals("LogFileSizeBasedCompactionStrategy should have resulted in 1 compaction", 1, returned.size());
     // Total size of all the log files
-    Long returnedSize = returned.stream()
-        .map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB)).map(s -> (Long) s)
-        .reduce((size1, size2) -> size1 + size2).orElse(0L);
-    assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB",
-        1204, (long) returnedSize);
+    Long returnedSize = returned.stream().map(s -> s.getMetrics().get(BoundedIOCompactionStrategy.TOTAL_IO_MB))
+        .map(s -> (Long) s).reduce((size1, size2) -> size1 + size2).orElse(0L);
+    assertEquals("Should chose the first 2 compactions which should result in a total IO of 690 MB", 1204,
+        (long) returnedSize);
   }
 
   @Test
@@ -118,20 +109,18 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
-            .withCompactionConfig(
-                    HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
-                            .withTargetIOPerCompactionInMB(400).build()).build();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
+        .build();
     List<CompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<CompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations);
 
     assertTrue("DayBasedCompactionStrategy should have resulted in fewer compactions",
-            returned.size() < operations.size());
+        returned.size() < operations.size());
 
     int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1), returned.get(0));
     // Either the partition paths are sorted in descending order or they are equal
-    assertTrue("DayBasedCompactionStrategy should sort partitions in descending order",
-            comparision >= 0);
+    assertTrue("DayBasedCompactionStrategy should sort partitions in descending order", comparision >= 0);
   }
 
   private List<CompactionOperation> createCompactionOperations(HoodieWriteConfig config,
@@ -139,9 +128,8 @@ public class TestHoodieCompactionStrategy {
     List<CompactionOperation> operations = Lists.newArrayList(sizesMap.size());
     sizesMap.forEach((k, v) -> {
       operations.add(new CompactionOperation(TestHoodieDataFile.newDataFile(k),
-              partitionPaths[new Random().nextInt(partitionPaths.length - 1)],
-          v.stream().map(TestHoodieLogFile::newLogFile).collect(
-              Collectors.toList()), config));
+          partitionPaths[new Random().nextInt(partitionPaths.length - 1)],
+          v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList()), config));
     });
     return operations;
   }

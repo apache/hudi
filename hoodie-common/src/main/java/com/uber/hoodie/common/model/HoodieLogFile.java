@@ -30,7 +30,7 @@ import org.apache.hadoop.fs.Path;
 /**
  * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and
  * extension from the log file path.
- *
+ * <p>
  * Also contains logic to roll-over the log file
  */
 public class HoodieLogFile implements Serializable {
@@ -103,8 +103,12 @@ public class HoodieLogFile implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     HoodieLogFile that = (HoodieLogFile) o;
     return path != null ? path.equals(that.path) : that.path == null;
   }

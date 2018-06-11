@@ -19,22 +19,21 @@ package com.uber.hoodie.common.table.log;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Iterator;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Iterator;
-
 /**
- * File Format for Hoodie Log Files. The File Format consists of blocks each seperated with a OLD_MAGIC
- * sync marker. A Block can either be a Data block, Command block or Delete Block. Data Block -
- * Contains log records serialized as Avro Binary Format Command Block - Specific commands like
- * RoLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block Delete Block - List of keys
- * to delete - tombstone for keys
+ * File Format for Hoodie Log Files. The File Format consists of blocks each seperated with a
+ * OLD_MAGIC sync marker. A Block can either be a Data block, Command block or Delete Block. Data
+ * Block - Contains log records serialized as Avro Binary Format Command Block - Specific commands
+ * like RoLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block Delete Block - List of
+ * keys to delete - tombstone for keys
  */
 public interface HoodieLogFormat {
 
@@ -43,19 +42,18 @@ public interface HoodieLogFormat {
    * this file specific (generate a random 4 byte magic and stick it in the file header), but this I
    * think is suffice for now - PR
    */
-  byte[] OLD_MAGIC = new byte[]{'H', 'U', 'D', 'I'};
+  byte[] OLD_MAGIC = new byte[] {'H', 'U', 'D', 'I'};
 
   /**
-   * Magic 6 bytes we put at the start of every block in the log file.
-   * This is added to maintain backwards compatiblity due to lack of log format/block
-   * version in older log files. All new log block will now write this OLD_MAGIC value
+   * Magic 6 bytes we put at the start of every block in the log file. This is added to maintain
+   * backwards compatiblity due to lack of log format/block version in older log files. All new log
+   * block will now write this OLD_MAGIC value
    */
-  byte[] MAGIC = new byte[]{'#', 'H', 'U', 'D', 'I', '#'};
+  byte[] MAGIC = new byte[] {'#', 'H', 'U', 'D', 'I', '#'};
 
   /**
-   * The current version of the log format. Anytime the log format changes
-   * this version needs to be bumped and corresponding changes need to be made to
-   * {@link HoodieLogFormatVersion}
+   * The current version of the log format. Anytime the log format changes this version needs to be
+   * bumped and corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
   int currentVersion = 1;
 
@@ -94,7 +92,7 @@ public interface HoodieLogFormat {
    */
   class WriterBuilder {
 
-    private final static Logger log = LogManager.getLogger(WriterBuilder.class);
+    private static final Logger log = LogManager.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
 
@@ -112,7 +110,8 @@ public interface HoodieLogFormat {
     private String logFileId;
     // File Commit Time stamp
     private String commitTime;
-    // version number for this log file. If not specified, then the current version will be computed by inspecting the file system
+    // version number for this log file. If not specified, then the current version will be
+    // computed by inspecting the file system
     private Integer logVersion;
     // Location of the directory containing the log
     private Path parentPath;
@@ -213,6 +212,37 @@ public interface HoodieLogFormat {
 
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, false, false);
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, false);
+  }
+
+  /**
+   * A set of feature flags associated with a log format. Versions are changed when the log format
+   * changes. TODO(na) - Implement policies around major/minor versions
+   */
+  abstract class LogFormatVersion {
+
+    private final int version;
+
+    LogFormatVersion(int version) {
+      this.version = version;
+    }
+
+    public int getVersion() {
+      return version;
+    }
+
+    public abstract boolean hasMagicHeader();
+
+    public abstract boolean hasContent();
+
+    public abstract boolean hasContentLength();
+
+    public abstract boolean hasOrdinal();
+
+    public abstract boolean hasHeader();
+
+    public abstract boolean hasFooter();
+
+    public abstract boolean hasLogBlockLength();
   }
 }

@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.hadoop;
 
-
 import static org.junit.Assert.assertTrue;
 
 import java.lang.annotation.Annotation;

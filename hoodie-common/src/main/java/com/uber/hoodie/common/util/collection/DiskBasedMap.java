@@ -22,13 +22,11 @@ import com.uber.hoodie.common.util.collection.io.storage.SizeAwareDataOutputStre
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.InetAddress;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Date;
@@ -36,22 +34,26 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
- * This class provides a disk spillable only map implementation. All of the data is
- * currenly written to one file, without any rollover support. It uses the following :
- * 1) An in-memory map that tracks the key-> latest ValueMetadata.
- * 2) Current position in the file
- * NOTE : Only String.class type supported for Key
+ * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
+ * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
+ * 2) Current position in the file NOTE : Only String.class type supported for Key
  */
-final public class DiskBasedMap<T, R> implements Map<T, R> {
+public final class DiskBasedMap<T, R> implements Map<T, R> {
 
+  private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
-  final private Map<T, ValueMetadata> valueMetadataMap;
+  private final Map<T, ValueMetadata> valueMetadataMap;
+  // Key converter to convert key type to bytes
+  private final Converter<T> keyConverter;
+  // Value converter to convert value type to bytes
+  private final Converter<R> valueConverter;
   // Read only file access to be able to seek to random positions to readFromDisk values
   private RandomAccessFile readOnlyFileHandle;
   // Write only OutputStream to be able to ONLY append to the file
@@ -63,112 +65,14 @@ final public class DiskBasedMap<T, R> implements Map<T, R> {
   private AtomicLong filePosition;
   // FilePath to store the spilled data
   private String filePath;
-  // Default file path prefix to put the spillable file
-  private static String DEFAULT_BASE_FILE_PATH = "/tmp/";
-  // Key converter to convert key type to bytes
-  final private Converter<T> keyConverter;
-  // Value converter to convert value type to bytes
-  final private Converter<R> valueConverter;
-
-  private static Logger log = LogManager.getLogger(DiskBasedMap.class);
 
 
-  public final class ValueMetadata {
-
-    // FilePath to store the spilled data
-    private String filePath;
-    // Size (numberOfBytes) of the value written to disk
-    private Integer sizeOfValue;
-    // FilePosition of the value written to disk
-    private Long offsetOfValue;
-    // Current timestamp when the value was written to disk
-    private Long timestamp;
-
-    protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
-      this.filePath = filePath;
-      this.sizeOfValue = sizeOfValue;
-      this.offsetOfValue = offsetOfValue;
-      this.timestamp = timestamp;
-    }
-
-    public String getFilePath() {
-      return filePath;
-    }
-
-    public int getSizeOfValue() {
-      return sizeOfValue;
-    }
-
-    public Long getOffsetOfValue() {
-      return offsetOfValue;
-    }
-
-    public long getTimestamp() {
-      return timestamp;
-    }
-  }
-
-  public static final class FileEntry {
-
-    // Checksum of the value written to disk, compared during every readFromDisk to make sure no corruption
-    private Long crc;
-    // Size (numberOfBytes) of the key written to disk
-    private Integer sizeOfKey;
-    // Size (numberOfBytes) of the value written to disk
-    private Integer sizeOfValue;
-    // Actual key
-    private byte[] key;
-    // Actual value
-    private byte[] value;
-    // Current timestamp when the value was written to disk
-    private Long timestamp;
-
-    public FileEntry(long crc, int sizeOfKey, int sizeOfValue, byte[] key, byte[] value,
-        long timestamp) {
-      this.crc = crc;
-      this.sizeOfKey = sizeOfKey;
-      this.sizeOfValue = sizeOfValue;
-      this.key = key;
-      this.value = value;
-      this.timestamp = timestamp;
-    }
-
-    public long getCrc() {
-      return crc;
-    }
-
-    public int getSizeOfKey() {
-      return sizeOfKey;
-    }
-
-    public int getSizeOfValue() {
-      return sizeOfValue;
-    }
-
-    public byte[] getKey() {
-      return key;
-    }
-
-    public byte[] getValue() {
-      return value;
-    }
-
-    public long getTimestamp() {
-      return timestamp;
-    }
-  }
-
-  protected DiskBasedMap(Optional<String> baseFilePath,
+  protected DiskBasedMap(String baseFilePath,
       Converter<T> keyConverter, Converter<R> valueConverter) throws IOException {
     this.valueMetadataMap = new HashMap<>();
-
-    if (!baseFilePath.isPresent()) {
-      baseFilePath = Optional.of(DEFAULT_BASE_FILE_PATH);
-    }
-    this.filePath = baseFilePath.get() + UUID.randomUUID().toString();
-    File writeOnlyFileHandle = new File(filePath);
+    File writeOnlyFileHandle = new File(baseFilePath, UUID.randomUUID().toString());
+    this.filePath = writeOnlyFileHandle.getPath();
     initFile(writeOnlyFileHandle);
-
     this.fileOutputStream = new FileOutputStream(writeOnlyFileHandle, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream);
     this.filePosition = new AtomicLong(0L);
@@ -181,9 +85,13 @@ final public class DiskBasedMap<T, R> implements Map<T, R> {
     if (writeOnlyFileHandle.exists()) {
       writeOnlyFileHandle.delete();
     }
+    if (!writeOnlyFileHandle.getParentFile().exists()) {
+      writeOnlyFileHandle.getParentFile().mkdir();
+    }
     writeOnlyFileHandle.createNewFile();
-
-    log.info("Spilling to file location " + writeOnlyFileHandle.getAbsolutePath());
+    log.info(
+        "Spilling to file location " + writeOnlyFileHandle.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
+            .getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName() + ")");
     // Open file in readFromDisk-only mode
     readOnlyFileHandle = new RandomAccessFile(filePath, "r");
     readOnlyFileHandle.seek(0);
@@ -193,8 +101,8 @@ final public class DiskBasedMap<T, R> implements Map<T, R> {
   }
 
   /**
-   * Register shutdown hook to force flush contents of the data written to FileOutputStream
-   * from OS page cache (typically 4 KB) to disk
+   * Register shutdown hook to force flush contents of the data written to FileOutputStream from OS page cache
+   * (typically 4 KB) to disk
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -323,5 +231,90 @@ final public class DiskBasedMap<T, R> implements Map<T, R> {
       entrySet.add(new AbstractMap.SimpleEntry<>(key, get(key)));
     }
     return entrySet;
+  }
+
+  public static final class FileEntry {
+
+    // Checksum of the value written to disk, compared during every readFromDisk to make sure no corruption
+    private Long crc;
+    // Size (numberOfBytes) of the key written to disk
+    private Integer sizeOfKey;
+    // Size (numberOfBytes) of the value written to disk
+    private Integer sizeOfValue;
+    // Actual key
+    private byte[] key;
+    // Actual value
+    private byte[] value;
+    // Current timestamp when the value was written to disk
+    private Long timestamp;
+
+    public FileEntry(long crc, int sizeOfKey, int sizeOfValue, byte[] key, byte[] value,
+        long timestamp) {
+      this.crc = crc;
+      this.sizeOfKey = sizeOfKey;
+      this.sizeOfValue = sizeOfValue;
+      this.key = key;
+      this.value = value;
+      this.timestamp = timestamp;
+    }
+
+    public long getCrc() {
+      return crc;
+    }
+
+    public int getSizeOfKey() {
+      return sizeOfKey;
+    }
+
+    public int getSizeOfValue() {
+      return sizeOfValue;
+    }
+
+    public byte[] getKey() {
+      return key;
+    }
+
+    public byte[] getValue() {
+      return value;
+    }
+
+    public long getTimestamp() {
+      return timestamp;
+    }
+  }
+
+  public final class ValueMetadata {
+
+    // FilePath to store the spilled data
+    private String filePath;
+    // Size (numberOfBytes) of the value written to disk
+    private Integer sizeOfValue;
+    // FilePosition of the value written to disk
+    private Long offsetOfValue;
+    // Current timestamp when the value was written to disk
+    private Long timestamp;
+
+    protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
+      this.filePath = filePath;
+      this.sizeOfValue = sizeOfValue;
+      this.offsetOfValue = offsetOfValue;
+      this.timestamp = timestamp;
+    }
+
+    public String getFilePath() {
+      return filePath;
+    }
+
+    public int getSizeOfValue() {
+      return sizeOfValue;
+    }
+
+    public Long getOffsetOfValue() {
+      return offsetOfValue;
+    }
+
+    public long getTimestamp() {
+      return timestamp;
+    }
   }
 }

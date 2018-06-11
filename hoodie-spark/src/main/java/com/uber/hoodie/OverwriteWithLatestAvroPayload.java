@@ -28,7 +28,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 /**
  * Default payload used for delta streamer.
- *
+ * <p>
  * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2.
  * combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
  */
@@ -36,7 +36,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
     HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
   /**
-   *
    * @param record
    * @param orderingVal
    */

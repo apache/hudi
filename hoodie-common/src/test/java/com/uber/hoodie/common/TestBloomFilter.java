@@ -19,9 +19,7 @@ package com.uber.hoodie.common;
 import java.io.IOException;
 import org.junit.Test;
 
-public class
-
-TestBloomFilter {
+public class TestBloomFilter {
 
   @Test
   public void testAddKey() {

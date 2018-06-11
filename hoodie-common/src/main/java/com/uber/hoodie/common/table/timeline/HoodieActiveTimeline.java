@@ -51,9 +51,10 @@ import org.apache.log4j.Logger;
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
-  public static final FastDateFormat COMMIT_FORMATTER = FastDateFormat.getInstance("yyyyMMddHHmmss");
+  public static final FastDateFormat COMMIT_FORMATTER = FastDateFormat
+      .getInstance("yyyyMMddHHmmss");
 
-  private final transient static Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
+  private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
   private HoodieTableMetaClient metaClient;
 
   /**
@@ -71,12 +72,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           Arrays.stream(
               HoodieTableMetaClient
                   .scanFiles(metaClient.getFs(), new Path(metaClient.getMetaPath()), path -> {
-            // Include only the meta files with extensions that needs to be included
-            String extension = FSUtils.getFileExtension(path.getName());
-            return Arrays.stream(includedExtensions).anyMatch(Predicate.isEqual(extension));
-          })).sorted(Comparator.comparing(
-              // Sort the meta-data by the instant time (first part of the file name)
-              fileStatus -> FSUtils.getInstantTime(fileStatus.getPath().getName())))
+                    // Include only the meta files with extensions that needs to be included
+                    String extension = FSUtils.getFileExtension(path.getName());
+                    return Arrays.stream(includedExtensions).anyMatch(Predicate.isEqual(extension));
+                  })).sorted(Comparator.comparing(
+                    // Sort the meta-data by the instant time (first part of the file name)
+                    fileStatus -> FSUtils.getInstantTime(fileStatus.getPath().getName())))
               // create HoodieInstantMarkers from FileStatus, which extracts properties
               .map(HoodieInstant::new).collect(Collectors.toList());
       log.info("Loaded instants " + instants);
@@ -84,13 +85,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
     this.metaClient = metaClient;
-    // multiple casts will make this lambda serializable - http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details = (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
+    // multiple casts will make this lambda serializable -
+    // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
+    this.details =
+        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
     this(metaClient,
-        new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
+        new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
             INFLIGHT_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
             CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION});
   }
@@ -114,8 +117,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits) that produce new data, in the active
-   * timeline *
+   * Get all instants (commits, delta commits) that produce new data, in the active timeline *
    */
   public HoodieTimeline getCommitsTimeline() {
     return getTimelineOfActions(
@@ -123,8 +125,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits, clean, savepoint, rollback) that result
-   * in actions, in the active timeline *
+   * Get all instants (commits, delta commits, clean, savepoint, rollback) that result in actions,
+   * in the active timeline *
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(

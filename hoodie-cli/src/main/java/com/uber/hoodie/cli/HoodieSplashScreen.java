@@ -24,22 +24,18 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
-public class HoodieSplashScreen
-    extends DefaultBannerProvider {
+public class HoodieSplashScreen extends DefaultBannerProvider {
 
-  private static String screen =
-      "============================================" + OsUtils.LINE_SEPARATOR +
-          "*                                          *" + OsUtils.LINE_SEPARATOR +
-          "*     _    _                 _ _           *" + OsUtils.LINE_SEPARATOR +
-          "*    | |  | |               | (_)          *" + OsUtils.LINE_SEPARATOR +
-          "*    | |__| | ___   ___   __| |_  ___      *" + OsUtils.LINE_SEPARATOR +
-          "*    |  __  |/ _ \\ / _ \\ / _` | |/ _ \\     *" +
-          OsUtils.LINE_SEPARATOR +
-          "*    | |  | | (_) | (_) | (_| | |  __/     *" + OsUtils.LINE_SEPARATOR +
-          "*    |_|  |_|\\___/ \\___/ \\__,_|_|\\___|     *" +
-          OsUtils.LINE_SEPARATOR +
-          "*                                          *" + OsUtils.LINE_SEPARATOR +
-          "============================================" + OsUtils.LINE_SEPARATOR;
+  private static String screen = "============================================" + OsUtils.LINE_SEPARATOR
+      + "*                                          *" + OsUtils.LINE_SEPARATOR
+      + "*     _    _                 _ _           *" + OsUtils.LINE_SEPARATOR
+      + "*    | |  | |               | (_)          *" + OsUtils.LINE_SEPARATOR
+      + "*    | |__| | ___   ___   __| |_  ___      *" + OsUtils.LINE_SEPARATOR
+      + "*    |  __  |/ _ \\ / _ \\ / _` | |/ _ \\     *" + OsUtils.LINE_SEPARATOR
+      + "*    | |  | | (_) | (_) | (_| | |  __/     *" + OsUtils.LINE_SEPARATOR
+      + "*    |_|  |_|\\___/ \\___/ \\__,_|_|\\___|     *" + OsUtils.LINE_SEPARATOR
+      + "*                                          *" + OsUtils.LINE_SEPARATOR
+      + "============================================" + OsUtils.LINE_SEPARATOR;
 
   public String getBanner() {
     return screen;

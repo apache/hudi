@@ -7,6 +7,8 @@ toc: false
 summary: "Here we list all possible configurations and what they mean"
 ---
 
+### Configuration
+
 * [HoodieWriteConfig](#HoodieWriteConfig) <br/>
 <span style="color:grey">Top Level Config which is passed in when HoodieWriteClent is created.</span>
     - [withPath](#withPath) (hoodie_base_path) <br/>
@@ -152,4 +154,47 @@ summary: "Here we list all possible configurations and what they mean"
         `instant_time <= END_INSTANTTIME` are fetched out.</span>
 
 
-{% include callout.html content="Hoodie is a young project. A lot of pluggable interfaces and configurations to support diverse workloads need to be created. Get involved [here](https://github.com/uber/hoodie)" type="info" %}
+### Tuning
+
+Writing data via Hoodie happens as a Spark job and thus general rules of spark debugging applies here too. Below is a list of things to keep in mind, if you are looking to improving performance or reliability.
+
+ - **Right operations** : Use `bulkinsert` to load new data into a table, and there on use `upsert`/`insert`. Difference between them is that bulk insert uses a disk based write path to scale to load large inputs without need to cache it.
+ - **Input Parallelism** : By default, Hoodie tends to over-partition input (i.e `withParallelism(1500)`), to ensure each Spark partition stays within the 2GB limit for inputs upto 500GB. Bump this up accordingly if you have larger inputs. We recommend having shuffle parallelism `hoodie.[insert|upsert|bulkinsert].shuffle.parallelism` such that its atleast input_data_size/500MB
+ - **Off-heap memory** : Hoodie writes parquet files and that needs good amount of off-heap memory proportional to schema width. Consider setting something like `spark.yarn.executor.memoryOverhead` or `spark.yarn.driver.memoryOverhead`, if you are running into such failures.
+ - **Spark Memory** : Typically, hoodie needs to be able to read a single file into memory to perform merges or compactions and thus the executor memory should be sufficient to accomodate this. In addition, Hoodie caches the input to be able to intelligently place data and thus leaving some `spark.storage.memoryFraction` will generally help boost performance.
+ - **Sizing files** : Set `limitFileSize` above judiciously, to balance ingest/write latency vs number of files & consequently metadata overhead associated with it.
+ - **Timeseries/Log data** : Default configs are tuned for database/nosql changelogs where individual record sizes are large. Another very popular class of data is timeseries/event/log data that tends to be more volumnious with lot more records per partition. In such cases
+    - Consider tuning the bloom filter accuracy via `.bloomFilterFPP()/bloomFilterNumEntries()` to achieve your target index look up time
+    - Consider making a key that is prefixed with time of the event, which will enable range pruning & significantly speeding up index lookup.
+ - **GC Tuning** : Please be sure to follow garbage collection tuning tips from Spark tuning guide to avoid OutOfMemory errors
+    - [Must] Use G1/CMS Collector. Sample CMS Flags to add to spark.executor.extraJavaOptions : ``-XX:NewSize=1g -XX:SurvivorRatio=2 -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:CMSInitiatingOccupancyFraction=70 -XX:+PrintTenuringDistribution -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintTenuringDistribution -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/hoodie-heapdump.hprof`
+    - If it keeps OOMing still, reduce spark memory conservatively: `spark.memory.fraction=0.2, spark.memory.storageFraction=0.2` allowing it to spill rather than OOM. (reliably slow vs crashing intermittently)
+
+ Below is a full working production config
+
+ ```
+ spark.driver.extraClassPath    /etc/hive/conf
+ spark.driver.extraJavaOptions    -XX:+PrintTenuringDistribution -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintGCTimeStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/hoodie-heapdump.hprof
+ spark.driver.maxResultSize    2g
+ spark.driver.memory    4g
+ spark.executor.cores    1
+ spark.executor.extraJavaOptions    -XX:+PrintFlagsFinal -XX:+PrintReferenceGC -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintAdaptiveSizePolicy -XX:+UnlockDiagnosticVMOptions -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/hoodie-heapdump.hprof
+ spark.executor.id    driver
+ spark.executor.instances    300
+ spark.executor.memory    6g
+ spark.rdd.compress true
+
+ spark.kryoserializer.buffer.max    512m
+ spark.serializer    org.apache.spark.serializer.KryoSerializer
+ spark.shuffle.memoryFraction    0.2
+ spark.shuffle.service.enabled    true
+ spark.sql.hive.convertMetastoreParquet    false
+ spark.storage.memoryFraction    0.6
+ spark.submit.deployMode    cluster
+ spark.task.cpus    1
+ spark.task.maxFailures    4
+
+ spark.yarn.driver.memoryOverhead    1024
+ spark.yarn.executor.memoryOverhead    3072
+ spark.yarn.max.executor.failures    100
+ ```

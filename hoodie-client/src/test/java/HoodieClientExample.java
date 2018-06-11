@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
@@ -38,24 +37,19 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Driver program that uses the Hoodie client with synthetic workload, and performs basic
- * operations. <p>
+ * Driver program that uses the Hoodie client with synthetic workload, and performs basic operations. <p>
  */
 public class HoodieClientExample {
 
-  @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
-  private String tablePath = "file:///tmp/hoodie/sample-table";
-
-  @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
-  private String tableName = "hoodie_rt";
-
-  @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
-  private String tableType = HoodieTableType.COPY_ON_WRITE.name();
-
+  private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
-
-  private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
+  @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
+  private String tablePath = "file:///tmp/hoodie/sample-table";
+  @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
+  private String tableName = "hoodie_rt";
+  @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
+  private String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
   public static void main(String[] args) throws Exception {
     HoodieClientExample cli = new HoodieClientExample();
@@ -92,10 +86,10 @@ public class HoodieClientExample {
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable(tableName).withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3).build())
-        .build();
+        .forTable(tableName)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3).build()).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
     /**

@@ -30,18 +30,14 @@ import org.apache.spark.sql.SQLContext;
 
 public class SparkMain {
 
-  protected final static Logger LOG = Logger.getLogger(SparkMain.class);
+  protected static final Logger LOG = Logger.getLogger(SparkMain.class);
 
 
   /**
    * Commands
    */
   enum SparkCommand {
-    ROLLBACK,
-    DEDUPLICATE,
-    ROLLBACK_TO_SAVEPOINT,
-    SAVEPOINT,
-    IMPORT
+    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT
   }
 
   public static void main(String[] args) throws Exception {
@@ -67,18 +63,19 @@ public class SparkMain {
         break;
       case IMPORT:
         assert (args.length == 11);
-        returnCode = dataImport(jsc, args[1], args[2], args[3], args[4], args[5], args[6],
-            Integer.parseInt(args[7]), args[8], SparkUtil.DEFUALT_SPARK_MASTER, args[9],
-            Integer.parseInt(args[10]));
+        returnCode = dataImport(jsc, args[1], args[2], args[3], args[4], args[5], args[6], Integer.parseInt(args[7]),
+            args[8], SparkUtil.DEFUALT_SPARK_MASTER, args[9], Integer.parseInt(args[10]));
+        break;
+      default:
         break;
     }
 
     System.exit(returnCode);
   }
 
-  private static int dataImport(JavaSparkContext jsc, String srcPath, String targetPath,
-      String tableName, String tableType, String rowKey, String partitionKey, int parallelism,
-      String schemaFile, String sparkMaster, String sparkMemory, int retry) throws Exception {
+  private static int dataImport(JavaSparkContext jsc, String srcPath, String targetPath, String tableName,
+      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMaster,
+      String sparkMemory, int retry) throws Exception {
     HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
     cfg.srcPath = srcPath;
     cfg.targetPath = targetPath;
@@ -92,19 +89,15 @@ public class SparkMain {
     return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
   }
 
-  private static int deduplicatePartitionPath(JavaSparkContext jsc,
-      String duplicatedPartitionPath,
-      String repairedOutputPath,
-      String basePath)
-      throws Exception {
-    DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath,
-        new SQLContext(jsc), FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
+  private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
+      String repairedOutputPath, String basePath) throws Exception {
+    DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
+        FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
     job.fixDuplicates(true);
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String commitTime, String basePath)
-      throws Exception {
+  private static int rollback(JavaSparkContext jsc, String commitTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
     if (client.rollback(commitTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", commitTime));
@@ -115,9 +108,7 @@ public class SparkMain {
     }
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime,
-      String basePath)
-      throws Exception {
+  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     HoodieWriteClient client = createHoodieClient(jsc, basePath);
     if (client.rollbackToSavepoint(savepointTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
@@ -128,12 +119,9 @@ public class SparkMain {
     }
   }
 
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath)
-      throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .build();
+  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
+        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config);
   }
 }

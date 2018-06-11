@@ -21,6 +21,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -30,17 +31,19 @@ import org.apache.log4j.Logger;
  */
 public class HoodieMetrics {
 
-  private HoodieWriteConfig config = null;
-  private String tableName = null;
   private static Logger logger = LogManager.getLogger(HoodieMetrics.class);
   // Some timers
   public String rollbackTimerName = null;
   public String cleanTimerName = null;
   public String commitTimerName = null;
+  public String deltaCommitTimerName = null;
   public String finalizeTimerName = null;
+  private HoodieWriteConfig config = null;
+  private String tableName = null;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
   private Timer commitTimer = null;
+  private Timer deltaCommitTimer = null;
   private Timer finalizeTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
@@ -48,9 +51,10 @@ public class HoodieMetrics {
     this.tableName = tableName;
     if (config.isMetricsOn()) {
       Metrics.init(config);
-      this.rollbackTimerName = getMetricsName("timer", "rollback");
-      this.cleanTimerName = getMetricsName("timer", "clean");
-      this.commitTimerName = getMetricsName("timer", "commit");
+      this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
+      this.cleanTimerName = getMetricsName("timer", HoodieTimeline.CLEAN_ACTION);
+      this.commitTimerName = getMetricsName("timer", HoodieTimeline.COMMIT_ACTION);
+      this.deltaCommitTimerName = getMetricsName("timer", HoodieTimeline.DELTA_COMMIT_ACTION);
       this.finalizeTimerName = getMetricsName("timer", "finalize");
     }
   }
@@ -87,8 +91,15 @@ public class HoodieMetrics {
     return finalizeTimer == null ? null : finalizeTimer.time();
   }
 
+  public Timer.Context getDeltaCommitCtx() {
+    if (config.isMetricsOn() && deltaCommitTimer == null) {
+      deltaCommitTimer = createTimer(deltaCommitTimerName);
+    }
+    return deltaCommitTimer == null ? null : deltaCommitTimer.time();
+  }
+
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs,
-      HoodieCommitMetadata metadata) {
+      HoodieCommitMetadata metadata, String actionType) {
     if (config.isMetricsOn()) {
       long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
       long totalFilesInsert = metadata.fetchTotalFilesInsert();
@@ -97,24 +108,35 @@ public class HoodieMetrics {
       long totalUpdateRecordsWritten = metadata.fetchTotalUpdateRecordsWritten();
       long totalInsertRecordsWritten = metadata.fetchTotalInsertRecordsWritten();
       long totalBytesWritten = metadata.fetchTotalBytesWritten();
-      registerGauge(getMetricsName("commit", "duration"), durationInMs);
-      registerGauge(getMetricsName("commit", "totalPartitionsWritten"), totalPartitionsWritten);
-      registerGauge(getMetricsName("commit", "totalFilesInsert"), totalFilesInsert);
-      registerGauge(getMetricsName("commit", "totalFilesUpdate"), totalFilesUpdate);
-      registerGauge(getMetricsName("commit", "totalRecordsWritten"), totalRecordsWritten);
-      registerGauge(getMetricsName("commit", "totalUpdateRecordsWritten"),
-          totalUpdateRecordsWritten);
-      registerGauge(getMetricsName("commit", "totalInsertRecordsWritten"),
-          totalInsertRecordsWritten);
-      registerGauge(getMetricsName("commit", "totalBytesWritten"), totalBytesWritten);
-      registerGauge(getMetricsName("commit", "commitTime"), commitEpochTimeInMs);
+      long totalTimeTakenByScanner = metadata.getTotalScanTime();
+      long totalTimeTakenForInsert = metadata.getTotalCreateTime();
+      long totalTimeTakenForUpsert = metadata.getTotalUpsertTime();
+      long totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
+      long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
+      long totalLogFilesSize = metadata.getTotalLogFilesSize();
+      registerGauge(getMetricsName(actionType, "duration"), durationInMs);
+      registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
+      registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
+      registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
+      registerGauge(getMetricsName(actionType, "totalRecordsWritten"), totalRecordsWritten);
+      registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
+      registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
+      registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
+      registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
+      registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
+      registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
+      registerGauge(getMetricsName(actionType, "totalUpsertTime"), totalTimeTakenForUpsert);
+      registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
+      registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), totalLogFilesCompacted);
+      registerGauge(getMetricsName(actionType, "totalLogFilesSize"), totalLogFilesSize);
     }
   }
 
   public void updateRollbackMetrics(long durationInMs, long numFilesDeleted) {
     if (config.isMetricsOn()) {
-      logger.info(String.format("Sending rollback metrics (duration=%d, numFilesDeleted=$d)",
-          durationInMs, numFilesDeleted));
+      logger.info(String
+          .format("Sending rollback metrics (duration=%d, numFilesDeleted=$d)", durationInMs,
+              numFilesDeleted));
       registerGauge(getMetricsName("rollback", "duration"), durationInMs);
       registerGauge(getMetricsName("rollback", "numFilesDeleted"), numFilesDeleted);
     }
@@ -122,8 +144,9 @@ public class HoodieMetrics {
 
   public void updateCleanMetrics(long durationInMs, int numFilesDeleted) {
     if (config.isMetricsOn()) {
-      logger.info(String.format("Sending clean metrics (duration=%d, numFilesDeleted=%d)",
-          durationInMs, numFilesDeleted));
+      logger.info(String
+          .format("Sending clean metrics (duration=%d, numFilesDeleted=%d)", durationInMs,
+              numFilesDeleted));
       registerGauge(getMetricsName("clean", "duration"), durationInMs);
       registerGauge(getMetricsName("clean", "numFilesDeleted"), numFilesDeleted);
     }
@@ -131,8 +154,9 @@ public class HoodieMetrics {
 
   public void updateFinalizeWriteMetrics(long durationInMs, int numFilesFinalized) {
     if (config.isMetricsOn()) {
-      logger.info(String.format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)",
-          durationInMs, numFilesFinalized));
+      logger.info(String
+          .format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)",
+              durationInMs, numFilesFinalized));
       registerGauge(getMetricsName("finalize", "duration"), durationInMs);
       registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
     }
@@ -140,8 +164,7 @@ public class HoodieMetrics {
 
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
-    return config == null ? null :
-        String.format("%s.%s.%s", tableName, action, metric);
+    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
   }
 
   void registerGauge(String metricName, final long value) {
@@ -154,7 +177,8 @@ public class HoodieMetrics {
         }
       });
     } catch (Exception e) {
-      // Here we catch all exception, so the major upsert pipeline will not be affected if the metrics system
+      // Here we catch all exception, so the major upsert pipeline will not be affected if the
+      // metrics system
       // has some issues.
       logger.error("Failed to send metrics: ", e);
     }

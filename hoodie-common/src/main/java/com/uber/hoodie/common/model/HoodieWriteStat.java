@@ -16,10 +16,10 @@
 
 package com.uber.hoodie.common.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
-import javax.annotation.Nullable;
 import java.io.Serializable;
+import javax.annotation.Nullable;
 import org.apache.hadoop.fs.Path;
 
 /**
@@ -91,19 +91,46 @@ public class HoodieWriteStat implements Serializable {
    * Total number of log records that were compacted by a compaction operation
    */
   @Nullable
-  private Long totalLogRecords;
+  private long totalLogRecords;
 
   /**
-   * Total number of log files that were compacted by a compaction operation
+   * Total number of log files compacted for a file slice with this base fileid
    */
   @Nullable
-  private Long totalLogFiles;
+  private long totalLogFilesCompacted;
+
+  /**
+   * Total size of all log files for a file slice with this base fileid
+   */
+  @Nullable
+  private long totalLogSizeCompacted;
 
   /**
    * Total number of records updated by a compaction operation
    */
   @Nullable
-  private Long totalRecordsToBeUpdate;
+  private long totalUpdatedRecordsCompacted;
+
+  /**
+   * Total number of log blocks seen in a compaction operation
+   */
+  @Nullable
+  private long totalLogBlocks;
+
+  /**
+   * Total number of corrupt blocks seen in a compaction operation
+   */
+  @Nullable
+  private long totalCorruptLogBlock;
+
+  /**
+   * Total number of rollback blocks seen in a compaction operation
+   */
+  private long totalRollbackBlocks;
+
+  @Nullable
+  @JsonIgnore
+  private RuntimeStats runtimeStats;
 
   public HoodieWriteStat() {
     // called by jackson json lib
@@ -181,28 +208,28 @@ public class HoodieWriteStat implements Serializable {
     this.partitionPath = partitionPath;
   }
 
-  public Long getTotalLogRecords() {
+  public long getTotalLogRecords() {
     return totalLogRecords;
   }
 
-  public void setTotalLogRecords(Long totalLogRecords) {
+  public void setTotalLogRecords(long totalLogRecords) {
     this.totalLogRecords = totalLogRecords;
   }
 
-  public Long getTotalLogFiles() {
-    return totalLogFiles;
+  public long getTotalLogFilesCompacted() {
+    return totalLogFilesCompacted;
   }
 
-  public void setTotalLogFiles(Long totalLogFiles) {
-    this.totalLogFiles = totalLogFiles;
+  public void setTotalLogFilesCompacted(long totalLogFilesCompacted) {
+    this.totalLogFilesCompacted = totalLogFilesCompacted;
   }
 
-  public Long getTotalRecordsToBeUpdate() {
-    return totalRecordsToBeUpdate;
+  public long getTotalUpdatedRecordsCompacted() {
+    return totalUpdatedRecordsCompacted;
   }
 
-  public void setTotalRecordsToBeUpdate(Long totalRecordsToBeUpdate) {
-    this.totalRecordsToBeUpdate = totalRecordsToBeUpdate;
+  public void setTotalUpdatedRecordsCompacted(long totalUpdatedRecordsCompacted) {
+    this.totalUpdatedRecordsCompacted = totalUpdatedRecordsCompacted;
   }
 
   public void setTempPath(String tempPath) {
@@ -211,6 +238,47 @@ public class HoodieWriteStat implements Serializable {
 
   public String getTempPath() {
     return this.tempPath;
+  }
+
+  public long getTotalLogSizeCompacted() {
+    return totalLogSizeCompacted;
+  }
+
+  public void setTotalLogSizeCompacted(long totalLogSizeCompacted) {
+    this.totalLogSizeCompacted = totalLogSizeCompacted;
+  }
+
+  public long getTotalLogBlocks() {
+    return totalLogBlocks;
+  }
+
+  public void setTotalLogBlocks(long totalLogBlocks) {
+    this.totalLogBlocks = totalLogBlocks;
+  }
+
+  public long getTotalCorruptLogBlock() {
+    return totalCorruptLogBlock;
+  }
+
+  public void setTotalCorruptLogBlock(long totalCorruptLogBlock) {
+    this.totalCorruptLogBlock = totalCorruptLogBlock;
+  }
+
+  public long getTotalRollbackBlocks() {
+    return totalRollbackBlocks;
+  }
+
+  public void setTotalRollbackBlocks(Long totalRollbackBlocks) {
+    this.totalRollbackBlocks = totalRollbackBlocks;
+  }
+
+  @Nullable
+  public RuntimeStats getRuntimeStats() {
+    return runtimeStats;
+  }
+
+  public void setRuntimeStats(@Nullable RuntimeStats runtimeStats) {
+    this.runtimeStats = runtimeStats;
   }
 
   /**
@@ -225,17 +293,25 @@ public class HoodieWriteStat implements Serializable {
 
   @Override
   public String toString() {
-    return new StringBuilder()
-        .append("HoodieWriteStat {")
-        .append("path=" + path)
-        .append(", tempPath=" + tempPath)
-        .append(", prevCommit='" + prevCommit + '\'')
-        .append(", numWrites=" + numWrites)
-        .append(", numDeletes=" + numDeletes)
-        .append(", numUpdateWrites=" + numUpdateWrites)
-        .append(", numWriteBytes=" + totalWriteBytes)
-        .append('}')
-        .toString();
+    return "HoodieWriteStat{"
+        + "fileId='" + fileId + '\''
+        + ", path='" + path + '\''
+        + ", prevCommit='" + prevCommit + '\''
+        + ", numWrites=" + numWrites
+        + ", numDeletes=" + numDeletes
+        + ", numUpdateWrites=" + numUpdateWrites
+        + ", totalWriteBytes=" + totalWriteBytes
+        + ", totalWriteErrors=" + totalWriteErrors
+        + ", tempPath='" + tempPath + '\''
+        + ", partitionPath='" + partitionPath
+        + '\'' + ", totalLogRecords=" + totalLogRecords
+        + ", totalLogFilesCompacted=" + totalLogFilesCompacted
+        + ", totalLogSizeCompacted=" + totalLogSizeCompacted
+        + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted
+        + ", totalLogBlocks=" + totalLogBlocks
+        + ", totalCorruptLogBlock=" + totalCorruptLogBlock
+        + ", totalRollbackBlocks=" + totalRollbackBlocks
+        + '}';
   }
 
   @Override
@@ -260,5 +336,52 @@ public class HoodieWriteStat implements Serializable {
     int result = path.hashCode();
     result = 31 * result + prevCommit.hashCode();
     return result;
+  }
+
+  public static class RuntimeStats implements Serializable {
+    /**
+     * Total time taken to read and merge logblocks in a log file
+     */
+    @Nullable
+    private long totalScanTime;
+
+    /**
+     * Total time taken by a Hoodie Merge for an existing file
+     */
+    @Nullable
+    private long totalUpsertTime;
+
+    /**
+     * Total time taken by a Hoodie Insert to a file
+     */
+    @Nullable
+    private long totalCreateTime;
+
+    @Nullable
+    public long getTotalScanTime() {
+      return totalScanTime;
+    }
+
+    public void setTotalScanTime(@Nullable long totalScanTime) {
+      this.totalScanTime = totalScanTime;
+    }
+
+    @Nullable
+    public long getTotalUpsertTime() {
+      return totalUpsertTime;
+    }
+
+    public void setTotalUpsertTime(@Nullable long totalUpsertTime) {
+      this.totalUpsertTime = totalUpsertTime;
+    }
+
+    @Nullable
+    public long getTotalCreateTime() {
+      return totalCreateTime;
+    }
+
+    public void setTotalCreateTime(@Nullable long totalCreateTime) {
+      this.totalCreateTime = totalCreateTime;
+    }
   }
 }

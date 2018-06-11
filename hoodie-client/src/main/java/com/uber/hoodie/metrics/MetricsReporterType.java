@@ -21,6 +21,5 @@ package com.uber.hoodie.metrics;
  * future.
  */
 public enum MetricsReporterType {
-  GRAPHITE,
-  INMEMORY
+  GRAPHITE, INMEMORY
 }

@@ -24,7 +24,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.configuration.PropertiesConfiguration;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link com.uber.hoodie.common.model.HoodieKey}
+ * Abstract class to extend for plugging in extraction of
+ * {@link com.uber.hoodie.common.model.HoodieKey}
  * from an Avro record
  */
 public abstract class KeyGenerator implements Serializable {

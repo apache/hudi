@@ -23,8 +23,7 @@ import org.apache.log4j.Logger;
 
 public class HoodieHiveUtil {
 
-  public static final Logger LOG =
-      LogManager.getLogger(HoodieHiveUtil.class);
+  public static final Logger LOG = LogManager.getLogger(HoodieHiveUtil.class);
 
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";

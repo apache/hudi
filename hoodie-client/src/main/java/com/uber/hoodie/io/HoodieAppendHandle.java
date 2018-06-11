@@ -24,6 +24,7 @@ import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
@@ -37,14 +38,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieAppendException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.TaskContext;
-import org.apache.spark.util.SizeEstimator;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -53,6 +46,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.TaskContext;
+import org.apache.spark.util.SizeEstimator;
 
 /**
  * IO Operation to append data onto an existing file.
@@ -61,26 +61,23 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
   private static Logger logger = LogManager.getLogger(HoodieAppendHandle.class);
   private static AtomicLong recordIndex = new AtomicLong(1);
-
-  private TableFileSystemView.RealtimeView fileSystemView;
   private final WriteStatus writeStatus;
   private final String fileId;
-  private String partitionPath;
-  private Iterator<HoodieRecord<T>> recordItr;
   List<IndexedRecord> recordList = new ArrayList<>();
   List<String> keysToDelete = new ArrayList<>();
+  private TableFileSystemView.RealtimeView fileSystemView;
+  private String partitionPath;
+  private Iterator<HoodieRecord<T>> recordItr;
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
   private long averageRecordSize = 0;
   private HoodieLogFile currentLogFile;
   private Writer writer;
   private boolean doInit = true;
+  private long estimatedNumberOfBytesWritten;
 
-  public HoodieAppendHandle(HoodieWriteConfig config,
-      String commitTime,
-      HoodieTable<T> hoodieTable,
-      String fileId,
-      Iterator<HoodieRecord<T>> recordItr) {
+  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+      String fileId, Iterator<HoodieRecord<T>> recordItr) {
     super(config, commitTime, hoodieTable);
     WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     writeStatus.setStat(new HoodieDeltaWriteStat());
@@ -93,42 +90,40 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private void init(String partitionPath) {
 
     // extract some information from the first record
-      FileSlice fileSlice = fileSystemView.getLatestFileSlices(partitionPath)
-          .filter(fileSlice1 -> fileSlice1.getDataFile().get().getFileId().equals(fileId))
-          .findFirst().get();
-      // HACK(vc) This also assumes a base file. It will break, if appending without one.
-      String latestValidFilePath = fileSlice.getDataFile().get().getFileName();
-      String baseCommitTime = FSUtils.getCommitTime(latestValidFilePath);
-      writeStatus.getStat().setPrevCommit(baseCommitTime);
-      writeStatus.setFileId(fileId);
-      writeStatus.setPartitionPath(partitionPath);
-      writeStatus.getStat().setFileId(fileId);
-      this.partitionPath = partitionPath;
+    FileSlice fileSlice = fileSystemView.getLatestFileSlices(partitionPath)
+        .filter(fileSlice1 -> fileSlice1.getDataFile().get().getFileId().equals(fileId)).findFirst()
+        .get();
+    // HACK(vc) This also assumes a base file. It will break, if appending without one.
+    String latestValidFilePath = fileSlice.getDataFile().get().getFileName();
+    String baseCommitTime = FSUtils.getCommitTime(latestValidFilePath);
+    writeStatus.getStat().setPrevCommit(baseCommitTime);
+    writeStatus.setFileId(fileId);
+    writeStatus.setPartitionPath(partitionPath);
+    writeStatus.getStat().setFileId(fileId);
+    this.partitionPath = partitionPath;
 
-      try {
-        this.writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-            .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(fileSlice.getLogFiles()
-                .map(logFile -> logFile.getLogVersion())
-                .max(Comparator.naturalOrder()).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
-            .withSizeThreshold(config.getLogFileMaxSize())
-            .withFs(fs).withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-        this.currentLogFile = writer.getLogFile();
-        ((HoodieDeltaWriteStat) writeStatus.getStat())
-            .setLogVersion(currentLogFile.getLogVersion());
-        ((HoodieDeltaWriteStat) writeStatus.getStat())
-            .setLogOffset(writer.getCurrentSize());
-      } catch (Exception e) {
-        logger.error("Error in update task at commit " + commitTime, e);
-        writeStatus.setGlobalError(e);
-        throw new HoodieUpsertException(
-            "Failed to initialize HoodieUpdateHandle for FileId: " + fileId
-                + " on commit " + commitTime + " on HDFS path " + hoodieTable
-                .getMetaClient().getBasePath() + partitionPath, e);
-      }
-      Path path = new Path(partitionPath,
-          FSUtils.makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId));
-      writeStatus.getStat().setPath(path.toString());
+    try {
+      this.writer = HoodieLogFormat.newWriterBuilder()
+          .onParentPath(new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+          .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(
+              fileSlice.getLogFiles().map(logFile -> logFile.getLogVersion())
+                  .max(Comparator.naturalOrder()).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+          .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs)
+          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+      this.currentLogFile = writer.getLogFile();
+      ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogVersion(currentLogFile.getLogVersion());
+      ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogOffset(writer.getCurrentSize());
+    } catch (Exception e) {
+      logger.error("Error in update task at commit " + commitTime, e);
+      writeStatus.setGlobalError(e);
+      throw new HoodieUpsertException(
+          "Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
+              + commitTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath()
+              + partitionPath, e);
+    }
+    Path path = new Path(partitionPath,
+        FSUtils.makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId));
+    writeStatus.getStat().setPath(path.toString());
   }
 
   private Optional<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
@@ -150,7 +145,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
 
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
-      // deflate record payload after recording success. This will help users access payload as a part of marking
+      // deflate record payload after recording success. This will help users access payload as a
+      // part of marking
       // record successful.
       hoodieRecord.deflate();
       return avroRecord;
@@ -165,7 +161,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   // to make sure we don't append records with older (shorter) schema than already appended
   public void doAppend() {
 
-    int maxBlockSize = config.getLogFileDataBlockMaxSize(); int numberOfRecords = 0;
+    int maxBlockSize = config.getLogFileDataBlockMaxSize();
+    int numberOfRecords = 0;
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
@@ -173,17 +170,19 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       HoodieRecord record = recordItr.next();
       // update the new location of the record, so we know where to find it next
       record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
-      if(doInit) {
+      if (doInit) {
         init(record.getPartitionPath());
         averageRecordSize = SizeEstimator.estimate(record);
         doInit = false;
       }
       // Append if max number of records reached to achieve block size
-      if(numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
-        // Recompute averageRecordSize before writing a new block and update existing value with avg of new and old
+      if (numberOfRecords >= (int) (maxBlockSize / averageRecordSize)) {
+        // Recompute averageRecordSize before writing a new block and update existing value with
+        // avg of new and old
         logger.info("AvgRecordSize => " + averageRecordSize);
-        averageRecordSize = (averageRecordSize + SizeEstimator.estimate(record))/2;
+        averageRecordSize = (averageRecordSize + SizeEstimator.estimate(record)) / 2;
         doAppend(header);
+        estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
         numberOfRecords = 0;
       }
       Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
@@ -195,6 +194,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       numberOfRecords++;
     }
     doAppend(header);
+    estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
   }
 
   private void doAppend(Map<HoodieLogBlock.HeaderMetadataType, String> header) {
@@ -221,7 +221,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
+      writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
+      RuntimeStats runtimeStats = new RuntimeStats();
+      runtimeStats.setTotalUpsertTime(timer.endTimer());
+      writeStatus.getStat().setRuntimeStats(runtimeStats);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }

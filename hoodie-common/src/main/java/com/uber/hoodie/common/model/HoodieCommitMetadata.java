@@ -208,14 +208,106 @@ public class HoodieCommitMetadata implements Serializable {
     return totalWriteErrors;
   }
 
+  public long getTotalRecordsDeleted() {
+    long totalDeletes = 0;
+    for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
+      for (HoodieWriteStat stat : stats) {
+        totalDeletes += stat.getNumDeletes();
+      }
+    }
+    return totalDeletes;
+  }
+
+  public Long getTotalLogRecordsCompacted() {
+    Long totalLogRecords = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalLogRecords += writeStat.getTotalLogRecords();
+      }
+    }
+    return totalLogRecords;
+  }
+
+  public Long getTotalLogFilesCompacted() {
+    Long totalLogFiles = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalLogFiles += writeStat.getTotalLogFilesCompacted();
+      }
+    }
+    return totalLogFiles;
+  }
+
+  public Long getTotalCompactedRecordsUpdated() {
+    Long totalUpdateRecords = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalUpdateRecords += writeStat.getTotalUpdatedRecordsCompacted();
+      }
+    }
+    return totalUpdateRecords;
+  }
+
+  public Long getTotalLogFilesSize() {
+    Long totalLogFilesSize = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        totalLogFilesSize += writeStat.getTotalLogSizeCompacted();
+      }
+    }
+    return totalLogFilesSize;
+  }
+
+  public Long getTotalScanTime() {
+    Long totalScanTime = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        if (writeStat.getRuntimeStats() != null) {
+          totalScanTime += writeStat.getRuntimeStats().getTotalScanTime();
+        }
+      }
+    }
+    return totalScanTime;
+  }
+
+  public Long getTotalCreateTime() {
+    Long totalCreateTime = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        if (writeStat.getRuntimeStats() != null) {
+          totalCreateTime += writeStat.getRuntimeStats().getTotalCreateTime();
+        }
+      }
+    }
+    return totalCreateTime;
+  }
+
+  public Long getTotalUpsertTime() {
+    Long totalUpsertTime = 0L;
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        if (writeStat.getRuntimeStats() != null) {
+          totalUpsertTime += writeStat.getRuntimeStats().getTotalUpsertTime();
+        }
+      }
+    }
+    return totalUpsertTime;
+  }
+
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
 
     HoodieCommitMetadata that = (HoodieCommitMetadata) o;
 
-    if (!partitionToWriteStats.equals(that.partitionToWriteStats)) return false;
+    if (!partitionToWriteStats.equals(that.partitionToWriteStats)) {
+      return false;
+    }
     return compacted.equals(that.compacted);
 
   }
@@ -230,7 +322,7 @@ public class HoodieCommitMetadata implements Serializable {
   public static HoodieCommitMetadata fromBytes(byte[] bytes) throws IOException {
     return fromJsonString(new String(bytes, Charset.forName("utf-8")));
   }
-  
+
   private static ObjectMapper getObjectMapper() {
     ObjectMapper mapper = new ObjectMapper();
     mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);

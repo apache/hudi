@@ -30,8 +30,8 @@ import org.apache.spark.util.Utils;
 @Immutable
 public class HoodieMemoryConfig extends DefaultHoodieConfig {
 
-  // This fraction is multiplied with the spark.memory.fraction to get a final fraction of heap space to use during merge
-  // This makes it easier to scale this value as one increases the spark.executor.memory
+  // This fraction is multiplied with the spark.memory.fraction to get a final fraction of heap space to use
+  // during merge. This makes it easier to scale this value as one increases the spark.executor.memory
   public static final String MAX_MEMORY_FRACTION_FOR_MERGE_PROP = "hoodie.memory.merge.fraction";
   // Default max memory fraction during hash-merge, excess spills to disk
   public static final String DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE = String.valueOf(0.6);
@@ -45,7 +45,12 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   public static final String MAX_MEMORY_FOR_MERGE_PROP = "hoodie.memory.merge.max.size";
   // Property to set the max memory for compaction
   public static final String MAX_MEMORY_FOR_COMPACTION_PROP = "hoodie.memory.compaction.max.size";
-
+  // Property to set the max memory for dfs inputstream buffer size
+  public static final String MAX_DFS_STREAM_BUFFER_SIZE_PROP = "hoodie.memory.dfs.buffer.max.size";
+  public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
+  public static final String SPILLABLE_MAP_BASE_PATH_PROP = "hoodie.memory.spillable.map.path";
+  // Default file path prefix for spillable file
+  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
 
   private HoodieMemoryConfig(Properties props) {
     super(props);
@@ -74,32 +79,40 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withMaxMemoryFractionPerPartitionMerge(long maxMemoryFractionPerPartitionMerge) {
+    public Builder withMaxMemoryFractionPerPartitionMerge(double maxMemoryFractionPerPartitionMerge) {
       props.setProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP,
           String.valueOf(maxMemoryFractionPerPartitionMerge));
       return this;
     }
 
-    public Builder withMaxMemoryFractionPerCompaction(long maxMemoryFractionPerCompaction) {
+    public Builder withMaxMemoryFractionPerCompaction(double maxMemoryFractionPerCompaction) {
       props.setProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP,
           String.valueOf(maxMemoryFractionPerCompaction));
       return this;
     }
 
+    public Builder withMaxDFSStreamBufferSize(int maxStreamBufferSize) {
+      props.setProperty(MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+          String.valueOf(maxStreamBufferSize));
+      return this;
+    }
+
     /**
-     * Dynamic calculation of max memory to use for for spillable map. user.available.memory =
-     * spark.executor.memory * (1 - spark.memory.fraction) spillable.available.memory =
-     * user.available.memory * hoodie.memory.fraction. Anytime the spark.executor.memory or the
-     * spark.memory.fraction is changed, the memory used for spillable map changes accordingly
+     * Dynamic calculation of max memory to use for for spillable map. user.available.memory = spark.executor.memory *
+     * (1 - spark.memory.fraction) spillable.available.memory = user.available.memory * hoodie.memory.fraction. Anytime
+     * the spark.executor.memory or the spark.memory.fraction is changed, the memory used for spillable map changes
+     * accordingly
      */
     private long getMaxMemoryAllowedForMerge(String maxMemoryFraction) {
       final String SPARK_EXECUTOR_MEMORY_PROP = "spark.executor.memory";
       final String SPARK_EXECUTOR_MEMORY_FRACTION_PROP = "spark.memory.fraction";
-      // This is hard-coded in spark code {@link https://github.com/apache/spark/blob/576c43fb4226e4efa12189b41c3bc862019862c6/core/src/main/scala/org/apache/spark/memory/UnifiedMemoryManager.scala#L231}
-      // so have to re-define this here
+      // This is hard-coded in spark code {@link
+      // https://github.com/apache/spark/blob/576c43fb4226e4efa12189b41c3bc862019862c6/core/src/main/scala/org/apache/
+      // spark/memory/UnifiedMemoryManager.scala#L231} so have to re-define this here
       final String DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION = "0.6";
-      // This is hard-coded in spark code {@link https://github.com/apache/spark/blob/576c43fb4226e4efa12189b41c3bc862019862c6/core/src/main/scala/org/apache/spark/SparkContext.scala#L471}
-      // so have to re-define this here
+      // This is hard-coded in spark code {@link
+      // https://github.com/apache/spark/blob/576c43fb4226e4efa12189b41c3bc862019862c6/core/src/main/scala/org/apache/
+      // spark/SparkContext.scala#L471} so have to re-define this here
       final String DEFAULT_SPARK_EXECUTOR_MEMORY_MB = "1024"; // in MB
 
       if (SparkEnv.get() != null) {
@@ -109,7 +122,8 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
                 DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024
                 * 1024L);
         // 0.6 is the default value used by Spark,
-        // look at {@link https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}
+        // look at {@link
+        // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}
         double memoryFraction = Double
             .valueOf(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_FRACTION_PROP,
                 DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION));
@@ -140,8 +154,13 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
           !props.containsKey(MAX_MEMORY_FOR_COMPACTION_PROP),
           MAX_MEMORY_FOR_COMPACTION_PROP, String.valueOf(
               getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP))));
+      setDefaultOnCondition(props,
+          !props.containsKey(MAX_DFS_STREAM_BUFFER_SIZE_PROP),
+          MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
+      setDefaultOnCondition(props,
+          !props.containsKey(SPILLABLE_MAP_BASE_PATH_PROP),
+          SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH);
       return config;
     }
   }
-
 }

@@ -40,7 +40,7 @@ public class Metrics {
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
     }
-//        reporter.start();
+    // reporter.start();
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override

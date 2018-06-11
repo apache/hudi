@@ -16,20 +16,14 @@
 
 package com.uber.hoodie.common.util.collection.converter;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
-import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieNotSerializableException;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Optional;
-import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.lang3.SerializationUtils;
@@ -91,17 +85,5 @@ public class HoodieRecordConverter<V> implements
     } catch (IOException io) {
       throw new HoodieNotSerializableException("Cannot de-serialize value from bytes", io);
     }
-  }
-
-  @Override
-  public long sizeEstimate(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) {
-    // Most HoodieRecords are bound to have data + schema. Although, the same schema object is shared amongst
-    // all records in the JVM. Calculate and print the size of the Schema and of the Record to
-    // note the sizes and differences. A correct estimation in such cases is handled in
-    /** {@link com.uber.hoodie.common.util.collection.ExternalSpillableMap} **/
-    long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
-    long sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
-    log.info("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
-    return sizeOfRecord;
   }
 }

@@ -20,7 +20,6 @@ package com.uber.hoodie.io.compact.strategy;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.compact.CompactionOperation;
-
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Comparator;
@@ -30,20 +29,21 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
- * This strategy orders compactions in reverse order of creation of Hive Partitions.
- * It helps to compact data in latest partitions first and then older capped at the Total_IO allowed.
+ * This strategy orders compactions in reverse order of creation of Hive Partitions. It helps to
+ * compact data in latest partitions first and then older capped at the Total_IO allowed.
  */
 public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
   private static String datePartitionFormat = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
-  private static Comparator<CompactionOperation> comparator = (CompactionOperation leftC, CompactionOperation rightC) -> {
+  private static Comparator<CompactionOperation> comparator = (CompactionOperation leftC,
+      CompactionOperation rightC) -> {
     try {
       Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
-              .parse(leftC.getPartitionPath());
+          .parse(leftC.getPartitionPath());
       Date right = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
-              .parse(rightC.getPartitionPath());
+          .parse(rightC.getPartitionPath());
       return left.after(right) ? -1 : right.after(left) ? 1 : 0;
     } catch (ParseException e) {
       throw new HoodieException("Invalid Partition Date Format", e);
@@ -55,8 +55,10 @@ public class DayBasedCompactionStrategy extends BoundedIOCompactionStrategy {
   }
 
   @Override
-  public List<CompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig, List<CompactionOperation> operations) {
+  public List<CompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+      List<CompactionOperation> operations) {
     // Iterate through the operations and accept operations as long as we are within the IO limit
-    return super.orderAndFilter(writeConfig, operations.stream().sorted(comparator).collect(Collectors.toList()));
+    return super.orderAndFilter(writeConfig,
+        operations.stream().sorted(comparator).collect(Collectors.toList()));
   }
 }

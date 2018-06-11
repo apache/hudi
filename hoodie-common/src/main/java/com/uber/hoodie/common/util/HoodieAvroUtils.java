@@ -45,11 +45,11 @@ import org.apache.avro.io.EncoderFactory;
 public class HoodieAvroUtils {
 
   // All metadata fields are optional strings.
-  private final static Schema METADATA_FIELD_SCHEMA = Schema.createUnion(Arrays.asList(
+  private static final Schema METADATA_FIELD_SCHEMA = Schema.createUnion(Arrays.asList(
       Schema.create(Schema.Type.NULL),
       Schema.create(Schema.Type.STRING)));
 
-  private final static Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
+  private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   /**
    * Convert a given avro record to bytes
@@ -74,6 +74,13 @@ public class HoodieAvroUtils {
     return reader.read(null, decoder);
   }
 
+  public static boolean isMetadataField(String fieldName) {
+    return HoodieRecord.COMMIT_TIME_METADATA_FIELD.equals(fieldName)
+        || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
+        || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
+        || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
+        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName);
+  }
 
   /**
    * Adds the Hoodie metadata fields to the given schema
@@ -98,7 +105,9 @@ public class HoodieAvroUtils {
     parentFields.add(partitionPathField);
     parentFields.add(fileNameField);
     for (Schema.Field field : schema.getFields()) {
-      parentFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), null));
+      if (!isMetadataField(field.name())) {
+        parentFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), null));
+      }
     }
 
     Schema mergedSchema = Schema
