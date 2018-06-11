@@ -322,6 +322,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.valueOf(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO));
   }
 
+  public double getLogFileToParquetCompressionRatio() {
+    return Double.valueOf(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
+  }
+
   /**
    * metrics properties
    **/
@@ -345,7 +349,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public String getGraphiteMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX);
   }
-  
+
   /**
    * memory configs
    */

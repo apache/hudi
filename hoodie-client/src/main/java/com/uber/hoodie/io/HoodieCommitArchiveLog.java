@@ -27,6 +27,7 @@ import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.model.ActionType;
 import com.uber.hoodie.common.model.HoodieArchivedLogFile;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
@@ -52,6 +53,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * Archiver to bound the growth of <action>.commit files
@@ -99,9 +101,9 @@ public class HoodieCommitArchiveLog {
   /**
    * Check if commits need to be archived. If yes, archive commits.
    */
-  public boolean archiveIfRequired() {
+  public boolean archiveIfRequired(final JavaSparkContext jsc) {
     try {
-      List<HoodieInstant> instantsToArchive = getInstantsToArchive().collect(Collectors.toList());
+      List<HoodieInstant> instantsToArchive = getInstantsToArchive(jsc).collect(Collectors.toList());
       boolean success = true;
       if (instantsToArchive.iterator().hasNext()) {
         this.writer = openWriter();
@@ -117,13 +119,13 @@ public class HoodieCommitArchiveLog {
     }
   }
 
-  private Stream<HoodieInstant> getInstantsToArchive() {
+  private Stream<HoodieInstant> getInstantsToArchive(JavaSparkContext jsc) {
 
     // TODO : rename to max/minInstantsToKeep
     int maxCommitsToKeep = config.getMaxCommitsToKeep();
     int minCommitsToKeep = config.getMinCommitsToKeep();
 
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // GroupBy each action and limit each action timeline to maxCommitsToKeep
     // TODO: Handle ROLLBACK_ACTION in future
@@ -252,6 +254,8 @@ public class HoodieCommitArchiveLog {
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     com.uber.hoodie.avro.model.HoodieCommitMetadata avroMetaData = mapper
         .convertValue(hoodieCommitMetadata, com.uber.hoodie.avro.model.HoodieCommitMetadata.class);
+    // Do not archive Rolling Stats
+    avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, null);
     return avroMetaData;
   }
 }

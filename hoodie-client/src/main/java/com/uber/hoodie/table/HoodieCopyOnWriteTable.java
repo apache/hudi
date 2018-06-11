@@ -27,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -40,10 +41,11 @@ import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.exception.HoodieUpsertException;
-import com.uber.hoodie.func.LazyInsertIterable;
+import com.uber.hoodie.func.CopyOnWriteLazyInsertIterable;
 import com.uber.hoodie.func.ParquetReaderIterator;
 import com.uber.hoodie.func.SparkBoundedInMemoryExecutor;
 import com.uber.hoodie.io.HoodieCleanHelper;
+import com.uber.hoodie.io.HoodieCreateHandle;
 import com.uber.hoodie.io.HoodieMergeHandle;
 import java.io.IOException;
 import java.io.Serializable;
@@ -64,6 +66,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -90,8 +93,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   private static Logger logger = LogManager.getLogger(HoodieCopyOnWriteTable.class);
 
-  public HoodieCopyOnWriteTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    super(config, metaClient);
+  public HoodieCopyOnWriteTable(HoodieWriteConfig config, JavaSparkContext jsc) {
+    super(config, jsc);
   }
 
   private static PairFlatMapFunction<Iterator<Tuple2<String, String>>, String,
@@ -225,7 +228,15 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   public Iterator<List<WriteStatus>> handleInsert(String commitTime,
       Iterator<HoodieRecord<T>> recordItr) throws Exception {
-    return new LazyInsertIterable<>(recordItr, config, commitTime, this);
+    return new CopyOnWriteLazyInsertIterable<>(recordItr, config, commitTime, this);
+  }
+
+  public Iterator<List<WriteStatus>> handleInsert(String commitTime, String partitionPath, String fileId,
+      Iterator<HoodieRecord<T>> recordItr) {
+    HoodieCreateHandle createHandle = new HoodieCreateHandle(config, commitTime, this, partitionPath, fileId,
+        recordItr);
+    createHandle.write();
+    return Collections.singletonList(Collections.singletonList(createHandle.close())).iterator();
   }
 
   @SuppressWarnings("unchecked")
@@ -289,17 +300,34 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    */
   protected Map<FileStatus, Boolean> deleteCleanedFiles(String partitionPath, List<String> commits)
       throws IOException {
+    Map<FileStatus, Boolean> results = Maps.newHashMap();
+    deleteCleanedFiles(results, partitionPath, commits);
+    return results;
+  }
+
+  /**
+   * Common method used for cleaning out parquet files under a partition path during rollback of a
+   * set of commits
+   */
+  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, String partitionPath,
+      List<String> commits)
+      throws IOException {
     logger.info("Cleaning path " + partitionPath);
     FileSystem fs = getMetaClient().getFs();
-    FileStatus[] toBeDeleted = fs
-        .listStatus(new Path(config.getBasePath(), partitionPath), path -> {
-          if (!path.toString().contains(".parquet")) {
-            return false;
-          }
-          String fileCommitTime = FSUtils.getCommitTime(path.getName());
-          return commits.contains(fileCommitTime);
-        });
-    Map<FileStatus, Boolean> results = Maps.newHashMap();
+    // PathFilter to get all parquet files and log files that need to be deleted
+    PathFilter filter = (path) -> {
+      if (path.toString().contains(".parquet")) {
+        String fileCommitTime = FSUtils.getCommitTime(path.getName());
+        return commits.contains(fileCommitTime);
+        // TODO (NA) : Move log files logic out of CopyOnWrite
+      } else if (path.toString().contains(".log")) {
+        // Since the baseCommitTime is the only commit for new log files, it's okay here
+        String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
+        return commits.contains(fileCommitTime);
+      }
+      return false;
+    };
+    FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
@@ -311,7 +339,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits)
       throws IOException {
-    String actionType = this.getCommitActionType();
+    String actionType = metaClient.getCommitActionType();
     HoodieActiveTimeline activeTimeline = this.getActiveTimeline();
     List<String> inflights = this.getInflightCommitTimeline().getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
@@ -613,13 +641,18 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      * Remembers what type each bucket is for later.
      */
     private HashMap<Integer, BucketInfo> bucketInfoMap;
+    /**
+     * Rolling stats for files
+     */
+    protected HoodieRollingStatMetadata rollingStatMetadata;
+    protected long averageRecordSize;
 
     UpsertPartitioner(WorkloadProfile profile) {
       updateLocationToBucket = new HashMap<>();
       partitionPathToInsertBuckets = new HashMap<>();
       bucketInfoMap = new HashMap<>();
       globalStat = profile.getGlobalStat();
-
+      rollingStatMetadata = getRollingStats();
       assignUpdates(profile);
       assignInserts(profile);
 
@@ -652,7 +685,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     private void assignInserts(WorkloadProfile profile) {
       // for new inserts, compute buckets depending on how many records we have for each partition
       Set<String> partitionPaths = profile.getPartitionPaths();
-      long averageRecordSize = averageBytesPerRecord();
+      averageRecordSize = averageBytesPerRecord();
       logger.info("AvgRecordSize => " + averageRecordSize);
       for (String partitionPath : partitionPaths) {
         WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
@@ -763,7 +796,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      * Obtains the average record size based on records written during last commit. Used for
      * estimating how many records pack into one file.
      */
-    private long averageBytesPerRecord() {
+    protected long averageBytesPerRecord() {
       long avgSize = 0L;
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getCommitTimeline()
           .filterCompletedInstants();
@@ -822,5 +855,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         return targetBuckets.get(0).bucketNumber;
       }
     }
+  }
+
+  protected HoodieRollingStatMetadata getRollingStats() {
+    return null;
   }
 }

@@ -46,6 +46,6 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload> implements
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition,
       Iterator<HoodieRecord<T>> sortedRecordItr) throws Exception {
-    return new LazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable);
+    return new CopyOnWriteLazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable);
   }
 }

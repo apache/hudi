@@ -31,25 +31,33 @@ import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.model.FileSlice;
+import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRollingStat;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
+import com.uber.hoodie.config.HoodieMemoryConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.index.HoodieIndex.IndexType;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +65,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -70,7 +79,6 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
@@ -155,7 +163,7 @@ public class TestMergeOnReadTable {
     assertNoWriteErrors(statuses);
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
     Optional<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
     assertTrue(deltaCommit.isPresent());
@@ -166,7 +174,7 @@ public class TestMergeOnReadTable {
 
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metaClient,
-        hoodieTable.getCommitTimeline().filterCompletedInstants(), allFiles);
+        metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
     Stream<HoodieDataFile> dataFilesToRead = roView.getLatestDataFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
@@ -209,9 +217,8 @@ public class TestMergeOnReadTable {
     assertTrue(dataFilesToRead.findAny().isPresent());
 
     // verify that there is a commit
-    HoodieTable table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath(), true), getConfig(false));
-    HoodieTimeline timeline = table.getCommitTimeline().filterCompletedInstants();
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath(), true);
+    HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
     assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
     String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
     assertTrue(HoodieTimeline.compareTimestamps("000", latestCompactionCommitTime, HoodieTimeline.LESSER));
@@ -263,7 +270,7 @@ public class TestMergeOnReadTable {
     assertNoWriteErrors(statuses);
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
     Optional<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
     assertTrue(deltaCommit.isPresent());
@@ -274,7 +281,7 @@ public class TestMergeOnReadTable {
 
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metaClient,
-        hoodieTable.getCommitTimeline().filterCompletedInstants(), allFiles);
+        metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
     Stream<HoodieDataFile> dataFilesToRead = roView.getLatestDataFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
@@ -372,7 +379,7 @@ public class TestMergeOnReadTable {
     client.rollback(newCommitTime);
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     HoodieTableFileSystemView roView = new HoodieTableFileSystemView(metaClient,
         hoodieTable.getCompletedCommitTimeline(), allFiles);
@@ -408,7 +415,7 @@ public class TestMergeOnReadTable {
     assertNoWriteErrors(statuses);
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
     Optional<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
     assertTrue(deltaCommit.isPresent());
@@ -419,7 +426,7 @@ public class TestMergeOnReadTable {
 
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metaClient,
-        hoodieTable.getCommitTimeline().filterCompletedInstants(), allFiles);
+        metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
     Stream<HoodieDataFile> dataFilesToRead = roView.getLatestDataFiles();
     assertTrue(!dataFilesToRead.findAny().isPresent());
 
@@ -456,7 +463,7 @@ public class TestMergeOnReadTable {
     client.rollback(newCommitTime);
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
     roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
     dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
     recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
@@ -482,8 +489,8 @@ public class TestMergeOnReadTable {
 
     allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
-    roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCommitsTimeline(), allFiles);
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    roView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
 
     final String compactedCommitTime = metaClient.getActiveTimeline().reload().getCommitsTimeline().lastInstant().get()
         .getTimestamp();
@@ -500,8 +507,8 @@ public class TestMergeOnReadTable {
 
     allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
-    roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCommitsTimeline(), allFiles);
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    roView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsTimeline(), allFiles);
 
     assertFalse(roView.getLatestDataFiles().filter(file -> {
       if (compactedCommitTime.equals(file.getCommitTime())) {
@@ -531,7 +538,7 @@ public class TestMergeOnReadTable {
     assertNoWriteErrors(statuses);
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
     Optional<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
     assertTrue(deltaCommit.isPresent());
@@ -542,7 +549,7 @@ public class TestMergeOnReadTable {
 
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     TableFileSystemView.ReadOptimizedView roView = new HoodieTableFileSystemView(metaClient,
-        hoodieTable.getCommitsTimeline().filterCompletedInstants(), allFiles);
+        metaClient.getCommitsTimeline().filterCompletedInstants(), allFiles);
     Stream<HoodieDataFile> dataFilesToRead = roView.getLatestDataFiles();
     Map<String, Long> parquetFileIdToSize = dataFilesToRead.collect(
         Collectors.toMap(HoodieDataFile::getFileId, HoodieDataFile::getFileSize));
@@ -591,7 +598,6 @@ public class TestMergeOnReadTable {
   }
 
   @Test
-  @Ignore
   public void testLogFileCountsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig(true);
@@ -606,7 +612,7 @@ public class TestMergeOnReadTable {
 
     // Update all the 100 records
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     newCommitTime = "101";
     writeClient.startCommitWithTime(newCommitTime);
@@ -614,7 +620,7 @@ public class TestMergeOnReadTable {
     List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
     JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
     HoodieIndex index = new HoodieBloomIndex<>(config, jsc);
-    updatedRecords = index.tagLocation(updatedRecordsRDD, table).collect();
+    updatedRecords = index.tagLocation(updatedRecordsRDD, jsc, metaClient).collect();
 
     // Write them to corresponding avro logfiles
     HoodieTestUtils
@@ -623,7 +629,7 @@ public class TestMergeOnReadTable {
 
     // Verify that all data file has one log file
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, config);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     for (String partitionPath : dataGen.getPartitionPaths()) {
       List<FileSlice> groupedLogFiles = table.getRTFileSystemView().getLatestFileSlices(partitionPath)
           .collect(Collectors.toList());
@@ -634,14 +640,14 @@ public class TestMergeOnReadTable {
 
     // Do a compaction
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, config);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     String commitTime = writeClient.startCompaction();
     JavaRDD<WriteStatus> result = writeClient.compact(commitTime);
 
     // Verify that recently written compacted data file has no log file
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, config);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
     assertTrue("Compaction commit should be > than last insert", HoodieTimeline.compareTimestamps(
@@ -677,7 +683,7 @@ public class TestMergeOnReadTable {
 
     // total time taken for creating files should be greater than 0
     long totalCreateTime = statuses.map(writeStatus -> writeStatus.getStat().getRuntimeStats().getTotalCreateTime())
-        .reduce((a,b) -> a + b).intValue();
+        .reduce((a, b) -> a + b).intValue();
     Assert.assertTrue(totalCreateTime > 0);
 
     // Update all the 100 records
@@ -690,7 +696,7 @@ public class TestMergeOnReadTable {
     writeClient.commit(newCommitTime, statuses);
     // total time taken for upsert all records should be greater than 0
     long totalUpsertTime = statuses.map(writeStatus -> writeStatus.getStat().getRuntimeStats().getTotalUpsertTime())
-        .reduce((a,b) -> a + b).intValue();
+        .reduce((a, b) -> a + b).intValue();
     Assert.assertTrue(totalUpsertTime > 0);
 
     // Do a compaction
@@ -699,22 +705,463 @@ public class TestMergeOnReadTable {
     writeClient.commitCompaction(commitTime, statuses);
     // total time taken for scanning log files should be greater than 0
     long timeTakenForScanner = statuses.map(writeStatus -> writeStatus.getStat().getRuntimeStats().getTotalScanTime())
-        .reduce((a,b) -> a + b).longValue();
+        .reduce((a, b) -> a + b).longValue();
     Assert.assertTrue(timeTakenForScanner > 0);
   }
+
+  @Test
+  public void testSimpleInsertsGeneratedIntoLogFiles() throws Exception {
+    // insert 100 records
+    // Setting IndexType to be InMemory to simulate Global Index nature
+    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+
+    HoodieTable table = HoodieTable
+        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config,
+            jsc);
+    TableFileSystemView.RealtimeView tableRTFileSystemView = table.getRTFileSystemView();
+
+    long numLogFiles = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() > 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+    }
+
+    Assert.assertTrue(numLogFiles > 0);
+    // Do a compaction
+    String commitTime = writeClient.startCompaction();
+    statuses = writeClient.compact(commitTime);
+    Assert.assertTrue(statuses.map(status -> status.getStat().getPath().contains("parquet")).count() == numLogFiles);
+    Assert.assertEquals(statuses.count(), numLogFiles);
+    writeClient.commitCompaction(commitTime, statuses);
+  }
+
+  @Test
+  public void testInsertsIntoLogFilesWithSmallFileHandling() throws Exception {
+    // insert 100 records
+    // Setting IndexType to be InMemory to simulate Global Index nature
+    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+
+    HoodieTable table = HoodieTable
+        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config,
+            jsc);
+    TableFileSystemView.RealtimeView tableRTFileSystemView = table.getRTFileSystemView();
+
+    long numLogFiles = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() > 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+    }
+
+    Assert.assertTrue(numLogFiles > 0);
+
+    newCommitTime = "101";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    records = dataGen.generateInserts(newCommitTime, 100);
+    recordsRDD = jsc.parallelize(records, 1);
+    statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+
+    table = HoodieTable
+        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config,
+            jsc);
+    tableRTFileSystemView = table.getRTFileSystemView();
+
+    long numLogFiles1 = 0;
+    List<String> fileIds = new ArrayList<>();
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() > 0);
+      numLogFiles1 += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+      fileIds.addAll(tableRTFileSystemView.getLatestFileSlices(partitionPath).map(fileSlice ->
+          fileSlice.getLogFiles().findFirst().get().getFileId()).collect(Collectors.toList()));
+    }
+
+    // The inserts should goto the same log files and no new log files should be created
+    Assert.assertEquals(numLogFiles, numLogFiles1);
+
+    // Compact the log files to generate
+    String compactionTime = writeClient.startCompaction();
+    statuses = writeClient.compact(compactionTime);
+    writeClient.commitCompaction(compactionTime, statuses);
+
+    // New inserts should still goto the same file-ids
+    records = dataGen.generateInserts(newCommitTime, 100);
+    recordsRDD = jsc.parallelize(records, 1);
+    newCommitTime = "103";
+    writeClient.startCommitWithTime(newCommitTime);
+    statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+    List<String> newFileIds = statuses.map(status -> status.getFileId()).collect();
+    Assert.assertTrue(fileIds.containsAll(newFileIds));
+
+  }
+
+  @Test
+  public void testFirstInsertRollback() throws Exception {
+    // insert 100 records
+    // Setting IndexType to be InMemory to simulate Global Index nature
+    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+    // trigger an action
+    List<WriteStatus> writeStatuses = statuses.collect();
+
+    // Ensure that inserts are written to only log files
+    Assert.assertEquals(writeStatuses.stream().filter(writeStatus -> !writeStatus.getStat().getPath().contains("log")
+    ).count(), 0);
+    Assert.assertTrue(writeStatuses.stream().filter(writeStatus -> writeStatus.getStat().getPath().contains("log")
+    ).count() > 0);
+
+    // rollback a failed commit
+    boolean rollback = writeClient.rollback(newCommitTime);
+    Assert.assertTrue(rollback);
+
+    final HoodieTableMetaClient metaClient1 = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient1, config, jsc);
+    TableFileSystemView.RealtimeView tableRTFileSystemView = table.getRTFileSystemView();
+
+    long numLogFiles = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() == 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+    }
+
+    Assert.assertEquals(0, numLogFiles);
+
+    // Insert another 100 records, should be written to the same log files
+    newCommitTime = "101";
+    writeClient.startCommitWithTime(newCommitTime);
+    records = dataGen.generateInserts(newCommitTime, 100);
+    recordsRDD = jsc.parallelize(records, 1);
+    statuses = writeClient.upsert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+
+    // rollback a successful commit
+    rollback = writeClient.rollback(newCommitTime);
+    Assert.assertTrue(rollback);
+
+    final HoodieTableMetaClient metaClient2 = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    table = HoodieTable.getHoodieTable(metaClient2, config, jsc);
+    tableRTFileSystemView = table.getRTFileSystemView();
+
+    numLogFiles = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() == 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+    }
+    Assert.assertEquals(0, numLogFiles);
+
+  }
+
+  @Test
+  public void testRecurringInsertOrUpsertRollback() throws Exception {
+    // TODO (NA): Remove the HoodieCompactedScanner code once RealtimeInputFormat is fixed to read fileslices without
+    // base parquet files
+    // insert 100 records
+    // Setting IndexType to be InMemory to simulate Global Index nature
+    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+    // trigger an action
+    List<WriteStatus> writeStatuses = statuses.collect();
+    writeClient.commit(newCommitTime, statuses);
+
+    // Ensure that inserts are written to only log files
+    Assert.assertEquals(writeStatuses.stream().filter(writeStatus -> !writeStatus.getStat().getPath().contains("log")
+    ).count(), 0);
+    Assert.assertTrue(writeStatuses.stream().filter(writeStatus -> writeStatus.getStat().getPath().contains("log")
+    ).count() > 0);
+
+    // Insert another 100 records, should be written to the same log files due to small file sizing
+    newCommitTime = "101";
+    writeClient.startCommitWithTime(newCommitTime);
+    records = dataGen.generateInserts(newCommitTime, 100);
+    recordsRDD = jsc.parallelize(records, 1);
+    statuses = writeClient.upsert(recordsRDD, newCommitTime);
+    // trigger an action
+    statuses.collect();
+
+    // rollback a failed commit
+    boolean rollback = writeClient.rollback(newCommitTime);
+    Assert.assertTrue(rollback);
+
+    final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable table = HoodieTable
+        .getHoodieTable(metaClient, config,
+            jsc);
+    String latestCommit = table.metaClient.getActiveTimeline().getAllCommitsTimeline().lastInstant().get()
+        .getTimestamp();
+    long totalRecords = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      totalRecords += table.getRTFileSystemView().getAllFileSlices(partitionPath).map(fileSlice -> {
+        HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(metaClient.getFs(), metaClient
+            .getBasePath(), fileSlice.getLogFiles().map(hoodieLogFile -> hoodieLogFile.getPath()
+            .toString())
+            .collect(Collectors.toList()), HoodieTestDataGenerator
+            .avroSchema,
+            latestCommit,
+            HoodieMemoryConfig
+                .DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, Boolean.valueOf(HoodieCompactionConfig
+            .DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED), false, HoodieMemoryConfig
+            .DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE, "/tmp");
+        return scanner.getRecords().size();
+      }).reduce((a,b) -> a + b).get();
+    }
+
+    Assert.assertEquals(totalRecords, 100);
+    // Insert another 100 records
+    newCommitTime = "102";
+    writeClient.startCommitWithTime(newCommitTime);
+    records = dataGen.generateInserts(newCommitTime, 100);
+    recordsRDD = jsc.parallelize(records, 1);
+    statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+
+    // rollback a successful commit
+    writeClient.rollback(newCommitTime);
+    final HoodieTableMetaClient metaClient1 = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    table = HoodieTable.getHoodieTable(metaClient1, config, jsc);
+    TableFileSystemView.RealtimeView tableRTFileSystemView = table.getRTFileSystemView();
+
+    long numLogFiles = 0;
+    totalRecords = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() > 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+      totalRecords += table.getRTFileSystemView().getAllFileSlices(partitionPath).map(fileSlice -> {
+        HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(metaClient.getFs(), metaClient
+            .getBasePath(), fileSlice.getLogFiles().map(hoodieLogFile -> hoodieLogFile.getPath()
+            .toString())
+            .collect(Collectors.toList()), HoodieTestDataGenerator
+            .avroSchema,
+            latestCommit,
+            HoodieMemoryConfig
+                .DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, Boolean.valueOf(HoodieCompactionConfig
+            .DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED), false, HoodieMemoryConfig
+            .DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE, "/tmp");
+        return scanner.getRecords().size();
+      }).reduce((a,b) -> a + b).get();
+    }
+    Assert.assertTrue(numLogFiles > 0);
+    Assert.assertEquals(totalRecords, 100);
+
+    // Rollback the first commit, this should delete the first log files that were generated
+    writeClient.rollback("100");
+
+    final HoodieTableMetaClient metaClient2 = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    table = HoodieTable.getHoodieTable(metaClient2, config, jsc);
+    tableRTFileSystemView = table.getRTFileSystemView();
+    numLogFiles = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() == 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+    }
+    Assert.assertTrue(numLogFiles == 0);
+  }
+
+  @Test
+  public void testInsertsGeneratedIntoLogFilesRollbackAfterCompaction() throws Exception {
+    // insert 100 records
+    // Setting IndexType to be InMemory to simulate Global Index nature
+    HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
+    writeClient.commit(newCommitTime, statuses);
+    // trigger an action
+    statuses.collect();
+
+    HoodieTable table = HoodieTable
+        .getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config,
+            jsc);
+    TableFileSystemView.RealtimeView tableRTFileSystemView = table.getRTFileSystemView();
+
+    long numLogFiles = 0;
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() > 0);
+      numLogFiles += tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count();
+    }
+
+    Assert.assertTrue(numLogFiles > 0);
+    // Do a compaction
+    newCommitTime = writeClient.startCompaction();
+    statuses = writeClient.compact(newCommitTime);
+    // Ensure all log files have been compacted into parquet files
+    Assert.assertTrue(statuses.map(status -> status.getStat().getPath().contains("parquet")).count() == numLogFiles);
+    Assert.assertEquals(statuses.count(), numLogFiles);
+    writeClient.commitCompaction(newCommitTime, statuses);
+    // Trigger a rollback of compaction
+    writeClient.rollback(newCommitTime);
+    for (String partitionPath : dataGen.getPartitionPaths()) {
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getDataFile().isPresent()).count() == 0);
+      Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath).filter(fileSlice ->
+          fileSlice.getLogFiles().count() > 0).count() > 0);
+    }
+  }
+
+  /**
+   * Test to ensure rolling stats are correctly written to metadata file
+   */
+  @Test
+  public void testRollingStatsInMetadata() throws Exception {
+
+    HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
+    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+
+    String commitTime = "000";
+    client.startCommitWithTime(commitTime);
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+    JavaRDD<WriteStatus> statuses = client.insert(writeRecords, commitTime);
+    assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+
+    // Read from commit file
+    table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(table.getActiveTimeline().getInstantDetails(table
+        .getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get());
+    HoodieRollingStatMetadata rollingStatMetadata = HoodieRollingStatMetadata.fromString(metadata.getExtraMetadata()
+        .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+    int inserts = 0;
+    for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats().entrySet()) {
+      for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
+        inserts += stat.getValue().getInserts();
+      }
+    }
+    Assert.assertEquals(inserts, 200);
+
+    commitTime = "001";
+    client.startCommitWithTime(commitTime);
+    records = dataGen.generateUpdates(commitTime, records);
+    writeRecords = jsc.parallelize(records, 1);
+    statuses = client.upsert(writeRecords, commitTime);
+    assertTrue("Commit should succeed", client.commit(commitTime, statuses));
+
+    // Read from commit file
+    table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    metadata = HoodieCommitMetadata.fromBytes(table.getActiveTimeline().getInstantDetails(table
+        .getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get());
+    rollingStatMetadata = HoodieRollingStatMetadata.fromString(metadata.getExtraMetadata()
+        .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+    inserts = 0; int upserts = 0;
+    for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats().entrySet()) {
+      for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
+        inserts += stat.getValue().getInserts();
+        upserts += stat.getValue().getUpserts();
+      }
+    }
+
+    Assert.assertEquals(inserts, 200);
+    Assert.assertEquals(upserts, 200);
+
+    client.rollback(commitTime);
+
+    // Read from commit file
+    table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    metadata = HoodieCommitMetadata.fromBytes(table.getActiveTimeline().getInstantDetails(table
+        .getActiveTimeline().getDeltaCommitTimeline().lastInstant().get()).get());
+    rollingStatMetadata = HoodieRollingStatMetadata.fromString(metadata.getExtraMetadata()
+        .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+    inserts = 0; upserts = 0;
+    for (Map.Entry<String, Map<String, HoodieRollingStat>> pstat : rollingStatMetadata.getPartitionToRollingStats().entrySet()) {
+      for (Map.Entry<String, HoodieRollingStat> stat : pstat.getValue().entrySet()) {
+        inserts += stat.getValue().getInserts();
+        upserts += stat.getValue().getUpserts();
+      }
+    }
+    Assert.assertEquals(inserts, 200);
+    Assert.assertEquals(upserts, 0);
+  }
+
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {
     return getConfigBuilder(autoCommit).build();
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
+    return getConfigBuilder(autoCommit, IndexType.BLOOM);
+  }
+
+  private HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, HoodieIndex.IndexType indexType) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true).withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024).withInlineCompaction(false)
                 .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024 * 1024).build())
         .forTable("test-trip-table")
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build());
   }
 
   private void assertNoWriteErrors(List<WriteStatus> statuses) {

@@ -127,16 +127,17 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     fileIdSet.addAll(logFiles.keySet());
 
     List<HoodieFileGroup> fileGroups = new ArrayList<>();
+    //TODO: vb: Need to check/fix dataFile corresponding to inprogress/failed async compaction do not show up here
     fileIdSet.forEach(pair -> {
-      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), pair.getValue(),
-          visibleActiveTimeline);
+      HoodieFileGroup.Builder groupBuilder = new HoodieFileGroup.Builder().withPartitionPath(pair.getKey())
+          .withId(pair.getValue()).withTimeline(visibleActiveTimeline);
       if (dataFiles.containsKey(pair)) {
-        dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
+        dataFiles.get(pair).forEach(dataFile -> groupBuilder.withDataFile(dataFile));
       }
       if (logFiles.containsKey(pair)) {
-        logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
+        logFiles.get(pair).forEach(logFile -> groupBuilder.withLogFile(logFile));
       }
-      fileGroups.add(group);
+      fileGroups.add(groupBuilder.build());
     });
 
     // add to the cache.

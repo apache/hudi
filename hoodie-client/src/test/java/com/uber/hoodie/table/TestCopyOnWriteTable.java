@@ -77,6 +77,7 @@ public class TestCopyOnWriteTable {
     folder.create();
     this.basePath = folder.getRoot().getAbsolutePath();
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
+
   }
 
   @Test
@@ -90,9 +91,10 @@ public class TestCopyOnWriteTable {
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
-    HoodieCreateHandle io = new HoodieCreateHandle(config, commitTime, table, partitionPath);
+    HoodieCreateHandle io = new HoodieCreateHandle(config, commitTime, table, partitionPath,
+        UUID.randomUUID().toString());
     Path newPath = io.makeNewPath(record.getPartitionPath(), unitNumber, fileName);
     assertTrue(newPath.toString().equals(
         this.basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(commitTime, unitNumber, fileName)));
@@ -117,7 +119,7 @@ public class TestCopyOnWriteTable {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
     String partitionPath = "/2016/01/31";
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -187,7 +189,7 @@ public class TestCopyOnWriteTable {
     Thread.sleep(1000);
     String newCommitTime = HoodieTestUtils.makeNewCommitTime();
     metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = new HoodieCopyOnWriteTable(config, metadata);
+    table = new HoodieCopyOnWriteTable(config, jsc);
     Iterator<List<WriteStatus>> iter = table
         .handleUpdate(newCommitTime, updatedRecord1.getCurrentLocation().getFileId(),
             updatedRecords.iterator());
@@ -255,7 +257,7 @@ public class TestCopyOnWriteTable {
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     // Get some records belong to the same partition (2016/01/31)
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -290,7 +292,7 @@ public class TestCopyOnWriteTable {
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     // Write a few records, and get atleast one file
     // 10 records for partition 1, 1 record for partition 2.
@@ -324,7 +326,7 @@ public class TestCopyOnWriteTable {
     HoodieWriteConfig config = makeHoodieClientConfig();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
@@ -372,7 +374,7 @@ public class TestCopyOnWriteTable {
             .build()).build();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
@@ -411,9 +413,9 @@ public class TestCopyOnWriteTable {
     HoodieClientTestUtils.fakeDataFile(basePath, testPartitionPath, "001", "file1", fileSize);
 
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, metadata);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{testPartitionPath});
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", numInserts);
     List<HoodieRecord> updateRecords = dataGenerator.generateUpdates("001", numUpdates);
     for (HoodieRecord updateRec : updateRecords) {

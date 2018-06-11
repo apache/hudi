@@ -269,7 +269,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInMetaPath(instant.getFileName(), content);
   }
 
-  protected void createFileInMetaPath(String filename, Optional<byte[]> content) {
+  public void createFileInMetaPath(String filename, Optional<byte[]> content) {
     Path fullPath = new Path(metaClient.getMetaPath(), filename);
     try {
       if (!content.isPresent()) {

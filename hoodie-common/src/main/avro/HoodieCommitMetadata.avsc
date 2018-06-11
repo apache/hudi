@@ -60,6 +60,18 @@
                      {
                         "name":"totalUpdatedRecordsCompacted",
                         "type":["null","long"]
+                     },
+                     {
+                        "name":"totalLogBlocks",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalCorruptLogBlock",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalRollbackBlocks",
+                        "type":["null","long"]
                      }
                   ]
                }

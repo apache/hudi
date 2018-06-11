@@ -30,6 +30,8 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieRollingStat;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -130,7 +132,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
   public static SparkConf registerClasses(SparkConf conf) {
     conf.registerKryoClasses(
-        new Class[] {HoodieWriteConfig.class, HoodieRecord.class, HoodieKey.class});
+        new Class[]{HoodieWriteConfig.class, HoodieRecord.class, HoodieKey.class});
     return conf;
   }
 
@@ -144,9 +146,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   public JavaRDD<HoodieRecord<T>> filterExists(JavaRDD<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
 
-    JavaRDD<HoodieRecord<T>> recordsWithLocation = index.tagLocation(hoodieRecords, table);
+    JavaRDD<HoodieRecord<T>> recordsWithLocation = index.tagLocation(hoodieRecords, jsc, table.getMetaClient());
     return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
   }
 
@@ -161,7 +163,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
           config.shouldCombineBeforeUpsert(), records, config.getUpsertShuffleParallelism());
 
       // perform index loop up to get existing location of records
-      JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, table);
+      JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table.getMetaClient());
       return upsertRecordsInternal(taggedRecords, commitTime, table, true);
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
@@ -178,7 +180,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * needed.
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
-   * @param commitTime     Commit Time handle
+   * @param commitTime Commit Time handle
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
@@ -202,7 +204,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * This implementation skips the index check and is able to leverage benefits such as small file
    * handling/blocking alignment, as with upsert(), by profiling the workload
    *
-   * @param records    HoodieRecords to insert
+   * @param records HoodieRecords to insert
    * @param commitTime Commit Time handle
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
@@ -230,7 +232,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * The prepared HoodieRecords should be de-duped if needed.
    *
    * @param preppedRecords HoodieRecords to insert
-   * @param commitTime     Commit Time handle
+   * @param commitTime Commit Time handle
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
@@ -256,7 +258,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * attempts to control the numbers of files with less memory compared to the {@link
    * HoodieWriteClient#insert(JavaRDD, String)}
    *
-   * @param records    HoodieRecords to insert
+   * @param records HoodieRecords to insert
    * @param commitTime Commit Time handle
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
@@ -276,10 +278,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * partitioner. If specified then it will be used for repartitioning records. See {@link
    * UserDefinedBulkInsertPartitioner}.
    *
-   * @param records               HoodieRecords to insert
-   * @param commitTime            Commit Time handle
+   * @param records HoodieRecords to insert
+   * @param commitTime Commit Time handle
    * @param bulkInsertPartitioner If specified then it will be used to partition input records
-   *                              before they are inserted into hoodie.
+   * before they are inserted into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime,
@@ -310,10 +312,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * partitioner. If specified then it will be used for repartitioning records. See {@link
    * UserDefinedBulkInsertPartitioner}.
    *
-   * @param preppedRecords        HoodieRecords to insert
-   * @param commitTime            Commit Time handle
+   * @param preppedRecords HoodieRecords to insert
+   * @param commitTime Commit Time handle
    * @param bulkInsertPartitioner If specified then it will be used to partition input records
-   *                              before they are inserted into hoodie.
+   * before they are inserted into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
@@ -377,8 +379,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   /**
    * Save the workload profile in an intermediate file (here re-using commit files) This is useful
    * when performing rollback for MOR datasets. Only updates are recorded in the workload profile
-   * metadata since updates to log blocks are unknown across batches Inserts (which are new parquet
-   * files) are rolled back based on commit time. // TODO : Create a new WorkloadProfile metadata
+   * metadata since updates to log blocks are unknown across batches. Inserts (which are new parquet
+   * files and/or new log files) are rolled back based on commit time and whether the partition stats is empty. This is
+   * done since the FileId's are generated by the IO handler and not the workload profile metadata so there is no
+   * upfront way to writing out the HoodieRecordLocation (or the fileId) for the incoming inserts.
+   * // TODO : Create a new WorkloadProfile
+   * metadata
    * file instead of using HoodieCommitMetadata
    */
   private void saveWorkloadProfileMetadataToInflight(WorkloadProfile profile, HoodieTable<T> table,
@@ -390,6 +396,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         partitionStat.getUpdateLocationToCount().entrySet().stream().forEach(entry -> {
           HoodieWriteStat writeStat = new HoodieWriteStat();
           writeStat.setFileId(entry.getKey());
+          // TODO : Write baseCommitTime is possible here ?
           writeStat.setPrevCommit(entry.getValue().getKey());
           writeStat.setNumUpdateWrites(entry.getValue().getValue());
           metadata.addWriteStat(path.toString(), writeStat);
@@ -450,10 +457,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   private JavaRDD<WriteStatus> updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD,
       HoodieTable<T> table, String commitTime) {
     // Update the index back
-    JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, table);
+    JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table.getMetaClient());
     // Trigger the insert and collect statuses
     statuses = statuses.persist(config.getWriteStatusStorageLevel());
-    commitOnAutoCommit(commitTime, statuses, table.getCommitActionType());
+    commitOnAutoCommit(commitTime, statuses,
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true)
+            .getCommitActionType());
     return statuses;
   }
 
@@ -476,9 +485,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
       Optional<HashMap<String, String>> extraMetadata) {
-    HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
-    return commit(commitTime, writeStatuses, extraMetadata, table.getCommitActionType());
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
+    return commit(commitTime, writeStatuses, extraMetadata, metaClient.getCommitActionType());
   }
 
   private boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
@@ -487,7 +495,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     logger.info("Commiting " + commitTime);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
 
@@ -496,9 +504,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             writeStatus.getPartitionPath(), writeStatus.getStat())).collect();
 
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    for (Tuple2<String, HoodieWriteStat> stat : stats) {
-      metadata.addWriteStat(stat._1(), stat._2());
-    }
+    updateMetadataAndRollingStats(actionType, metadata, stats);
 
     // Finalize write
     final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
@@ -531,7 +537,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(config,
           new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true));
-      archiveLog.archiveIfRequired();
+      archiveLog.archiveIfRequired(jsc);
       if (config.isAutoClean()) {
         // Call clean to cleanup if there is anything to cleanup after the commit,
         logger.info("Auto cleaning is enabled. Running cleaner now");
@@ -568,13 +574,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * <p>
    * Savepoint should be on a commit that could not have been cleaned.
    *
-   * @param user    - User creating the savepoint
+   * @param user - User creating the savepoint
    * @param comment - Comment for the savepoint
    * @return true if the savepoint was created successfully
    */
   public boolean savepoint(String user, String comment) {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     if (table.getCompletedCommitTimeline().empty()) {
       throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
     }
@@ -595,13 +601,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Savepoint should be on a commit that could not have been cleaned.
    *
    * @param commitTime - commit that should be savepointed
-   * @param user       - User creating the savepoint
-   * @param comment    - Comment for the savepoint
+   * @param user - User creating the savepoint
+   * @param comment - Comment for the savepoint
    * @return true if the savepoint was created successfully
    */
   public boolean savepoint(String commitTime, String user, String comment) {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     Optional<HoodieInstant> cleanInstant = table.getCompletedCleanTimeline().lastInstant();
 
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION,
@@ -662,7 +668,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public void deleteSavepoint(String savepointTime) {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
 
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION,
@@ -688,9 +694,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public boolean rollbackToSavepoint(String savepointTime) {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieTimeline commitTimeline = table.getCommitsTimeline();
+    HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline();
 
     HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION,
         savepointTime);
@@ -737,7 +743,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieTimeline inflightTimeline = table.getInflightCommitTimeline();
     HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
@@ -841,7 +847,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
       // Create a Hoodie table which encapsulated the commits and files visible
       HoodieTable<T> table = HoodieTable.getHoodieTable(
-          new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+          new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
 
       List<HoodieCleanStat> cleanStats = table.clean(jsc);
       if (cleanStats.isEmpty()) {
@@ -890,9 +896,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   public void startCommitWithTime(String commitTime) {
     logger.info("Generate a new commit time " + commitTime);
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    String commitActionType = table.getCommitActionType();
+    String commitActionType = table.getMetaClient().getCommitActionType();
     activeTimeline.createInflight(new HoodieInstant(true, commitActionType, commitTime));
   }
 
@@ -912,7 +918,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public void startCompactionWithTime(String commitTime) {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     String commitActionType = HoodieTimeline.COMMIT_ACTION;
     activeTimeline.createInflight(new HoodieInstant(true, commitActionType, commitTime));
@@ -925,7 +931,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   public JavaRDD<WriteStatus> compact(String commitTime) throws IOException {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
     // TODO : Fix table.getActionType for MOR table type to return different actions based on delta or compaction
     writeContext = metrics.getCommitCtx();
     JavaRDD<WriteStatus> statuses = table.compact(jsc, commitTime);
@@ -961,7 +967,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         config.getBasePath(), true);
-    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     // TODO : Fix table.getActionType for MOR table type to return different actions based on delta or compaction and
     // then use getTableAndInitCtx
     Timer.Context writeContext = metrics.getCommitCtx();
@@ -1048,8 +1054,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   private void rollbackInflightCommits() {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
-    HoodieTimeline inflightTimeline = table.getCommitsTimeline().filterInflights();
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterInflights();
     List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     Collections.reverse(commits);
@@ -1061,12 +1067,53 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   private HoodieTable getTableAndInitCtx() {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config);
-    if (table.getCommitActionType() == HoodieTimeline.COMMIT_ACTION) {
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
+    if (table.getMetaClient().getCommitActionType() == HoodieTimeline.COMMIT_ACTION) {
       writeContext = metrics.getCommitCtx();
     } else {
       writeContext = metrics.getDeltaCommitCtx();
     }
     return table;
+  }
+
+  private void updateMetadataAndRollingStats(String actionType, HoodieCommitMetadata metadata, List<Tuple2<String,
+      HoodieWriteStat>> stats) {
+    // TODO : make sure we cannot rollback / archive last commit file
+    try {
+      // Create a Hoodie table which encapsulated the commits and files visible
+      HoodieTable table = HoodieTable.getHoodieTable(
+          new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
+      // 0. All of the rolling stat management is only done by the DELTA commit for MOR and COMMIT for COW other wise
+      // there may be race conditions
+      HoodieRollingStatMetadata rollingStatMetadata = new HoodieRollingStatMetadata(actionType);
+      // 1. Look up previous rolling stat metadata file
+      // 2. Look up the previous compaction/commit and get the HoodieCommitMetadata from there.
+      // 3. Now, first read the existing rolling stats and merge with the result of current metadata.
+
+      // Need to do this on every commit (delta or commit) to support COW and MOR. NOTE : For compaction commits,
+      // this will just add metadata which will never be used
+      for (Tuple2<String, HoodieWriteStat> stat : stats) {
+        metadata.addWriteStat(stat._1(), stat._2());
+        HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat._2().getFileId(), stat._2().getNumWrites(),
+            stat._2().getNumUpdateWrites(), stat._2().getTotalWriteBytes());
+        rollingStatMetadata.addRollingStat(stat._1, hoodieRollingStat);
+      }
+      // The last rolling stat should be present in the completed timeline
+      Optional<HoodieInstant> lastInstant = table.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
+          .lastInstant();
+      if (lastInstant.isPresent()) {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(table.getActiveTimeline().getInstantDetails(lastInstant
+                .get()).get());
+        rollingStatMetadata = rollingStatMetadata
+            .merge(HoodieRollingStatMetadata.fromString(commitMetadata.getExtraMetadata()
+                .get
+                    (HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY)));
+      }
+
+      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, rollingStatMetadata.toJsonString());
+    } catch (IOException io) {
+      throw new HoodieCommitException("unable to save rolling stats");
+    }
   }
 }
