@@ -251,7 +251,7 @@ public class TestCleaner extends TestHoodieClientBase {
           HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
           for (HoodieInstant entry : timeline.getInstants().collect(Collectors.toList())) {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(timeline.getInstantDetails(entry).get());
+                .fromBytes(timeline.getInstantDetails(entry).get(), HoodieCommitMetadata.class);
 
             for (HoodieWriteStat wstat : commitMetadata.getWriteStats(partitionPath)) {
               if (!fileIdToVersions.containsKey(wstat.getFileId())) {

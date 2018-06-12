@@ -31,6 +31,7 @@ import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
 import com.uber.hoodie.common.model.ActionType;
 import com.uber.hoodie.common.model.HoodieArchivedLogFile;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -273,7 +275,7 @@ public class HoodieCommitArchiveLog {
       }
       case COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get());
+            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(commitMetadataConverter(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
@@ -294,7 +296,7 @@ public class HoodieCommitArchiveLog {
       }
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get());
+            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(commitMetadataConverter(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
@@ -312,6 +314,8 @@ public class HoodieCommitArchiveLog {
     mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     com.uber.hoodie.avro.model.HoodieCommitMetadata avroMetaData = mapper
         .convertValue(hoodieCommitMetadata, com.uber.hoodie.avro.model.HoodieCommitMetadata.class);
+    // Do not archive Rolling Stats, cannot set to null since AVRO will throw null pointer
+    avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, StringUtils.EMPTY);
     return avroMetaData;
   }
 }

@@ -66,6 +66,18 @@
                         "name":"numInserts",
                         "type":["null","long"],
                         "default" : null
+                     },
+                     {
+                        "name":"totalLogBlocks",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalCorruptLogBlock",
+                        "type":["null","long"]
+                     },
+                     {
+                        "name":"totalRollbackBlocks",
+                        "type":["null","long"]
                      }
                   ]
                }

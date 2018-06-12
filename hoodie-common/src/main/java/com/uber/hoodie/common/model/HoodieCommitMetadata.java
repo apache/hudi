@@ -119,12 +119,12 @@ public class HoodieCommitMetadata implements Serializable {
     return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);
   }
 
-  public static HoodieCommitMetadata fromJsonString(String jsonStr) throws IOException {
+  public static <T> T fromJsonString(String jsonStr, Class<T> clazz) throws Exception {
     if (jsonStr == null || jsonStr.isEmpty()) {
       // For empty commit file (no data or somethings bad happen).
-      return new HoodieCommitMetadata();
+      return clazz.newInstance();
     }
-    return getObjectMapper().readValue(jsonStr, HoodieCommitMetadata.class);
+    return getObjectMapper().readValue(jsonStr, clazz);
   }
 
   // Here the functions are named "fetch" instead of "get", to get avoid of the json conversion.
@@ -319,11 +319,15 @@ public class HoodieCommitMetadata implements Serializable {
     return result;
   }
 
-  public static HoodieCommitMetadata fromBytes(byte[] bytes) throws IOException {
-    return fromJsonString(new String(bytes, Charset.forName("utf-8")));
+  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
+    try {
+      return fromJsonString(new String(bytes, Charset.forName("utf-8")), clazz);
+    } catch (Exception e) {
+      throw new IOException("unable to read commit metadata", e);
+    }
   }
 
-  private static ObjectMapper getObjectMapper() {
+  protected static ObjectMapper getObjectMapper() {
     ObjectMapper mapper = new ObjectMapper();
     mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);

@@ -32,6 +32,8 @@ import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieRollingStat;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -501,9 +503,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             writeStatus.getPartitionPath(), writeStatus.getStat())).collect();
 
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    for (Tuple2<String, HoodieWriteStat> stat : stats) {
-      metadata.addWriteStat(stat._1(), stat._2());
-    }
+    updateMetadataAndRollingStats(actionType, metadata, stats);
+
 
     // Finalize write
     final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
@@ -1255,5 +1256,43 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       }
     });
     return compactionInstantTimeOpt;
+  }
+
+  private void updateMetadataAndRollingStats(String actionType, HoodieCommitMetadata metadata, List<Tuple2<String,
+      HoodieWriteStat>> stats) {
+    // TODO : make sure we cannot rollback / archive last commit file
+    try {
+      // Create a Hoodie table which encapsulated the commits and files visible
+      HoodieTable table = HoodieTable.getHoodieTable(
+          new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
+      // 0. All of the rolling stat management is only done by the DELTA commit for MOR and COMMIT for COW other wise
+      // there may be race conditions
+      HoodieRollingStatMetadata rollingStatMetadata = new HoodieRollingStatMetadata(actionType);
+      // 1. Look up the previous compaction/commit and get the HoodieCommitMetadata from there.
+      // 2. Now, first read the existing rolling stats and merge with the result of current metadata.
+
+      // Need to do this on every commit (delta or commit) to support COW and MOR.
+      for (Tuple2<String, HoodieWriteStat> stat : stats) {
+        metadata.addWriteStat(stat._1(), stat._2());
+        HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat._2().getFileId(),
+            stat._2().getNumWrites() - (stat._2().getNumUpdateWrites() - stat._2.getNumDeletes()),
+            stat._2().getNumUpdateWrites(), stat._2.getNumDeletes(), stat._2().getTotalWriteBytes());
+        rollingStatMetadata.addRollingStat(stat._1, hoodieRollingStat);
+      }
+      // The last rolling stat should be present in the completed timeline
+      Optional<HoodieInstant> lastInstant = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
+          .lastInstant();
+      if (lastInstant.isPresent()) {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(table.getActiveTimeline().getInstantDetails(lastInstant
+                .get()).get(), HoodieCommitMetadata.class);
+        rollingStatMetadata = rollingStatMetadata
+            .merge(HoodieCommitMetadata.fromBytes(commitMetadata.getExtraMetadata()
+                .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(), HoodieRollingStatMetadata.class));
+      }
+      metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, rollingStatMetadata.toJsonString());
+    } catch (IOException io) {
+      throw new HoodieCommitException("Unable to save rolling stats");
+    }
   }
 }
