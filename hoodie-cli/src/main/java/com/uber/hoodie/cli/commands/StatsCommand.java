@@ -75,7 +75,8 @@ public class StatsCommand implements CommandMarker {
     DecimalFormat df = new DecimalFormat("#.00");
     for (HoodieInstant commitTime : timeline.getInstants().collect(Collectors.toList())) {
       String waf = "0";
-      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitTime).get());
+      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitTime).get(),
+          HoodieCommitMetadata.class);
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
         waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());
       }

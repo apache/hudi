@@ -307,7 +307,7 @@ public class HoodieHiveClient {
           HoodieInstant lastCommit = activeTimeline.lastInstant().orElseThrow(
               () -> new InvalidDatasetException(syncConfig.basePath));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-              activeTimeline.getInstantDetails(lastCommit).get());
+              activeTimeline.getInstantDetails(lastCommit).get(), HoodieCommitMetadata.class);
           String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
               .stream().findAny().orElseThrow(() -> new IllegalArgumentException(
                   "Could not find any data file written for commit " + lastCommit
@@ -339,7 +339,7 @@ public class HoodieHiveClient {
             HoodieInstant lastDeltaInstant = lastDeltaCommit.get();
             // read from the log file wrote
             commitMetadata = HoodieCommitMetadata.fromBytes(
-                activeTimeline.getInstantDetails(lastDeltaInstant).get());
+                activeTimeline.getInstantDetails(lastDeltaInstant).get(), HoodieCommitMetadata.class);
             filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
                 .stream().filter(s -> s.contains(HoodieLogFile.DELTA_EXTENSION))
                 .findAny().orElseThrow(() -> new IllegalArgumentException(
@@ -372,7 +372,7 @@ public class HoodieHiveClient {
 
     // Read from the compacted file wrote
     HoodieCommitMetadata compactionMetadata = HoodieCommitMetadata.fromBytes(
-        activeTimeline.getInstantDetails(lastCompactionCommit).get());
+        activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
         .stream().findAny().orElseThrow(() -> new IllegalArgumentException(
             "Could not find any data file written for compaction " + lastCompactionCommit
@@ -539,7 +539,7 @@ public class HoodieHiveClient {
           Integer.MAX_VALUE);
       return timelineToSync.getInstants().map(s -> {
         try {
-          return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(s).get());
+          return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw new HoodieIOException(
               "Failed to get partitions written since " + lastCommitTimeSynced, e);

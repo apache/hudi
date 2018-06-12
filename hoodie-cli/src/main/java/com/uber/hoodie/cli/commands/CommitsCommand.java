@@ -82,7 +82,8 @@ public class CommitsCommand implements CommandMarker {
     Collections.reverse(commits);
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get());
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
+          HoodieCommitMetadata.class);
       rows.add(new Comparable[]{commit.getTimestamp(),
           commitMetadata.fetchTotalBytesWritten(),
           commitMetadata.fetchTotalFilesInsert(),
@@ -160,7 +161,8 @@ public class CommitsCommand implements CommandMarker {
     if (!timeline.containsInstant(commitInstant)) {
       return "Commit " + commitTime + " not found in Commits " + timeline;
     }
-    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get());
+    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get(),
+        HoodieCommitMetadata.class);
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats().entrySet()) {
       String path = entry.getKey();
@@ -221,7 +223,8 @@ public class CommitsCommand implements CommandMarker {
     if (!timeline.containsInstant(commitInstant)) {
       return "Commit " + commitTime + " not found in Commits " + timeline;
     }
-    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get());
+    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get(),
+        HoodieCommitMetadata.class);
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats().entrySet()) {
       String path = entry.getKey();
