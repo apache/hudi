@@ -187,7 +187,7 @@ public class HoodieDeltaStreamer implements Serializable {
       Optional<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get());
+            commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
         if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
           resumeCheckpointStr = Optional.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {

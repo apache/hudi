@@ -45,7 +45,11 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
   public InMemoryHashIndex(HoodieWriteConfig config) {
     super(config);
-    recordLocationMap = new ConcurrentHashMap<>();
+    synchronized (InMemoryHashIndex.class) {
+      if (recordLocationMap == null) {
+        recordLocationMap = new ConcurrentHashMap<>();
+      }
+    }
   }
 
   @Override

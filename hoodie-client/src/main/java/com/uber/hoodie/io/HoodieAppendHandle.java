@@ -75,6 +75,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private long recordsWritten = 0;
   // Total number of records deleted during an append
   private long recordsDeleted = 0;
+  // Total number of records updated during an append
+  private long updatedRecordsWritten = 0;
   // Average record size for a HoodieRecord. This size is updated at the end of every log block flushed to disk
   private long averageRecordSize = 0;
   private HoodieLogFile currentLogFile;
@@ -89,6 +91,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private int maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
   private Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+  // Total number of new records inserted into the delta file
+  private long insertRecordsWritten = 0;
 
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String fileId, Iterator<HoodieRecord<T>> recordItr) {
@@ -111,6 +115,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       // extract some information from the first record
       Optional<FileSlice> fileSlice = fileSystemView.getLatestFileSlices(partitionPath)
           .filter(fileSlice1 -> fileSlice1.getFileId().equals(fileId)).findFirst();
+      // Set the base commit time as the current commitTime for new inserts into log files
       String baseInstantTime = commitTime;
       if (fileSlice.isPresent()) {
         baseInstantTime = fileSlice.get().getBaseInstantTime();
@@ -156,6 +161,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
                 hoodieRecord.getPartitionPath(), fileId);
         HoodieAvroUtils
             .addCommitMetadataToRecord((GenericRecord) avroRecord.get(), commitTime, seqId);
+        // If currentLocation is present, then this is an update
+        if (hoodieRecord.getCurrentLocation() != null) {
+          updatedRecordsWritten++;
+        } else {
+          insertRecordsWritten++;
+        }
         recordsWritten++;
       } else {
         recordsDeleted++;
@@ -238,6 +249,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       writeStatus.getStat().setPrevCommit(commitTime);
       writeStatus.getStat().setFileId(this.fileId);
       writeStatus.getStat().setNumWrites(recordsWritten);
+      writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
+      writeStatus.getStat().setNumInserts(insertRecordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
