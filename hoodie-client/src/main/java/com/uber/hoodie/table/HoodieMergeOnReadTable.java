@@ -54,6 +54,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -216,11 +217,14 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                   final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
                   Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
 
-                  // In case all data was inserts and the commit failed, there is no partition stats
-                  if (commitMetadata.getPartitionToWriteStats().size() == 0) {
-                    super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, filter);
-                  }
+                  // In case all data was inserts and the commit failed, delete the file belonging to that commit
+                  super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, filter);
 
+                  final Set<String> deletedFiles = filesToDeletedStatus.entrySet().stream()
+                      .map(entry -> {
+                        Path filePath = entry.getKey().getPath();
+                        return FSUtils.getFileIdFromFilePath(filePath);
+                      }).collect(Collectors.toSet());
                   // append rollback blocks for updates
                   if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
                     // This needs to be done since GlobalIndex at the moment does not store the latest commit time
@@ -231,15 +235,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                         .filter(wStat -> {
                           if (wStat != null
                               && wStat.getPrevCommit() != HoodieWriteStat.NULL_COMMIT
-                              && wStat.getPrevCommit() != null) {
+                              && wStat.getPrevCommit() != null && !deletedFiles.contains(wStat.getFileId())) {
                             return true;
-                          }
-                          // we do not know fileIds for inserts (first inserts are either log files or parquet files),
-                          // delete all files for the corresponding failed commit, if present (same as COW)
-                          try {
-                            super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, filter);
-                          } catch (IOException io) {
-                            throw new UncheckedIOException(io);
                           }
                           return false;
                         })
