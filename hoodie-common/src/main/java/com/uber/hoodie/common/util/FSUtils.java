@@ -214,6 +214,16 @@ public class FSUtils {
   }
 
   /**
+   * Check if the file is a parquet file of a log file. Then get the fileId appropriately.
+   */
+  public static String getFileIdFromFilePath(Path filePath) {
+    if (FSUtils.isLogFile(filePath)) {
+      return FSUtils.getFileIdFromLogPath(filePath);
+    }
+    return FSUtils.getFileId(filePath.getName());
+  }
+
+  /**
    * Get the first part of the file name in the log file. That will be the fileId. Log file do not
    * have commitTime in the file name.
    */
