@@ -51,6 +51,8 @@ import com.uber.hoodie.index.HoodieIndex.IndexType;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -389,10 +391,10 @@ public class TestMergeOnReadTable {
   @Test
   public void testRollbackWithDeltaAndCompactionCommit() throws Exception {
 
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieWriteConfig cfg = getConfig(false);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
-    // Test delta commit rollback (with all log files)
+    // Test delta commit rollback
     /**
      * Write 1 (only inserts)
      */
@@ -403,7 +405,9 @@ public class TestMergeOnReadTable {
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
+    JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
+    client.commit(newCommitTime, writeStatusJavaRDD);
+    List<WriteStatus> statuses = writeStatusJavaRDD.collect();
     assertNoWriteErrors(statuses);
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
@@ -428,56 +432,99 @@ public class TestMergeOnReadTable {
         dataFilesToRead.findAny().isPresent());
 
     /**
-     * Write 2 (updates)
+     * Write 2 (inserts + updates - testing failed delta commit)
      */
-    newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    final String commitTime1 = "002";
+    // WriteClient with custom config (disable small file handling)
+    client = new HoodieWriteClient(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withAutoCommit(false).withAssumeDatePartitioning(true).withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(1 * 1024).withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1 * 1024).build())
+        .forTable("test-trip-table").build());
+    client.startCommitWithTime(commitTime1);
 
-    records = dataGen.generateUpdates(newCommitTime, records);
-
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
-    // Verify there are no errors
-    assertNoWriteErrors(statuses);
-    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-    deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
-    assertTrue(deltaCommit.isPresent());
-    assertEquals("Latest Delta commit should be 002", "002", deltaCommit.get().getTimestamp());
-
-    commit = metaClient.getActiveTimeline().getCommitTimeline().firstInstant();
-    assertFalse(commit.isPresent());
+    List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
+    copyOfRecords = dataGen.generateUpdates(commitTime1, copyOfRecords);
+    copyOfRecords.addAll(dataGen.generateInserts(commitTime1, 200));
 
     List<String> dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
     List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
-
     assertEquals(recordsRead.size(), 200);
 
-    // Test delta commit rollback
-    client.rollback(newCommitTime);
+    statuses = client.upsert(jsc.parallelize(copyOfRecords, 1), commitTime1).collect();
+    // Verify there are no errors
+    assertNoWriteErrors(statuses);
+
+    // Test failed delta commit rollback
+    client.rollback(commitTime1);
+    allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
+    // After rollback, there should be no parquet file with the failed commit time
+    Assert.assertEquals(Arrays.asList(allFiles).stream().filter(file -> file.getPath().getName()
+        .contains(commitTime1)).collect(Collectors.toList()).size(), 0);
+    dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
+    recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
+    assertEquals(recordsRead.size(), 200);
+
+
+    /**
+     * Write 3 (inserts + updates - testing successful delta commit)
+     */
+    final String commitTime2 = "002";
+    client = new HoodieWriteClient(jsc, cfg);
+    client.startCommitWithTime(commitTime2);
+
+    copyOfRecords = new ArrayList<>(records);
+    copyOfRecords = dataGen.generateUpdates(commitTime2, copyOfRecords);
+    copyOfRecords.addAll(dataGen.generateInserts(commitTime2, 200));
+
+    dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
+    recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
+    assertEquals(recordsRead.size(), 200);
+
+    writeStatusJavaRDD = client.upsert(writeRecords, commitTime2);
+    client.commit(commitTime2, writeStatusJavaRDD);
+    statuses = writeStatusJavaRDD.collect();
+    // Verify there are no errors
+    assertNoWriteErrors(statuses);
+
+    // Test successful delta commit rollback
+    client.rollback(commitTime2);
+    allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
+    // After rollback, there should be no parquet file with the failed commit time
+    Assert.assertEquals(Arrays.asList(allFiles).stream().filter(file -> file.getPath().getName()
+        .contains(commitTime2)).collect(Collectors.toList()).size(), 0);
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
     roView = new HoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitTimeline(), allFiles);
     dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
     recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
-
+    // check that the number of records read is still correct after rollback operation
     assertEquals(recordsRead.size(), 200);
 
-    //Test compaction commit rollback
+    // Test compaction commit rollback
     /**
-     * Write 2 (updates)
+     * Write 4 (updates)
      */
     newCommitTime = "003";
     client.startCommitWithTime(newCommitTime);
 
-    records = dataGen.generateUpdates(newCommitTime, 400);
+    records = dataGen.generateUpdates(newCommitTime, records);
 
-    statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+    writeStatusJavaRDD = client.upsert(writeRecords, newCommitTime);
+    client.commit(newCommitTime, writeStatusJavaRDD);
+    statuses = writeStatusJavaRDD.collect();
+    // Verify there are no errors
     assertNoWriteErrors(statuses);
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
 
     String compactionCommit = client.startCompaction();
-    client.compact(compactionCommit);
+    JavaRDD<WriteStatus> writeStatus = client.compact(compactionCommit);
+    client.commitCompaction(compactionCommit, writeStatus);
 
     allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
