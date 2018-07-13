@@ -19,6 +19,7 @@ package com.uber.hoodie.common.util;
 import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,9 @@ import org.apache.avro.generic.IndexedRecord;
 
 public class SpillableMapTestUtils {
 
+  public static final String DUMMY_COMMIT_TIME = "DUMMY_COMMIT_TIME";
+  public static final String DUMMY_FILE_ID = "DUMMY_FILE_ID";
+
   public static List<String> upsertRecords(List<IndexedRecord> iRecords,
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
     List<String> recordKeys = new ArrayList<>();
@@ -38,8 +42,10 @@ public class SpillableMapTestUtils {
           String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
           recordKeys.add(key);
-          records.put(key, new HoodieRecord<>(new HoodieKey(key, partitionPath),
-              new HoodieAvroPayload(Optional.of((GenericRecord) r))));
+          HoodieRecord record = new HoodieRecord<>(new HoodieKey(key, partitionPath),
+              new HoodieAvroPayload(Optional.of((GenericRecord) r)));
+          record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));
+          records.put(key, record);
         });
     return recordKeys;
   }

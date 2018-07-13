@@ -149,11 +149,12 @@ public class TestExternalSpillableMap {
         new HoodieAvroPayload(Optional.of((GenericRecord) onDiskRecord)));
     // assert size
     assert records.size() == 100;
-    // get should return the same HoodieKey and same value
+    // get should return the same HoodieKey, same location and same value
     assert inMemoryHoodieRecord.getKey().equals(records.get(ikey).getKey());
     assert onDiskHoodieRecord.getKey().equals(records.get(dkey).getKey());
-    //assert inMemoryHoodieRecord.equals(records.get(ikey));
-    //assert onDiskHoodieRecord.equals(records.get(dkey));
+    // compare the member variables of HoodieRecord not set by the constructor
+    assert records.get(ikey).getCurrentLocation().getFileId().equals(SpillableMapTestUtils.DUMMY_FILE_ID);
+    assert records.get(ikey).getCurrentLocation().getCommitTime().equals(SpillableMapTestUtils.DUMMY_COMMIT_TIME);
 
     // test contains
     assertTrue(records.containsKey(ikey));

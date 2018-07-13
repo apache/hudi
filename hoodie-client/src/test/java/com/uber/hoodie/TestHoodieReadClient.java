@@ -165,9 +165,12 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
     JavaRDD<WriteStatus> result =
         insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, insertFn, isPrepped,
             true, numRecords);
+    // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
+    // since they have been modified in the DAG
     JavaRDD<HoodieRecord> recordRDD =
         jsc.parallelize(
             result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+                .map(record -> new HoodieRecord(record.getKey(), null))
                 .collect(Collectors.toList()));
     // Should have 100 records in table (check using Index), all in locations marked at commit
     HoodieReadClient readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
@@ -186,6 +189,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
     recordRDD =
         jsc.parallelize(
             result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+                .map(record -> new HoodieRecord(record.getKey(), null))
                 .collect(Collectors.toList()));
     // Index should be able to locate all updates in correct locations.
     readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
