@@ -102,7 +102,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   }
 
   public Optional<HoodieRecordLocation> getNewLocation() {
-    return Optional.of(this.newLocation);
+    return Optional.ofNullable(this.newLocation);
   }
 
   public boolean isCurrentLocationKnown() {
