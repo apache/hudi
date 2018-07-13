@@ -18,6 +18,7 @@ package com.uber.hoodie.common.util.collection.converter;
 
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
@@ -28,6 +29,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.Triple;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -58,9 +60,15 @@ public class HoodieRecordConverter<V> implements
         val = HoodieAvroUtils
             .avroToBytes((GenericRecord) hoodieRecord.getData().getInsertValue(schema).get());
       }
-      Pair<Pair<String, String>, byte[]> data =
-          Pair.of(Pair.of(hoodieRecord.getKey().getRecordKey(),
-              hoodieRecord.getKey().getPartitionPath()), val);
+      byte [] currentLocation = hoodieRecord.getCurrentLocation() != null ? SerializationUtils.serialize(hoodieRecord
+          .getCurrentLocation()) : new byte[0];
+      byte [] newLocation = hoodieRecord.getNewLocation().isPresent() ? SerializationUtils.serialize(
+          (HoodieRecordLocation) hoodieRecord.getNewLocation().get()) : new byte[0];
+
+      // Triple<Pair<RecordKey, PartitionPath>, Pair<oldLocation, newLocation>, data>
+      Triple<Pair<String, String>, Pair<byte [], byte []>, byte[]> data =
+          Triple.of(Pair.of(hoodieRecord.getKey().getRecordKey(),
+              hoodieRecord.getKey().getPartitionPath()), Pair.of(currentLocation, newLocation), val);
       return SerializationUtils.serialize(data);
     } catch (IOException io) {
       throw new HoodieNotSerializableException("Cannot serialize value to bytes", io);
@@ -70,17 +78,29 @@ public class HoodieRecordConverter<V> implements
   @Override
   public HoodieRecord getData(byte[] bytes) {
     try {
-      Pair<Pair<String, String>, byte[]> data = SerializationUtils.deserialize(bytes);
+      Triple<Pair<String, String>, Pair<byte [], byte []>, byte[]> data = SerializationUtils.deserialize(bytes);
       Optional<GenericRecord> payload = Optional.empty();
-      if (data.getValue().length > 0) {
+      HoodieRecordLocation currentLocation = null;
+      HoodieRecordLocation newLocation = null;
+      if (data.getRight().length > 0) {
         // This can happen if the record is deleted, the payload is optional with 0 bytes
-        payload = Optional.of(HoodieAvroUtils.bytesToAvro(data.getValue(), schema));
+        payload = Optional.of(HoodieAvroUtils.bytesToAvro(data.getRight(), schema));
+      }
+      // Get the currentLocation for the HoodieRecord
+      if (data.getMiddle().getLeft().length > 0) {
+        currentLocation = SerializationUtils.deserialize(data.getMiddle().getLeft());
+      }
+      // Get the newLocation for the HoodieRecord
+      if (data.getMiddle().getRight().length > 0) {
+        newLocation = SerializationUtils.deserialize(data.getMiddle().getRight());
       }
       HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
-          new HoodieKey(data.getKey().getKey(), data.getKey().getValue()),
+          new HoodieKey(data.getLeft().getKey(), data.getLeft().getValue()),
           ReflectionUtils
               .loadPayload(payloadClazz,
                   new Object[]{payload}, Optional.class));
+      hoodieRecord.setCurrentLocation(currentLocation);
+      hoodieRecord.setNewLocation(newLocation);
       return hoodieRecord;
     } catch (IOException io) {
       throw new HoodieNotSerializableException("Cannot de-serialize value from bytes", io);
