@@ -333,4 +333,13 @@ public class HoodieCommitMetadata implements Serializable {
     mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
     return mapper;
   }
+
+  @Override
+  public String toString() {
+    return "HoodieCommitMetadata{"
+        + "partitionToWriteStats=" + partitionToWriteStats
+        + ", compacted=" + compacted
+        + ", extraMetadataMap=" + extraMetadataMap
+        + '}';
+  }
 }

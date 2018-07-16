@@ -35,6 +35,7 @@
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-common</artifactId>
       <version>${project.version}</version>
+      <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
@@ -60,16 +61,12 @@
       <artifactId>hadoop-hdfs</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.hive</groupId>
-      <artifactId>hive-exec</artifactId>
-    </dependency>
-    <dependency>
       <groupId>commons-logging</groupId>
       <artifactId>commons-logging</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.hive</groupId>
-      <artifactId>hive-jdbc</artifactId>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.parquet</groupId>
@@ -78,6 +75,10 @@
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>parquet-avro</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>parquet-hadoop-bundle</artifactId>
     </dependency>
     <dependency>
       <groupId>com.twitter.common</groupId>
@@ -93,6 +94,11 @@
       <artifactId>kryo</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -101,33 +107,60 @@
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4</version>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
-              </dependencyReducedPomLocation>
-              <minimizeJar>true</minimizeJar>
-              <artifactSet>
-                <includes>
-                  <include>com.uber.hoodie:hoodie-common</include>
-                  <include>com.twitter:parquet-avro</include>
-                  <include>com.twitter.common:objectsize</include>
-                </includes>
-              </artifactSet>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
     </plugins>
   </build>
-
+  <profiles>
+    <profile>
+      <id>hive12</id>
+      <activation>
+        <property>
+          <name>!hive11</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-jdbc</artifactId>
+          <version>${hive12.version}</version>
+          <exclusions>
+            <exclusion>
+              <groupId>commons-logging</groupId>
+              <artifactId>commons-logging</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-exec</artifactId>
+          <version>${hive12.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>hive11</id>
+      <activation>
+        <property>
+          <name>hive11</name>
+        </property>
+      </activation>
+      <dependencies>
+       <dependency>
+          <groupId>${hive11.groupid}</groupId>
+          <artifactId>hive-jdbc</artifactId>
+          <version>${hive11.version}</version>
+          <exclusions>
+            <exclusion>
+              <groupId>commons-logging</groupId>
+              <artifactId>commons-logging</artifactId>
+            </exclusion>
+          </exclusions>
+        </dependency>
+        <dependency>
+          <groupId>${hive11.groupid}</groupId>
+          <artifactId>hive-exec</artifactId>
+          <version>${hive11.version}</version>
+        </dependency>
+      </dependencies>
+   </profile>
+  </profiles>
 </project>

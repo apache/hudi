@@ -21,12 +21,13 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.4-SNAPSHOT</version>
+    <version>0.4.3-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.uber.hoodie</groupId>
-  <artifactId>hoodie-spark</artifactId>
+  <artifactId>hoodie-spark-bundle</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -34,31 +35,8 @@
     <junit.version>4.10</junit.version>
   </properties>
 
-  <repositories>
-    <repository>
-      <id>scala-tools.org</id>
-      <name>Scala-tools Maven2 Repository</name>
-      <url>http://scala-tools.org/repo-releases</url>
-    </repository>
-  </repositories>
-
   <build>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <groupId>net.alchim31.maven</groupId>
-          <artifactId>scala-maven-plugin</artifactId>
-          <version>3.3.1</version>
-        </plugin>
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <version>2.0.2</version>
-        </plugin>
-      </plugins>
-    </pluginManagement>
-
-    <plugins>
+     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
@@ -79,46 +57,130 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>net.alchim31.maven</groupId>
-        <artifactId>scala-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>scala-compile-first</id>
-            <phase>process-resources</phase>
-            <goals>
-              <goal>add-source</goal>
-              <goal>compile</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>scala-test-compile</id>
-            <phase>process-test-resources</phase>
-            <goals>
-              <goal>testCompile</goal>
-            </goals>
-          </execution>
-        </executions>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.4</version>
         <executions>
           <execution>
-            <phase>compile</phase>
+            <phase>package</phase>
             <goals>
-              <goal>compile</goal>
+              <goal>shade</goal>
             </goals>
+            <configuration>
+              <relocations>
+                <relocation>
+                  <pattern>com.beust.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.beust.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.joda.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.joda.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.google.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.slf4j.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.slf4j.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.</shadedPattern>
+                  <excludes>
+                    <exclude>com.databricks.spark.**</exclude>
+                    <exclude>org.apache.avro.**</exclude>
+                    <exclude>org.apache.derby.**</exclude>
+                    <exclude>org.apache.hadoop.**</exclude>
+                    <exclude>org.apache.hive.**</exclude>
+                    <exclude>org.apache.logging.log4j.**</exclude>
+                    <exclude>org.apache.log4j.**</exclude>
+                    <exclude>org.apache.spark.**</exclude>
+                    <exclude>org.apache.thrift.**</exclude>
+                  </excludes>
+                </relocation>
+                <relocation>
+                  <pattern>parquet.column</pattern>
+                  <shadedPattern>com.uber.hoodie.parquet.column</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>parquet.format.</pattern>
+                  <shadedPattern>com.uber.hoodie.parquet.format.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>parquet.hadoop.</pattern>
+                  <shadedPattern>com.uber.hoodie.parquet.hadoop.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>parquet.schema</pattern>
+                  <shadedPattern>com.uber.hoodie.parquet.schema</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.jdbc.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hive.jdbc.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.metastore.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.common.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hive.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.common.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.conf.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.conf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.service.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hive.service.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.service.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
+                </relocation>
+              </relocations>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <artifactSet>
+                <excludes>
+                  <exclude>com.databricks:spark-avro_2.11</exclude>
+                  <exclude>log4j:*</exclude>
+                  <exclude>org.apache.avro:*</exclude>
+                  <exclude>org.apache.derby:derby</exclude>
+                  <exclude>org.apache.hadoop:*</exclude>
+                  <exclude>org.apache.hbase:*</exclude>
+                  <!-- Just include hive-common, hive-service, hive-metastore and hive-jdbc -->
+                  <exclude>org.apache.hive:hive-exec</exclude>
+                  <exclude>org.apache.hive:hive-serde</exclude>
+                  <exclude>org.apache.hive:hive-shims</exclude>
+                  <exclude>org.apache.spark:*</exclude>
+                </excludes>
+              </artifactSet>
+              <finalName>${project.artifactId}-${project.version}${hiveJarSuffix}</finalName>
+            </configuration>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.rat</groupId>
-        <artifactId>apache-rat-plugin</artifactId>
       </plugin>
     </plugins>
   </build>
 
   <dependencies>
+   <dependency>
+      <groupId>com.beust</groupId>
+      <artifactId>jcommander</artifactId>
+   </dependency>
+    <dependency>
+      <groupId>commons-dbcp</groupId>
+      <artifactId>commons-dbcp</artifactId>
+    </dependency>
     <dependency>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
@@ -152,10 +214,6 @@
       <artifactId>jackson-annotations</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-scala_2.11</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client</artifactId>
       <exclusions>
@@ -166,13 +224,11 @@
       </exclusions>
       <scope>provided</scope>
     </dependency>
-
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <scope>provided</scope>
     </dependency>
-
     <dependency>
       <groupId>log4j</groupId>
       <artifactId>log4j</artifactId>
@@ -182,16 +238,13 @@
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
     </dependency>
-
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-configuration2</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-client</artifactId>
-      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.uber.hoodie</groupId>
@@ -209,28 +262,17 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit-dep</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-client</artifactId>
       <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
+   </dependency>
     <dependency>
       <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-common</artifactId>
+      <artifactId>hoodie-spark</artifactId>
       <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
+   </dependency>
   </dependencies>
+
   <profiles>
     <profile>
       <id>hive12</id>
@@ -239,6 +281,9 @@
           <name>!hive11</name>
         </property>
       </activation>
+      <properties>
+        <hiveJarSuffix></hiveJarSuffix>
+      </properties>
       <dependencies>
         <dependency>
           <groupId>${hive12.groupid}</groupId>
@@ -269,6 +314,9 @@
           <name>hive11</name>
         </property>
       </activation>
+      <properties>
+        <hiveJarSuffix>.hive11</hiveJarSuffix>
+      </properties>
       <dependencies>
         <dependency>
           <groupId>${hive11.groupid}</groupId>
@@ -293,5 +341,5 @@
       </dependencies>
     </profile>
   </profiles>
-
 </project>
+

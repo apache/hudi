@@ -20,7 +20,7 @@ In the following sections, we cover the configs needed across different query en
 ## Hive
 
 For HiveServer2 access, [install](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr)
-the hoodie-hadoop-mr-x.y.z-SNAPSHOT.jar into the aux jars path and we should be able to recognize the Hoodie tables and query them correctly.
+the hoodie-hadoop-mr-bundle-x.y.z-SNAPSHOT.jar into the aux jars path and we should be able to recognize the Hoodie tables and query them correctly.
 
 For beeline access, the `hive.input.format` variable needs to be set to the fully qualified path name of the inputformat `com.uber.hoodie.hadoop.HoodieInputFormat`
 For Tez, additionally the `hive.tez.input.format` needs to be set to `org.apache.hadoop.hive.ql.io.HiveInputFormat`
@@ -39,7 +39,7 @@ However benchmarks have not revealed any real performance degradation with Hoodi
 Sample command is provided below to spin up Spark Shell
 
 ```
-$ spark-shell --jars hoodie-hadoop-mr-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+$ spark-shell --jars hoodie-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala> sqlContext.sql("select count(*) from uber.trips where datestr = '2016-10-02'").show()
 
@@ -62,7 +62,7 @@ spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.clas
 
 ## Presto
 
-Presto requires a [patch](https://github.com/prestodb/presto/pull/7002) (until the PR is merged) and the hoodie-hadoop-mr jar to be placed
+Presto requires a [patch](https://github.com/prestodb/presto/pull/7002) (until the PR is merged) and the hoodie-hadoop-mr-bundle jar to be placed
 into `<presto_install>/plugin/hive-hadoop2/`.
 
 {% include callout.html content="Get involved to improve this integration [here](https://github.com/uber/hoodie/issues/81)" type="info" %}
