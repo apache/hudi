@@ -27,9 +27,11 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -137,6 +139,26 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Add null fields to passed in schema. Caller is responsible for ensuring there is no duplicates.
+   * As different query engines have varying constraints regarding treating the case-sensitivity of fields, its best
+   * to let caller determine that.
+   * @param schema Passed in schema
+   * @param newFieldNames Null Field names to be added
+   * @return
+   */
+  public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
+    List<Field> newFields = schema.getFields().stream().map(field -> {
+      return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue());
+    }).collect(Collectors.toList());
+    for (String newField : newFieldNames) {
+      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", null));
+    }
+    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    newSchema.setFields(newFields);
+    return newSchema;
+  }
+
+  /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
   public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String commitTime,
@@ -155,7 +177,7 @@ public class HoodieAvroUtils {
     for (Schema.Field f : record.getSchema().getFields()) {
       newRecord.put(f.name(), record.get(f.name()));
     }
-    if (!new GenericData().validate(newSchema, newRecord)) {
+    if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatabilityException(
           "Unable to validate the rewritten record " + record + " against schema "
               + newSchema);

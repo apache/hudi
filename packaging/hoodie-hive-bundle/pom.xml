@@ -19,11 +19,12 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.4-SNAPSHOT</version>
+    <version>0.4.3-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hoodie-hive</artifactId>
+  <artifactId>hoodie-hive-bundle</artifactId>
   <packaging>jar</packaging>
 
   <dependencies>
@@ -94,36 +95,6 @@
       <artifactId>httpclient</artifactId>
     </dependency>
 
-    <!-- Hadoop Testing -->
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-      <classifier>tests</classifier>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <classifier>tests</classifier>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-mapreduce-client-common</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-mapreduce-client-core</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-all</artifactId>
-      <scope>test</scope>
-    </dependency>
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>parquet-avro</artifactId>
@@ -131,28 +102,22 @@
 
     <dependency>
       <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hadoop-mr</artifactId>
+      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
     </dependency>
+ 
     <dependency>
       <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-common</artifactId>
+      <artifactId>hoodie-hive</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <!-- All other hoodie deps will come from hoodie-hadoop-mr-bundle -->
+          <groupId>com.uber.hoodie</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-common</artifactId>
-      <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.esotericsoftware.kryo</groupId>
-      <artifactId>kryo</artifactId>
-      <version>2.21</version>
-      <scope>test</scope>
-    </dependency>
-
   </dependencies>
 
   <build>
@@ -163,13 +128,64 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>2.5</version>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.4</version>
         <executions>
           <execution>
+            <phase>package</phase>
             <goals>
-              <goal>test-jar</goal>
+              <goal>shade</goal>
             </goals>
+            <configuration>
+              <relocations>
+                 <relocation>
+                  <pattern>com.beust.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.beust.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                  <pattern>org.joda.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.joda.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                  <pattern>com.google.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.google.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.slf4j.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.slf4j.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.apache.commons.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>parquet.column</pattern>
+                   <shadedPattern>com.uber.hoodie.parquet.column</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>parquet.format.</pattern>
+                   <shadedPattern>com.uber.hoodie.parquet.format.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>parquet.hadoop.</pattern>
+                   <shadedPattern>com.uber.hoodie.parquet.hadoop.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>parquet.schema.</pattern>
+                   <shadedPattern>com.uber.hoodie.parquet.schema.</shadedPattern>
+                 </relocation>
+              </relocations>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <artifactSet>
+                <excludes>
+                  <exclude>log4j:log4j</exclude>
+                  <exclude>org.apache.hadoop:*</exclude>
+                  <exclude>org.apache.hive:*</exclude>
+                  <exclude>org.apache.derby:derby</exclude>
+                </excludes>
+              </artifactSet>
+              <finalName>${project.artifactId}-${project.version}${hiveJarSuffix}</finalName>
+            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -184,6 +200,9 @@
           <name>!hive11</name>
         </property>
       </activation>
+      <properties>
+        <hiveJarSuffix></hiveJarSuffix>
+      </properties>
       <dependencies>
         <dependency>
           <groupId>${hive12.groupid}</groupId>
@@ -214,6 +233,9 @@
           <name>hive11</name>
         </property>
       </activation>
+      <properties>
+        <hiveJarSuffix>.hive11</hiveJarSuffix>
+      </properties>
       <dependencies>
         <dependency>
           <groupId>org.apache.hive</groupId>

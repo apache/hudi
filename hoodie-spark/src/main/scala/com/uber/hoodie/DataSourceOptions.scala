@@ -19,6 +19,7 @@
 package com.uber.hoodie
 
 import com.uber.hoodie.common.model.HoodieTableType
+import com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor
 
 /**
   * List of options that can be passed to the Hoodie datasource,
@@ -143,4 +144,28 @@ object DataSourceWriteOptions {
     */
   val COMMIT_METADATA_KEYPREFIX_OPT_KEY = "hoodie.datasource.write.commitmeta.key.prefix"
   val DEFAULT_COMMIT_METADATA_KEYPREFIX_OPT_VAL = "_"
+
+  // HIVE SYNC SPECIFIC CONFIGS
+  //NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
+  // unexpected issues with config getting reset
+  val HIVE_SYNC_ENABLED_OPT_KEY = "hoodie.datasource.hive_sync.enable"
+  val HIVE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.database"
+  val HIVE_TABLE_OPT_KEY = "hoodie.datasource.hive_sync.table"
+  val HIVE_USER_OPT_KEY = "hoodie.datasource.hive_sync.username"
+  val HIVE_PASS_OPT_KEY = "hoodie.datasource.hive_sync.password"
+  val HIVE_URL_OPT_KEY = "hoodie.datasource.hive_sync.jdbcUrl"
+  val HIVE_PARTITION_FIELDS_OPT_KEY = "hoodie.datasource.hive_sync.partition_fields"
+  val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = "hoodie.datasource.hive_sync.partition_extractor_class"
+  val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
+
+  // DEFAULT FOR HIVE SPECIFIC CONFIGS
+  val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
+  val DEFAULT_HIVE_DATABASE_OPT_VAL = "default"
+  val DEFAULT_HIVE_TABLE_OPT_VAL = "unknown"
+  val DEFAULT_HIVE_USER_OPT_VAL = "hive"
+  val DEFAULT_HIVE_PASS_OPT_VAL = "hive"
+  val DEFAULT_HIVE_URL_OPT_VAL = "jdbc:hive2://localhost:10000"
+  val DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL = ""
+  val DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL = classOf[SlashEncodedDayPartitionValueExtractor].getCanonicalName
+  val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
 }

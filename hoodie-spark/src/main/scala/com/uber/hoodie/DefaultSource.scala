@@ -25,11 +25,12 @@ import java.util.{Optional, Properties}
 import com.uber.hoodie.DataSourceReadOptions._
 import com.uber.hoodie.DataSourceWriteOptions._
 import com.uber.hoodie.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import com.uber.hoodie.common.util.TypedProperties
+import com.uber.hoodie.common.util.{FSUtils, TypedProperties}
 import com.uber.hoodie.config.HoodieWriteConfig
 import com.uber.hoodie.exception.HoodieException
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -39,6 +40,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable.ListBuffer
 
 /**
   * Hoodie Spark Datasource, for reading and writing hoodie datasets
@@ -92,6 +94,7 @@ class DefaultSource extends RelationProvider
         classOf[com.uber.hoodie.hadoop.HoodieROTablePathFilter],
         classOf[org.apache.hadoop.fs.PathFilter]);
 
+      log.info("Constructing hoodie (as parquet) data source with options :" + parameters)
       // simply return as a regular parquet relation
       DataSource.apply(
         sparkSession = sqlContext.sparkSession,
@@ -118,6 +121,15 @@ class DefaultSource extends RelationProvider
     defaultsMap.putIfAbsent(PARTITIONPATH_FIELD_OPT_KEY, DEFAULT_PARTITIONPATH_FIELD_OPT_VAL)
     defaultsMap.putIfAbsent(KEYGENERATOR_CLASS_OPT_KEY, DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
     defaultsMap.putIfAbsent(COMMIT_METADATA_KEYPREFIX_OPT_KEY, DEFAULT_COMMIT_METADATA_KEYPREFIX_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_SYNC_ENABLED_OPT_KEY, DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_DATABASE_OPT_KEY, DEFAULT_HIVE_DATABASE_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_TABLE_OPT_KEY, DEFAULT_HIVE_TABLE_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_USER_OPT_KEY, DEFAULT_HIVE_USER_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_PASS_OPT_KEY, DEFAULT_HIVE_PASS_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_URL_OPT_KEY, DEFAULT_HIVE_URL_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_PARTITION_FIELDS_OPT_KEY, DEFAULT_HIVE_PARTITION_FIELDS_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY, DEFAULT_HIVE_PARTITION_EXTRACTOR_CLASS_OPT_VAL)
+    defaultsMap.putIfAbsent(HIVE_ASSUME_DATE_PARTITION_OPT_KEY, DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL)
     mapAsScalaMap(defaultsMap)
   }
 
@@ -200,7 +212,8 @@ class DefaultSource extends RelationProvider
     }
 
     // Create a HoodieWriteClient & issue the write.
-    val client = DataSourceUtils.createHoodieClient(new JavaSparkContext(sparkContext),
+    val jsc = new JavaSparkContext(sparkContext);
+    val client = DataSourceUtils.createHoodieClient(jsc,
       schema.toString,
       path.get,
       tblName.get,
@@ -228,6 +241,13 @@ class DefaultSource extends RelationProvider
       else {
         log.info("Commit " + commitTime + " failed!")
       }
+
+      val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).map(r => r.toBoolean).getOrElse(false)
+      if (hiveSyncEnabled) {
+        log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
+        val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
+        syncHive(basePath, fs, parameters)
+      }
       client.close
     } else {
       log.error(s"Upsert failed with ${errorCount} errors :");
@@ -247,5 +267,28 @@ class DefaultSource extends RelationProvider
     createRelation(sqlContext, parameters, df.schema)
   }
 
+  private def syncHive(basePath: Path, fs: FileSystem, parameters: Map[String, String]): Boolean = {
+    val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, parameters)
+    val hiveConf: HiveConf = new HiveConf()
+    hiveConf.addResource(fs.getConf)
+    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
+    true
+  }
+
+  private def buildSyncConfig(basePath: Path, parameters: Map[String, String]): HiveSyncConfig = {
+    val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig()
+    hiveSyncConfig.basePath = basePath.toString
+    hiveSyncConfig.assumeDatePartitioning =
+      parameters.get(HIVE_ASSUME_DATE_PARTITION_OPT_KEY).exists(r => r.toBoolean)
+    hiveSyncConfig.databaseName = parameters(HIVE_DATABASE_OPT_KEY)
+    hiveSyncConfig.tableName = parameters(HIVE_TABLE_OPT_KEY)
+    hiveSyncConfig.hiveUser = parameters(HIVE_USER_OPT_KEY)
+    hiveSyncConfig.hivePass = parameters(HIVE_PASS_OPT_KEY)
+    hiveSyncConfig.jdbcUrl = parameters(HIVE_URL_OPT_KEY)
+    hiveSyncConfig.partitionFields =
+      ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).toList: _*)
+    hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
+    hiveSyncConfig
+  }
   override def shortName(): String = "hoodie"
 }

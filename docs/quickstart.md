@@ -15,6 +15,11 @@ Check out code and pull it into Intellij as a normal maven project.
 Normally build the maven project, from command line
 ```
 $ mvn clean install -DskipTests
+
+To work with older version of Hive (pre Hive-1.2.1), use
+
+$ mvn clean install -DskipTests -Dhive11
+
 ```
 
 {% include callout.html content="You might want to add your spark jars folder to project dependencies under 'Module Setttings', to be able to run Spark from IDE" type="info" %}
@@ -22,16 +27,45 @@ $ mvn clean install -DskipTests
 {% include note.html content="Setup your local hadoop/hive test environment, so you can play with entire ecosystem. See [this](http://www.bytearray.io/2016/05/setting-up-hadoopyarnsparkhive-on-mac.html) for reference" %}
 
 
+## Supported Versions
+
+Hoodie requires Java 8 to be installed. Hoodie works with Spark-2.x versions. We have verified that hoodie works with the following combination of Hadoop/Hive/Spark.
+
+| Hadoop | Hive  | Spark | Instructions to Build Hoodie | 
+| ---- | ----- | ---- | ---- |
+| 2.6.0-cdh5.7.2 | 1.1.0-cdh5.7.2 | spark-2.[1-3].x | Use "mvn clean install -DskipTests -Dhive11". Jars will have ".hive11" as suffix |
+| Apache hadoop-2.8.4 | Apache hive-2.3.3 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
+| Apache hadoop-2.7.3 | Apache hive-1.2.1 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
+
+If your environment has other versions of hadoop/hive/spark, please try out hoodie and let us know if there are any issues. We are limited by our bandwidth to certify other combinations. 
+It would be of great help if you can reach out to us with your setup and experience with hoodie.
 
 ## Generate a Hoodie Dataset
 
+### Requirements & Environment Variable
+
+Please set the following environment variablies according to your setup. We have given an example setup with CDH version
+
+```
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre/
+export HIVE_HOME=/var/hadoop/setup/apache-hive-1.1.0-cdh5.7.2-bin
+export HADOOP_HOME=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
+export HADOOP_INSTALL=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
+export HADOOP_CONF_DIR=$HADOOP_INSTALL/etc/hadoop
+export SPARK_HOME=/var/hadoop/setup/spark-2.3.1-bin-hadoop2.7
+export SPARK_INSTALL=$SPARK_HOME
+export SPARK_CONF_DIR=$SPARK_HOME/conf
+export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$PATH
+```
 
 ### DataSource API
 
-Run __hoodie-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS/local filesystem
+Run __hoodie-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS/local filesystem. Use the wrapper script
+to run from command-line
 
 ```
-
+cd hoodie-spark
+./run_hoodie_app.sh --help
 Usage: <main class> [options]
   Options:
     --help, -h
@@ -69,11 +103,12 @@ Now, lets see how we can publish this data into Hive.
 hdfs namenode # start name node
 hdfs datanode # start data node
 
-bin/hive --service metastore -p 10000 # start metastore
+bin/hive --service metastore  # start metastore
 bin/hiveserver2 \
-  --hiveconf hive.server2.thrift.port=10010 \
   --hiveconf hive.root.logger=INFO,console \
-  --hiveconf hive.aux.jars.path=hoodie/hoodie-hadoop-mr/target/hoodie-hadoop-mr-0.3.6-SNAPSHOT.jar
+  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
+  --hiveconf ive.stats.autogather=false \
+  --hiveconf hive.aux.jars.path=hoodie/packaging/hoodie-hadoop-mr-bundle/target/hoodie-hadoop-mr-bundle-0.4.3-SNAPSHOT.jar
 
 ```
 
@@ -86,7 +121,8 @@ It uses an incremental approach by storing the last commit time synced in the TB
 This can be run as frequently as the ingestion pipeline to make sure new partitions and schema evolution changes are reflected immediately.
 
 ```
-{JAVA8}/bin/java -cp "/etc/hive/conf:./hoodie-hive-0.3.8-SNAPSHOT-jar-with-dependencies.jar:/opt/hadoop/lib/hadoop-mapreduce/*" com.uber.hoodie.hive.HiveSyncTool 
+cd hoodie-hive
+./run_sync_tool.sh
   --user hive
   --pass hive 
   --database default 
@@ -100,16 +136,18 @@ This can be run as frequently as the ingestion pipeline to make sure new partiti
 
 
 #### Manually via Beeline
-Add in the hoodie-hadoop-mr jar so, Hive can read the Hoodie dataset and answer the query.
+Add in the hoodie-hadoop-mr-bundler jar so, Hive can read the Hoodie dataset and answer the query.
+Also, For reading hoodie tables using hive, the following configs needs to be setup
 
 ```
-hive> add jar file:///tmp/hoodie-hadoop-mr-0.2.7.jar;
-Added [file:///tmp/hoodie-hadoop-mr-0.2.7.jar] to class path
-Added resources: [file:///tmp/hoodie-hadoop-mr-0.2.7.jar]
+hive> set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
+hive> set hive.stats.autogather=false;
+hive> add jar file:///tmp/hoodie-hadoop-mr-bundle-0.4.3.jar;
+Added [file:///tmp/hoodie-hadoop-mr-bundle-0.4.3.jar] to class path
+Added resources: [file:///tmp/hoodie-hadoop-mr-bundle-0.4.3.jar]
 ```
 
 Then, you need to create a __ReadOptimized__ Hive table as below (only type supported as of now)and register the sample partitions
-
 
 ```
 drop table hoodie_test;
@@ -200,8 +238,7 @@ Spark is super easy, once you get Hive working as above. Just spin up a Spark Sh
 
 ```
 $ cd $SPARK_INSTALL
-$ export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
-$ spark-shell --jars /tmp/hoodie-hadoop-mr-0.2.7.jar --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false
+$ spark-shell --jars $HUDI_SRC/packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-0.4.3-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
 
 scala> val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 scala> sqlContext.sql("show tables").show(10000)
