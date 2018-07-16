@@ -95,8 +95,15 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro ?
         Writable[] replaceValue = deltaRecordMap.get(key).get();
         Writable[] originalValue = arrayWritable.get();
-        System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);
-        arrayWritable.set(originalValue);
+        try {
+          System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);
+          arrayWritable.set(originalValue);
+        } catch (RuntimeException re) {
+          LOG.error("Got exception when doing array copy", re);
+          LOG.error("Base record :" + arrayWritableToString(arrayWritable));
+          LOG.error("Log record :" + arrayWritableToString(deltaRecordMap.get(key)));
+          throw re;
+        }
       }
       return true;
     }

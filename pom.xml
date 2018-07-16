@@ -25,7 +25,7 @@
   <description>Hoodie is a Apache Spark library that provides the ability to efficiently do
     incremental processing on datasets in HDFS
   </description>
-  <url>https://github.com/uber/hoodie</url>
+  <url>https://github.com/uber/hudi</url>
   <name>Hoodie</name>
 
   <modules>
@@ -36,6 +36,9 @@
     <module>hoodie-hive</module>
     <module>hoodie-utilities</module>
     <module>hoodie-spark</module>
+    <module>packaging/hoodie-hadoop-mr-bundle</module>
+    <module>packaging/hoodie-hive-bundle</module>
+    <module>packaging/hoodie-spark-bundle</module>
   </modules>
 
   <licenses>
@@ -61,7 +64,7 @@
     <developer>
       <id>prasanna</id>
       <name>Prasanna Rajaperumal</name>
-      <organization>Uber</organization>
+      <organization>Snowflake</organization>
     </developer>
   </developers>
 
@@ -94,23 +97,14 @@
       <name>Nishith Agarwal</name>
       <organization>Uber</organization>
     </contributor>
+    <contributor>
+      <name>Balaji Varadharajan</name>
+      <organization>Uber</organization>
+    </contributor>
   </contributors>
 
   <inceptionYear>2015-2016</inceptionYear>
-  <dependencies>
-    <dependency>
-      <groupId>com.google.code.gson</groupId>
-      <artifactId>gson</artifactId>
-      <version>2.3.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+
 
   <properties>
     <maven-dependency-plugin.version>2.10</maven-dependency-plugin.version>
@@ -121,11 +115,15 @@
     <junit.version>4.11</junit.version>
     <mockito.version>1.9.5</mockito.version>
     <log4j.version>1.2.17</log4j.version>
-    <cdh.version>5.7.2</cdh.version>
-    <hadoop.version>2.6.0</hadoop.version>
-    <hive.version>1.1.0</hive.version>
+    <joda.version>2.9.9</joda.version>
+    <hadoop.version>2.7.3</hadoop.version>
+    <hive12.groupid>org.apache.hive</hive12.groupid>
+    <hive12.version>1.2.1</hive12.version>
+    <hive11.groupid>org.apache.hive</hive11.groupid>
+    <hive11.version>1.1.1</hive11.version>
     <metrics.version>3.1.1</metrics.version>
     <spark.version>2.1.0</spark.version>
+    <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
     <scala.libversion>2.11</scala.libversion>
   </properties>
@@ -278,32 +276,6 @@
             </execution>
           </executions>
         </plugin>
-        <!--<plugin>-->
-        <!--<groupId>org.codehaus.mojo</groupId>-->
-        <!--<artifactId>cobertura-maven-plugin</artifactId>-->
-        <!--<version>2.7</version>-->
-        <!--<configuration>-->
-        <!--<formats>-->
-        <!--<format>html</format>-->
-        <!--<format>xml</format>-->
-        <!--</formats>-->
-        <!--</configuration>-->
-        <!--<executions>-->
-        <!--<execution>-->
-        <!--<phase>test</phase>-->
-        <!--<goals>-->
-        <!--<goal>cobertura</goal>-->
-        <!--</goals>-->
-        <!--</execution>-->
-        <!--</executions>-->
-        <!--<dependencies>-->
-        <!--<dependency>-->
-        <!--<groupId>org.ow2.asm</groupId>-->
-        <!--<artifactId>asm</artifactId>-->
-        <!--<version>5.0.3</version>-->
-        <!--</dependency>-->
-        <!--</dependencies>-->
-        <!--</plugin>-->
         <plugin>
           <!-- excludes are inherited -->
           <groupId>org.apache.rat</groupId>
@@ -337,7 +309,7 @@
         <plugin>
           <groupId>org.apache.avro</groupId>
           <artifactId>avro-maven-plugin</artifactId>
-          <version>1.7.6</version>
+          <version>${avro.version}</version>
           <executions>
             <execution>
               <phase>generate-sources</phase>
@@ -359,6 +331,19 @@
 
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+        <version>2.3.1</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>${junit.version}</version>
+        <scope>test</scope>
+      </dependency>
 
       <dependency>
         <groupId>com.beust</groupId>
@@ -373,9 +358,16 @@
       </dependency>
 
       <dependency>
+        <!-- Used by hoodie-hive -->
+        <groupId>joda-time</groupId>
+        <artifactId>joda-time</artifactId>
+        <version>${joda.version}</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-client</artifactId>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
+        <version>${hadoop.version}</version>
         <scope>provided</scope>
         <exclusions>
           <exclusion>
@@ -404,7 +396,7 @@
       <dependency>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro-mapred</artifactId>
-        <version>1.7.7</version>
+        <version>${avro.version}</version>
       </dependency>
 
       <!-- we have to stay at <= 16.0, due to issues with HBase client -->
@@ -418,25 +410,19 @@
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-common</artifactId>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
+        <version>${hadoop.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-hdfs</artifactId>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
+        <version>${hadoop.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-auth</artifactId>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
-        <scope>provided</scope>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hive</groupId>
-        <artifactId>hive-common</artifactId>
-        <version>${hive.version}-cdh${cdh.version}</version>
+        <version>${hadoop.version}</version>
         <scope>provided</scope>
         <exclusions>
           <exclusion>
@@ -448,19 +434,13 @@
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-core</artifactId>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
+        <version>${hadoop.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-common</artifactId>
-        <version>2.6.0-cdh5.7.2</version>
-        <scope>provided</scope>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hive</groupId>
-        <artifactId>hive-exec</artifactId>
-        <version>1.1.0-cdh5.7.2</version>
+        <version>${hadoop.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
@@ -468,30 +448,34 @@
         <artifactId>commons-logging</artifactId>
         <version>1.2</version>
       </dependency>
-
+      <dependency>
+        <groupId>commons-io</groupId>
+        <artifactId>commons-io</artifactId>
+        <version>2.6</version>
+      </dependency>
 
       <!-- Storage formats -->
       <!-- Spark parquet version 1.7.0 does not play well with the hive 1.1.0 installed in cluster (which requires twitter parquet 1.5.0) -->
       <dependency>
         <groupId>com.twitter</groupId>
         <artifactId>parquet-hadoop-bundle</artifactId>
-        <version>1.5.0-cdh5.7.2</version>
+        <version>1.6.0</version>
       </dependency>
       <dependency>
         <groupId>com.twitter</groupId>
         <artifactId>parquet-hive-bundle</artifactId>
-        <version>1.5.0</version>
+        <version>1.6.0</version>
       </dependency>
       <dependency>
         <groupId>com.twitter</groupId>
         <artifactId>parquet-avro</artifactId>
-        <version>1.5.0-cdh5.7.2</version>
+        <version>1.6.0</version>
       </dependency>
 
       <dependency>
         <groupId>org.apache.parquet</groupId>
         <artifactId>parquet-hive-bundle</artifactId>
-        <version>1.8.1</version>
+        <version>${parquet.version}</version>
       </dependency>
 
       <dependency>
@@ -532,7 +516,7 @@
       <dependency>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
-        <version>1.7.6-cdh5.7.2</version>
+        <version>${avro.version}</version>
         <exclusions>
           <exclusion>
             <groupId>org.slf4j</groupId>
@@ -572,6 +556,11 @@
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpcore</artifactId>
+        <version>4.3.2</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpclient</artifactId>
         <version>4.3.2</version>
       </dependency>
       <dependency>
@@ -622,32 +611,14 @@
       </dependency>
 
       <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.6.0</version>
+      </dependency>
+      <dependency>
         <groupId>org.codehaus.jackson</groupId>
         <artifactId>jackson-mapper-asl</artifactId>
         <version>1.9.13</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.apache.hive</groupId>
-        <artifactId>hive-jdbc</artifactId>
-        <version>${hive.version}-cdh${cdh.version}</version>
-        <exclusions>
-          <exclusion>
-            <groupId>com.fasterxml.jackson.*</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-        </exclusions>
-      </dependency>
-
-      <dependency>
-        <groupId>org.apache.hive</groupId>
-        <artifactId>hive-service</artifactId>
-        <version>${hive.version}-cdh${cdh.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hive</groupId>
-        <artifactId>hive-metastore</artifactId>
-        <version>${hive.version}-cdh${cdh.version}</version>
       </dependency>
 
       <dependency>
@@ -659,33 +630,13 @@
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-hdfs</artifactId>
         <classifier>tests</classifier>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
-        <exclusions>
-          <exclusion>
-            <groupId>org.codehaus</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-          <!-- Need these exclusions to make sure JavaSparkContext can be setup. https://issues.apache.org/jira/browse/SPARK-1693 -->
-          <exclusion>
-            <groupId>org.mortbay.jetty</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>javax.servlet.jsp</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>javax.servlet</groupId>
-            <artifactId>*</artifactId>
-          </exclusion>
-        </exclusions>
-        <scope>test</scope>
+        <version>${hadoop.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-common</artifactId>
         <classifier>tests</classifier>
-        <version>${hadoop.version}-cdh${cdh.version}</version>
+        <version>${hadoop.version}</version>
       </dependency>
       <dependency>
         <groupId>org.mockito</groupId>
@@ -703,8 +654,11 @@
     </dependencies>
 
   </dependencyManagement>
-
   <repositories>
+    <repository>
+      <id>Maven repository</id>
+      <url>https://central.maven.org/maven2/</url>
+    </repository>
     <repository>
       <id>cloudera-repo-releases</id>
       <url>https://repository.cloudera.com/artifactory/public/</url>
@@ -723,6 +677,109 @@
   </distributionManagement>
 
   <profiles>
+    <profile>
+      <id>hive12</id>
+      <activation>
+        <property>
+          <name>!hive11</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-service</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-shims</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-jdbc</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-serde</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-metastore</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-common</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive12.groupid}</groupId>
+          <artifactId>hive-exec</artifactId>
+          <version>${hive12.version}</version>
+          <scope>provided</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>hive11</id>
+      <activation>
+        <property>
+          <name>hive11</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-service</artifactId>
+          <version>${hive11.version}</version>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-shims</artifactId>
+          <version>${hive11.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-jdbc</artifactId>
+          <version>${hive11.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-serde</artifactId>
+          <version>${hive11.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-metastore</artifactId>
+          <version>${hive11.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-common</artifactId>
+          <version>${hive11.version}</version>
+          <scope>provided</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.apache.hive</groupId>
+          <artifactId>hive-exec</artifactId>
+          <version>${hive11.version}</version>
+          <scope>provided</scope>
+        </dependency>
+      </dependencies>
+    </profile>
     <profile>
       <id>release</id>
       <activation>

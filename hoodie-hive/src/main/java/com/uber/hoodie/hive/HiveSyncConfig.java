@@ -69,4 +69,20 @@ public class HiveSyncConfig implements Serializable {
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
+
+  @Override
+  public String toString() {
+    return "HiveSyncConfig{"
+        + "databaseName='" + databaseName + '\''
+        + ", tableName='" + tableName + '\''
+        + ", hiveUser='" + hiveUser + '\''
+        + ", hivePass='" + hivePass + '\''
+        + ", jdbcUrl='" + jdbcUrl + '\''
+        + ", basePath='" + basePath + '\''
+        + ", partitionFields=" + partitionFields
+        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
+        + ", assumeDatePartitioning=" + assumeDatePartitioning
+        + ", help=" + help
+        + '}';
+  }
 }

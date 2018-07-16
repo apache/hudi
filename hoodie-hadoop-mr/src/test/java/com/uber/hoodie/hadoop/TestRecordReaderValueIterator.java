@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.hadoop;
 
-import groovy.lang.Tuple2;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.RecordReader;
@@ -41,8 +41,8 @@ public class TestRecordReaderValueIterator {
         "spark",
         "dataset",
     };
-    List<Tuple2<Integer, String>> entries = IntStream.range(0, values.length)
-        .boxed().map(idx -> new Tuple2<>(idx, values[idx])).collect(Collectors.toList());
+    List<Pair<Integer, String>> entries = IntStream.range(0, values.length)
+        .boxed().map(idx -> Pair.of(idx, values[idx])).collect(Collectors.toList());
     TestRecordReader reader = new TestRecordReader(entries);
     RecordReaderValueIterator<IntWritable, Text> itr = new RecordReaderValueIterator<IntWritable, Text>(reader);
     for (int i = 0; i < values.length; i++) {
@@ -58,10 +58,10 @@ public class TestRecordReaderValueIterator {
    */
   private static class TestRecordReader implements RecordReader<IntWritable, Text> {
 
-    private final List<Tuple2<Integer, String>> entries;
+    private final List<Pair<Integer, String>> entries;
     private int currIndex = 0;
 
-    public TestRecordReader(List<Tuple2<Integer, String>> entries) {
+    public TestRecordReader(List<Pair<Integer, String>> entries) {
       this.entries = entries;
     }
 
@@ -71,8 +71,8 @@ public class TestRecordReaderValueIterator {
       if (currIndex >= entries.size()) {
         return false;
       }
-      key.set(entries.get(currIndex).getFirst());
-      value.set(entries.get(currIndex).getSecond());
+      key.set(entries.get(currIndex).getLeft());
+      value.set(entries.get(currIndex).getRight());
       currIndex++;
       return true;
     }

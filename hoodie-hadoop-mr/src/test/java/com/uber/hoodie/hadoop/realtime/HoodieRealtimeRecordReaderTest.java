@@ -104,7 +104,6 @@ public class HoodieRealtimeRecordReaderTest {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
-    long size = writer.getCurrentSize();
     return writer;
   }
 
@@ -348,7 +347,7 @@ public class HoodieRealtimeRecordReaderTest {
 
       // Assert type MAP
       ArrayWritable mapItem = (ArrayWritable) values[12];
-      Writable[] mapItemValues = mapItem.get();
+      Writable[] mapItemValues = ((ArrayWritable) mapItem.get()[0]).get();
       ArrayWritable mapItemValue1 = (ArrayWritable) mapItemValues[0];
       ArrayWritable mapItemValue2 = (ArrayWritable) mapItemValues[1];
       Assert.assertEquals("test value for field: tags", mapItemValue1.get()[0].toString(),
@@ -381,10 +380,10 @@ public class HoodieRealtimeRecordReaderTest {
 
       // Assert type ARRAY
       ArrayWritable arrayValue = (ArrayWritable) values[14];
-      Writable[] arrayValues = arrayValue.get();
+      Writable[] arrayValues = ((ArrayWritable) arrayValue.get()[0]).get();
       for (int i = 0; i < arrayValues.length; i++) {
-        Assert.assertEquals("test value for field: stringArray", arrayValues[i].toString(),
-            "stringArray" + i + recordCommitTimeSuffix);
+        Assert.assertEquals("test value for field: stringArray", "stringArray" + i + recordCommitTimeSuffix,
+            arrayValues[i].toString());
       }
     }
   }

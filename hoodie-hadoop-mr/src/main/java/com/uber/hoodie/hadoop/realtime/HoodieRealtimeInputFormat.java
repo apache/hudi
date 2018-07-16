@@ -203,19 +203,29 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
   @Override
   public RecordReader<Void, ArrayWritable> getRecordReader(final InputSplit split,
       final JobConf job, final Reporter reporter) throws IOException {
+
+    LOG.info("Before adding Hoodie columns, Projections :" + job
+        .get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR) + ", Ids :"
+        + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+
+    // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
+    // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases
+    // hoodie additional projection columns are reset after calling setConf and only natural projections
+    // (one found in select queries) are set. things would break because of this.
+    // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
+    // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction time.
+    this.conf = addRequiredProjectionFields(job);
+
     LOG.info("Creating record reader with readCols :" + job
-        .get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+        .get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR) + ", Ids :"
+        + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     // sanity check
     Preconditions.checkArgument(split instanceof HoodieRealtimeFileSplit,
         "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with "
             + split);
+
     return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, job,
         super.getRecordReader(split, job, reporter));
-  }
-
-  @Override
-  public void setConf(Configuration conf) {
-    this.conf = addRequiredProjectionFields(conf);
   }
 
   @Override
