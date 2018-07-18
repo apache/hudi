@@ -142,8 +142,16 @@ public class WriteStatus implements Serializable {
     return totalRecords;
   }
 
+  public void setTotalRecords(long totalRecords) {
+    this.totalRecords = totalRecords;
+  }
+
   public long getTotalErrorRecords() {
     return totalErrorRecords;
+  }
+
+  public void setTotalErrorRecords(long totalErrorRecords) {
+    this.totalErrorRecords = totalErrorRecords;
   }
 
   @Override
