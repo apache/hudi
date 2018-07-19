@@ -258,23 +258,45 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public String getHbaseZkQuorum() {
-    return props.getProperty(HoodieIndexConfig.HBASE_ZKQUORUM_PROP);
+    return props.getProperty(HoodieHBaseIndexConfig.HBASE_ZKQUORUM_PROP);
   }
 
   public int getHbaseZkPort() {
-    return Integer.parseInt(props.getProperty(HoodieIndexConfig.HBASE_ZKPORT_PROP));
+    return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_ZKPORT_PROP));
   }
 
   public String getHbaseTableName() {
-    return props.getProperty(HoodieIndexConfig.HBASE_TABLENAME_PROP);
+    return props.getProperty(HoodieHBaseIndexConfig.HBASE_TABLENAME_PROP);
   }
 
   public int getHbaseIndexGetBatchSize() {
-    return Integer.valueOf(props.getProperty(HoodieIndexConfig.HBASE_GET_BATCH_SIZE_PROP));
+    return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HBASE_GET_BATCH_SIZE_PROP));
   }
 
   public int getHbaseIndexPutBatchSize() {
-    return Integer.valueOf(props.getProperty(HoodieIndexConfig.HBASE_PUT_BATCH_SIZE_PROP));
+    return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE_PROP));
+  }
+
+  public Boolean getHbaseIndexPutBatchSizeAutoCompute() {
+    return Boolean.valueOf(props.getProperty(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP));
+  }
+
+  /**
+   * Fraction of the global share of QPS that should be allocated to this job.
+   * Let's say there are 3 jobs which have input size in terms of number of rows
+   * required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
+   * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
+   */
+  public float getHbaseIndexQPSFraction() {
+    return Float.parseFloat(props.getProperty(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION_PROP));
+  }
+
+  /**
+   * This should be same across various jobs. This is intended to limit the aggregate
+   * QPS generated across various Hoodie jobs to an Hbase Region Server
+   */
+  public int getHbaseIndexMaxQPSPerRegionServer() {
+    return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER_PROP));
   }
 
   public int getBloomIndexParallelism() {
