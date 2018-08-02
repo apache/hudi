@@ -74,11 +74,27 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Stream all the latest uncompacted file slices in the given partition
+     */
+    Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath);
+
+
+    /**
      * Stream all the latest file slices in the given partition with precondition that
      * commitTime(file) before maxCommitTime
      */
     Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
         String maxCommitTime);
+
+    /**
+     * Stream all "merged" file-slices before on an instant time
+     * If a file-group has a pending compaction request, the file-slice before and after compaction request instant
+     * is merged and returned.
+     * @param partitionPath  Partition Path
+     * @param maxInstantTime Max Instant Time
+     * @return
+     */
+    public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime);
 
     /**
      * Stream all the latest file slices, in the given range

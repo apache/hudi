@@ -37,7 +37,7 @@ public class FileSlice implements Serializable {
   /**
    * Point in the timeline, at which the slice was created
    */
-  private String baseCommitTime;
+  private String baseInstantTime;
 
   /**
    * data file, with the compacted data, for this slice
@@ -50,11 +50,11 @@ public class FileSlice implements Serializable {
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
-  public FileSlice(String baseCommitTime, String fileId) {
+  public FileSlice(String baseInstantTime, String fileId) {
     this.fileId = fileId;
-    this.baseCommitTime = baseCommitTime;
+    this.baseInstantTime = baseInstantTime;
     this.dataFile = null;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getLogVersionComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFile.getBaseInstantAndLogVersionComparator());
   }
 
   public void setDataFile(HoodieDataFile dataFile) {
@@ -69,8 +69,8 @@ public class FileSlice implements Serializable {
     return logFiles.stream();
   }
 
-  public String getBaseCommitTime() {
-    return baseCommitTime;
+  public String getBaseInstantTime() {
+    return baseInstantTime;
   }
 
   public String getFileId() {
@@ -84,7 +84,7 @@ public class FileSlice implements Serializable {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FileSlice {");
-    sb.append("baseCommitTime=").append(baseCommitTime);
+    sb.append("baseCommitTime=").append(baseInstantTime);
     sb.append(", dataFile='").append(dataFile).append('\'');
     sb.append(", logFiles='").append(logFiles).append('\'');
     sb.append('}');

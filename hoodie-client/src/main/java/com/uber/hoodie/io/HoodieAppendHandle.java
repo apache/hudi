@@ -113,7 +113,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
           .filter(fileSlice1 -> fileSlice1.getFileId().equals(fileId)).findFirst();
       String baseInstantTime = commitTime;
       if (fileSlice.isPresent()) {
-        baseInstantTime = fileSlice.get().getBaseCommitTime();
+        baseInstantTime = fileSlice.get().getBaseInstantTime();
       } else {
         // This means there is no base data file, start appending to a new log file
         fileSlice = Optional.of(new FileSlice(baseInstantTime, this.fileId));
