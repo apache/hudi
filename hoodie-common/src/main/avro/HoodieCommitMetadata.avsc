@@ -59,7 +59,8 @@
                      },
                      {
                         "name":"totalUpdatedRecordsCompacted",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }
