@@ -144,7 +144,8 @@ public class Table implements Iterable<List<String>> {
         if (fieldNameToConverterMap.containsKey(fieldName)) {
           return fieldNameToConverterMap.get(fieldName).apply(row.get(idx));
         }
-        return row.get(idx).toString();
+        Object v = row.get(idx);
+        return v == null ? "null" : v.toString();
       }).collect(Collectors.toList());
     }).collect(Collectors.toList());
   }

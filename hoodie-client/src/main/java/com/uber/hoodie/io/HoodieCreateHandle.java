@@ -75,7 +75,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       throw new HoodieInsertException(
           "Failed to initialize HoodieStorageWriter for path " + getStorageWriterPath(), e);
     }
-    logger.info("New InsertHandle for partition :" + partitionPath);
+    logger.info("New InsertHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
