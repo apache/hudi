@@ -88,6 +88,7 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>
+      <version>${fasterxml.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.parquet</groupId>

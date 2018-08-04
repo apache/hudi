@@ -1,7 +1,11 @@
 {
   "type" : "record",
   "name" : "triprec",
-  "fields" : [ {
+  "fields" : [
+  {
+    "name" : "timestamp",
+    "type" : "double"
+  }, {
     "name" : "_row_key",
     "type" : "string"
   }, {

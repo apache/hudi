@@ -93,8 +93,6 @@ public class HiveIncrementalPuller {
     public int maxCommits = 3;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
-    @Parameter(names = {"--storageFormat"})
-    public String tempTableStorageFormat = "AVRO";
   }
 
   static {
@@ -207,12 +205,7 @@ public class HiveIncrementalPuller {
   }
 
   private String getStoredAsClause() {
-    if (config.tempTableStorageFormat.equalsIgnoreCase("json")) {
-      // Special case for json
-      // default json serde does not support having same key even if its under multiple depths
-      return "ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe' STORED AS TEXTFILE";
-    }
-    return "STORED AS " + config.tempTableStorageFormat;
+    return "STORED AS AVRO";
   }
 
   private void initHiveBeelineProperties(Statement stmt) throws SQLException {

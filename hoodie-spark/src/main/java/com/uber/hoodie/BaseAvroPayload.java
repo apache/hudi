@@ -18,6 +18,7 @@
 
 package com.uber.hoodie;
 
+import com.uber.hoodie.exception.HoodieException;
 import java.io.Serializable;
 import org.apache.avro.generic.GenericRecord;
 
@@ -44,5 +45,8 @@ public abstract class BaseAvroPayload implements Serializable {
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     this.record = record;
     this.orderingVal = orderingVal;
+    if (orderingVal == null) {
+      throw new HoodieException("Ordering value is null for record: " + record);
+    }
   }
 }

@@ -20,6 +20,9 @@ package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.common.util.collection.ImmutablePair;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.IOException;
@@ -30,14 +33,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.avro.mapred.AvroKey;
+import org.apache.avro.mapreduce.AvroKeyInputFormat;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -69,12 +73,12 @@ public class HiveIncrPullSource extends Source {
     private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
   }
 
-  public HiveIncrPullSource(PropertiesConfiguration config, JavaSparkContext sparkContext,
-      SourceDataFormat dataFormat, SchemaProvider schemaProvider) {
-    super(config, sparkContext, dataFormat, schemaProvider);
-    this.fs = FSUtils.getFs(config.getBasePath(), sparkContext.hadoopConfiguration());
-    DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
-    this.incrPullRootPath = config.getString(Config.ROOT_INPUT_PATH_PROP);
+  public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext,
+      SchemaProvider schemaProvider) {
+    super(props, sparkContext, schemaProvider);
+    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+    this.incrPullRootPath = props.getString(Config.ROOT_INPUT_PATH_PROP);
+    this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
 
   /**
@@ -110,7 +114,7 @@ public class HiveIncrPullSource extends Source {
 
   @Override
   public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr, long maxInputBytes) {
+      Optional<String> lastCheckpointStr, long sourceLimit) {
     try {
       // find the source commit to pull
       Optional<String> commitToPull = findCommitToPull(lastCheckpointStr);
@@ -125,10 +129,10 @@ public class HiveIncrPullSource extends Source {
           fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
       String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString())
           .collect(Collectors.joining(","));
-      String schemaStr = schemaProvider.getSourceSchema().toString();
-      final AvroConvertor avroConvertor = new AvroConvertor(schemaStr);
-      return new ImmutablePair<>(
-          Optional.of(DFSSource.fromFiles(dataFormat, avroConvertor, pathStr, sparkContext)),
+      JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
+          AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
+          sparkContext.hadoopConfiguration());
+      return new ImmutablePair<>(Optional.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
     } catch (IOException ioe) {
       throw new HoodieIOException(

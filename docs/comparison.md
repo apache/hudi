@@ -47,7 +47,7 @@ just for analytics. Finally, HBase does not support incremental processing primi
 A popular question, we get is : "How does Hoodie relate to stream processing systems?", which we will try to answer here. Simply put, Hoodie can integrate with
 batch (`copy-on-write storage`) and streaming (`merge-on-read storage`) jobs of today, to store the computed results in Hadoop. For Spark apps, this can happen via direct
 integration of Hoodie library with Spark/Spark streaming DAGs. In case of Non-Spark processing systems (eg: Flink, Hive), the processing can be done in the respective systems
-and later sent into a Hoodie table via a Kafka topic/HDFS intermediate file. (TODO: Need link to SQLStreamer/DeltaStreamer after reworking). In more conceptual level, data processing
+and later sent into a Hoodie table via a Kafka topic/HDFS intermediate file. In more conceptual level, data processing
 pipelines just consist of three components : `source`, `processing`, `sink`, with users ultimately running queries against the sink to use the results of the pipeline.
 Hoodie can act as either a source or sink, that stores data on HDFS. Applicability of Hoodie to a given stream processing pipeline ultimately boils down to suitability
 of Presto/SparkSQL/Hive for your queries.

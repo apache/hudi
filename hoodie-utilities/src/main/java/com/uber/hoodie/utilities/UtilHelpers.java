@@ -20,22 +20,20 @@ package com.uber.hoodie.utilities;
 
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
 import com.uber.hoodie.common.util.ReflectionUtils;
+import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.exception.HoodieIOException;
+import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.Source;
-import com.uber.hoodie.utilities.sources.SourceDataFormat;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Optional;
-import org.apache.commons.configuration.ConfigurationException;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.commons.lang3.reflect.ConstructorUtils;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -52,42 +50,34 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class UtilHelpers {
   private static Logger logger = LogManager.getLogger(UtilHelpers.class);
 
-  public static Source createSource(String sourceClass, PropertiesConfiguration cfg,
-      JavaSparkContext jssc, SourceDataFormat dataFormat, SchemaProvider schemaProvider)
+  public static Source createSource(String sourceClass, TypedProperties cfg,
+      JavaSparkContext jssc, SchemaProvider schemaProvider)
       throws IOException {
     try {
-      return (Source) ConstructorUtils.invokeConstructor(Class.forName(sourceClass), (Object) cfg,
-          (Object) jssc, (Object) dataFormat, (Object) schemaProvider);
+      return (Source) ReflectionUtils.loadClass(sourceClass,
+          new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SchemaProvider.class},
+          cfg, jssc, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass,
-      PropertiesConfiguration cfg) throws IOException {
+      TypedProperties cfg, JavaSparkContext jssc) throws IOException {
     try {
-      return (SchemaProvider) ConstructorUtils.invokeConstructor(Class.forName(schemaProviderClass),
-          (Object) cfg);
+      return (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
     }
   }
 
   /**
-   * TODO: Support hierarchical config files (see CONFIGURATION-609 for sample)
    */
-  public static PropertiesConfiguration readConfig(FileSystem fs, Path cfgPath) {
+  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath) {
     try {
-      FSDataInputStream in = fs.open(cfgPath);
-      PropertiesConfiguration config = new PropertiesConfiguration();
-      config.load(in);
-      in.close();
-      return config;
-    } catch (IOException e) {
-      throw new HoodieIOException("Unable to read config file at :" + cfgPath, e);
-    } catch (ConfigurationException e) {
-      throw new HoodieDeltaStreamerException("Invalid configs found in config file at :" + cfgPath,
-          e);
+      return new DFSPropertiesConfiguration(fs, cfgPath);
+    } catch (Exception e) {
+      throw new HoodieException("Unable to read props file at :" + cfgPath, e);
     }
   }
 
@@ -117,24 +107,16 @@ public class UtilHelpers {
     return new String(buf.array());
   }
 
-  /**
-   * Build Spark Context for ingestion/compaction
-   * @return
-   */
-  public static JavaSparkContext buildSparkContext(String tableName, String sparkMaster, String sparkMemory) {
-    SparkConf sparkConf = new SparkConf().setAppName("hoodie-data-importer-" + tableName);
-    sparkConf.setMaster(sparkMaster);
-
-    if (sparkMaster.startsWith("yarn")) {
+  private static SparkConf buildSparkConf(String appName, String defaultMaster) {
+    SparkConf sparkConf = new SparkConf().setAppName(appName);
+    String master = sparkConf.get("spark.master", defaultMaster);
+    sparkConf.setMaster(master);
+    if (master.startsWith("yarn")) {
       sparkConf.set("spark.eventLog.overwrite", "true");
       sparkConf.set("spark.eventLog.enabled", "true");
     }
-
     sparkConf.set("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    sparkConf.set("spark.executor.memory", sparkMemory);
-
-    // Configure hadoop conf
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec",
@@ -142,6 +124,20 @@ public class UtilHelpers {
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
     sparkConf = HoodieWriteClient.registerClasses(sparkConf);
+    return sparkConf;
+  }
+
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {
+    return new JavaSparkContext(buildSparkConf(appName, defaultMaster));
+  }
+
+  /**
+   * Build Spark Context for ingestion/compaction
+   * @return
+   */
+  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
+    SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
+    sparkConf.set("spark.executor.memory", sparkMemory);
     return new JavaSparkContext(sparkConf);
   }
 
@@ -184,5 +180,11 @@ public class UtilHelpers {
     }
     logger.error(String.format("Import failed with %d errors.", errors.value()));
     return -1;
+  }
+
+  public static TypedProperties readConfig(InputStream in) throws IOException {
+    TypedProperties defaults = new TypedProperties();
+    defaults.load(in);
+    return defaults;
   }
 }

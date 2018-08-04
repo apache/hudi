@@ -41,7 +41,6 @@ public class HDFSParquetImportCommand implements CommandMarker {
       @CliOption(key = "upsert", mandatory = false, unspecifiedDefaultValue = "false",
           help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
       @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset") final String srcPath,
-      @CliOption(key = "srcType", mandatory = true, help = "Source type for the input dataset") final String srcType,
       @CliOption(key = "targetPath", mandatory = true, help = "Base path for the target hoodie dataset") final String
           targetPath,
       @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
@@ -57,7 +56,7 @@ public class HDFSParquetImportCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry) throws Exception {
 
-    validate(format, srcType);
+    (new HDFSParquetImporter.FormatValidator()).validate("format", format);
 
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -80,10 +79,5 @@ public class HDFSParquetImportCommand implements CommandMarker {
       return "Failed to import dataset to hoodie format";
     }
     return "Dataset imported to hoodie format";
-  }
-
-  private void validate(String format, String srcType) {
-    (new HDFSParquetImporter.FormatValidator()).validate("format", format);
-    (new HDFSParquetImporter.SourceTypeValidator()).validate("srcType", srcType);
   }
 }
