@@ -18,12 +18,23 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.utilities.schema.SchemaProvider;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+
 /**
- * Format of the data within source.
+ * DFS Source that reads json data
  */
-public enum SourceDataFormat {
-  AVRO, // No conversion needed explicitly to avro
-  JSON, // we will try to convert to avro
-  ROW, // Will be added later, so we can plug/play with spark sources.
-  CUSTOM // the source is responsible for conversion to avro.
+public class JsonDFSSource extends DFSSource {
+
+  public JsonDFSSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
+    super(props, sparkContext, schemaProvider);
+  }
+
+  @Override
+  protected JavaRDD<GenericRecord> fromFiles(AvroConvertor convertor, String pathStr) {
+    return sparkContext.textFile(pathStr).map((String j) -> convertor.fromJson(j));
+  }
 }

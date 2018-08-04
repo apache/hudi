@@ -19,33 +19,26 @@
 package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.DataSourceUtils;
+import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.common.util.collection.ImmutablePair;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
-import java.util.Spliterator;
-import java.util.Spliterators;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import kafka.common.TopicAndPartition;
-import kafka.serializer.DefaultDecoder;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.streaming.kafka.KafkaCluster;
-import org.apache.spark.streaming.kafka.KafkaUtils;
+import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset;
 import org.apache.spark.streaming.kafka.OffsetRange;
 import scala.Predef;
 import scala.collection.JavaConverters;
@@ -59,9 +52,11 @@ import scala.util.Either;
 /**
  * Source to read data from Kafka, incrementally
  */
-public class KafkaSource extends Source {
+public abstract class KafkaSource extends Source {
 
   private static volatile Logger log = LogManager.getLogger(KafkaSource.class);
+
+  private static long DEFAULT_MAX_EVENTS_TO_READ = 1000000; // 1M events max
 
 
   static class CheckpointUtils {
@@ -72,6 +67,9 @@ public class KafkaSource extends Source {
     public static HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> strToOffsets(
         String checkpointStr) {
       HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> offsetMap = new HashMap<>();
+      if (checkpointStr.length() == 0) {
+        return offsetMap;
+      }
       String[] splits = checkpointStr.split(",");
       String topic = splits[0];
       for (int i = 1; i < splits.length; i++) {
@@ -83,46 +81,70 @@ public class KafkaSource extends Source {
     }
 
     /**
-     * String representation of checkpoint
-     * <p>
-     * Format: topic1,0:offset0,1:offset1,2:offset2, .....
+     * String representation of checkpoint <p> Format: topic1,0:offset0,1:offset1,2:offset2, .....
      */
-    public static String offsetsToStr(
-        HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> offsetMap) {
+    public static String offsetsToStr(OffsetRange[] ranges) {
       StringBuilder sb = new StringBuilder();
       // atleast 1 partition will be present.
-      sb.append(offsetMap.entrySet().stream().findFirst().get().getKey().topic() + ",");
-      sb.append(offsetMap.entrySet().stream()
-          .map(e -> String.format("%s:%d", e.getKey().partition(), e.getValue().offset()))
+      sb.append(ranges[0].topic() + ",");
+      sb.append(Arrays.stream(ranges)
+          .map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
           .collect(Collectors.joining(",")));
       return sb.toString();
     }
 
-    public static OffsetRange[] computeOffsetRanges(
-        HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> fromOffsetMap,
-        HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> toOffsetMap) {
-      Comparator<OffsetRange> byPartition = (OffsetRange o1, OffsetRange o2) -> {
-        return Integer.valueOf(o1.partition()).compareTo(Integer.valueOf(o2.partition()));
-      };
-      List<OffsetRange> offsetRanges = toOffsetMap.entrySet().stream().map(e -> {
-        TopicAndPartition tp = e.getKey();
-        long fromOffset = -1;
-        if (fromOffsetMap.containsKey(tp)) {
-          fromOffset = fromOffsetMap.get(tp).offset();
-        }
-        return OffsetRange.create(tp, fromOffset, e.getValue().offset());
-      }).sorted(byPartition).collect(Collectors.toList());
 
-      OffsetRange[] ranges = new OffsetRange[offsetRanges.size()];
-      return offsetRanges.toArray(ranges);
+    /**
+     * Compute the offset ranges to read from Kafka, while handling newly added partitions, skews, event limits.
+     *
+     * @param fromOffsetMap offsets where we left off last time
+     * @param toOffsetMap offsets of where each partitions is currently at
+     * @param numEvents maximum number of events to read.
+     */
+    public static OffsetRange[] computeOffsetRanges(
+        HashMap<TopicAndPartition, LeaderOffset> fromOffsetMap,
+        HashMap<TopicAndPartition, LeaderOffset> toOffsetMap,
+        long numEvents) {
+
+      Comparator<OffsetRange> byPartition = (OffsetRange o1, OffsetRange o2) ->
+          Integer.valueOf(o1.partition()).compareTo(Integer.valueOf(o2.partition()));
+
+      // Create initial offset ranges for each 'to' partition, with from = to offsets.
+      OffsetRange[] ranges = new OffsetRange[toOffsetMap.size()];
+      toOffsetMap.entrySet().stream().map(e -> {
+        TopicAndPartition tp = e.getKey();
+        long fromOffset = fromOffsetMap.getOrDefault(tp, new LeaderOffset("", -1, 0)).offset();
+        return OffsetRange.create(tp, fromOffset, fromOffset);
+      }).sorted(byPartition).collect(Collectors.toList()).toArray(ranges);
+
+      long allocedEvents = 0;
+      java.util.Set<Integer> exhaustedPartitions = new HashSet<>();
+      // keep going until we have events to allocate and partitions still not exhausted.
+      while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
+        long remainingEvents = numEvents - allocedEvents;
+        long eventsPerPartition = (long) Math
+            .ceil((1.0 * remainingEvents) / (toOffsetMap.size() - exhaustedPartitions.size()));
+
+        // Allocate the remaining events to non-exhausted partitions, in round robin fashion
+        for (int i = 0; i < ranges.length; i++) {
+          OffsetRange range = ranges[i];
+          if (!exhaustedPartitions.contains(range.partition())) {
+            long toOffsetMax = toOffsetMap.get(range.topicAndPartition()).offset();
+            long toOffset = Math.min(toOffsetMax, range.untilOffset() + eventsPerPartition);
+            if (toOffset == toOffsetMax) {
+              exhaustedPartitions.add(range.partition());
+            }
+            allocedEvents += toOffset - range.untilOffset();
+            ranges[i] = OffsetRange.create(range.topicAndPartition(), range.fromOffset(), toOffset);
+          }
+        }
+      }
+
+      return ranges;
     }
 
     public static long totalNewMessages(OffsetRange[] ranges) {
-      long totalMsgs = 0;
-      for (OffsetRange range : ranges) {
-        totalMsgs += Math.max(range.untilOffset() - range.fromOffset(), 0);
-      }
-      return totalMsgs;
+      return Arrays.asList(ranges).stream().mapToLong(r -> r.count()).sum();
     }
   }
 
@@ -149,32 +171,31 @@ public class KafkaSource extends Source {
    * Configs to be passed for this source. All standard Kafka consumer configs are also respected
    */
   static class Config {
-
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String DEFAULT_AUTO_RESET_OFFSET = "largest";
   }
 
 
-  private HashMap<String, String> kafkaParams;
+  protected HashMap<String, String> kafkaParams;
 
-  private final String topicName;
+  protected final String topicName;
 
-  public KafkaSource(PropertiesConfiguration config, JavaSparkContext sparkContext,
-      SourceDataFormat dataFormat, SchemaProvider schemaProvider) {
-    super(config, sparkContext, dataFormat, schemaProvider);
+  public KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
+    super(props, sparkContext, schemaProvider);
 
     kafkaParams = new HashMap<>();
-    Stream<String> keys = StreamSupport.stream(
-        Spliterators.spliteratorUnknownSize(config.getKeys(), Spliterator.NONNULL), false);
-    keys.forEach(k -> kafkaParams.put(k, config.getString(k)));
-
-    DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.KAFKA_TOPIC_NAME));
-    topicName = config.getString(Config.KAFKA_TOPIC_NAME);
+    for (Object prop : props.keySet()) {
+      kafkaParams.put(prop.toString(), props.getString(prop.toString()));
+    }
+    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.KAFKA_TOPIC_NAME));
+    topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
+
+  protected abstract JavaRDD<GenericRecord> toAvroRDD(OffsetRange[] offsetRanges, AvroConvertor avroConvertor);
 
   @Override
   public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr, long maxInputBytes) {
+      Optional<String> lastCheckpointStr, long sourceLimit) {
 
     // Obtain current metadata for the topic
     KafkaCluster cluster = new KafkaCluster(ScalaHelpers.toScalaMap(kafkaParams));
@@ -192,7 +213,7 @@ public class KafkaSource extends Source {
     if (lastCheckpointStr.isPresent()) {
       fromOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     } else {
-      String autoResetValue = config
+      String autoResetValue = props
           .getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET);
       if (autoResetValue.equals("smallest")) {
         fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
@@ -206,40 +227,23 @@ public class KafkaSource extends Source {
       }
     }
 
-    // Always read until the latest offset
+    // Obtain the latest offsets.
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> toOffsets = new HashMap(
         ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
 
-    // Come up with final set of OffsetRanges to read (account for new partitions)
-    // TODO(vc): Respect maxInputBytes, by estimating number of messages to read each batch from
-    // partition size
-    OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets);
+    // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
+    long numEvents = Math.min(DEFAULT_MAX_EVENTS_TO_READ, sourceLimit);
+    OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
-      return new ImmutablePair<>(Optional.empty(),
-          lastCheckpointStr.isPresent() ? lastCheckpointStr.get()
-              : CheckpointUtils.offsetsToStr(toOffsets));
+      return new ImmutablePair<>(Optional.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     } else {
       log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + topicName);
     }
 
-    // Perform the actual read from Kafka
-    JavaRDD<byte[]> kafkaRDD = KafkaUtils.createRDD(sparkContext, byte[].class, byte[].class,
-        DefaultDecoder.class, DefaultDecoder.class, kafkaParams, offsetRanges).values();
-
     // Produce a RDD[GenericRecord]
-    final AvroConvertor avroConvertor = new AvroConvertor(
-        schemaProvider.getSourceSchema().toString());
-    JavaRDD<GenericRecord> newDataRDD;
-    if (dataFormat == SourceDataFormat.AVRO) {
-      newDataRDD = kafkaRDD.map(bytes -> avroConvertor.fromAvroBinary(bytes));
-    } else if (dataFormat == SourceDataFormat.JSON) {
-      newDataRDD = kafkaRDD.map(
-          bytes -> avroConvertor.fromJson(new String(bytes, Charset.forName("utf-8"))));
-    } else {
-      throw new HoodieNotSupportedException("Unsupport data format :" + dataFormat);
-    }
-
-    return new ImmutablePair<>(Optional.of(newDataRDD), CheckpointUtils.offsetsToStr(toOffsets));
+    final AvroConvertor avroConvertor = new AvroConvertor(schemaProvider.getSourceSchema().toString());
+    JavaRDD<GenericRecord> newDataRDD = toAvroRDD(offsetRanges, avroConvertor);
+    return new ImmutablePair<>(Optional.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }
 }

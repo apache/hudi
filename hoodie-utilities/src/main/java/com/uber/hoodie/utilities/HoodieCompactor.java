@@ -80,7 +80,8 @@ public class HoodieCompactor {
       System.exit(1);
     }
     HoodieCompactor compactor = new HoodieCompactor(cfg);
-    compactor.compact(UtilHelpers.buildSparkContext(cfg.tableName, cfg.sparkMaster, cfg.sparkMemory), cfg.retry);
+    compactor.compact(UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),
+        cfg.retry);
   }
 
   public int compact(JavaSparkContext jsc, int retry) {

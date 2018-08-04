@@ -20,14 +20,14 @@ package com.uber.hoodie.utilities.schema;
 
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.util.Arrays;
 import org.apache.avro.Schema;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * A simple schema provider, that reads off files on DFS
@@ -37,33 +37,30 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   /**
    * Configs supported
    */
-  static class Config {
-
-    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.filebased"
-        + ".schemaprovider.source.schema"
-        + ".file";
-    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.filebased"
-        + ".schemaprovider.target.schema"
-        + ".file";
+  public static class Config {
+    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider"
+        + ".source.schema.file";
+    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider"
+        + ".target.schema.file";
   }
 
   private final FileSystem fs;
 
   private final Schema sourceSchema;
 
-  private final Schema targetSchema;
+  private Schema targetSchema;
 
-  public FilebasedSchemaProvider(PropertiesConfiguration config) {
-    super(config);
-    this.fs = FSUtils.getFs(config.getBasePath(), new Configuration());
-
-    DataSourceUtils.checkRequiredProperties(config,
-        Arrays.asList(Config.SOURCE_SCHEMA_FILE_PROP, Config.TARGET_SCHEMA_FILE_PROP));
+  public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+    super(props, jssc);
+    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.SOURCE_SCHEMA_FILE_PROP));
+    this.fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), jssc.hadoopConfiguration());
     try {
       this.sourceSchema = new Schema.Parser().parse(
-          fs.open(new Path(config.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
-      this.targetSchema = new Schema.Parser().parse(
-          fs.open(new Path(config.getString(Config.TARGET_SCHEMA_FILE_PROP))));
+          fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
+      if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
+        this.targetSchema = new Schema.Parser().parse(
+            fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema", ioe);
     }
@@ -76,6 +73,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getTargetSchema() {
-    return targetSchema;
+    if (targetSchema != null) {
+      return targetSchema;
+    } else {
+      return super.getTargetSchema();
+    }
   }
 }

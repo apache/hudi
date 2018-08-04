@@ -16,11 +16,10 @@
  *
  */
 
-import com.uber.hoodie.common.util.SchemaTestUtil
+import com.uber.hoodie.common.util.{SchemaTestUtil, TypedProperties}
 import com.uber.hoodie.exception.HoodieException
 import com.uber.hoodie.{DataSourceWriteOptions, OverwriteWithLatestAvroPayload, SimpleKeyGenerator}
 import org.apache.avro.generic.GenericRecord
-import org.apache.commons.configuration.PropertiesConfiguration
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.AssertionsForJUnit
@@ -39,10 +38,10 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
   }
 
 
-  private def getKeyConfig(recordKeyFieldName: String, paritionPathField: String): PropertiesConfiguration = {
-    val props = new PropertiesConfiguration()
-    props.addProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, recordKeyFieldName)
-    props.addProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, paritionPathField)
+  private def getKeyConfig(recordKeyFieldName: String, paritionPathField: String): TypedProperties = {
+    val props = new TypedProperties()
+    props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, recordKeyFieldName)
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, paritionPathField)
     props
   }
 
@@ -52,24 +51,26 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
     assertEquals("field1", hk1.getRecordKey)
     assertEquals("name1", hk1.getPartitionPath)
 
-    // recordKey field not specified
+    // partition path field not specified
     try {
-      val props = new PropertiesConfiguration()
-      props.addProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
+      val props = new TypedProperties()
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
       new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: IllegalArgumentException => {
         // do nothing
       }
     };
 
-    // partitionPath field is null
+    // recordkey field not specified
     try {
-      new SimpleKeyGenerator(getKeyConfig("field1", null)).getKey(baseRecord)
+      val props = new TypedProperties()
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionField")
+      new SimpleKeyGenerator(props).getKey(baseRecord)
       fail("Should have errored out")
     } catch {
-      case e: HoodieException => {
+      case e: IllegalArgumentException => {
         // do nothing
       }
     };
@@ -90,6 +91,11 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
         // do nothing
       }
     };
+
+    // if partition path can't be found, return default partition path
+    val hk3 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere"))
+      .getKey(baseRecord);
+    assertEquals("default", hk3.getPartitionPath)
   }
 
   @Test def testOverwriteWithLatestAvroPayload() = {

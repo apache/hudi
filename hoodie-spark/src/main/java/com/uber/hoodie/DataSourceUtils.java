@@ -21,6 +21,8 @@ package com.uber.hoodie;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.ReflectionUtils;
+import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -31,8 +33,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.commons.lang3.reflect.ConstructorUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -72,10 +72,9 @@ public class DataSourceUtils {
    * Create a key generator class via reflection, passing in any configs needed
    */
   public static KeyGenerator createKeyGenerator(String keyGeneratorClass,
-      PropertiesConfiguration cfg) throws IOException {
+      TypedProperties props) throws IOException {
     try {
-      return (KeyGenerator) ConstructorUtils
-          .invokeConstructor(Class.forName(keyGeneratorClass), (Object) cfg);
+      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
     }
@@ -87,17 +86,17 @@ public class DataSourceUtils {
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record,
       Comparable orderingVal) throws IOException {
     try {
-      return (HoodieRecordPayload) ConstructorUtils.invokeConstructor(Class.forName(payloadClass),
-          (Object) record, (Object) orderingVal);
+      return (HoodieRecordPayload) ReflectionUtils
+          .loadClass(payloadClass, new Class<?>[]{GenericRecord.class, Comparable.class}, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
   }
 
-  public static void checkRequiredProperties(PropertiesConfiguration configuration,
+  public static void checkRequiredProperties(TypedProperties props,
       List<String> checkPropNames) {
     checkPropNames.stream().forEach(prop -> {
-      if (!configuration.containsKey(prop)) {
+      if (!props.containsKey(prop)) {
         throw new HoodieNotSupportedException("Required property " + prop + " is missing");
       }
     });

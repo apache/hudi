@@ -75,7 +75,9 @@ public class HDFSParquetImporter implements Serializable {
       System.exit(1);
     }
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
-    dataImporter.dataImport(UtilHelpers.buildSparkContext(cfg.tableName, cfg.sparkMaster, cfg.sparkMemory), cfg.retry);
+    dataImporter
+        .dataImport(UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),
+            cfg.retry);
   }
 
   public int dataImport(JavaSparkContext jsc, int retry) throws Exception {
@@ -206,19 +208,6 @@ public class HDFSParquetImporter implements Serializable {
     }
   }
 
-  public static class SourceTypeValidator implements IValueValidator<String> {
-
-    List<String> validSourceTypes = Arrays.asList("hdfs");
-
-    @Override
-    public void validate(String name, String value) throws ParameterException {
-      if (value == null || !validSourceTypes.contains(value)) {
-        throw new ParameterException(String.format(
-            "Invalid source type: value:%s: supported source types:%s", value, validSourceTypes));
-      }
-    }
-  }
-
   public static class Config implements Serializable {
 
     @Parameter(names = {"--command", "-c"},
@@ -228,10 +217,6 @@ public class HDFSParquetImporter implements Serializable {
     @Parameter(names = {"--src-path",
         "-sp"}, description = "Base path for the input dataset", required = true)
     public String srcPath = null;
-    @Parameter(names = {"--src-type",
-        "-st"}, description = "Source type for the input dataset", required = true,
-        validateValueWith = SourceTypeValidator.class)
-    public String srcType = null;
     @Parameter(names = {"--target-path",
         "-tp"}, description = "Base path for the target hoodie dataset", required = true)
     public String targetPath = null;

@@ -19,36 +19,29 @@
 package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.io.Serializable;
-import java.util.Optional;
+import io.confluent.kafka.serializers.KafkaAvroDecoder;
+import kafka.serializer.StringDecoder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.streaming.kafka.KafkaUtils;
+import org.apache.spark.streaming.kafka.OffsetRange;
 
 /**
- * Represents a source from which we can tail data. Assumes a constructor that takes properties.
+ * Reads avro serialized Kafka data, based on the confluent schema-registry
  */
-public abstract class Source implements Serializable {
+public class AvroKafkaSource extends KafkaSource {
 
-  protected transient TypedProperties props;
-
-  protected transient JavaSparkContext sparkContext;
-
-  protected transient SchemaProvider schemaProvider;
-
-
-  protected Source(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    this.props = props;
-    this.sparkContext = sparkContext;
-    this.schemaProvider = schemaProvider;
+  public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
+    super(props, sparkContext, schemaProvider);
   }
 
-  /**
-   * Fetches new data upto sourceLimit, from the provided checkpoint and returns an RDD of the
-   * data, as well as the checkpoint to be written as a result of that.
-   */
-  public abstract Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr, long sourceLimit);
+  @Override
+  protected JavaRDD<GenericRecord> toAvroRDD(OffsetRange[] offsetRanges, AvroConvertor avroConvertor) {
+    JavaRDD<GenericRecord> recordRDD = KafkaUtils
+        .createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class, kafkaParams,
+            offsetRanges).values().map(obj -> (GenericRecord) obj);
+    return recordRDD;
+  }
 }

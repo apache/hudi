@@ -21,6 +21,7 @@ package com.uber.hoodie.utilities.keygen;
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 import java.io.Serializable;
@@ -30,7 +31,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.TimeZone;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.configuration.PropertiesConfiguration;
 
 /**
  * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -64,7 +64,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         + ".dateformat";
   }
 
-  public TimestampBasedKeyGenerator(PropertiesConfiguration config) {
+  public TimestampBasedKeyGenerator(TypedProperties config) {
     super(config);
     DataSourceUtils.checkRequiredProperties(config,
         Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
