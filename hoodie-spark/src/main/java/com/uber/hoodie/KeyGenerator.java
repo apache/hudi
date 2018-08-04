@@ -19,9 +19,9 @@
 package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.util.TypedProperties;
 import java.io.Serializable;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.configuration.PropertiesConfiguration;
 
 /**
  * Abstract class to extend for plugging in extraction of
@@ -30,9 +30,9 @@ import org.apache.commons.configuration.PropertiesConfiguration;
  */
 public abstract class KeyGenerator implements Serializable {
 
-  protected transient PropertiesConfiguration config;
+  protected transient TypedProperties config;
 
-  protected KeyGenerator(PropertiesConfiguration config) {
+  protected KeyGenerator(TypedProperties config) {
     this.config = config;
   }
 

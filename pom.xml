@@ -116,6 +116,7 @@
     <maven-dependency-plugin.version>2.10</maven-dependency-plugin.version>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
+    <fasterxml.version>2.6.5</fasterxml.version>
     <parquet.version>1.8.1</parquet.version>
     <junit.version>4.11</junit.version>
     <mockito.version>1.9.5</mockito.version>
@@ -376,6 +377,16 @@
         <artifactId>hadoop-client</artifactId>
         <version>${hadoop.version}-cdh${cdh.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.servlet</groupId>
+            <artifactId>servlet-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>
@@ -427,6 +438,12 @@
         <artifactId>hive-common</artifactId>
         <version>${hive.version}-cdh${cdh.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -482,12 +499,28 @@
         <artifactId>spark-core_2.11</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.**</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.servlet</groupId>
+            <artifactId>servlet-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-sql_2.11</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.**</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>
@@ -561,8 +594,33 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-annotations</artifactId>
-        <version>2.6.0</version>
+        <version>${fasterxml.version}</version>
       </dependency>
+
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+        <version>${fasterxml.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>${fasterxml.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.fasterxml.jackson.module</groupId>
+        <artifactId>jackson-module-scala_2.11</artifactId>
+        <version>${fasterxml.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-core-asl</artifactId>
+        <version>1.9.13</version>
+      </dependency>
+
       <dependency>
         <groupId>org.codehaus.jackson</groupId>
         <artifactId>jackson-mapper-asl</artifactId>
@@ -573,6 +631,12 @@
         <groupId>org.apache.hive</groupId>
         <artifactId>hive-jdbc</artifactId>
         <version>${hive.version}-cdh${cdh.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.fasterxml.jackson.*</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>
@@ -596,6 +660,26 @@
         <artifactId>hadoop-hdfs</artifactId>
         <classifier>tests</classifier>
         <version>${hadoop.version}-cdh${cdh.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.codehaus</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <!-- Need these exclusions to make sure JavaSparkContext can be setup. https://issues.apache.org/jira/browse/SPARK-1693 -->
+          <exclusion>
+            <groupId>org.mortbay.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.servlet.jsp</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.servlet</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
+        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>

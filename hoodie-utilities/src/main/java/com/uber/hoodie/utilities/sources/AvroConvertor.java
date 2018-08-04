@@ -27,7 +27,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 /**
- * Convert a variety of {@link SourceDataFormat} into Avro GenericRecords. Has a bunch of lazy
+ * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy
  * fields to circumvent issues around serializing these objects from driver to executors
  */
 public class AvroConvertor implements Serializable {
@@ -80,6 +80,10 @@ public class AvroConvertor implements Serializable {
     initSchema();
     initJsonConvertor();
     return jsonConverter.convert(json);
+  }
+
+  public Schema getSchema() {
+    return new Schema.Parser().parse(schemaStr);
   }
 
 

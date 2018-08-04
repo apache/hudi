@@ -65,7 +65,6 @@ public class HoodieTestDataGenerator {
       DEFAULT_THIRD_PARTITION_PATH
   };
   public static final int DEFAULT_PARTITION_DEPTH = 3;
-
   public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},"
       + "{\"name\": \"_row_key\", \"type\": \"string\"},"
@@ -78,6 +77,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\":\"fare\",\"type\": \"double\"}]}";
   public static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
   private static Random rand = new Random(46474747);
+
   private List<KeyPartition> existingKeysList = new ArrayList<>();
   private String[] partitionPaths;
 
@@ -160,10 +160,6 @@ public class HoodieTestDataGenerator {
     } finally {
       os.close();
     }
-  }
-
-  public static void createSavepointFile(String basePath, String commitTime) throws IOException {
-    createSavepointFile(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
   }
 
   public static void createSavepointFile(String basePath, String commitTime, Configuration configuration)
@@ -289,8 +285,11 @@ public class HoodieTestDataGenerator {
     return partitionPaths;
   }
 
-  static class KeyPartition {
+  public List<KeyPartition> getExistingKeysList() {
+    return existingKeysList;
+  }
 
+  public static class KeyPartition {
     HoodieKey key;
     String partitionPath;
   }

@@ -4,22 +4,117 @@ keywords: incremental processing
 sidebar: mydoc_sidebar
 permalink: incremental_processing.html
 toc: false
-summary: In this page, we will discuss incremental processing primitives that Hoodie has to offer.
+summary: In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes.
 ---
 
 As discussed in the concepts section, the two basic primitives needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
 data using Hoodie are `upserts` (to apply changes to a dataset) and `incremental pulls` (to obtain a change stream/log from a dataset). This section
 discusses a few tools that can be used to achieve these on different contexts.
 
-{% include callout.html content="Instructions are currently only for Copy-on-write storage. When merge-on-read storage is added, these tools would be revised to add that support" type="info" %}
+## Ingesting/Writing Data
 
-
-## Upserts
-
-Upserts can be used to apply a delta or an incremental change to a Hoodie dataset. For e.g, the incremental changes could be from a Kafka topic or files uploaded to HDFS or
+Following means can be used to apply a delta or an incremental change to a Hoodie dataset. For e.g, the incremental changes could be from a Kafka topic or files uploaded to HDFS or
 even changes pulled from another Hoodie dataset.
 
-#### Via Spark Job
+#### DeltaStreamer Tool
+
+The `HoodieDeltaStreamer` utility provides the way to achieve all of these, by using the capabilities of `HoodieWriteClient`, and support simply row-row ingestion (no transformations)
+from different sources such as DFS or Kafka.
+
+The tool is a spark job (part of hoodie-utilities), that provides the following functionality
+
+ - Ability to consume new events from Kafka, incremental imports from Sqoop or output of `HiveIncrementalPuller` or files under a folder on HDFS
+ - Support json, avro or a custom payload types for the incoming data
+ - New data is written to a Hoodie dataset, with support for checkpointing & schemas and registered onto Hive
+
+Command line options describe capabilities in more detail (first build hoodie-utilities using `mvn clean package`).
+
+```
+[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` --help
+Usage: <main class> [options]
+  Options:
+    --help, -h
+
+    --key-generator-class
+      Subclass of com.uber.hoodie.KeyGenerator to generate a HoodieKey from
+      the given avro record. Built in: SimpleKeyGenerator (uses provided field
+      names as recordkey & partitionpath. Nested fields specified via dot
+      notation, e.g: a.b.c)
+      Default: com.uber.hoodie.SimpleKeyGenerator
+    --op
+      Takes one of these values : UPSERT (default), INSERT (use when input is
+      purely new data/inserts to gain speed)
+      Default: UPSERT
+      Possible Values: [UPSERT, INSERT, BULK_INSERT]
+    --payload-class
+      subclass of HoodieRecordPayload, that works off a GenericRecord.
+      Implement your own, if you want to do something other than overwriting
+      existing value
+      Default: com.uber.hoodie.OverwriteWithLatestAvroPayload
+    --props
+      path to properties file on localfs or dfs, with configurations for
+      hoodie client, schema provider, key generator and data source. For
+      hoodie client props, sane defaults are used, but recommend use to
+      provide basic things like metrics endpoints, hive configs etc. For
+      sources, referto individual classes, for supported properties.
+      Default: file:///Users/vinoth/bin/hoodie/src/test/resources/delta-streamer-config/dfs-source.properties
+    --schemaprovider-class
+      subclass of com.uber.hoodie.utilities.schema.SchemaProvider to attach
+      schemas to input & target table data, built in options:
+      FilebasedSchemaProvider
+      Default: com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+    --source-class
+      Subclass of com.uber.hoodie.utilities.sources to read data. Built-in
+      options: com.uber.hoodie.utilities.sources.{JsonDFSSource (default),
+      AvroDFSSource, JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}
+      Default: com.uber.hoodie.utilities.sources.JsonDFSSource
+    --source-limit
+      Maximum amount of data to read from source. Default: No limit For e.g:
+      DFSSource => max bytes to read, KafkaSource => max events to read
+      Default: 9223372036854775807
+    --source-ordering-field
+      Field within source record to decide how to break ties between records
+      with same key in input data. Default: 'ts' holding unix timestamp of
+      record
+      Default: ts
+    --spark-master
+      spark master to use.
+      Default: local[2]
+  * --target-base-path
+      base path for the target hoodie dataset. (Will be created if did not
+      exist first time around. If exists, expected to be a hoodie dataset)
+  * --target-table
+      name of the target table in Hive
+
+
+```
+
+
+The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
+provided under `hoodie-utilities/src/test/resources/delta-streamer-config`.
+
+For e.g: once you have Confluent Kafka, Schema registry up & running, produce some test data using ([impressions.avro](https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html) provided by schema-registry repo)
+
+```
+[confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
+```
+
+and then ingest it as follows.
+
+```
+[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` \
+  --props file://${PWD}/hoodie-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
+  --schemaprovider-class com.uber.hoodie.utilities.schema.SchemaRegistryProvider \
+  --source-class com.uber.hoodie.utilities.sources.AvroKafkaSource \
+  --source-ordering-field impresssiontime \
+  --target-base-path file:///tmp/hoodie-deltastreamer-op --target-table uber.impressions \
+  --op BULK_INSERT
+```
+
+In some cases, you may want to convert your existing dataset into Hoodie, before you can begin ingesting new data. This can be accomplished using the `hdfsparquetimport` command on the `hoodie-cli`.
+Currently, there is support for converting parquet datasets.
+
+#### Via Custom Spark Job
 
 The `hoodie-spark` module offers the DataSource API to write any data frame into a Hoodie dataset. Following is how we can upsert a dataframe, while specifying the field names that need to be used
 for `recordKey => _row_key`, `partitionPath => partition` and `precombineKey => timestamp`
@@ -38,100 +133,6 @@ inputDF.write()
 ```
 
 Please refer to [configurations](configurations.html) section, to view all datasource options.
-
-
-#### DeltaStreamer Tool
-
-The `HoodieDeltaStreamer` utility provides the way to achieve all of these, by using the capabilities of `HoodieWriteClient`.
-
-The tool is a spark job (part of hoodie-utilities), that provides the following functionality
-
- - Ability to consume new events from Kafka, incremental imports from Sqoop or output of `HiveIncrementalPuller` or files under a folder on HDFS
- - Support json, avro or a custom payload types for the incoming data
- - New data is written to a Hoodie dataset, with support for checkpointing & schemas and registered onto Hive
-
- To understand more
-
-```
-
-[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer hoodie-utilities/target/hoodie-utilities-0.3.6-SNAPSHOT-bin.jar --help
-Usage: <main class> [options]
-  Options:
-    --help, -h
-       Default: false
-    --hoodie-client-config
-       path to properties file on localfs or dfs, with hoodie client config.
-       Sane defaultsare used, but recommend use to provide basic things like metrics
-       endpoints, hive configs etc
-    --key-generator-class
-       Subclass of com.uber.hoodie.utilities.common.KeyExtractor to generatea
-       HoodieKey from the given avro record. Built in: SimpleKeyGenerator (Uses provided
-       field names as recordkey & partitionpath. Nested fields specified via dot
-       notation, e.g: a.b.c)
-       Default: com.uber.hoodie.utilities.keygen.SimpleKeyGenerator
-    --key-generator-config
-       Path to properties file on localfs or dfs, with KeyGenerator configs. For
-       list of acceptable properites, refer the KeyGenerator class
-    --max-input-bytes
-       Maximum number of bytes to read from source. Default: 1TB
-       Default: 1099511627776
-    --op
-       Takes one of these values : UPSERT (default), INSERT (use when input is
-       purely new data/inserts to gain speed)
-       Default: UPSERT
-       Possible Values: [UPSERT, INSERT]
-    --payload-class
-       subclass of HoodieRecordPayload, that works off a GenericRecord. Default:
-       SourceWrapperPayload. Implement your own, if you want to do something other than overwriting
-       existing value
-       Default: com.uber.hoodie.utilities.deltastreamer.DeltaStreamerAvroPayload
-    --schemaprovider-class
-       subclass of com.uber.hoodie.utilities.schema.SchemaProvider to attach
-       schemas to input & target table data, built in options: FilebasedSchemaProvider
-       Default: com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
-    --schemaprovider-config
-       path to properties file on localfs or dfs, with schema configs. For list
-       of acceptable properties, refer the schema provider class
-    --source-class
-       subclass of com.uber.hoodie.utilities.sources.Source to use to read data.
-       built-in options: com.uber.hoodie.utilities.common.{DFSSource (default),
-       KafkaSource, HiveIncrPullSource}
-       Default: com.uber.hoodie.utilities.sources.DFSSource
-     --source-config
-       path to properties file on localfs or dfs, with source configs. For list
-       of acceptable properties, refer the source class
-    --source-format
-       Format of data in source, JSON (default), Avro. All source data is
-       converted to Avro using the provided schema in any case
-       Default: JSON
-       Possible Values: [AVRO, JSON, ROW, CUSTOM]
-    --source-ordering-field
-       Field within source record to decide how to break ties between  records
-       with same key in input data. Default: 'ts' holding unix timestamp of record
-       Default: ts
-    --target-base-path
-       base path for the target hoodie dataset
-    --target-table
-       name of the target table in Hive
-
-
-```
-
-For e.g, followings ingests data from Kafka (avro records as the client example)
-
-
-```
-[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer hoodie-utilities/target/hoodie-utilities-0.3.6-SNAPSHOT-bin.jar \
-     --hoodie-client-config hoodie-utilities/src/main/resources/delta-streamer-config/hoodie-client.properties \
-     --key-generator-config hoodie-utilities/src/main/resources/delta-streamer-config/key-generator.properties \
-      --schemaprovider-config hoodie-utilities/src/main/resources/delta-streamer-config/schema-provider.properties \
-      --source-class com.uber.hoodie.utilities.sources.KafkaSource \
-      --source-config hoodie-utilities/src/main/resources/delta-streamer-config/source.properties \
-      --source-ordering-field rider \
-      --target-base-path file:///tmp/hoodie-deltastreamer-op \
-      --target-table uber.trips
-```
-
 
 #### Syncing to Hive
 
@@ -164,7 +165,7 @@ Usage: <main class> [options]
 {% include callout.html content="Note that for now, due to jar mismatches between Spark & Hive, its recommended to run this as a separate Java task in your workflow manager/cron. This is getting fix [here](https://github.com/uber/hoodie/issues/123)" type="info" %}
 
 
-## Incremental Pull
+## Incrementally Pulling
 
 Hoodie datasets can be pulled incrementally, which means you can get ALL and ONLY the updated & new rows since a specified commit timestamp.
 This, together with upserts, are particularly useful for building data pipelines where 1 or more source hoodie tables are incrementally pulled (streams/facts),

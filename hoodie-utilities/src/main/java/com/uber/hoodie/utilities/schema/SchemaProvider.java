@@ -18,22 +18,29 @@
 
 package com.uber.hoodie.utilities.schema;
 
+import com.uber.hoodie.common.util.TypedProperties;
 import java.io.Serializable;
 import org.apache.avro.Schema;
-import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.spark.api.java.JavaSparkContext;
 
 /**
  * Class to provide schema for reading data and also writing into a Hoodie table
  */
 public abstract class SchemaProvider implements Serializable {
 
-  protected PropertiesConfiguration config;
+  protected TypedProperties config;
 
-  protected SchemaProvider(PropertiesConfiguration config) {
-    this.config = config;
+  protected JavaSparkContext jssc;
+
+  protected SchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+    this.config = props;
+    this.jssc = jssc;
   }
 
   public abstract Schema getSourceSchema();
 
-  public abstract Schema getTargetSchema();
+  public Schema getTargetSchema() {
+    // by default, use source schema as target for hoodie dataset as well
+    return getSourceSchema();
+  }
 }

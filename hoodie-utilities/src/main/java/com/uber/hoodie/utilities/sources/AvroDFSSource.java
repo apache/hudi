@@ -19,36 +19,29 @@
 package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.io.Serializable;
-import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.mapred.AvroKey;
+import org.apache.avro.mapreduce.AvroKeyInputFormat;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Represents a source from which we can tail data. Assumes a constructor that takes properties.
+ * DFS Source that reads avro data
  */
-public abstract class Source implements Serializable {
+public class AvroDFSSource extends DFSSource {
 
-  protected transient TypedProperties props;
-
-  protected transient JavaSparkContext sparkContext;
-
-  protected transient SchemaProvider schemaProvider;
-
-
-  protected Source(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    this.props = props;
-    this.sparkContext = sparkContext;
-    this.schemaProvider = schemaProvider;
+  public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
+    super(props, sparkContext, schemaProvider);
   }
 
-  /**
-   * Fetches new data upto sourceLimit, from the provided checkpoint and returns an RDD of the
-   * data, as well as the checkpoint to be written as a result of that.
-   */
-  public abstract Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr, long sourceLimit);
+  @Override
+  protected JavaRDD<GenericRecord> fromFiles(AvroConvertor convertor, String pathStr) {
+    JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
+        AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
+        sparkContext.hadoopConfiguration());
+    return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
+  }
 }
