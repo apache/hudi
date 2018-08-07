@@ -62,6 +62,11 @@ public class HoodieWriteStat implements Serializable {
   private long numUpdateWrites;
 
   /**
+   * Total number of insert records or converted to updates (for small file handling)
+   */
+  private long numInserts;
+
+  /**
    * Total size of file written
    */
   private long totalWriteBytes;
@@ -160,6 +165,10 @@ public class HoodieWriteStat implements Serializable {
     this.numUpdateWrites = numUpdateWrites;
   }
 
+  public void setNumInserts(long numInserts) {
+    this.numInserts = numInserts;
+  }
+
   public long getTotalWriteBytes() {
     return totalWriteBytes;
   }
@@ -190,6 +199,10 @@ public class HoodieWriteStat implements Serializable {
 
   public long getNumUpdateWrites() {
     return numUpdateWrites;
+  }
+
+  public long getNumInserts() {
+    return numInserts;
   }
 
   public String getFileId() {
