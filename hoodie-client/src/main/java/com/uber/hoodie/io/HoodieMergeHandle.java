@@ -67,6 +67,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   private long recordsWritten = 0;
   private long recordsDeleted = 0;
   private long updatedRecordsWritten = 0;
+  private long insertRecordsWritten = 0;
 
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Iterator<HoodieRecord<T>> recordItr, String fileId) {
@@ -173,14 +174,19 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     return partitionPath;
   }
 
-  private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord,
-      Optional<IndexedRecord> indexedRecord) {
+  private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, Optional<IndexedRecord> indexedRecord) {
+    if (indexedRecord.isPresent()) {
+      updatedRecordsWritten++;
+    }
+    return writeRecord(hoodieRecord, indexedRecord);
+  }
+
+  private boolean writeRecord(HoodieRecord<T> hoodieRecord, Optional<IndexedRecord> indexedRecord) {
     Optional recordMetadata = hoodieRecord.getData().getMetadata();
     try {
       if (indexedRecord.isPresent()) {
         storageWriter.writeAvroWithMetadata(indexedRecord.get(), hoodieRecord);
         recordsWritten++;
-        updatedRecordsWritten++;
       } else {
         recordsDeleted++;
       }
@@ -256,7 +262,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
         String key = pendingRecordsItr.next();
         if (!writtenRecordKeys.contains(key)) {
           HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
-          writeUpdateRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(schema));
+          writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(schema));
+          insertRecordsWritten++;
         }
       }
       keyToNewRecords.clear();
@@ -270,6 +277,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
+      writeStatus.getStat().setNumInserts(insertRecordsWritten);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());

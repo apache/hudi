@@ -61,6 +61,11 @@
                         "name":"totalUpdatedRecordsCompacted",
                         "type":["null","long"],
                         "default" : null
+                     },
+                     {
+                        "name":"numInserts",
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }
