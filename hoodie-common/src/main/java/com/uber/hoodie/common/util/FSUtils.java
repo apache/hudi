@@ -246,6 +246,15 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
+  /**
+   * Get the last part of the file name in the log file and convert to int.
+   */
+  public static String getPartitionPathFromFilePath(Path filePath) {
+    String [] pathElements = filePath.toUri().toString().split("/");
+    return String.format("%s/%s/%s", pathElements[pathElements.length - 4], pathElements[pathElements.length - 3],
+        pathElements[pathElements.length - 2]);
+  }
+
   public static String makeLogFileName(String fileId, String logFileExtension,
       String baseCommitTime, int version) {
     return LOG_FILE_PREFIX + String
