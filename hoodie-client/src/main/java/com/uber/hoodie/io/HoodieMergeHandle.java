@@ -83,8 +83,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     super(config, commitTime, hoodieTable);
     this.fileSystemView = hoodieTable.getROFileSystemView();
     this.keyToNewRecords = keyToNewRecords;
-    init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get())
-        .getPartitionPath(), dataFileToBeMerged);
+    if (dataFileToBeMerged.isPresent()) {
+      init(fileId, FSUtils.getPartitionPathFromFilePath(dataFileToBeMerged.get().getFileStatus().getPath()),
+          dataFileToBeMerged);
+    } else {
+      init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get())
+          .getPartitionPath(), dataFileToBeMerged);
+    }
   }
 
   /**

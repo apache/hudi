@@ -21,13 +21,16 @@ import static org.junit.Assert.assertTrue;
 
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.FileSlice;
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.table.TableFileSystemView.RealtimeView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -43,13 +46,17 @@ import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -188,6 +195,53 @@ public class TestHoodieCompactor {
           .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath))
           .count() > 0);
     }
+  }
+
+  @Test
+  public void testParquetWithoutUpdatesWrittenFromDeltaCommitGetsCompacted() throws Exception {
+    // insert 100 records
+    HoodieWriteConfig config = getConfig();
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    String newCommitTime = "100";
+    writeClient.startCommitWithTime(newCommitTime);
+    // Write new parquet files as deltacommit
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    final RealtimeView rtView = table.getRTFileSystemView();
+    List<HoodieDataFile> dataFiles = statuses.stream().map(status -> {
+      return rtView.getLatestFileSlices(status.getPartitionPath()); }).flatMap(fileSliceStream -> fileSliceStream)
+        .map(fileSlice -> fileSlice.getDataFile().get()).collect(Collectors.toList());
+    Assert.assertTrue(dataFiles.size() > 0);
+    // Ensure that these parquet files are picked up as part of compaction
+    String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+    HoodieRealtimeTableCompactor tableCompactor = new HoodieRealtimeTableCompactor();
+    HoodieCompactionPlan hoodieCompactionPlan = tableCompactor.generateCompactionPlan(jsc, table, config,
+        compactionInstantTime, new HashSet<>());
+    Assert.assertEquals(hoodieCompactionPlan.getOperations().size(), statuses.size());
+    // Compact these parquet files
+    compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+    writeClient.scheduleCompactionAtInstant(compactionInstantTime, Optional.empty());
+    JavaRDD<WriteStatus> result = writeClient.compact(compactionInstantTime);
+    writeClient.commitCompaction(compactionInstantTime, result, Optional.empty());
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    final RealtimeView rtView2 = table.getRTFileSystemView();
+    List<HoodieDataFile> dataFiles2 = statuses.stream().map(status -> {
+      return rtView2.getLatestFileSlices(status.getPartitionPath()); }).flatMap(fileSliceStream -> fileSliceStream)
+        .map(fileSlice -> fileSlice.getDataFile().get()).collect(Collectors.toList());
+    Set<Long> oldFileSizes = dataFiles.stream().map(dataFile -> dataFile.getFileSize()).collect(Collectors.toSet());
+    Set<Long> newFileSizes = dataFiles2.stream().map(dataFile -> dataFile.getFileSize()).collect(Collectors.toSet());
+    // Make sure that the new parquet files written are of the same size (since there were no updates)
+    Assert.assertTrue(oldFileSizes.containsAll(newFileSizes));
+    // Now, these new parquet files should not be picked up for compaction again
+    compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+    tableCompactor = new HoodieRealtimeTableCompactor();
+    hoodieCompactionPlan = tableCompactor.generateCompactionPlan(jsc, table, config, compactionInstantTime, new
+        HashSet<>());
+    Assert.assertEquals(hoodieCompactionPlan.getOperations().size(), 0);
   }
 
   // TODO - after modifying HoodieReadClient to support realtime tables - add more tests to make
