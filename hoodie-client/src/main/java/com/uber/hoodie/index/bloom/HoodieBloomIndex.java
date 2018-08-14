@@ -303,7 +303,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * if we dont have key ranges, then also we need to compare against the file. no other choice if
    * we do, then only compare the file if the record key falls in range.
    */
-  private boolean shouldCompareWithFile(BloomIndexFileInfo indexInfo, String recordKey) {
+  boolean shouldCompareWithFile(BloomIndexFileInfo indexInfo, String recordKey) {
     return !indexInfo.hasKeyRanges() || indexInfo.isKeyInRange(recordKey);
   }
 
@@ -313,10 +313,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * record's key needs to be checked. For datasets, where the keys have a definite insert order
    * (e.g: timestamp as prefix), the number of files to be compared gets cut down a lot from range
    * pruning.
+   *
+   * Sub-partition to ensure the records can be looked up against files & also prune
+   * file<=>record comparisons based on recordKey
+   * ranges in the index info.
    */
-  // sub-partition to ensure the records can be looked up against files & also prune
-  // file<=>record comparisons based on recordKey
-  // ranges in the index info.
   @VisibleForTesting
   JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,

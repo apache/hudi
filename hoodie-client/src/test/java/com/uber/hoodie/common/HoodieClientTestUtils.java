@@ -18,29 +18,36 @@ package com.uber.hoodie.common;
 
 import com.uber.hoodie.HoodieReadClient;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.exception.HoodieException;
+import com.uber.hoodie.io.storage.HoodieParquetConfig;
+import com.uber.hoodie.io.storage.HoodieParquetWriter;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -173,5 +180,60 @@ public class HoodieClientTestUtils {
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie dataset as a dataframe", e);
     }
+  }
+
+  public static String writeParquetFile(String basePath,
+                                        String partitionPath,
+                                        String filename,
+                                        List<HoodieRecord> records,
+                                        Schema schema,
+                                        BloomFilter filter,
+                                        boolean createCommitTime) throws IOException {
+
+    if (filter == null) {
+      filter = new BloomFilter(10000, 0.0000001);
+    }
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema,
+        filter);
+    String commitTime = FSUtils.getCommitTime(filename);
+    HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
+        ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
+        HoodieTestUtils.getDefaultHadoopConf(),
+        Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
+    HoodieParquetWriter writer = new HoodieParquetWriter(
+        commitTime,
+        new Path(basePath + "/" + partitionPath + "/" + filename),
+        config,
+        schema);
+    int seqId = 1;
+    for (HoodieRecord record : records) {
+      GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
+      HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, commitTime, "" + seqId++);
+      HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), filename);
+      writer.writeAvro(record.getRecordKey(), avroRecord);
+      filter.add(record.getRecordKey());
+    }
+    writer.close();
+
+    if (createCommitTime) {
+      HoodieTestUtils.createMetadataFolder(basePath);
+      HoodieTestUtils.createCommitFiles(basePath, commitTime);
+    }
+    return filename;
+  }
+
+  public static String writeParquetFile(String basePath,
+                                        String partitionPath,
+                                        List<HoodieRecord> records,
+                                        Schema schema,
+                                        BloomFilter filter,
+                                        boolean createCommitTime) throws IOException, InterruptedException {
+    Thread.sleep(1000);
+    String commitTime = HoodieTestUtils.makeNewCommitTime();
+    String fileId = UUID.randomUUID().toString();
+    String filename = FSUtils.makeDataFileName(commitTime, 1, fileId);
+    HoodieTestUtils.createCommitFiles(basePath, commitTime);
+    return HoodieClientTestUtils
+        .writeParquetFile(basePath, partitionPath, filename, records, schema, filter, createCommitTime);
   }
 }

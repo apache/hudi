@@ -24,6 +24,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
+import com.uber.hoodie.index.bloom.HoodieGlobalBloomIndex;
 import com.uber.hoodie.index.bucketed.BucketedIndex;
 import com.uber.hoodie.index.hbase.HBaseIndex;
 import com.uber.hoodie.table.HoodieTable;
@@ -53,6 +54,8 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
         return new InMemoryHashIndex<>(config);
       case BLOOM:
         return new HoodieBloomIndex<>(config);
+      case GLOBAL_BLOOM:
+        return new HoodieGlobalBloomIndex<>(config);
       case BUCKETED:
         return new BucketedIndex<>(config);
       default:
@@ -116,6 +119,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
 
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, BUCKETED
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, BUCKETED
   }
 }

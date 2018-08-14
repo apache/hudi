@@ -27,7 +27,6 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
-import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.TestRawTripPayload;
@@ -37,29 +36,19 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.io.storage.HoodieParquetConfig;
-import com.uber.hoodie.io.storage.HoodieParquetWriter;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -173,10 +162,18 @@ public class TestHoodieBloomIndex {
     HoodieRecord record4 = new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()),
         rowChange4);
 
-    writeParquetFile("2016/04/01", "2_0_20160401010101.parquet", Lists.newArrayList(), schema, null, false);
-    writeParquetFile("2015/03/12", "1_0_20150312101010.parquet", Lists.newArrayList(), schema, null, false);
-    writeParquetFile("2015/03/12", "3_0_20150312101010.parquet", Arrays.asList(record1), schema, null, false);
-    writeParquetFile("2015/03/12", "4_0_20150312101010.parquet", Arrays.asList(record2, record3, record4), schema, null,
+    HoodieClientTestUtils
+        .writeParquetFile(basePath, "2016/04/01", "2_0_20160401010101.parquet",
+            Lists.newArrayList(), schema, null, false);
+    HoodieClientTestUtils
+        .writeParquetFile(basePath, "2015/03/12", "1_0_20150312101010.parquet",
+            Lists.newArrayList(), schema, null, false);
+    HoodieClientTestUtils
+        .writeParquetFile(basePath, "2015/03/12", "3_0_20150312101010.parquet",
+            Arrays.asList(record1), schema, null, false);
+    HoodieClientTestUtils
+        .writeParquetFile(basePath, "2015/03/12", "4_0_20150312101010.parquet",
+            Arrays.asList(record2, record3, record4), schema, null,
         false);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
@@ -270,7 +267,9 @@ public class TestHoodieBloomIndex {
     // record2, record3).
     BloomFilter filter = new BloomFilter(10000, 0.0000001);
     filter.add(record3.getRecordKey());
-    String filename = writeParquetFile("2016/01/31", Arrays.asList(record1, record2), schema, filter, true);
+    String filename = HoodieClientTestUtils
+        .writeParquetFile(basePath, "2016/01/31",
+            Arrays.asList(record1, record2), schema, filter, true);
 
     // The bloom filter contains 3 records
     assertTrue(filter.mightContain(record1.getRecordKey()));
@@ -355,9 +354,12 @@ public class TestHoodieBloomIndex {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    String filename1 = writeParquetFile("2016/01/31", Arrays.asList(record1), schema, null, true);
-    String filename2 = writeParquetFile("2016/01/31", Arrays.asList(record2), schema, null, true);
-    String filename3 = writeParquetFile("2015/01/31", Arrays.asList(record4), schema, null, true);
+    String filename1 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
+    String filename2 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
+    String filename3 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
 
     // We do the tag again
     metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
@@ -420,9 +422,12 @@ public class TestHoodieBloomIndex {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    String filename1 = writeParquetFile("2016/01/31", Arrays.asList(record1), schema, null, true);
-    String filename2 = writeParquetFile("2016/01/31", Arrays.asList(record2), schema, null, true);
-    String filename3 = writeParquetFile("2015/01/31", Arrays.asList(record4), schema, null, true);
+    String filename1 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
+    String filename2 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
+    String filename3 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
 
     // We do the tag again
     metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
@@ -468,7 +473,9 @@ public class TestHoodieBloomIndex {
 
     BloomFilter filter = new BloomFilter(10000, 0.0000001);
     filter.add(record2.getRecordKey());
-    String filename = writeParquetFile("2016/01/31", Arrays.asList(record1), schema, filter, true);
+    String filename = HoodieClientTestUtils
+        .writeParquetFile(basePath, "2016/01/31",
+            Arrays.asList(record1), schema, filter, true);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));
 
@@ -491,49 +498,4 @@ public class TestHoodieBloomIndex {
     }
   }
 
-  private String writeParquetFile(String partitionPath, List<HoodieRecord> records, Schema schema, BloomFilter filter,
-      boolean createCommitTime) throws IOException, InterruptedException {
-    Thread.sleep(1000);
-    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-    String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(commitTime, 1, fileId);
-
-    return writeParquetFile(partitionPath, filename, records, schema, filter, createCommitTime);
-  }
-
-  private String writeParquetFile(String partitionPath, String filename, List<HoodieRecord> records, Schema schema,
-      BloomFilter filter, boolean createCommitTime) throws IOException {
-
-    if (filter == null) {
-      filter = new BloomFilter(10000, 0.0000001);
-    }
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema,
-        filter);
-    String commitTime = FSUtils.getCommitTime(filename);
-    HoodieParquetConfig config = new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
-        ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-        HoodieTestUtils.getDefaultHadoopConf(),
-        Double.valueOf(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
-    HoodieParquetWriter writer = new HoodieParquetWriter(
-        commitTime,
-        new Path(basePath + "/" + partitionPath + "/" + filename),
-        config,
-        schema);
-    int seqId = 1;
-    for (HoodieRecord record : records) {
-      GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-      HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, commitTime, "" + seqId++);
-      HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), filename);
-      writer.writeAvro(record.getRecordKey(), avroRecord);
-      filter.add(record.getRecordKey());
-    }
-    writer.close();
-
-    if (createCommitTime) {
-      // Also make sure the commit is valid
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME).mkdirs();
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + ".commit").createNewFile();
-    }
-    return filename;
-  }
 }
