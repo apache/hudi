@@ -126,6 +126,10 @@ public class HoodieTestUtils {
     }
   }
 
+  public static final void createMetadataFolder(String basePath) throws IOException {
+    new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME).mkdirs();
+  }
+
   public static final void createInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
     for (String commitTime : commitTimes) {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
