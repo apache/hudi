@@ -24,6 +24,7 @@ import com.uber.hoodie.HoodieDataSourceHelpers;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import java.util.List;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -65,7 +66,10 @@ public class HoodieJavaApp {
   private String hivePass = "hive";
 
   @Parameter(names = {"--hive-url", "-hl"}, description = "hive JDBC URL")
-  private String hiveJdbcUrl = "jdbc:hive://localhost:10000";
+  private String hiveJdbcUrl = "jdbc:hive2://localhost:10000";
+
+  @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
+  private Boolean useMultiPartitionKeys = false;
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
@@ -188,10 +192,16 @@ public class HoodieJavaApp {
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
           .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
           .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "dateStr")
           .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY(), hiveUser)
           .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(), hivePass)
           .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY(), "true");
+      if (useMultiPartitionKeys) {
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "year,month,day")
+            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+            MultiPartKeysValueExtractor.class.getCanonicalName());
+      } else {
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "dateStr");
+      }
     }
     return writer;
   }

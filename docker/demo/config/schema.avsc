@@ -1,0 +1,41 @@
+{
+  "type":"record",
+  "name":"stock_ticks",
+  "fields":[{
+     "name": "volume",
+     "type": "long"
+  }, {
+     "name": "ts", 
+     "type": "string"
+  }, {
+     "name": "symbol", 
+     "type": "string"
+  },{
+     "name": "year", 
+     "type": "int"
+  },{
+     "name": "month", 
+     "type": "string"
+  },{
+     "name": "high", 
+     "type": "double"
+  },{
+     "name": "low", 
+     "type": "double"
+  },{
+     "name": "key", 
+     "type": "string"
+  },{
+     "name": "date", 
+     "type":"string"
+  }, {
+     "name": "close", 
+     "type": "double"
+  }, {
+     "name": "open", 
+     "type": "double"
+  }, {
+     "name": "day", 
+     "type":"string"
+  }
+]}

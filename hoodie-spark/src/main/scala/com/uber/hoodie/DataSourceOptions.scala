@@ -153,7 +153,7 @@ object DataSourceWriteOptions {
   val HIVE_TABLE_OPT_KEY = "hoodie.datasource.hive_sync.table"
   val HIVE_USER_OPT_KEY = "hoodie.datasource.hive_sync.username"
   val HIVE_PASS_OPT_KEY = "hoodie.datasource.hive_sync.password"
-  val HIVE_URL_OPT_KEY = "hoodie.datasource.hive_sync.jdbcUrl"
+  val HIVE_URL_OPT_KEY = "hoodie.datasource.hive_sync.jdbcurl"
   val HIVE_PARTITION_FIELDS_OPT_KEY = "hoodie.datasource.hive_sync.partition_fields"
   val HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY = "hoodie.datasource.hive_sync.partition_extractor_class"
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~          http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <artifactId>hoodie-hadoop-docker</artifactId>
+    <groupId>com.uber.hoodie</groupId>
+    <version>0.4.5-SNAPSHOT</version>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
+  <packaging>pom</packaging>
+  <artifactId>hoodie-hadoop-hive-docker</artifactId>
+
+  <description>Base Docker Image with Hoodie</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <checkstyle.skip>true</checkstyle.skip>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hadoop-base-docker</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>1.7</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <configuration>
+              <tasks>
+                <copy file="${project.basedir}/../../../../packaging/hoodie-hadoop-mr-bundle/target/hoodie-hadoop-mr-bundle-${project.version}.jar"
+                      tofile="target/hoodie-hadoop-mr-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-${project.version}.jar"
+                      tofile="target/hoodie-hive-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-${project.version}.jar"
+                      tofile="target/hoodie-spark-bundle.jar" />
+                <copy file="${project.basedir}/../../../../hoodie-utilities/target/hoodie-utilities-${project.version}.jar"
+                      tofile="target/hoodie-utilities.jar" />
+              </tasks>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- Build Docker image -->
+      <plugin>
+        <groupId>com.spotify</groupId>
+        <artifactId>dockerfile-maven-plugin</artifactId>
+        <version>${dockerfile.maven.version}</version>
+        <executions>
+          <execution>
+            <id>tag-latest</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>build</goal>
+              <goal>tag</goal>
+              <!-- <goal>push</goal> -->
+            </goals>
+            <configuration>
+              <skip>${docker.build.skip}</skip>
+              <pullNewerImage>false</pullNewerImage>
+              <repository>varadarb/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
+              <forceTags>true</forceTags>
+              <tag>latest</tag>
+            </configuration>
+          </execution>
+          <execution>
+            <id>tag-version</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>build</goal>
+              <goal>tag</goal>
+              <!-- <goal>push</goal> -->
+            </goals>
+            <configuration>
+              <skip>${docker.build.skip}</skip>
+              <pullNewerImage>false</pullNewerImage>
+              <repository>varadarb/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
+              <forceTags>true</forceTags>
+              <tag>${project.version}</tag>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
