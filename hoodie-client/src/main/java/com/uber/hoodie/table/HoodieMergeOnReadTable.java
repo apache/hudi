@@ -296,7 +296,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                                 "Failed to rollback for commit " + commit, io);
                           } finally {
                             try {
-                              writer.close();
+                              if (writer != null) {
+                                writer.close();
+                              }
                             } catch (IOException io) {
                               throw new UncheckedIOException(io);
                             }
