@@ -72,6 +72,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       try {
         this.output = fs.append(path, bufferSize);
       } catch (RemoteException e) {
+        log.warn("Remote Exception, attempting to handle or recover lease", e);
         handleAppendExceptionOrRecoverLease(path, e);
       } catch (IOException ioe) {
         if (ioe.getMessage().equalsIgnoreCase("Not supported")) {
