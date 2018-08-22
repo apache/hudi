@@ -39,6 +39,8 @@
     <module>packaging/hoodie-hadoop-mr-bundle</module>
     <module>packaging/hoodie-hive-bundle</module>
     <module>packaging/hoodie-spark-bundle</module>
+    <module>docker/hoodie/hadoop</module>
+    <module>hoodie-integ-test</module>
   </modules>
 
   <licenses>

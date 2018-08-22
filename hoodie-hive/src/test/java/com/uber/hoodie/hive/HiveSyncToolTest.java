@@ -26,7 +26,6 @@ import com.google.common.collect.Lists;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
-import com.uber.hoodie.hive.util.MultiPartKeysValueExtractor;
 import com.uber.hoodie.hive.util.SchemaUtil;
 import java.io.IOException;
 import java.net.URISyntaxException;

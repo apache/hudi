@@ -1,0 +1,45 @@
+FROM frolvlad/alpine-oraclejdk8
+MAINTAINER Hoodie
+USER root
+
+# Default to UTF-8 file.encoding
+ENV LANG C.UTF-8
+
+# Updating & Installing packages
+RUN apk add net-tools curl bash perl procps
+
+ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_URL=https://www.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
+ENV HADOOP_VERSION ${HADOOP_VERSION}
+ENV HADOOP_URL ${HADOOP_URL}
+
+RUN set -x \
+    && echo "Fetch URL2 is : ${HADOOP_URL}" \
+    && curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz \
+    && curl -fSL "${HADOOP_URL}.asc" -o /tmp/hadoop.tar.gz.asc \
+    && mkdir -p /opt/hadoop-$HADOOP_VERSION/logs \
+    && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
+    && rm /tmp/hadoop.tar.gz* \
+    && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
+    && cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml \
+    && mkdir /hadoop-data
+
+ENV HADOOP_PREFIX=/opt/hadoop-$HADOOP_VERSION
+ENV HADOOP_CONF_DIR=/etc/hadoop
+ENV MULTIHOMED_NETWORK=1
+ENV HADOOP_HOME=${HADOOP_PREFIX}
+ENV HADOOP_INSTALL=${HADOOP_HOME}
+ENV USER=root
+ENV PATH /usr/bin:/bin:$HADOOP_PREFIX/bin/:$PATH
+
+# Exposing a union of ports across hadoop versions
+# Well known ports including ssh
+EXPOSE 0-1024 4040 7000-10100 5000-5100 50000-50200 58188 58088 58042 
+
+ADD entrypoint.sh /entrypoint.sh
+ADD export_container_ip.sh /usr/bin/
+RUN chmod a+x /usr/bin/export_container_ip.sh \
+    && chmod a+x /entrypoint.sh
+
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+

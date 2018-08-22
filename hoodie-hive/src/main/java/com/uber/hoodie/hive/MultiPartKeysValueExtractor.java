@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.hive.util;
+package com.uber.hoodie.hive;
 
-import com.uber.hoodie.hive.PartitionValueExtractor;
 import java.util.Arrays;
 import java.util.List;
 
