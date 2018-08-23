@@ -1,3 +1,25 @@
+Release 0.4.3
+------------------------------------
+
+### Highlights
+ * Ability to run compactions asynchrously & in-parallel to ingestion/write added!!!
+ * Day based compaction does not respect IO budgets i.e agnostic of them
+ * Adds ability to throttle writes to HBase via the HBaseIndex
+ * (Merge on read) Inserts are sent to log files, if they are indexable.
+
+### Full PR List
+
+ * **@n3nash** - Adding ability for inserts to be written to log files #400
+ * **@n3nash** - Fixing bug introducted in rollback for MOR table type with inserts into log files #417
+ * **@n3nash** - Changing Day based compaction strategy to be IO agnostic #398
+ * **@ovj** - Changing access level to protected so that subclasses can access it #421
+ * **@n3nash** - Fixing missing hoodie record location in HoodieRecord when record is read from disk after being spilled #419
+ * **@bvaradar** -  Async compaction - Single Consolidated PR #404
+ * **@bvaradar** - BUGFIX - Use Guava Optional (which is Serializable) in CompactionOperation to avoid NoSerializableException #435
+ * **@n3nash** - Adding another metric to HoodieWriteStat #434
+ * **@n3nash** - Fixing Null pointer exception in finally block #440
+ * **@kaushikd49** - Throttling to limit QPS from HbaseIndex #427
+
 Release 0.4.2
 ------------------------------------
 
