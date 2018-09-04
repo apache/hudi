@@ -18,16 +18,20 @@ package com.uber.hoodie.exception;
 
 import java.io.IOException;
 
-public class HoodieNotSerializableException extends HoodieException {
+public class HoodieSerializationException extends HoodieException {
 
   private IOException ioException;
 
-  public HoodieNotSerializableException(String msg, IOException t) {
+  public HoodieSerializationException(String msg, IOException t) {
     super(msg, t);
     this.ioException = t;
   }
 
-  public HoodieNotSerializableException(String msg) {
+  public HoodieSerializationException(String msg, Exception t) {
+    super(msg, t);
+  }
+
+  public HoodieSerializationException(String msg) {
     super(msg);
   }
 

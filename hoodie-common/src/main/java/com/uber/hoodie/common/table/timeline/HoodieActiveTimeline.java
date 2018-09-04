@@ -24,6 +24,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
@@ -32,7 +33,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
@@ -49,8 +49,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
-  public static final FastDateFormat COMMIT_FORMATTER = FastDateFormat
-      .getInstance("yyyyMMddHHmmss");
+  public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,

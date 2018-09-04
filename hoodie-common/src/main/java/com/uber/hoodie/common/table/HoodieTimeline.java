@@ -19,11 +19,11 @@ package com.uber.hoodie.common.table;
 import com.uber.hoodie.common.table.timeline.HoodieDefaultTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
+import com.uber.hoodie.common.util.StringUtils;
 import java.io.Serializable;
 import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.stream.Stream;
-import org.apache.commons.lang3.StringUtils;
 
 /**
  * HoodieTimeline is a view of meta-data instants in the hoodie dataset. Instants are specific
