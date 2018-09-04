@@ -22,14 +22,14 @@ import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
-import com.uber.hoodie.exception.HoodieNotSerializableException;
+import com.uber.hoodie.common.util.SerializationUtils;
+import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.common.util.collection.Triple;
+import com.uber.hoodie.exception.HoodieSerializationException;
 import java.io.IOException;
 import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.lang3.SerializationUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.commons.lang3.tuple.Triple;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -71,7 +71,7 @@ public class HoodieRecordConverter<V> implements
               hoodieRecord.getKey().getPartitionPath()), Pair.of(currentLocation, newLocation), val);
       return SerializationUtils.serialize(data);
     } catch (IOException io) {
-      throw new HoodieNotSerializableException("Cannot serialize value to bytes", io);
+      throw new HoodieSerializationException("Cannot serialize value to bytes", io);
     }
   }
 
@@ -103,7 +103,7 @@ public class HoodieRecordConverter<V> implements
       hoodieRecord.setNewLocation(newLocation);
       return hoodieRecord;
     } catch (IOException io) {
-      throw new HoodieNotSerializableException("Cannot de-serialize value from bytes", io);
+      throw new HoodieSerializationException("Cannot de-serialize value from bytes", io);
     }
   }
 }

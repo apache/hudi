@@ -23,6 +23,7 @@ import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.IOException;
 import java.util.HashMap;
@@ -32,7 +33,6 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction
