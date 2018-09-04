@@ -23,6 +23,7 @@ import com.uber.hoodie.exception.HoodieException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
@@ -30,7 +31,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.concurrent.ConcurrentUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -130,7 +130,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
               throw e;
             }
           });
-    }).orElse(ConcurrentUtils.constantFuture(null));
+    }).orElse(CompletableFuture.completedFuture(null));
   }
 
   /**

@@ -18,6 +18,7 @@ package com.uber.hoodie.common.table.log.block;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
+import com.uber.hoodie.common.util.StringUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -28,7 +29,6 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
@@ -64,7 +64,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
-    byte[] bytesToWrite = StringUtils.join(getKeysToDelete(), ',')
+    byte[] bytesToWrite = StringUtils.join(getKeysToDelete(), ",")
         .getBytes(Charset.forName("utf-8"));
     output.writeInt(HoodieLogBlock.version);
     output.writeInt(bytesToWrite.length);
