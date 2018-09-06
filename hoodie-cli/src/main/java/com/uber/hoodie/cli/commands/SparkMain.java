@@ -23,6 +23,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
 import com.uber.hoodie.utilities.HDFSParquetImporter;
 import com.uber.hoodie.utilities.HoodieCompactor;
 import org.apache.log4j.Logger;
@@ -68,14 +69,14 @@ public class SparkMain {
             Integer.parseInt(args[7]), args[8], SparkUtil.DEFUALT_SPARK_MASTER, args[9], Integer.parseInt(args[10]));
         break;
       case COMPACT_RUN:
-        assert (args.length == 9);
-        returnCode = compact(jsc, args[1], args[2], args[3], args[4], args[5], Integer.parseInt(args[6]),
-            args[7], args[8], Integer.parseInt(args[9]), false);
+        assert (args.length == 8);
+        returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]),
+            args[5], args[6], Integer.parseInt(args[7]), false);
         break;
       case COMPACT_SCHEDULE:
-        assert (args.length == 10);
-        returnCode = compact(jsc, args[1], args[2], args[3], args[4], args[5], Integer.parseInt(args[6]),
-            args[7], args[8], Integer.parseInt(args[9]), true);
+        assert (args.length == 5);
+        returnCode = compact(jsc, args[1], args[2], args[3],  1,
+            "", args[4], 0, true);
         break;
       default:
         break;
@@ -103,14 +104,13 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      String rowKey, String partitionKey, int parallelism, String schemaFile,
-      String sparkMemory, int retry, boolean schedule) throws Exception {
+      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule) throws Exception {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
     cfg.compactionInstantTime = compactionInstant;
-    cfg.rowKey = rowKey;
-    cfg.partitionKey = partitionKey;
+    // TODO: Make this configurable along with strategy specific config - For now, this is a generic enough strategy
+    cfg.strategyClassName = UnBoundedCompactionStrategy.class.getCanonicalName();
     cfg.parallelism = parallelism;
     cfg.schemaFile = schemaFile;
     cfg.runSchedule = schedule;
