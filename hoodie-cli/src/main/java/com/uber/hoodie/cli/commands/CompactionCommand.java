@@ -162,14 +162,8 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compaction schedule", help = "Schedule Compaction")
   public String scheduleCompact(
-      @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
-      @CliOption(key = "rowKeyField", mandatory = true, help = "Row key field name") final String rowKeyField,
-      @CliOption(key = {
-          "parallelism"}, mandatory = true, help = "Parallelism for hoodie compaction") final String parallelism,
-      @CliOption(key = "schemaFilePath", mandatory = true, help = "Path for Avro schema file") final String
-          schemaFilePath,
-      @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry) throws Exception {
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "1G", help = "Spark executor memory")
+      final String sparkMemory) throws Exception {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -181,7 +175,7 @@ public class CompactionCommand implements CommandMarker {
           scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
       sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE.toString(), HoodieCLI.tableMetadata.getBasePath(),
-          tableName, compactionInstantTime, rowKeyField, parallelism, schemaFilePath, sparkMemory, retry);
+          HoodieCLI.tableMetadata.getTableConfig().getTableName(), compactionInstantTime, sparkMemory);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
@@ -196,16 +190,15 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compaction run", help = "Run Compaction for given instant time")
   public String compact(
-      @CliOption(key = "tableName", mandatory = true, help = "Table name") final String tableName,
-      @CliOption(key = "rowKeyField", mandatory = true, help = "Row key field name") final String rowKeyField,
-      @CliOption(key = {
-          "parallelism"}, mandatory = true, help = "Parallelism for hoodie compaction") final String parallelism,
-      @CliOption(key = "schemaFilePath", mandatory = true, help = "Path for Avro schema file") final String
-          schemaFilePath,
-      @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
-      @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry,
-      @CliOption(key = "compactionInstant", mandatory = true, help = "Base path for the target hoodie dataset") final
-      String compactionInstantTime) throws Exception {
+      @CliOption(key = {"parallelism"}, mandatory = true, help = "Parallelism for hoodie compaction")
+      final String parallelism,
+      @CliOption(key = "schemaFilePath", mandatory = true, help = "Path for Avro schema file")
+      final String schemaFilePath,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G", help = "Spark executor memory")
+      final String sparkMemory,
+      @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
+      @CliOption(key = "compactionInstant", mandatory = true, help = "Base path for the target hoodie dataset")
+      final String compactionInstantTime) throws Exception {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -214,7 +207,8 @@ public class CompactionCommand implements CommandMarker {
           scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
       sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), HoodieCLI.tableMetadata.getBasePath(),
-          tableName, compactionInstantTime, rowKeyField, parallelism, schemaFilePath, sparkMemory, retry);
+          HoodieCLI.tableMetadata.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
+          sparkMemory, retry);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
