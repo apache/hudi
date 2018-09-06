@@ -23,7 +23,9 @@ import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -171,5 +173,10 @@ public class HoodieTableConfig implements Serializable {
    */
   public String getArchivelogFolder() {
     return props.getProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
+  }
+
+  public Map<String, String> getProps() {
+    return props.entrySet().stream().collect(
+        Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
   }
 }
