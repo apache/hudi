@@ -21,6 +21,42 @@ Once hoodie has been built via `mvn clean install -DskipTests`, the shell can be
 A hoodie dataset resides on HDFS, in a location referred to as the **basePath** and we would need this location in order to connect to a Hoodie dataset.
 Hoodie library effectively manages this HDFS dataset internally, using .hoodie subfolder to track all metadata
 
+To initialize a hoodie table, use the following command.
+
+```
+18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
+============================================
+*                                          *
+*     _    _                 _ _           *
+*    | |  | |               | (_)          *
+*    | |__| | ___   ___   __| |_  ___      *
+*    |  __  |/ _ \ / _ \ / _` | |/ _ \     *
+*    | |  | | (_) | (_) | (_| | |  __/     *
+*    |_|  |_|\___/ \___/ \__,_|_|\___|     *
+*                                          *
+============================================
+
+Welcome to Hoodie CLI. Please type help if you are looking for help.
+hoodie->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tableType COPY_ON_WRITE
+.....
+18/09/06 15:57:15 INFO table.HoodieTableMetaClient: Finished Loading Table of type COPY_ON_WRITE from ...
+```
+
+To see the description of hoodie table, use the command:
+```
+hoodie:hoodie_table_1->desc
+18/09/06 15:57:19 INFO timeline.HoodieActiveTimeline: Loaded instants []
+    _________________________________________________________
+    | Property                | Value                        |
+    |========================================================|
+    | basePath                | ...                          |
+    | metaPath                | ...                          |
+    | fileSystem              | hdfs                         |
+    | hoodie.table.name       | hoodie_table_1               |
+    | hoodie.table.type       | COPY_ON_WRITE                |
+    | hoodie.archivelog.folder|                              |
+```
+
 Following is a sample command to connect to a Hoodie dataset contains uber trips.
 
 ```
@@ -135,7 +171,7 @@ hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc 
     ________________________________________________________________________________________________
     | CommitTime    | Min     | 10th    | 50th    | avg     | 95th    | Max     | NumFiles| StdDev  |
     |===============================================================================================|
-    | 20161004211210| 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 2       | 2.3 KB  |
+    | <COMMIT_ID>   | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 2       | 2.3 KB  |
     ....
     ....
 ```
@@ -158,6 +194,117 @@ hoodie:trips->stats wa
 In order to limit the amount of growth of .commit files on HDFS, Hoodie archives older .commit files (with due respect to the cleaner policy) into a commits.archived file.
 This is a sequence file that contains a mapping from commitNumber => json with raw information about the commit (same that is nicely rolled up above).
 
+
+#### Compactions
+
+To get an idea of the lag between compaction and writer applications, use the below command to list down all 
+pending compactions.
+
+```
+hoodie:trips->compactions show all
+     ___________________________________________________________________
+    | Compaction Instant Time| State    | Total FileIds to be Compacted|
+    |==================================================================|
+    | <INSTANT_1>            | REQUESTED| 35                           |
+    | <INSTANT_2>            | INFLIGHT | 27                           |
+
+```
+
+To inspect a specific compaction plan, use
+
+```
+hoodie:trips->compaction show --instant <INSTANT_1>
+    _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+    | Partition Path| File Id | Base Instant  | Data File Path                                    | Total Delta Files| getMetrics                                                                                                                    |
+    |================================================================================================================================================================================================================================================
+    | 2018/07/17    | <UUID>  | <INSTANT_1>   | viewfs://ns-default/.../../UUID_<INSTANT>.parquet | 1                | {TOTAL_LOG_FILES=1.0, TOTAL_IO_READ_MB=1230.0, TOTAL_LOG_FILES_SIZE=2.51255751E8, TOTAL_IO_WRITE_MB=991.0, TOTAL_IO_MB=2221.0}|
+
+```
+
+To manually schedule or run a compaction, use the below command. This command uses spark launcher to perform compaction
+operations. NOTE : Make sure no other application is scheduling compaction for this dataset concurrently
+
+```
+hoodie:trips->help compaction schedule
+Keyword:                   compaction schedule
+Description:               Schedule Compaction
+ Keyword:                  sparkMemory
+   Help:                   Spark executor memory
+   Mandatory:              false
+   Default if specified:   '__NULL__'
+   Default if unspecified: '1G'
+
+* compaction schedule - Schedule Compaction
+```
+
+```
+hoodie:trips->help compaction run
+Keyword:                   compaction run
+Description:               Run Compaction for given instant time
+ Keyword:                  tableName
+   Help:                   Table name
+   Mandatory:              true
+   Default if specified:   '__NULL__'
+   Default if unspecified: '__NULL__'
+
+ Keyword:                  parallelism
+   Help:                   Parallelism for hoodie compaction
+   Mandatory:              true
+   Default if specified:   '__NULL__'
+   Default if unspecified: '__NULL__'
+
+ Keyword:                  schemaFilePath
+   Help:                   Path for Avro schema file
+   Mandatory:              true
+   Default if specified:   '__NULL__'
+   Default if unspecified: '__NULL__'
+
+ Keyword:                  sparkMemory
+   Help:                   Spark executor memory
+   Mandatory:              true
+   Default if specified:   '__NULL__'
+   Default if unspecified: '__NULL__'
+
+ Keyword:                  retry
+   Help:                   Number of retries
+   Mandatory:              true
+   Default if specified:   '__NULL__'
+   Default if unspecified: '__NULL__'
+
+ Keyword:                  compactionInstant
+   Help:                   Base path for the target hoodie dataset
+   Mandatory:              true
+   Default if specified:   '__NULL__'
+   Default if unspecified: '__NULL__'
+
+* compaction run - Run Compaction for given instant time
+```
+
+##### Up-Coming CLI for Compaction
+
+In the next release, more useful CLI to revert/repair compaction schedules will be added. Here is a preview of them:
+
+Validating a compaction plan : Check if all the files necessary for compactions are present and are valid
+
+```
+hoodie:trips->compaction validate --compactionInstant <instantId>
+```
+
+The following commands must be executed without any other writer/ingestion application running.
+
+Sometimes, it becomes necessary to remove a fileId from a compaction-plan inorder to speed-up or unblock compaction 
+operation. Any new log-files that happened on this file after the compaction got scheduled will be safely renamed 
+so that are preserved. Hudi provides the following CLI to support it
+
+```
+hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
+```
+
+In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
+```
+hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
+```
+  
 ## Metrics
 
 Once the Hoodie Client is configured with the right datasetname and environment for metrics, it produces the following graphite metrics, that aid in debugging hoodie datasets
