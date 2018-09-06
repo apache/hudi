@@ -45,6 +45,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
+import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
@@ -53,6 +54,12 @@ import org.springframework.stereotype.Component;
 public class CompactionCommand implements CommandMarker {
 
   private static Logger log = LogManager.getLogger(HDFSParquetImportCommand.class);
+
+  @CliAvailabilityIndicator({"compactions show all", "compaction show", "compaction run", "compaction schedule"})
+  public boolean isAvailable() {
+    return (HoodieCLI.tableMetadata != null)
+        && (HoodieCLI.tableMetadata.getTableType() == HoodieTableType.MERGE_ON_READ);
+  }
 
   @CliCommand(value = "compactions show all", help = "Shows all compactions that are in active timeline")
   public String compactionsAll(
