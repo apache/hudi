@@ -62,6 +62,23 @@ Each record is uniquely identified by a `record key` and mapped to a file id for
 and file id, never changes once the first version of a record has been written to a file. In short, the
  `file id` identifies a group of files, that contain all versions of a group of records.
 
+## Terminologies
+
+ * `Hudi Dataset` 
+    A structured hive/spark table managed by Hudi. Hudi supports both partitioned and non-partitioned Hive tables. 
+ * `Commit` 
+    A commit marks a new batch of data applied to a dataset. Hudi maintains  monotonically increasing timestamps to track commits and guarantees that a commit is atomically 
+    published.
+ * `Commit Timeline`
+    Commit Timeline refers to the sequence of Commits that was applied in order on a dataset over its lifetime. 
+ * `File Slice` 
+    Hudi provides efficient handling of updates by having a fixed mapping between record key to a logical file Id. 
+    Hudi uses MVCC to provide atomicity and isolation of readers from a writer. This means that a logical fileId will
+    have many physical versions of it. Each of these physical version of a file represents a complete view of the
+    file as of a commit and is called File Slice
+ * `File Group`
+    A file-group is a file-slice timeline. It is a list of file-slices in commit order. It is identified by `file id`
+
 
 ## Copy On Write
 
