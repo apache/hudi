@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.hadoop;
 
+import com.uber.hoodie.common.util.collection.Pair;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.RecordReader;
