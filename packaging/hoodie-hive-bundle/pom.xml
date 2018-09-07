@@ -192,6 +192,10 @@
     </plugins>
   </build>
 
+  <properties>
+    <checkstyle.skip>true</checkstyle.skip>
+  </properties>
+
   <profiles>
     <profile>
       <id>hive12</id>

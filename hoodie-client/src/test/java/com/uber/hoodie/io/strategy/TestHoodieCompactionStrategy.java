@@ -25,6 +25,7 @@ import com.google.common.collect.Maps;
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.BoundedIOCompactionStrategy;
@@ -37,7 +38,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Assert;
 import org.junit.Test;
 
