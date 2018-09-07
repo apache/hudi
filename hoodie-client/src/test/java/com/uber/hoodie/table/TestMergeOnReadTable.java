@@ -485,6 +485,7 @@ public class TestMergeOnReadTable {
     recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
     assertEquals(recordsRead.size(), 200);
 
+    writeRecords = jsc.parallelize(copyOfRecords, 1);
     writeStatusJavaRDD = client.upsert(writeRecords, commitTime2);
     client.commit(commitTime2, writeStatusJavaRDD);
     statuses = writeStatusJavaRDD.collect();
