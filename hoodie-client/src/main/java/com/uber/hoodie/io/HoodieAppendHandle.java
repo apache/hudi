@@ -246,7 +246,6 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       if (writer != null) {
         writer.close();
       }
-      writeStatus.getStat().setPrevCommit(commitTime);
       writeStatus.getStat().setFileId(this.fileId);
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
