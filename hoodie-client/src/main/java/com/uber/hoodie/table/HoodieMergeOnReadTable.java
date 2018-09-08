@@ -307,10 +307,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
             this.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        HoodieRollingStatMetadata rollingStatMetadata = HoodieCommitMetadata
-            .fromBytes(commitMetadata.getExtraMetadata().get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY)
-                .getBytes(), HoodieRollingStatMetadata.class);
-        return rollingStatMetadata;
+        Optional<String> lastRollingStat = Optional.ofNullable(commitMetadata.getExtraMetadata()
+            .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+        if (lastRollingStat.isPresent()) {
+          HoodieRollingStatMetadata rollingStatMetadata = HoodieCommitMetadata
+              .fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class);
+          return rollingStatMetadata;
+        }
       }
       return null;
     } catch (IOException e) {
