@@ -911,7 +911,14 @@ public class TestMergeOnReadTable {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
-    String commitTime = "000";
+    // Create a commit without rolling stats in metadata to test backwards compatibility
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    String commitActionType = table.getMetaClient().getCommitActionType();
+    HoodieInstant instant = new HoodieInstant(true, commitActionType, "000");
+    activeTimeline.createInflight(instant);
+    activeTimeline.saveAsComplete(instant, Optional.empty());
+
+    String commitTime = "001";
     client.startCommitWithTime(commitTime);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -936,7 +943,7 @@ public class TestMergeOnReadTable {
     }
     Assert.assertEquals(inserts, 200);
 
-    commitTime = "001";
+    commitTime = "002";
     client.startCommitWithTime(commitTime);
     records = dataGen.generateUpdates(commitTime, records);
     writeRecords = jsc.parallelize(records, 1);
