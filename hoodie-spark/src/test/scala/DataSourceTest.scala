@@ -124,14 +124,7 @@ class DataSourceTest extends AssertionsForJUnit {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Read RO View
-    try {
-      val hoodieROViewDF1 = spark.read.format("com.uber.hoodie")
-        .load(basePath + "/*/*/*/*")
-      fail("we should error out, since no compaction has yet occurred.")
-    } catch {
-      case e: AnalysisException => {
-        // do nothing
-      }
-    };
+    val hoodieROViewDF1 = spark.read.format("com.uber.hoodie").load(basePath + "/*/*/*/*")
+    assertEquals(100, hoodieROViewDF1.count()) // still 100, since we only updated
   }
 }
