@@ -1286,9 +1286,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(table.getActiveTimeline().getInstantDetails(lastInstant
                 .get()).get(), HoodieCommitMetadata.class);
-        rollingStatMetadata = rollingStatMetadata
-            .merge(HoodieCommitMetadata.fromBytes(commitMetadata.getExtraMetadata()
-                .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY).getBytes(), HoodieRollingStatMetadata.class));
+        Optional<String> lastRollingStat = Optional.ofNullable(commitMetadata.getExtraMetadata()
+            .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
+        if (lastRollingStat.isPresent()) {
+          rollingStatMetadata = rollingStatMetadata
+              .merge(HoodieCommitMetadata.fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class));
+        }
       }
       metadata.addMetadata(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, rollingStatMetadata.toJsonString());
     } catch (IOException io) {
