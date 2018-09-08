@@ -28,6 +28,7 @@ import com.uber.hoodie.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import com.uber.hoodie.common.util.{FSUtils, TypedProperties}
 import com.uber.hoodie.config.HoodieWriteConfig
 import com.uber.hoodie.exception.HoodieException
+import com.uber.hoodie.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
