@@ -48,7 +48,10 @@ public class SparkUtil {
 
   public static JavaSparkContext initJavaSparkConf(String name) {
     SparkConf sparkConf = new SparkConf().setAppName(name);
-    sparkConf.setMaster(DEFUALT_SPARK_MASTER);
+    String defMasterFromEnv = sparkConf.get("spark.master");
+    if ((null == defMasterFromEnv) || (defMasterFromEnv.isEmpty())) {
+      sparkConf.setMaster(DEFUALT_SPARK_MASTER);
+    }
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.eventLog.overwrite", "true");
