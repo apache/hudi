@@ -1,3 +1,31 @@
+Release 0.4.4
+------------------------------------
+
+### Highlights
+ * Dependencies are now decoupled from CDH and based on apache versions!
+ * Support for Hive 2 is here!! Use -Dhive11 to build for older hive versions
+ * Deltastreamer tool reworked to make configs simpler, hardended tests, added Confluent Kafka support
+ * Removed dependency on commons lang3, to ease use with different hadoop/spark versions
+ * Better CLI support and docs for managing async compactions
+ * New CLI commands to manage datasets
+
+### Full PR List
+
+ * **@saravsars** - Updated jcommander version to fix NPE in HoodieDeltaStreamer tool #443
+ * **@n3nash** - Removing dependency on apache-commons lang 3, adding necessary classes as needed #444
+ * **@n3nash** - Small file size handling for inserts into log files. #413
+ * **@vinothchandar** - Update Gemfile.lock with higher ffi version
+ * **@bvaradar** -  Simplify and fix CLI to schedule and run compactions #447
+ * **@n3nash** - Fix a failing test case intermittenly in TestMergeOnRead due to incorrect prev commit time #448
+ * **@bvaradar**- CLI to create and desc hoodie table #446
+ * **@vinothchandar**- Reworking the deltastreamer tool #449
+ * **@bvaradar**- Docs for describing async compaction and how to operate it #445
+ * **@n3nash**- Adding check for rolling stats not present in existing timeline to handle backwards compatibility #451
+ * **@bvaradar** **@vinothchandar** - Moving all dependencies off cdh and to apache #420
+ * **@bvaradar**- Reduce minimum delta-commits required for compaction #452
+ * **@bvaradar**- Use spark Master from environment if set #454
+
+
 Release 0.4.3
 ------------------------------------
 
