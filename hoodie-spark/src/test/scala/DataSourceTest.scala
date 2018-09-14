@@ -98,14 +98,26 @@ class DataSourceTest extends AssertionsForJUnit {
 
 
     // Read Incremental View
+    // we have 2 commits, try pulling the first commit (which is not the latest)
+    val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0);
+    val hoodieIncViewDF1 = spark.read.format("com.uber.hoodie")
+      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommit)
+      .load(basePath);
+    assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
+    var countsPerCommit = hoodieIncViewDF1.groupBy("_hoodie_commit_time").count().collect();
+    assertEquals(1, countsPerCommit.length)
+    assertEquals(firstCommit, countsPerCommit(0).get(0))
+
+    // pull the latest commit
     val hoodieIncViewDF2 = spark.read.format("com.uber.hoodie")
       .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
       .load(basePath);
 
-
     assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
-    val countsPerCommit = hoodieIncViewDF2.groupBy("_hoodie_commit_time").count().collect();
+    countsPerCommit = hoodieIncViewDF2.groupBy("_hoodie_commit_time").count().collect();
     assertEquals(1, countsPerCommit.length)
     assertEquals(commitInstantTime2, countsPerCommit(0).get(0))
   }
