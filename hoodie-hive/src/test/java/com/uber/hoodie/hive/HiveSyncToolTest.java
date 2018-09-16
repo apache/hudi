@@ -22,9 +22,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.Lists;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
+import com.uber.hoodie.hive.util.MultiPartKeysValueExtractor;
 import com.uber.hoodie.hive.util.SchemaUtil;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -356,4 +358,33 @@ public class HiveSyncToolTest {
     TestUtil.hiveSyncConfig.tableName = roTablename;
   }
 
+  @Test
+  public void testMultiPartitionKeySync()
+      throws IOException, InitializationError, URISyntaxException, TException,
+      InterruptedException {
+    String commitTime = "100";
+    TestUtil.createCOWDataset(commitTime, 5);
+
+    HiveSyncConfig hiveSyncConfig = HiveSyncConfig.copy(TestUtil.hiveSyncConfig);
+    hiveSyncConfig.partitionValueExtractorClass = MultiPartKeysValueExtractor.class.getCanonicalName();
+    hiveSyncConfig.tableName = "multi_part_key";
+    hiveSyncConfig.partitionFields = Lists.newArrayList("year", "month", "day");
+    TestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+
+    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig,
+        TestUtil.getHiveConf(), TestUtil.fileSystem);
+    assertFalse("Table " + hiveSyncConfig.tableName + " should not exist initially",
+        hiveClient.doesTableExist());
+    // Lets do the sync
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, TestUtil.getHiveConf(), TestUtil.fileSystem);
+    tool.syncHoodieTable();
+    assertTrue("Table " + hiveSyncConfig.tableName + " should exist after sync completes",
+        hiveClient.doesTableExist());
+    assertEquals("Hive Schema should match the dataset schema + partition fields",
+        hiveClient.getTableSchema().size(), hiveClient.getDataSchema().getColumns().size() + 3);
+    assertEquals("Table partitions should match the number of partitions we wrote", 5,
+        hiveClient.scanTablePartitions().size());
+    assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES",
+        commitTime, hiveClient.getLastCommitTimeSynced().get());
+  }
 }

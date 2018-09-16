@@ -40,6 +40,7 @@ import java.sql.Driver;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -152,45 +153,41 @@ public class HoodieHiveClient {
     alterSQL.append(syncConfig.databaseName).append(".").append(syncConfig.tableName)
         .append(" ADD IF NOT EXISTS ");
     for (String partition : partitions) {
-
-      StringBuilder partBuilder = new StringBuilder();
-      List<String> partitionValues = partitionValueExtractor
-          .extractPartitionValuesInPath(partition);
-      Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-          "Partition key parts " + syncConfig.partitionFields
-              + " does not match with partition values " + partitionValues
-              + ". Check partition strategy. ");
-      for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-        partBuilder.append(syncConfig.partitionFields.get(i)).append("=").append("'")
-            .append(partitionValues.get(i)).append("'");
-      }
-
+      String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = new Path(syncConfig.basePath, partition).toString();
-      alterSQL.append("  PARTITION (").append(partBuilder.toString()).append(") LOCATION '")
+      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '")
           .append(fullPartitionPath).append("' ");
     }
     return alterSQL.toString();
+  }
+
+  /**
+   * Generate Hive Partition from partition values
+   * @param partition Partition path
+   * @return
+   */
+  private String getPartitionClause(String partition) {
+    List<String> partitionValues = partitionValueExtractor
+        .extractPartitionValuesInPath(partition);
+    Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
+        "Partition key parts " + syncConfig.partitionFields
+            + " does not match with partition values " + partitionValues
+            + ". Check partition strategy. ");
+    List<String> partBuilder = new ArrayList<>();
+    for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
+      partBuilder.add(syncConfig.partitionFields.get(i) + "=" + "'" + partitionValues.get(i) + "'");
+    }
+    return partBuilder.stream().collect(Collectors.joining(","));
   }
 
   private List<String> constructChangePartitions(List<String> partitions) {
     List<String> changePartitions = Lists.newArrayList();
     String alterTable = "ALTER TABLE " + syncConfig.databaseName + "." + syncConfig.tableName;
     for (String partition : partitions) {
-      StringBuilder partBuilder = new StringBuilder();
-      List<String> partitionValues = partitionValueExtractor
-          .extractPartitionValuesInPath(partition);
-      Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-          "Partition key parts " + syncConfig.partitionFields
-              + " does not match with partition values " + partitionValues
-              + ". Check partition strategy. ");
-      for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-        partBuilder.append(syncConfig.partitionFields.get(i)).append("=").append("'")
-            .append(partitionValues.get(i)).append("'");
-      }
-
+      String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = new Path(syncConfig.basePath, partition).toString();
       String changePartition =
-          alterTable + " PARTITION (" + partBuilder.toString() + ") SET LOCATION '" + fullPartitionPath + "'";
+          alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
       changePartitions.add(changePartition);
     }
     return changePartitions;

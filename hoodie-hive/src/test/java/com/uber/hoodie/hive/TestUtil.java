@@ -358,4 +358,8 @@ public class TestUtil {
     fsout.write(bytes);
     fsout.close();
   }
+
+  public static Set<String> getCreatedTablesSet() {
+    return createdTablesSet;
+  }
 }
