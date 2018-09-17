@@ -16,12 +16,16 @@
 
 package com.uber.hoodie.common.util;
 
+import com.google.common.reflect.ClassPath;
+import com.google.common.reflect.ClassPath.ClassInfo;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.exception.HoodieException;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 public class ReflectionUtils {
 
@@ -81,5 +85,18 @@ public class ReflectionUtils {
     Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs)
         .map(arg -> arg.getClass()).toArray(Class<?>[]::new);
     return loadClass(clazz, constructorArgTypes, constructorArgs);
+  }
+
+  /**
+   * Return stream of top level class names in the same class path as passed-in class
+   * @param clazz
+   */
+  public static Stream<String> getTopLevelClassesInClasspath(Class clazz) {
+    try {
+      ClassPath classPath = ClassPath.from(clazz.getClassLoader());
+      return classPath.getTopLevelClasses().stream().map(ClassInfo::getName);
+    } catch (IOException e) {
+      throw new RuntimeException("Got exception while dumping top level classes", e);
+    }
   }
 }
