@@ -172,7 +172,6 @@
                 </includes>
               </artifactSet>
               <finalName>${project.artifactId}-${project.version}${hiveJarSuffix}</finalName>
-              <classifier>${hiveJarSuffix}</classifier>
             </configuration>
           </execution>
         </executions>
