@@ -294,6 +294,7 @@ public abstract class AbstractRealtimeRecordReader {
         lastBlock = (HoodieAvroDataBlock) block;
       }
     }
+    reader.close();
     if (lastBlock != null) {
       return lastBlock.getSchema();
     }

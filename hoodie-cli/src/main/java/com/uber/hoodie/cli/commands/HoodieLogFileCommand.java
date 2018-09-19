@@ -131,6 +131,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           totalEntries++;
         }
       }
+      reader.close();
     }
     List<Comparable[]> rows = new ArrayList<>();
     int i = 0;
@@ -221,6 +222,7 @@ public class HoodieLogFileCommand implements CommandMarker {
             }
           }
         }
+        reader.close();
         if (allRecords.size() >= limit) {
           break;
         }

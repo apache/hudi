@@ -62,6 +62,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
+  private boolean closed = false;
 
   HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
@@ -95,13 +96,13 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   /**
-   * Close the inputstream when the JVM exits
+   * Close the inputstream if not closed when the JVM exits
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
       public void run() {
         try {
-          inputStream.close();
+          close();
         } catch (Exception e) {
           log.warn("unable to close input stream for log file " + logFile, e);
           // fail silently for any sort of exception
@@ -277,7 +278,10 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   @Override
   public void close() throws IOException {
-    this.inputStream.close();
+    if (!closed) {
+      this.inputStream.close();
+      closed = true;
+    }
   }
 
   @Override

@@ -30,6 +30,7 @@ import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.SpillableMapUtils;
 import com.uber.hoodie.exception.HoodieIOException;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
@@ -115,9 +116,10 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Scan Log files
    */
   public void scan() {
+    HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // iterate over the paths
-      HoodieLogFormatReader logFormatReaderWrapper =
+      logFormatReaderWrapper =
           new HoodieLogFormatReader(fs,
               logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile)))
                   .collect(Collectors.toList()), readerSchema, readBlocksLazily, reverseReader, bufferSize);
@@ -239,6 +241,15 @@ public abstract class AbstractHoodieLogRecordScanner {
     } catch (Exception e) {
       log.error("Got exception when reading log file", e);
       throw new HoodieIOException("IOException when reading log file ");
+    } finally {
+      try {
+        if (null != logFormatReaderWrapper) {
+          logFormatReaderWrapper.close();
+        }
+      } catch (IOException ioe) {
+        // Eat exception as we do not want to mask the original exception that can happen
+        log.error("Unable to close log format reader", ioe);
+      }
     }
   }
 

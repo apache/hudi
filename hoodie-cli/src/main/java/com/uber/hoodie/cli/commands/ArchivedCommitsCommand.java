@@ -77,6 +77,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
       List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> readCommit(r))
           .collect(Collectors.toList());
       allCommits.addAll(readCommits);
+      reader.close();
     }
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime")
