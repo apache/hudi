@@ -304,6 +304,7 @@ public class HoodieLogFormatTest {
         dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords,
         dataBlockRead.getRecords());
+    reader.close();
   }
 
   @SuppressWarnings("unchecked")
@@ -370,6 +371,7 @@ public class HoodieLogFormatTest {
         dataBlockRead.getRecords().size());
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords3,
         dataBlockRead.getRecords());
+    reader.close();
   }
 
   @SuppressWarnings("unchecked")
@@ -454,6 +456,8 @@ public class HoodieLogFormatTest {
     //assertEquals("", "something-random", new String(corruptBlock.getCorruptedBytes()));
     assertFalse("There should be no more block left", reader.hasNext());
 
+    reader.close();
+
     // Simulate another failure back to back
     outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
@@ -493,6 +497,7 @@ public class HoodieLogFormatTest {
     assertTrue("We should get the last block next", reader.hasNext());
     reader.next();
     assertFalse("We should have no more blocks left", reader.hasNext());
+    reader.close();
   }
 
 
@@ -1097,7 +1102,7 @@ public class HoodieLogFormatTest {
     assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
     dBlock = (HoodieAvroDataBlock) block;
     assertEquals(dBlock.getRecords().size(), 100);
-
+    reader.close();
   }
 
   @SuppressWarnings("unchecked")
@@ -1167,6 +1172,7 @@ public class HoodieLogFormatTest {
         dataBlockRead.getRecords());
 
     assertFalse(reader.hasPrev());
+    reader.close();
   }
 
   @Test
@@ -1224,6 +1230,7 @@ public class HoodieLogFormatTest {
       e.printStackTrace();
       // We should have corrupted block
     }
+    reader.close();
   }
 
   @SuppressWarnings("unchecked")
@@ -1283,5 +1290,6 @@ public class HoodieLogFormatTest {
         dataBlockRead.getRecords());
 
     assertFalse(reader.hasPrev());
+    reader.close();
   }
 }

@@ -85,6 +85,11 @@ public class TestCleaner extends TestHoodieClientBase {
   private static final int BIG_BATCH_INSERT_SIZE = 500;
   private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
 
+  @Override
+  public void tearDown() throws IOException {
+    super.tearDown();
+  }
+
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests
    *

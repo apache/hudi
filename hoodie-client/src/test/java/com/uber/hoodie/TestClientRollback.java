@@ -37,6 +37,7 @@ import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.spark.api.java.JavaRDD;
@@ -46,6 +47,11 @@ import org.junit.Test;
  * Test Cases for rollback of snapshots and commits
  */
 public class TestClientRollback extends TestHoodieClientBase {
+
+  @Override
+  public void tearDown() throws IOException {
+    super.tearDown();
+  }
 
   /**
    * Test case for rollback-savepoint interaction

@@ -43,6 +43,7 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -63,6 +64,11 @@ import scala.Option;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
+
+  @Override
+  public void tearDown() throws IOException {
+    super.tearDown();
+  }
 
   /**
    * Test Auto Commit behavior for HoodieWriteClient insert API

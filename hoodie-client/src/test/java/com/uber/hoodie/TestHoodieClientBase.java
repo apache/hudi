@@ -51,6 +51,8 @@ import java.util.Set;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -63,10 +65,13 @@ import org.junit.rules.TemporaryFolder;
  */
 public class TestHoodieClientBase implements Serializable {
 
+  protected static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
+
   protected transient JavaSparkContext jsc = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
   protected String basePath = null;
+  protected TemporaryFolder folder = null;
   protected transient HoodieTestDataGenerator dataGen = null;
 
   @Before
@@ -78,10 +83,10 @@ public class TestHoodieClientBase implements Serializable {
     //SQLContext stuff
     sqlContext = new SQLContext(jsc);
 
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
+    folder = new TemporaryFolder();
     folder.create();
     basePath = folder.getRoot().getAbsolutePath();
+
     fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     if (fs instanceof LocalFileSystem) {
       LocalFileSystem lfs = (LocalFileSystem) fs;
@@ -92,6 +97,33 @@ public class TestHoodieClientBase implements Serializable {
     }
     HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, getTableType());
     dataGen = new HoodieTestDataGenerator();
+  }
+
+  @After
+  /**
+   * Properly release resources at end of each test
+   */
+  public void tearDown() throws IOException {
+    if (null != sqlContext) {
+      logger.info("Clearing sql context cache of spark-session used in previous test-case");
+      sqlContext.clearCache();
+    }
+
+    if (null != jsc) {
+      logger.info("Closing spark context used in previous test-case");
+      jsc.close();
+    }
+
+    // Create a temp folder as the base path
+    if (null != folder) {
+      logger.info("Explicitly removing workspace used in previously run test-case");
+      folder.delete();
+    }
+
+    if (null != fs) {
+      logger.warn("Closing file-system instance used in previous test-run");
+      fs.close();
+    }
   }
 
   /**

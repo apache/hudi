@@ -73,6 +73,11 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
   }
 
+  @Override
+  public void tearDown() throws IOException {
+    super.tearDown();
+  }
+
   @Test
   public void testRollbackInflightIngestionWithPendingCompaction() throws Exception {
     // Rollback inflight ingestion when there is pending compaction

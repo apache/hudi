@@ -20,6 +20,7 @@ import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -29,6 +30,8 @@ import org.apache.log4j.Logger;
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
+  // Readers for previously scanned log-files that are still open
+  private final List<HoodieLogFileReader> prevReadersInOpenState;
   private HoodieLogFileReader currentReader;
   private final FileSystem fs;
   private final Schema readerSchema;
@@ -46,6 +49,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.readBlocksLazily = readBlocksLazily;
     this.reverseLogReader = reverseLogReader;
     this.bufferSize = bufferSize;
+    this.prevReadersInOpenState = new ArrayList<>();
     if (logFiles.size() > 0) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
       this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false);
@@ -53,7 +57,20 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   }
 
   @Override
+  /**
+   * Note : In lazy mode, clients must ensure close() should be called only after processing
+   * all log-blocks as the underlying inputstream will be closed.
+   * TODO: We can introduce invalidate() API at HoodieLogBlock and this object can call invalidate on
+   * all returned log-blocks so that we check this scenario specifically in HoodieLogBlock
+   */
   public void close() throws IOException {
+
+    for (HoodieLogFileReader reader : prevReadersInOpenState) {
+      reader.close();
+    }
+
+    prevReadersInOpenState.clear();
+
     if (currentReader != null) {
       currentReader.close();
     }
@@ -69,6 +86,12 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     } else if (logFiles.size() > 0) {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
+        // First close previous reader only if readBlockLazily is true
+        if (!readBlocksLazily) {
+          this.currentReader.close();
+        } else {
+          this.prevReadersInOpenState.add(currentReader);
+        }
         this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily,
             false);
       } catch (IOException io) {
