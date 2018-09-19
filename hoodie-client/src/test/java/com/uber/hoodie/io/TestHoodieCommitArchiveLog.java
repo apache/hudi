@@ -271,6 +271,7 @@ public class TestHoodieCommitArchiveLog {
 
     // verify in-flight instants after archive
     verifyInflightInstants(metaClient, 3);
+    reader.close();
   }
 
   @Test

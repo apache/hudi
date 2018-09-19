@@ -447,6 +447,7 @@ public class SchemaUtil {
         lastBlock = (HoodieAvroDataBlock) block;
       }
     }
+    reader.close();
     if (lastBlock != null) {
       return new parquet.avro.AvroSchemaConverter().convert(lastBlock.getSchema());
     }

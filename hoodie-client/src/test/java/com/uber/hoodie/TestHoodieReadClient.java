@@ -20,6 +20,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -34,6 +35,11 @@ import scala.Option;
  * Test-cases for covering HoodieReadClient APIs
  */
 public class TestHoodieReadClient extends TestHoodieClientBase {
+
+  @Override
+  public void tearDown() throws IOException {
+    super.tearDown();
+  }
 
   /**
    * Test ReadFilter API after writing new records using HoodieWriteClient.insert
