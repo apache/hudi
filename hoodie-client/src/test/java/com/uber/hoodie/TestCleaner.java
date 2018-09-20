@@ -192,6 +192,7 @@ public class TestCleaner extends TestHoodieClientBase {
         HoodieCompactionConfig.newBuilder().withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(maxVersions).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1)
+        .withFinalizeWriteParallelism(1).withConsistencyCheckEnabled(true)
         .build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
@@ -271,9 +272,6 @@ public class TestCleaner extends TestHoodieClientBase {
           for (HoodieFileGroup fileGroup : fileGroups) {
             if (selectedFileIdForCompaction.containsKey(fileGroup.getId())) {
               // Ensure latest file-slice selected for compaction is retained
-              String oldestCommitRetained =
-                  fileGroup.getAllDataFiles().map(HoodieDataFile::getCommitTime).sorted().findFirst().get();
-
               Optional<HoodieDataFile> dataFileForCompactionPresent =
                   fileGroup.getAllDataFiles().filter(df -> {
                     return compactionFileIdToLatestFileSlice.get(fileGroup.getId())
@@ -357,7 +355,8 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
         HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainCommits(maxCommits).build())
-        .withParallelism(1, 1).withBulkInsertParallelism(1).build();
+        .withParallelism(1, 1).withBulkInsertParallelism(1)
+        .withFinalizeWriteParallelism(1).withConsistencyCheckEnabled(true).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
     final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =

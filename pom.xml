@@ -625,7 +625,7 @@
       <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
-        <version>4.12</version>
+        <version>${junit.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>

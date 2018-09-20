@@ -23,7 +23,6 @@ import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -33,25 +32,30 @@ import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieSavepointException;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.io.ConsistencyCheck;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import scala.Tuple2;
 
 /**
  * Abstract implementation of a HoodieTable
  */
 public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
+
+  // time between successive attempts to ensure written data's metadata is consistent on storage
+  private static long INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = 2000L;
+  // maximum number of checks, for consistency of written data. Will wait upto 256 Secs
+  private static int MAX_CONSISTENCY_CHECKS = 7;
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
@@ -245,11 +249,26 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       throws IOException;
 
   /**
-   * Finalize the written data files
+   * Finalize the written data onto storage. Perform any final cleanups
    *
+   * @param jsc Spark Context
    * @param writeStatuses List of WriteStatus
-   * @return number of files finalized
+   * @throws HoodieIOException if some paths can't be finalized on storage
    */
-  public abstract Optional<Integer> finalizeWrite(JavaSparkContext jsc,
-      List<Tuple2<String, HoodieWriteStat>> writeStatuses);
+  public void finalizeWrite(JavaSparkContext jsc, List<WriteStatus> writeStatuses)
+      throws HoodieIOException {
+    if (config.isConsistencyCheckEnabled()) {
+      List<String> pathsToCheck = writeStatuses.stream()
+          .map(ws -> ws.getStat().getTempPath() != null
+              ? ws.getStat().getTempPath() : ws.getStat().getPath())
+          .collect(Collectors.toList());
+
+      List<String> failingPaths = new ConsistencyCheck(config.getBasePath(), pathsToCheck, jsc,
+          config.getFinalizeWriteParallelism())
+          .check(MAX_CONSISTENCY_CHECKS, INITIAL_CONSISTENCY_CHECK_INTERVAL_MS);
+      if (failingPaths.size() > 0) {
+        throw new HoodieIOException("Could not verify consistency of paths : " + failingPaths);
+      }
+    }
+  }
 }

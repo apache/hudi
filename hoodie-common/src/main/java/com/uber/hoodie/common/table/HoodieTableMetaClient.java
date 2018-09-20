@@ -207,6 +207,20 @@ public class HoodieTableMetaClient implements Serializable {
     return archivedTimeline;
   }
 
+
+  /**
+   * Helper method to initialize a dataset, with given basePath, tableType, name, archiveFolder
+   */
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
+      String tableType, String tableName, String archiveLogFolder) throws IOException {
+    HoodieTableType type = HoodieTableType.valueOf(tableType);
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
+    properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, type.name());
+    properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, archiveLogFolder);
+    return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
+  }
+
   /**
    * Helper method to initialize a given path, as a given storage type and table name
    */

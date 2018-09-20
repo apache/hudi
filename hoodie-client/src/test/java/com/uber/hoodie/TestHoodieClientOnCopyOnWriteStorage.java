@@ -19,6 +19,7 @@ package com.uber.hoodie;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +41,8 @@ import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.exception.HoodieCommitException;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.FileInputStream;
@@ -663,6 +666,42 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     Assert.assertEquals(inserts, 200);
     Assert.assertEquals(upserts, 200);
 
+  }
+
+  /**
+   * Tests behavior of committing only when consistency is verified
+   */
+  @Test
+  public void testConsistencyCheckDuringFinalize() throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
+        basePath);
+
+    String commitTime = "000";
+    client.startCommitWithTime(commitTime);
+    JavaRDD<HoodieRecord> writeRecords = jsc
+        .parallelize(dataGen.generateInserts(commitTime, 200), 1);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+
+    // move one of the files & commit should fail
+    WriteStatus status = result.take(1).get(0);
+    Path origPath = new Path(basePath + "/" + status.getStat().getPath());
+    Path hidePath = new Path(basePath + "/" + status.getStat().getPath() + "_hide");
+    metaClient.getFs().rename(origPath, hidePath);
+
+    try {
+      client.commit(commitTime, result);
+      fail("Commit should fail due to consistency check");
+    } catch (HoodieCommitException cme) {
+      assertTrue(cme.getCause() instanceof HoodieIOException);
+    }
+
+    // Re-introduce & commit should succeed
+    metaClient.getFs().rename(hidePath, origPath);
+    assertTrue("Commit should succeed", client.commit(commitTime, result));
+    assertTrue("After explicit commit, commit file should be created",
+        HoodieTestUtils.doesCommitExist(basePath, commitTime));
   }
 
   /**

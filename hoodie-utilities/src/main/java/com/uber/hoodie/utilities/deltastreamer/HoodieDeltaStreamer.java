@@ -54,7 +54,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -159,11 +158,8 @@ public class HoodieDeltaStreamer implements Serializable {
         }
       }
     } else {
-      Properties properties = new Properties();
-      properties.put(HoodieWriteConfig.TABLE_NAME, cfg.targetTableName);
-      HoodieTableMetaClient
-          .initializePathAsHoodieDataset(jssc.hadoopConfiguration(), cfg.targetBasePath,
-              properties);
+      HoodieTableMetaClient.initTableType(jssc.hadoopConfiguration(), cfg.targetBasePath,
+          cfg.storageType, cfg.targetTableName, "archived");
     }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
@@ -246,6 +242,10 @@ public class HoodieDeltaStreamer implements Serializable {
     // TODO: How to obtain hive configs to register?
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
+
+    @Parameter(names = {"--storage-type"}, description = "Type of Storage. "
+        + "COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
+    public String storageType;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
