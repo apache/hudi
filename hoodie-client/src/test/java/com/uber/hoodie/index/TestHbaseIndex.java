@@ -24,6 +24,7 @@ import static org.mockito.Mockito.times;
 
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
+import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
@@ -50,7 +51,6 @@ import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
@@ -101,8 +101,7 @@ public class TestHbaseIndex {
     hbaseConfig = utility.getConnection().getConfiguration();
     utility.createTable(TableName.valueOf(tableName), Bytes.toBytes("_s"));
     // Initialize a local spark env
-    SparkConf sparkConf = new SparkConf().setAppName("TestHbaseIndex").setMaster("local[1]");
-    jsc = new JavaSparkContext(sparkConf);
+    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHbaseIndex"));
     jsc.hadoopConfiguration().addResource(utility.getConfiguration());
   }
 

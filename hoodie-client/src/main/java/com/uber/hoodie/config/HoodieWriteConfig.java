@@ -68,6 +68,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE = "false";
   private static final String FINALIZE_WRITE_PARALLELISM = "hoodie.finalize.write.parallelism";
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
+  private static final String CONSISTENCY_CHECK_ENABLED = "hoodie.consistency.check.enabled";
+  private static final String DEFAULT_CONSISTENCY_CHECK_ENABLED = "false";
 
   private HoodieWriteConfig(Properties props) {
     super(props);
@@ -148,6 +150,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getFinalizeWriteParallelism() {
     return Integer.parseInt(props.getProperty(FINALIZE_WRITE_PARALLELISM));
+  }
+
+  public boolean isConsistencyCheckEnabled() {
+    return Boolean.parseBoolean(props.getProperty(CONSISTENCY_CHECK_ENABLED));
   }
 
   /**
@@ -551,6 +557,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withConsistencyCheckEnabled(boolean enabled) {
+      props.setProperty(CONSISTENCY_CHECK_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       // Check for mandatory properties
@@ -581,6 +592,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE);
       setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM),
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(CONSISTENCY_CHECK_ENABLED),
+          CONSISTENCY_CHECK_ENABLED, DEFAULT_CONSISTENCY_CHECK_ENABLED);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,

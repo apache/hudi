@@ -89,6 +89,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
+      cfg.storageType = "COPY_ON_WRITE";
       cfg.sourceClassName = TestDataSource.class.getName();
       cfg.operation = op;
       cfg.sourceOrderingField = "timestamp";

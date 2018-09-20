@@ -19,12 +19,12 @@
 package com.uber.hoodie
 
 import java.util
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
-import java.util.{Optional, Properties}
 
 import com.uber.hoodie.DataSourceReadOptions._
 import com.uber.hoodie.DataSourceWriteOptions._
-import com.uber.hoodie.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import com.uber.hoodie.common.table.HoodieTableMetaClient
 import com.uber.hoodie.common.util.{FSUtils, TypedProperties}
 import com.uber.hoodie.config.HoodieWriteConfig
 import com.uber.hoodie.exception.HoodieException
@@ -205,11 +205,8 @@ class DefaultSource extends RelationProvider
 
     // Create the dataset if not present (APPEND mode)
     if (!exists) {
-      val properties = new Properties();
-      properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tblName.get);
-      properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, storageType);
-      properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived");
-      HoodieTableMetaClient.initializePathAsHoodieDataset(sparkContext.hadoopConfiguration, path.get, properties);
+      HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, storageType,
+        tblName.get, "archived")
     }
 
     // Create a HoodieWriteClient & issue the write.
