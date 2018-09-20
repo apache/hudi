@@ -497,24 +497,25 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-
-    List<Tuple2<String, HoodieWriteStat>> stats = writeStatuses.mapToPair(
-        (PairFunction<WriteStatus, String, HoodieWriteStat>) writeStatus -> new Tuple2<>(
-            writeStatus.getPartitionPath(), writeStatus.getStat())).collect();
-
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    updateMetadataAndRollingStats(actionType, metadata, stats);
+    List<WriteStatus> writeStatusList = writeStatuses.collect();
+    updateMetadataAndRollingStats(actionType, metadata, writeStatusList);
 
 
     // Finalize write
     final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
-    final Optional<Integer> result = table.finalizeWrite(jsc, stats);
-    if (finalizeCtx != null && result.isPresent()) {
-      Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
-      durationInMs.ifPresent(duration -> {
-        logger.info("Finalize write elapsed time (milliseconds): " + duration);
-        metrics.updateFinalizeWriteMetrics(duration, result.get());
-      });
+    try {
+      table.finalizeWrite(jsc, writeStatusList);
+      if (finalizeCtx != null) {
+        Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
+        durationInMs.ifPresent(duration -> {
+          logger.info("Finalize write elapsed time (milliseconds): " + duration);
+          metrics.updateFinalizeWriteMetrics(duration, writeStatusList.size());
+        });
+      }
+    } catch (HoodieIOException ioe) {
+      throw new HoodieCommitException(
+          "Failed to complete commit " + commitTime + " due to finalize errors.", ioe);
     }
 
     // add in extra metadata
@@ -555,11 +556,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       logger.info("Committed " + commitTime);
     } catch (IOException e) {
       throw new HoodieCommitException(
-          "Failed to commit " + config.getBasePath() + " at time " + commitTime, e);
+          "Failed to complete commit " + config.getBasePath() + " at time " + commitTime, e);
     } catch (ParseException e) {
       throw new HoodieCommitException(
-          "Commit time is not of valid format.Failed to commit " + config.getBasePath()
-              + " at time " + commitTime, e);
+          "Failed to complete commit " + config.getBasePath() + " at time " + commitTime
+              + "Instant time is not of valid format", e);
     }
     return true;
   }
@@ -1258,8 +1259,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     return compactionInstantTimeOpt;
   }
 
-  private void updateMetadataAndRollingStats(String actionType, HoodieCommitMetadata metadata, List<Tuple2<String,
-      HoodieWriteStat>> stats) {
+  private void updateMetadataAndRollingStats(String actionType, HoodieCommitMetadata metadata,
+      List<WriteStatus> writeStatusList) {
     // TODO : make sure we cannot rollback / archive last commit file
     try {
       // Create a Hoodie table which encapsulated the commits and files visible
@@ -1272,12 +1273,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       // 2. Now, first read the existing rolling stats and merge with the result of current metadata.
 
       // Need to do this on every commit (delta or commit) to support COW and MOR.
-      for (Tuple2<String, HoodieWriteStat> stat : stats) {
-        metadata.addWriteStat(stat._1(), stat._2());
-        HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat._2().getFileId(),
-            stat._2().getNumWrites() - (stat._2().getNumUpdateWrites() - stat._2.getNumDeletes()),
-            stat._2().getNumUpdateWrites(), stat._2.getNumDeletes(), stat._2().getTotalWriteBytes());
-        rollingStatMetadata.addRollingStat(stat._1, hoodieRollingStat);
+      for (WriteStatus status : writeStatusList) {
+        HoodieWriteStat stat = status.getStat();
+        //TODO: why is stat.getPartitionPath() null at times here.
+        metadata.addWriteStat(status.getPartitionPath(), stat);
+        HoodieRollingStat hoodieRollingStat = new HoodieRollingStat(stat.getFileId(),
+            stat.getNumWrites() - (stat.getNumUpdateWrites() - stat.getNumDeletes()),
+            stat.getNumUpdateWrites(), stat.getNumDeletes(), stat.getTotalWriteBytes());
+        rollingStatMetadata.addRollingStat(status.getPartitionPath(), hoodieRollingStat);
       }
       // The last rolling stat should be present in the completed timeline
       Optional<HoodieInstant> lastInstant = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()

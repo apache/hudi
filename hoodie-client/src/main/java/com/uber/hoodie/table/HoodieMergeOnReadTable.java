@@ -43,6 +43,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieException;
+import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.MergeOnReadLazyInsertIterable;
@@ -294,9 +295,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
-    // do nothing for MOR tables
-    return Optional.empty();
+  public void finalizeWrite(JavaSparkContext jsc, List<WriteStatus> writeStatuses)
+      throws HoodieIOException {
+    // delegate to base class for MOR tables
+    super.finalizeWrite(jsc, writeStatuses);
   }
 
   @Override

@@ -29,7 +29,6 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
-import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
@@ -382,44 +381,40 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    */
   @Override
   @SuppressWarnings("unchecked")
-  public Optional<Integer> finalizeWrite(JavaSparkContext jsc, List writeStatuses) {
-    if (!config.shouldUseTempFolderForCopyOnWrite()) {
-      return Optional.empty();
+  public void finalizeWrite(JavaSparkContext jsc, List<WriteStatus> writeStatuses)
+      throws HoodieIOException {
+
+    super.finalizeWrite(jsc, writeStatuses);
+
+    if (config.shouldUseTempFolderForCopyOnWrite()) {
+      // This is to rename each data file from temporary path to its final location
+      jsc.parallelize(writeStatuses, config.getFinalizeWriteParallelism())
+          .map(status -> status.getStat())
+          .foreach(writeStat -> {
+            final FileSystem fs = getMetaClient().getFs();
+            final Path finalPath = new Path(config.getBasePath(), writeStat.getPath());
+
+            if (writeStat.getTempPath() != null) {
+              final Path tempPath = new Path(config.getBasePath(), writeStat.getTempPath());
+              boolean success;
+              try {
+                logger.info("Renaming temporary file: " + tempPath + " to " + finalPath);
+                success = fs.rename(tempPath, finalPath);
+              } catch (IOException e) {
+                throw new HoodieIOException(
+                    "Failed to rename file: " + tempPath + " to " + finalPath);
+              }
+
+              if (!success) {
+                throw new HoodieIOException(
+                    "Failed to rename file: " + tempPath + " to " + finalPath);
+              }
+            }
+          });
+
+      // clean temporary data files
+      cleanTemporaryDataFiles(jsc);
     }
-
-    // This is to rename each data file from temporary path to its final location
-    List<Tuple2<String, Boolean>> results = jsc
-        .parallelize(writeStatuses, config.getFinalizeWriteParallelism()).map(writeStatus -> {
-          Tuple2<String, HoodieWriteStat> writeStatTuple2 = (Tuple2<String, HoodieWriteStat>)
-              writeStatus;
-          HoodieWriteStat writeStat = writeStatTuple2._2();
-          final FileSystem fs = getMetaClient().getFs();
-          final Path finalPath = new Path(config.getBasePath(), writeStat.getPath());
-
-          if (writeStat.getTempPath() != null) {
-            final Path tempPath = new Path(config.getBasePath(), writeStat.getTempPath());
-            boolean success;
-            try {
-              logger.info("Renaming temporary file: " + tempPath + " to " + finalPath);
-              success = fs.rename(tempPath, finalPath);
-            } catch (IOException e) {
-              throw new HoodieIOException(
-                  "Failed to rename file: " + tempPath + " to " + finalPath);
-            }
-
-            if (!success) {
-              throw new HoodieIOException(
-                  "Failed to rename file: " + tempPath + " to " + finalPath);
-            }
-          }
-
-          return new Tuple2<>(writeStat.getPath(), true);
-        }).collect();
-
-    // clean temporary data files
-    cleanTemporaryDataFiles(jsc);
-
-    return Optional.of(results.size());
   }
 
   /**
