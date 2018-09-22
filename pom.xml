@@ -126,6 +126,7 @@
     <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
     <scala.libversion>2.11</scala.libversion>
+    <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
   </properties>
 
   <scm>
@@ -212,7 +213,7 @@
           <argLine>${surefireArgLine}</argLine>
           <systemPropertyVariables>
             <log4j.configuration>
-              file:${project.build.testOutputDirectory}/log4j-surefire.properties
+              ${surefire-log4j.file}
             </log4j.configuration>
           </systemPropertyVariables>
           <!-- Excludes integration tests when unit tests are run. -->
@@ -846,6 +847,17 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>warn-log</id>
+      <activation>
+        <property>
+          <name>env.HUDI_QUIETER_LOGGING</name>
+        </property>
+      </activation>
+      <properties>
+        <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties</surefire-log4j.file>
+      </properties>
     </profile>
   </profiles>
 
