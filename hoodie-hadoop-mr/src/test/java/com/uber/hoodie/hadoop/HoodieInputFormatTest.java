@@ -176,7 +176,7 @@ public class HoodieInputFormatTest {
   //TODO enable this after enabling predicate pushdown
   public void testPredicatePushDown() throws IOException {
     // initial commit
-    Schema schema = InputFormatTestUtil.readSchema("/sample1.avro");
+    Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");
     String commit1 = "20160628071126";
     File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);

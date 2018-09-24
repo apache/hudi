@@ -288,7 +288,7 @@
               <exclude>**/*.sh</exclude>
               <exclude>**/*.log</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
-              <exclude>**/test/resources/*.avro</exclude>
+              <exclude>**/test/resources/*.avsc</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/test/resources/*.schema</exclude>
               <exclude>**/test/resources/*.csv</exclude>

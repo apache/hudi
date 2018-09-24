@@ -47,7 +47,7 @@ import org.apache.avro.io.DecoderFactory;
 public class SchemaTestUtil {
 
   public static Schema getSimpleSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avro"));
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
   }
 
   public static List<IndexedRecord> generateTestRecords(int from, int limit) throws IOException, URISyntaxException {
@@ -163,7 +163,7 @@ public class SchemaTestUtil {
   }
 
   public static Schema getEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved.avro"));
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test-evolved.avsc"));
   }
 
   public static List<IndexedRecord> generateEvolvedTestRecords(int from, int limit)
@@ -172,7 +172,7 @@ public class SchemaTestUtil {
   }
 
   public static Schema getComplexEvolvedSchema() throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avro"));
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/complex-test-evolved.avsc"));
   }
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String commitTime,
