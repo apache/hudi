@@ -27,7 +27,7 @@ $ mvn clean install -DskipTests -Dhive11
 {% include note.html content="Setup your local hadoop/hive test environment, so you can play with entire ecosystem. See [this](http://www.bytearray.io/2016/05/setting-up-hadoopyarnsparkhive-on-mac.html) for reference" %}
 
 
-## Supported Versions
+## Version Compatibility
 
 Hoodie requires Java 8 to be installed. Hoodie works with Spark-2.x versions. We have verified that hoodie works with the following combination of Hadoop/Hive/Spark.
 
@@ -58,7 +58,13 @@ export SPARK_CONF_DIR=$SPARK_HOME/conf
 export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$PATH
 ```
 
-### DataSource API
+### Supported API's
+
+Use the DataSource API to quickly start reading or writing hoodie datasets in few lines of code. Ideal for most 
+ingestion use-cases.
+Use the RDD API to perform more involved actions on a hoodie dataset
+
+#### DataSource API
 
 Run __hoodie-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your HDFS/local filesystem. Use the wrapper script
 to run from command-line
@@ -86,14 +92,16 @@ Usage: <main class> [options]
 The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the `hoodie-spark` module as dependency
 and follow a similar pattern to write/read datasets via the datasource.
 
-### RDD API
+#### RDD API
 
 RDD level APIs give you more power and control over things, via the `hoodie-client` module .
 Refer to  __hoodie-client/src/test/java/HoodieClientExample.java__ class for an example.
 
 
 
-## Register Dataset to Hive Metastore
+## Query a Hoodie dataset
+
+### Register Dataset to Hive Metastore
 
 Now, lets see how we can publish this data into Hive.
 
@@ -215,11 +223,11 @@ ALTER TABLE `hoodie_rt` ADD IF NOT EXISTS PARTITION (datestr='2015-03-17') LOCAT
 
 
 
-## Querying The Dataset
+### Using different query engines
 
 Now, we can proceed to query the dataset, as we would normally do across all the three query engines supported.
 
-### HiveQL
+#### HiveQL
 
 Let's first perform a query on the latest committed snapshot of the table
 
@@ -232,7 +240,7 @@ Time taken: 18.05 seconds, Fetched: 1 row(s)
 hive>
 ```
 
-### SparkSQL
+#### SparkSQL
 
 Spark is super easy, once you get Hive working as above. Just spin up a Spark Shell as below
 
@@ -249,7 +257,7 @@ scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
 
 You can also use the sample queries in __hoodie-utilities/src/test/java/HoodieSparkSQLExample.java__ for running on `hoodie_rt`
 
-### Presto
+#### Presto
 
 Checkout the 'master' branch on OSS Presto, build it, and place your installation somewhere.
 
@@ -263,7 +271,7 @@ select count(*) from hive.default.hoodie_test
 
 
 
-## Incremental Queries
+## Incremental Queries of a Hoodie dataset
 
 Let's now perform a query, to obtain the __ONLY__ changed rows since a commit in the past.
 

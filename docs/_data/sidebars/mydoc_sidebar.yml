@@ -35,16 +35,20 @@ entries:
       url: /concepts.html
       output: web
 
-    - title: Configurations
-      url: /configurations.html
-      output: web
-
     - title: Implementation
       url: /implementation.html
       output: web
 
+    - title: Configurations
+      url: /configurations.html
+      output: web
+
     - title: SQL Queries
       url: /sql_queries.html
+      output: web
+
+    - title: Migration Guide
+      url: /migration_guide.html
       output: web
 
     - title: Incremental Processing
