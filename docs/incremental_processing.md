@@ -11,7 +11,7 @@ As discussed in the concepts section, the two basic primitives needed for [incre
 data using Hoodie are `upserts` (to apply changes to a dataset) and `incremental pulls` (to obtain a change stream/log from a dataset). This section
 discusses a few tools that can be used to achieve these on different contexts.
 
-## Ingesting/Writing Data
+## Incremental Ingestion
 
 Following means can be used to apply a delta or an incremental change to a Hoodie dataset. For e.g, the incremental changes could be from a Kafka topic or files uploaded to HDFS or
 even changes pulled from another Hoodie dataset.
