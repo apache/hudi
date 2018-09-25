@@ -26,7 +26,13 @@ It also powers several incremental Hive ETL pipelines and being currently integr
 3. ["Incremental Processing on Large Analytical Datasets"](https://spark-summit.org/2017/events/incremental-processing-on-large-analytical-datasets/) - By Prasanna Rajaperumal
    June 2017, Spark Summit 2017, San Francisco, CA. [Slides](https://www.slideshare.net/databricks/incremental-processing-on-large-analytical-datasets-with-prasanna-rajaperumal-and-vinoth-chandar) [Video](https://www.youtube.com/watch?v=3HS0lQX-cgo&feature=youtu.be)
 
+4. ["Hudi: Unifying storage and serving for batch and near-real-time analytics"](https://conferences.oreilly.com/strata/strata-ny/public/schedule/detail/70937) - By Nishith Agarwal & Balaji Vardarajan
+   September 2018, Strata Data Conference, New York, NY
 
+5. ["Hudi: Large-Scale, Near Real-Time Pipelines at Uber"](https://databricks
+.com/session/hudi-near-real-time-spark-pipelines-at-petabyte-scale) - By Vinoth Chander & Nishith Agarwal
+   October 2018, Spark+AI Summit Europe, London, UK
+   
 ## Articles
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar

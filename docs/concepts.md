@@ -20,6 +20,8 @@ Such key activities include
  * `COMMITS` - A single commit captures information about an **atomic write** of a batch of records into a dataset.
        Commits are identified by a monotonically increasing timestamp, denoting the start of the write operation.
  * `CLEANS` - Background activity that gets rid of older versions of files in the dataset, that are no longer needed.
+ * `DELTA_COMMITS` - A single commit captures information about an **atomic write** of a batch of records into a 
+ MergeOnRead storage type of dataset
  * `COMPACTIONS` - Background activity to reconcile differential data structures within Hoodie e.g: moving updates from row based log files to columnar formats.
 
 
@@ -32,6 +34,24 @@ organization reflects the actual time or `event time`, the data was intended for
 When there is late arriving data (data intended for 9:00 arriving >1 hr late at 10:20), we can see the upsert producing new data into even older time buckets/folders.
 With the help of the timeline, an incremental query attempting to get all new data that was committed successfully since 10:00 hours, is able to very efficiently consume
 only the changed files without say scanning all the time buckets > 07:00.
+
+## Terminologies
+
+ * `Hudi Dataset` 
+    A structured hive/spark dataset managed by Hudi. Hudi supports both partitioned and non-partitioned Hive tables. 
+ * `Commit` 
+    A commit marks a new batch of data applied to a dataset. Hudi maintains  monotonically increasing timestamps to track commits and guarantees that a commit is atomically 
+    published.
+ * `Commit Timeline`
+    Commit Timeline refers to the sequence of Commits that was applied in order on a dataset over its lifetime. 
+ * `File Slice` 
+    Hudi provides efficient handling of updates by having a fixed mapping between record key to a logical file Id. 
+    Hudi uses MVCC to provide atomicity and isolation of readers from a writer. This means that a logical fileId will
+    have many physical versions of it. Each of these physical version of a file represents a complete view of the
+    file as of a commit and is called File Slice
+ * `File Group`
+    A file-group is a file-slice timeline. It is a list of file-slices in commit order. It is identified by `file id`
+
 
 ## Storage Types
 
@@ -61,23 +81,6 @@ produced the file. Multiple files can share the same file id but written at diff
 Each record is uniquely identified by a `record key` and mapped to a file id forever. This mapping between record key
 and file id, never changes once the first version of a record has been written to a file. In short, the
  `file id` identifies a group of files, that contain all versions of a group of records.
-
-## Terminologies
-
- * `Hudi Dataset` 
-    A structured hive/spark table managed by Hudi. Hudi supports both partitioned and non-partitioned Hive tables. 
- * `Commit` 
-    A commit marks a new batch of data applied to a dataset. Hudi maintains  monotonically increasing timestamps to track commits and guarantees that a commit is atomically 
-    published.
- * `Commit Timeline`
-    Commit Timeline refers to the sequence of Commits that was applied in order on a dataset over its lifetime. 
- * `File Slice` 
-    Hudi provides efficient handling of updates by having a fixed mapping between record key to a logical file Id. 
-    Hudi uses MVCC to provide atomicity and isolation of readers from a writer. This means that a logical fileId will
-    have many physical versions of it. Each of these physical version of a file represents a complete view of the
-    file as of a commit and is called File Slice
- * `File Group`
-    A file-group is a file-slice timeline. It is a list of file-slices in commit order. It is identified by `file id`
 
 
 ## Copy On Write
@@ -136,3 +139,21 @@ There are lot of interesting things happening in this example, which bring out t
 
 The intention of merge on read storage, is to enable near real-time processing directly on top of Hadoop, as opposed to copying
 data out to specialized systems, which may not be able to handle the data volume.
+
+## Trade offs when choosing different storage types and views
+
+### Storage Types
+
+| Trade-off | CopyOnWrite | MergeOnRead |
+|-------------- |------------------| ------------------|
+| Data Latency | Higher   | Lower |
+| Update cost (I/O) | Higher (rewrite entire parquet) | Lower (append to delta file) |
+| Parquet File Size | Smaller (high update(I/0) cost) | Larger (low update cost) |
+| Write Amplification | Higher | Lower (depending on compaction strategy) |
+
+### Hudi Views
+
+| Trade-off | ReadOptimized | RealTime |
+|-------------- |------------------| ------------------|
+| Data Latency | Higher   | Lower |
+| Query Latency | Lower (raw columnar performance) | Higher (merge columnar + row based delta) |
