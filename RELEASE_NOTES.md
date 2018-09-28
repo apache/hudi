@@ -5,12 +5,20 @@ Release 0.4.4
  * Dependencies are now decoupled from CDH and based on apache versions!
  * Support for Hive 2 is here!! Use -Dhive11 to build for older hive versions
  * Deltastreamer tool reworked to make configs simpler, hardended tests, added Confluent Kafka support
+ * Provide strong consistency for S3 datasets
  * Removed dependency on commons lang3, to ease use with different hadoop/spark versions
  * Better CLI support and docs for managing async compactions
  * New CLI commands to manage datasets
 
 ### Full PR List
 
+ * **@vinothchandar** - Perform consistency checks during write finalize #464 
+ * **@bvaradar** - Travis CI tests needs to be run in quieter mode (WARN log level) to avoid max log-size errors #465
+ * **@lys0716** - Fix the name of avro schema file in Test #467
+ * **@bvaradar** - Hive Sync handling must work for datasets with multi-partition keys #460 
+ * **@bvaradar** - Explicitly release resources in LogFileReader and TestHoodieClientBase. Fixes Memory allocation errors #463
+ * **@bvaradar** - [Release Blocking] Ensure packaging modules create sources/javadoc jars #461
+ * **@vinothchandar** - Fix bug with incrementally pulling older data #458
  * **@saravsars** - Updated jcommander version to fix NPE in HoodieDeltaStreamer tool #443
  * **@n3nash** - Removing dependency on apache-commons lang 3, adding necessary classes as needed #444
  * **@n3nash** - Small file size handling for inserts into log files. #413
