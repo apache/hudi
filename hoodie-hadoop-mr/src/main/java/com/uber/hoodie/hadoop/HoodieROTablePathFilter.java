@@ -111,6 +111,16 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
         return hoodiePathCache.get(folder.toString()).contains(path);
       }
 
+      // Skip all files that are descendants of .hoodie in its path.
+      String filePath = path.toString();
+      if (filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
+          || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug(String.format("Skipping Hoodie Metadata file  %s \n", filePath));
+        }
+        return false;
+      }
+
       // Perform actual checking.
       Path baseDir;
       if (HoodiePartitionMetadata.hasPartitionMetadata(fs, folder)) {

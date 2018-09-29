@@ -219,6 +219,16 @@ public class HoodieTestUtils {
     return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + HoodieTimeline.COMMIT_EXTENSION;
   }
 
+  public static final String getInflightCommitFilePath(String basePath, String commitTime) throws IOException {
+    return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
+        + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
+  }
+
+  public static final String getRequestedCompactionFilePath(String basePath, String commitTime) throws IOException {
+    return basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + commitTime
+        + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
+  }
+
   public static final boolean doesDataFileExist(String basePath, String partitionPath, String commitTime, String fileID)
       throws IOException {
     return new File(getDataFilePath(basePath, partitionPath, commitTime, fileID)).exists();
