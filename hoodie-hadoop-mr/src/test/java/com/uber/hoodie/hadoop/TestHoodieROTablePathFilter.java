@@ -23,6 +23,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import org.apache.hadoop.fs.Path;
 import org.junit.Before;
 import org.junit.Rule;
@@ -51,6 +52,7 @@ public class TestHoodieROTablePathFilter {
 
     HoodieTestUtils.createCommitFiles(basePath, "001", "002");
     HoodieTestUtils.createInflightCommitFiles(basePath, "003");
+    HoodieTestUtils.createCompactionRequest(metaClient, "004", new ArrayList<>());
 
     HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f1");
     HoodieTestUtils.createDataFile(basePath, "2017/01/01", "001", "f2");
@@ -72,6 +74,19 @@ public class TestHoodieROTablePathFilter {
         "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
     assertFalse(pathFilter.accept(new Path(
         "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+    assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "001"))));
+    assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "002"))));
+    assertFalse(pathFilter.accept(new Path("file:///"
+        + HoodieTestUtils.getInflightCommitFilePath(basePath, "003"))));
+    assertFalse(pathFilter.accept(new Path("file:///"
+        + HoodieTestUtils.getRequestedCompactionFilePath(basePath, "004"))));
+    assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/"
+        + HoodieTableMetaClient.METAFOLDER_NAME + "/")));
+    assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)));
+
+    assertFalse(pathFilter.accept(new Path(
+        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+
   }
 
   @Test
