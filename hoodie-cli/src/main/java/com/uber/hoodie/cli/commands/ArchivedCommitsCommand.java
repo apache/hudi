@@ -50,6 +50,8 @@ public class ArchivedCommitsCommand implements CommandMarker {
 
   @CliCommand(value = "show archived commits", help = "Read commits from archived files and show details")
   public String showCommits(
+      @CliOption(key = {"skipMetadata"}, help = "Skip displaying commit metadata", unspecifiedDefaultValue = "true")
+      boolean skipMetadata,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "10") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
@@ -74,51 +76,65 @@ public class ArchivedCommitsCommand implements CommandMarker {
         List<IndexedRecord> records = blk.getRecords();
         readRecords.addAll(records);
       }
-      List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> readCommit(r))
+      List<Comparable[]> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r ->
+          readCommit(r, skipMetadata))
           .collect(Collectors.toList());
       allCommits.addAll(readCommits);
       reader.close();
     }
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime")
-        .addTableHeaderField("CommitType")
-        .addTableHeaderField("CommitDetails");
+        .addTableHeaderField("CommitType");
+
+    if (!skipMetadata) {
+      header = header.addTableHeaderField("CommitDetails");
+    }
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, allCommits);
   }
 
-  private Comparable[] readCommit(GenericRecord record) {
+  private Comparable[] readCommit(GenericRecord record, boolean skipMetadata) {
     List<Object> commitDetails = new ArrayList<>();
     try {
       switch (record.get("actionType").toString()) {
         case HoodieTimeline.CLEAN_ACTION: {
           commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
-          commitDetails.add(record.get("hoodieCleanMetadata").toString());
+          if (!skipMetadata) {
+            commitDetails.add(record.get("hoodieCleanMetadata").toString());
+          }
           break;
         }
         case HoodieTimeline.COMMIT_ACTION: {
           commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
-          commitDetails.add(record.get("hoodieCommitMetadata").toString());
+          if (!skipMetadata) {
+            commitDetails.add(record.get("hoodieCommitMetadata").toString());
+          }
           break;
         }
         case HoodieTimeline.DELTA_COMMIT_ACTION: {
           commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
-          commitDetails.add(record.get("hoodieCommitMetadata").toString());
+          if (!skipMetadata) {
+            commitDetails.add(record.get("hoodieCommitMetadata").toString());
+          }
           break;
         }
         case HoodieTimeline.ROLLBACK_ACTION: {
           commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
-          commitDetails.add(record.get("hoodieRollbackMetadata").toString());
+          if (!skipMetadata) {
+            commitDetails.add(record.get("hoodieRollbackMetadata").toString());
+          }
           break;
         }
         case HoodieTimeline.SAVEPOINT_ACTION: {
           commitDetails.add(record.get("commitTime"));
           commitDetails.add(record.get("actionType").toString());
-          commitDetails.add(record.get("hoodieSavePointMetadata").toString());
+          if (!skipMetadata) {
+            commitDetails.add(record.get("hoodieSavePointMetadata").toString());
+          }
           break;
         }
         default:

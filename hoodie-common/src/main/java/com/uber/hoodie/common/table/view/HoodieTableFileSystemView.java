@@ -440,4 +440,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   public Map<String, Pair<String, CompactionOperation>> getFileIdToPendingCompaction() {
     return fileIdToPendingCompaction;
   }
+
+  public Stream<HoodieFileGroup> getAllFileGroups() {
+    return fileGroupMap.values().stream();
+  }
 }
