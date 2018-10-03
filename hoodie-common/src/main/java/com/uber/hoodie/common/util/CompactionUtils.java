@@ -33,11 +33,15 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction
  */
 public class CompactionUtils {
+
+  private static final Logger LOG = LogManager.getLogger(CompactionUtils.class);
 
   /**
    * Generate compaction operation from file-slice
@@ -47,7 +51,7 @@ public class CompactionUtils {
    * @param metricsCaptureFunction Metrics Capture function
    * @return Compaction Operation
    */
-  public static  HoodieCompactionOperation buildFromFileSlice(String partitionPath, FileSlice fileSlice,
+  public static HoodieCompactionOperation buildFromFileSlice(String partitionPath, FileSlice fileSlice,
       Optional<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionOperation.Builder builder = HoodieCompactionOperation.newBuilder();
     builder.setPartitionPath(partitionPath);
@@ -114,14 +118,19 @@ public class CompactionUtils {
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
     return pendingCompactionInstants.stream().map(instant -> {
       try {
-        HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-            metaClient.getActiveTimeline().getInstantAuxiliaryDetails(
-                HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
-        return Pair.of(instant, compactionPlan);
+        return Pair.of(instant, getCompactionPlan(metaClient, instant.getTimestamp()));
       } catch (IOException e) {
         throw new HoodieException(e);
       }
     }).collect(Collectors.toList());
+  }
+
+  public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient,
+      String compactionInstant) throws IOException {
+    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+        metaClient.getActiveTimeline().getInstantAuxiliaryDetails(
+            HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
+    return compactionPlan;
   }
 
   /**
