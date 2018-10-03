@@ -161,6 +161,33 @@ hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
     ....
 ```
 
+
+#### FileSystem View
+
+Hudi views each partition as a collection of file-groups with each file-group containing a list of file-slices in commit
+order (See Concepts). The below commands allow users to view the file-slices for a data-set.
+
+```
+ hoodie:stock_ticks_mor->show fsview all
+ ....
+  _______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+ | Partition | FileId | Base-Instant | Data-File | Data-File Size| Num Delta Files| Total Delta File Size| Delta Files |
+ |==============================================================================================================================================================================================================================================================================================================================================================================================================|
+ | 2018/08/31| 111415c3-f26d-4639-86c8-f9956f245ac3| 20181002180759| hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/111415c3-f26d-4639-86c8-f9956f245ac3_0_20181002180759.parquet| 432.5 KB | 1 | 20.8 KB | [HoodieLogFile {hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/.111415c3-f26d-4639-86c8-f9956f245ac3_20181002180759.log.1}]|
+
+
+
+ hoodie:stock_ticks_mor->show fsview latest --partitionPath "2018/08/31"
+ ......
+ __________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+ | Partition | FileId | Base-Instant | Data-File | Data-File Size| Num Delta Files| Total Delta Size| Delta Size - compaction scheduled| Delta Size - compaction unscheduled| Delta To Base Ratio - compaction scheduled| Delta To Base Ratio - compaction unscheduled| Delta Files - compaction scheduled | Delta Files - compaction unscheduled|
+ |=================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================|
+ | 2018/08/31| 111415c3-f26d-4639-86c8-f9956f245ac3| 20181002180759| hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/111415c3-f26d-4639-86c8-f9956f245ac3_0_20181002180759.parquet| 432.5 KB | 1 | 20.8 KB | 20.8 KB | 0.0 B | 0.0 B | 0.0 B | [HoodieLogFile {hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/.111415c3-f26d-4639-86c8-f9956f245ac3_20181002180759.log.1}]| [] |
+ 
+ hoodie:stock_ticks_mor->
+```
+
+
 #### Statistics
 
 Since Hoodie directly manages file sizes for HDFS dataset, it might be good to get an overall picture
@@ -280,15 +307,36 @@ Description:               Run Compaction for given instant time
 * compaction run - Run Compaction for given instant time
 ```
 
-##### Up-Coming CLI for Compaction
-
-In the next release, more useful CLI to revert/repair compaction schedules will be added. Here is a preview of them:
+##### Validate Compaction
 
 Validating a compaction plan : Check if all the files necessary for compactions are present and are valid
 
 ```
-hoodie:trips->compaction validate --compactionInstant <instantId>
+hoodie:stock_ticks_mor->compaction validate --instant 20181005222611
+...
+
+   COMPACTION PLAN VALID
+   
+    ___________________________________________________________________________________________________________________________________________________________________________________________________________________________
+    | File Id                             | Base Instant Time| Base Data File                                                                                                                   | Num Delta Files| Valid| Error|
+    |==========================================================================================================================================================================================================================|
+    | 05320e98-9a57-4c38-b809-a6beaaeb36bd| 20181005222445   | hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | true |      |
+
+
+
+hoodie:stock_ticks_mor->compaction validate --instant 20181005222601
+
+   COMPACTION PLAN INVALID
+
+    _______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+    | File Id                             | Base Instant Time| Base Data File                                                                                                                   | Num Delta Files| Valid| Error                                                                           |
+    |=====================================================================================================================================================================================================================================================================================================|
+    | 05320e98-9a57-4c38-b809-a6beaaeb36bd| 20181005222445   | hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | false| All log files specified in compaction operation is not present. Missing ....    |
+
+
 ```
+
+##### NOTE
 
 The following commands must be executed without any other writer/ingestion application running.
 
@@ -296,15 +344,39 @@ Sometimes, it becomes necessary to remove a fileId from a compaction-plan inorde
 operation. Any new log-files that happened on this file after the compaction got scheduled will be safely renamed 
 so that are preserved. Hudi provides the following CLI to support it
 
+
+##### UnScheduling Compaction
+
 ```
 hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
+....
+No File renames needed to unschedule file from pending compaction. Operation successful.
+
 ```
 
 In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
 ```
 hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
+.....
+No File renames needed to unschedule pending compaction. Operation successful.
 ```
   
+##### Repair Compaction
+
+The above compaction unscheduling operations could sometimes fail partially (e:g -> HDFS temporarily unavailable). With
+partial failures, the compaction operation could become inconsistent with the state of file-slices. When you run 
+`compaction validate`, you can notice invalid compaction operations if there is one.  In these cases, the repair
+command comes to the rescue, it will rearrange the file-slices so that there is no loss and the file-slices are
+consistent with the compaction plan
+
+```
+hoodie:stock_ticks_mor->compaction repair --instant 20181005222611
+......
+Compaction successfully repaired
+.....
+```
+
+
 ## Metrics
 
 Once the Hoodie Client is configured with the right datasetname and environment for metrics, it produces the following graphite metrics, that aid in debugging hoodie datasets

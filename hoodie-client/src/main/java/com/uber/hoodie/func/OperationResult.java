@@ -1,0 +1,77 @@
+/*
+ *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *           http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *
+ */
+
+package com.uber.hoodie.func;
+
+import com.google.common.base.Optional;
+import java.io.Serializable;
+
+/**
+ * Holds Operation result. Used as a result container for Compaction Admin Client (running as part of Spark-launcher
+ * process) to communicate results back to Hoodie CLI process.
+ */
+public class OperationResult<T> implements Serializable {
+
+  private T operation;
+  private boolean executed;
+  private boolean success;
+  private Optional<Exception> exception;
+
+  public OperationResult() {
+  }
+
+  public OperationResult(T operation, boolean success, Optional<Exception> exception) {
+    this.operation = operation;
+    this.success = success;
+    this.exception = exception;
+    this.executed = true;
+  }
+
+  public OperationResult(T operation, boolean executed, boolean success, Optional<Exception> exception) {
+    this.operation = operation;
+    this.success = success;
+    this.exception = exception;
+    this.executed = executed;
+  }
+
+  public T getOperation() {
+    return operation;
+  }
+
+  public boolean isSuccess() {
+    return success;
+  }
+
+  public boolean isExecuted() {
+    return executed;
+  }
+
+  public Optional<Exception> getException() {
+    return exception;
+  }
+
+  @Override
+  public String toString() {
+    return "OperationResult{"
+        + "operation=" + operation
+        + ", executed=" + executed
+        + ", success=" + success
+        + ", exception=" + exception
+        + '}';
+  }
+}
