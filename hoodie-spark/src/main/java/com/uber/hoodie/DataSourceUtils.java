@@ -26,6 +26,7 @@ import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.index.HoodieIndex;
@@ -141,5 +142,20 @@ public class DataSourceUtils {
       HoodieKey hKey, String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
     return new HoodieRecord<>(hKey, payload);
+  }
+
+  @SuppressWarnings("unchecked")
+  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
+      JavaRDD<HoodieRecord> incomingHoodieRecords,
+      HoodieWriteConfig writeConfig) throws Exception {
+    try {
+      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
+      return client.tagLocation(incomingHoodieRecords)
+          .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
+    } catch (DatasetNotFoundException e) {
+      // this will be executed when there is no hoodie dataset yet
+      // so no dups to drop
+      return incomingHoodieRecords;
+    }
   }
 }

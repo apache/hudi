@@ -32,10 +32,12 @@ import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import com.uber.hoodie.utilities.sources.TestDataSource;
 import java.io.IOException;
+import java.util.List;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -103,6 +105,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       assertEquals(expected, recordCount);
     }
 
+    static List<Row> countsPerCommit(String datasetPath, SQLContext sqlContext) {
+      return sqlContext.read().format("com.uber.hoodie").load(datasetPath).groupBy("_hoodie_commit_time").count()
+          .sort("_hoodie_commit_time").collectAsList();
+    }
+
     static void assertCommitMetadata(String expected, String datasetPath, FileSystem fs, int totalCommits)
         throws IOException {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
@@ -159,5 +166,30 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
+    List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
+    assertEquals(2000, counts.get(0).getLong(1));
+  }
+
+  @Test
+  public void testFilterDupes() throws Exception {
+    String datasetBasePath = dfsBasePath + "/test_dupes_dataset";
+
+    // Initial bulk insert
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(datasetBasePath, Operation.BULK_INSERT);
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1000, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00000", datasetBasePath, dfs, 1);
+
+    // Generate the same 1000 records + 1000 new ones for upsert
+    cfg.filterDupes = true;
+    cfg.sourceLimit = 2000;
+    cfg.operation = Operation.UPSERT;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
+    // 1000 records for commit 00000 & 1000 for commit 00001
+    List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
+    assertEquals(1000, counts.get(0).getLong(1));
+    assertEquals(1000, counts.get(1).getLong(1));
   }
 }
