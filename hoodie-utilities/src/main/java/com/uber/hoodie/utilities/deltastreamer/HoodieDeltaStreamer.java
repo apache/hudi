@@ -179,8 +179,20 @@ public class HoodieDeltaStreamer implements Serializable {
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
-    // Perform the write
+    // filter dupes if needed
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
+    if (cfg.filterDupes) {
+      // turn upserts to insert
+      cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
+      records = DataSourceUtils.dropDuplicates(jssc, records, hoodieCfg);
+    }
+
+    if (records.isEmpty()) {
+      log.info("No new data, nothing to commit.. ");
+      return;
+    }
+
+    // Perform the write
     HoodieWriteClient client = new HoodieWriteClient<>(jssc, hoodieCfg);
     String commitTime = client.startCommit();
     log.info("Starting commit  : " + commitTime);
@@ -284,6 +296,10 @@ public class HoodieDeltaStreamer implements Serializable {
         + "is purely new data/inserts to gain speed)",
         converter = OperationConvertor.class)
     public Operation operation = Operation.UPSERT;
+
+    @Parameter(names = {"--filter-dupes"}, description = "Should duplicate records from source be dropped/filtered out"
+        + "before insert/bulk-insert")
+    public Boolean filterDupes = false;
 
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";
