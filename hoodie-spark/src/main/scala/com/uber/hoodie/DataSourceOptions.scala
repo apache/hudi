@@ -145,6 +145,13 @@ object DataSourceWriteOptions {
   val COMMIT_METADATA_KEYPREFIX_OPT_KEY = "hoodie.datasource.write.commitmeta.key.prefix"
   val DEFAULT_COMMIT_METADATA_KEYPREFIX_OPT_VAL = "_"
 
+  /**
+   *  Flag to indicate whether to drop duplicates upon insert.
+   *  By default insert will accept duplicates, to gain extra performance.
+   */
+  val INSERT_DROP_DUPS_OPT_KEY = "hoodie.datasource.write.insert.drop.duplicates"
+  val DEFAULT_INSERT_DROP_DUPS_OPT_VAL = "false"
+
   // HIVE SYNC SPECIFIC CONFIGS
   //NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset

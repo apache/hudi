@@ -196,6 +196,16 @@ public class HoodieTestDataGenerator {
     return inserts;
   }
 
+  public List<HoodieRecord> generateSameKeyInserts(String commitTime, List<HoodieRecord> origin) throws IOException {
+    List<HoodieRecord> copy = new ArrayList<>();
+    for (HoodieRecord r: origin) {
+      HoodieKey key = r.getKey();
+      HoodieRecord record = new HoodieRecord(key,  generateRandomValue(key, commitTime));
+      copy.add(record);
+    }
+    return copy;
+  }
+
   public List<HoodieRecord> generateDeletes(String commitTime, Integer n) throws IOException {
     List<HoodieRecord> inserts = generateInserts(commitTime, n);
     return generateDeletesFromExistingRecords(inserts);
