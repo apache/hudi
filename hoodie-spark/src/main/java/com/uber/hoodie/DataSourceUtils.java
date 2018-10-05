@@ -158,4 +158,15 @@ public class DataSourceUtils {
       return incomingHoodieRecords;
     }
   }
+
+  @SuppressWarnings("unchecked")
+  public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
+                                                     JavaRDD<HoodieRecord> incomingHoodieRecords,
+                                                     Map<String, String> parameters) throws Exception {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig
+        .newBuilder()
+        .withPath(parameters.get("path"))
+        .withProps(parameters).build();
+    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
+  }
 }
