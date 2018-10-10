@@ -37,8 +37,8 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.codehaus.jackson.JsonNode;
@@ -47,6 +47,10 @@ import org.codehaus.jackson.JsonNode;
  * Helper class to do common stuff across Avro.
  */
 public class HoodieAvroUtils {
+
+  private static ThreadLocal<BinaryEncoder> reuseEncoder = ThreadLocal.withInitial(() -> null);
+
+  private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
   // All metadata fields are optional strings.
   private static final Schema METADATA_FIELD_SCHEMA = Schema.createUnion(Arrays.asList(
@@ -62,7 +66,8 @@ public class HoodieAvroUtils {
     GenericDatumWriter<GenericRecord> writer =
         new GenericDatumWriter<>(record.getSchema());
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, null);
+    BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
+    reuseEncoder.set(encoder);
     writer.write(record, encoder);
     encoder.flush();
     out.close();
@@ -73,7 +78,8 @@ public class HoodieAvroUtils {
    * Convert serialized bytes back into avro record
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
-    Decoder decoder = DecoderFactory.get().binaryDecoder(bytes, null);
+    BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
+    reuseDecoder.set(decoder);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<GenericRecord>(schema);
     return reader.read(null, decoder);
   }

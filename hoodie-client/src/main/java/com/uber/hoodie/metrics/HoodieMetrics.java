@@ -16,8 +16,8 @@
 
 package com.uber.hoodie.metrics;
 
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.MetricRegistry;
+import static com.uber.hoodie.metrics.Metrics.registerGauge;
+
 import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
@@ -175,18 +175,6 @@ public class HoodieMetrics {
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
     return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
-  }
-
-  void registerGauge(String metricName, final long value) {
-    try {
-      MetricRegistry registry = Metrics.getInstance().getRegistry();
-      registry.register(metricName, (Gauge<Long>) () -> value);
-    } catch (Exception e) {
-      // Here we catch all exception, so the major upsert pipeline will not be affected if the
-      // metrics system
-      // has some issues.
-      logger.error("Failed to send metrics: ", e);
-    }
   }
 
   /**

@@ -18,20 +18,23 @@
 
 package com.uber.hoodie.utilities.sources;
 
-import static com.uber.hoodie.utilities.sources.KafkaSource.CheckpointUtils;
 import static org.junit.Assert.assertEquals;
 
+import com.uber.hoodie.AvroConversionUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.UtilitiesTestBase;
+import com.uber.hoodie.utilities.deltastreamer.SourceFormatAdapter;
 import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
+import com.uber.hoodie.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Optional;
 import kafka.common.TopicAndPartition;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset;
 import org.apache.spark.streaming.kafka.KafkaTestUtils;
 import org.apache.spark.streaming.kafka.OffsetRange;
@@ -42,7 +45,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
- * Tests against {@link KafkaSource}
+ * Tests against {@link AvroKafkaSource}
  */
 public class TestKafkaSource extends UtilitiesTestBase {
 
@@ -89,30 +92,44 @@ public class TestKafkaSource extends UtilitiesTestBase {
     props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
-    Source kafkaSource = new JsonKafkaSource(props, jsc, schemaProvider);
+    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    assertEquals(Optional.empty(), kafkaSource.fetchNewData(Optional.empty(), Long.MAX_VALUE).getKey());
+    assertEquals(Optional.empty(), kafkaSource.fetchNewDataInAvroFormat(Optional.empty(), Long.MAX_VALUE).getBatch());
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    Pair<Optional<JavaRDD<GenericRecord>>, String> fetch1 = kafkaSource.fetchNewData(Optional.empty(), 900);
-    assertEquals(900, fetch1.getKey().get().count());
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Optional.empty(), 900);
+    assertEquals(900, fetch1.getBatch().get().count());
+    // Test Avro To DataFrame<Row> path
+    Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
+        schemaProvider.getSourceSchema().toString(), jsonSource.getSparkSession());
+    assertEquals(900, fetch1AsRows.count());
 
     // 2. Produce new data, extract new data
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 1000)));
-    Pair<Optional<JavaRDD<GenericRecord>>, String> fetch2 = kafkaSource.fetchNewData(
-        Optional.of(fetch1.getValue()), Long.MAX_VALUE);
-    assertEquals(1100, fetch2.getKey().get().count());
+    InputBatch<Dataset<Row>> fetch2 = kafkaSource.fetchNewDataInRowFormat(
+        Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(1100, fetch2.getBatch().get().count());
 
     // 3. Extract with previous checkpoint => gives same data back (idempotent)
-    Pair<Optional<JavaRDD<GenericRecord>>, String> fetch3 = kafkaSource.fetchNewData(
-        Optional.of(fetch1.getValue()), Long.MAX_VALUE);
-    assertEquals(fetch2.getKey().get().count(), fetch3.getKey().get().count());
-    assertEquals(fetch2.getValue(), fetch3.getValue());
+    InputBatch<JavaRDD<GenericRecord>> fetch3 = kafkaSource.fetchNewDataInAvroFormat(
+        Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(fetch2.getBatch().get().count(), fetch3.getBatch().get().count());
+    assertEquals(fetch2.getCheckpointForNextBatch(), fetch3.getCheckpointForNextBatch());
+    // Same using Row API
+    InputBatch<Dataset<Row>> fetch3AsRows =
+        kafkaSource.fetchNewDataInRowFormat(Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(fetch2.getBatch().get().count(), fetch3AsRows.getBatch().get().count());
+    assertEquals(fetch2.getCheckpointForNextBatch(), fetch3AsRows.getCheckpointForNextBatch());
 
     // 4. Extract with latest checkpoint => no new data returned
-    Pair<Optional<JavaRDD<GenericRecord>>, String> fetch4 = kafkaSource.fetchNewData(
-        Optional.of(fetch2.getValue()), Long.MAX_VALUE);
-    assertEquals(Optional.empty(), fetch4.getKey());
+    InputBatch<JavaRDD<GenericRecord>> fetch4 = kafkaSource.fetchNewDataInAvroFormat(
+        Optional.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(Optional.empty(), fetch4.getBatch());
+    // Same using Row API
+    InputBatch<Dataset<Row>> fetch4AsRows =
+        kafkaSource.fetchNewDataInRowFormat(Optional.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(Optional.empty(), fetch4AsRows.getBatch());
   }
 
 

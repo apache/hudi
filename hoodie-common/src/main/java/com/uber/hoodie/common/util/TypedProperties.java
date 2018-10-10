@@ -19,7 +19,10 @@
 package com.uber.hoodie.common.util;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * Type-aware extension of {@link java.util.Properties}
@@ -47,6 +50,13 @@ public class TypedProperties extends Properties implements Serializable {
 
   public String getString(String property, String defaultValue) {
     return containsKey(property) ? getProperty(property) : defaultValue;
+  }
+
+  public List<String> getStringList(String property, String delimiter, List<String> defaultVal) {
+    if (!containsKey(property)) {
+      return defaultVal;
+    }
+    return Arrays.stream(getProperty(property).split(delimiter)).map(String::trim).collect(Collectors.toList());
   }
 
   public int getInteger(String property) {

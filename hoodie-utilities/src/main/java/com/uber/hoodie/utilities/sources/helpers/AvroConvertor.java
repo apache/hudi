@@ -16,7 +16,7 @@
  *
  */
 
-package com.uber.hoodie.utilities.sources;
+package com.uber.hoodie.utilities.sources.helpers;
 
 import com.twitter.bijection.Injection;
 import com.twitter.bijection.avro.GenericAvroCodecs;
@@ -55,6 +55,10 @@ public class AvroConvertor implements Serializable {
     this.schemaStr = schemaStr;
   }
 
+  public AvroConvertor(Schema schema) {
+    this.schemaStr = schema.toString();
+    this.schema = schema;
+  }
 
   private void initSchema() {
     if (schema == null) {

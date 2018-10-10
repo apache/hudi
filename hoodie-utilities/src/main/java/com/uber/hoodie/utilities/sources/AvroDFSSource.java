@@ -19,7 +19,10 @@
 package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
+import com.uber.hoodie.utilities.sources.helpers.DFSPathSelector;
+import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapreduce.AvroKeyInputFormat;
@@ -27,18 +30,33 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
  * DFS Source that reads avro data
  */
-public class AvroDFSSource extends DFSSource {
+public class AvroDFSSource extends AvroSource {
 
-  public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    super(props, sparkContext, schemaProvider);
+  private final DFSPathSelector pathSelector;
+
+  public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+      SchemaProvider schemaProvider) {
+    super(props, sparkContext, sparkSession, schemaProvider);
+    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override
-  protected JavaRDD<GenericRecord> fromFiles(AvroConvertor convertor, String pathStr) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Optional<String> lastCkptStr,
+      long sourceLimit) {
+    Pair<Optional<String>, String> selectPathsWithMaxModificationTime =
+        pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+    return selectPathsWithMaxModificationTime.getLeft().map(pathStr -> new InputBatch<>(
+        Optional.of(fromFiles(pathStr)),
+        selectPathsWithMaxModificationTime.getRight()))
+        .orElseGet(() -> new InputBatch<>(Optional.empty(), selectPathsWithMaxModificationTime.getRight()));
+  }
+
+  private JavaRDD<GenericRecord> fromFiles(String pathStr) {
     JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
         AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
         sparkContext.hadoopConfiguration());

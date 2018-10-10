@@ -75,7 +75,9 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"end_lat\", \"type\": \"double\"},"
       + "{\"name\": \"end_lon\", \"type\": \"double\"},"
       + "{\"name\":\"fare\",\"type\": \"double\"}]}";
-  public static Schema avroSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA));
+  public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
+
   private static Random rand = new Random(46474747);
 
   private List<KeyPartition> existingKeysList = new ArrayList<>();
@@ -100,7 +102,6 @@ public class HoodieTestDataGenerator {
    */
   public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
-    HoodieAvroUtils.addCommitMetadataToRecord(rec, commitTime, "-1");
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 

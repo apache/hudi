@@ -160,7 +160,8 @@ public class TestHoodieCompactor {
 
     // Write them to corresponding avro logfiles
     HoodieTestUtils
-        .writeRecordsToLogFiles(fs, metaClient.getBasePath(), HoodieTestDataGenerator.avroSchema, updatedRecords);
+        .writeRecordsToLogFiles(fs, metaClient.getBasePath(), HoodieTestDataGenerator.avroSchemaWithMetadataFields,
+            updatedRecords);
 
     // Verify that all data file has one log file
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
