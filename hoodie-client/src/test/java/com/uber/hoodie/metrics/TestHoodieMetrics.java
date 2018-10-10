@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.metrics;
 
+import static com.uber.hoodie.metrics.Metrics.registerGauge;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -39,7 +40,7 @@ public class TestHoodieMetrics {
 
   @Test
   public void testRegisterGauge() {
-    metrics.registerGauge("metric1", 123L);
+    registerGauge("metric1", 123L);
     assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString().equals("123"));
   }
 }

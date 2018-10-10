@@ -64,19 +64,31 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
   }
+
+  val lastInstant = commitTimeline.lastInstant().get()
+
   val commitsToReturn = commitTimeline.findInstantsInRange(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY,
-      commitTimeline.lastInstant().get().getTimestamp))
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
     .getInstants.iterator().toList
 
   // use schema from a file produced in the latest instant
   val latestSchema = {
+    // use last instant if instant range is empty
+    val instant = commitsToReturn.lastOption.getOrElse(lastInstant)
     val latestMeta = HoodieCommitMetadata
-          .fromBytes(commitTimeline.getInstantDetails(commitsToReturn.last).get, classOf[HoodieCommitMetadata])
+          .fromBytes(commitTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
     val metaFilePath = latestMeta.getFileIdAndFullPaths(basePath).values().iterator().next()
     AvroConversionUtils.convertAvroSchemaToStructType(ParquetUtils.readAvroSchema(
       sqlContext.sparkContext.hadoopConfiguration, new Path(metaFilePath)))
+  }
+
+  val filters = {
+    if (optParams.contains(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY)) {
+      val filterStr = optParams.get(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY).getOrElse("")
+      filterStr.split(",").filter(!_.isEmpty)
+    }
+    Array[String]()
   }
 
   override def schema: StructType = latestSchema
@@ -92,12 +104,17 @@ class IncrementalRelation(val sqlContext: SQLContext,
     // will filter out all the files incorrectly.
     sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
     val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
-    sqlContext.read.options(sOpts)
-      .schema(latestSchema) // avoid AnalysisException for empty input
-      .parquet(fileIdToFullPath.values.toList: _*)
-      .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp))
-      .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp))
-      .toDF().rdd
-
+    if (fileIdToFullPath.isEmpty) {
+      sqlContext.sparkContext.emptyRDD[Row]
+    } else {
+      log.info("Additional Filters to be applied to incremental source are :" + filters)
+      filters.foldLeft(sqlContext.read.options(sOpts)
+        .schema(latestSchema)
+        .parquet(fileIdToFullPath.values.toList: _*)
+        .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp))
+        .filter(String.format("%s <= '%s'",
+          HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)))((e, f) => e.filter(f))
+        .toDF().rdd
+    }
   }
 }

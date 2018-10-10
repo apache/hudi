@@ -33,7 +33,7 @@ Hoodie requires Java 8 to be installed. Hoodie works with Spark-2.x versions. We
 
 | Hadoop | Hive  | Spark | Instructions to Build Hoodie | 
 | ---- | ----- | ---- | ---- |
-| 2.6.0-cdh5.7.2 | 1.1.0-cdh5.7.2 | spark-2.[1-3].x | Use "mvn clean install -DskipTests -Dhive11". Jars will have ".hive11" as suffix |
+| 2.6.0-cdh5.7.2 | 1.1.0-cdh5.7.2 | spark-2.[1-3].x | Use "mvn clean install -DskipTests -Dhadoop.version=2.6.0-cdh5.7.2 -Dhive.version=1.1.0-cdh5.7.2" |
 | Apache hadoop-2.8.4 | Apache hive-2.3.3 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
 | Apache hadoop-2.7.3 | Apache hive-1.2.1 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
 

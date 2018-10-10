@@ -61,6 +61,22 @@
       <artifactId>hadoop-hdfs</artifactId>
     </dependency>
     <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+      <version>${hive.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-exec</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
       <groupId>commons-logging</groupId>
       <artifactId>commons-logging</artifactId>
     </dependency>
@@ -105,58 +121,4 @@
       </plugin>
     </plugins>
   </build>
-  <profiles>
-    <profile>
-      <id>hive12</id>
-      <activation>
-        <property>
-          <name>!hive11</name>
-        </property>
-      </activation>
-      <dependencies>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive12.version}</version>
-          <exclusions>
-            <exclusion>
-              <groupId>commons-logging</groupId>
-              <artifactId>commons-logging</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-exec</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
-    <profile>
-      <id>hive11</id>
-      <activation>
-        <property>
-          <name>hive11</name>
-        </property>
-      </activation>
-      <dependencies>
-       <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive11.version}</version>
-          <exclusions>
-            <exclusion>
-              <groupId>commons-logging</groupId>
-              <artifactId>commons-logging</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-exec</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-      </dependencies>
-   </profile>
-  </profiles>
 </project>

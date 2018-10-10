@@ -45,6 +45,26 @@
       <artifactId>hadoop-auth</artifactId>
     </dependency>
     <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-metastore</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-common</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
     </dependency>
@@ -195,73 +215,4 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
   </properties>
-
-  <profiles>
-    <profile>
-      <id>hive12</id>
-      <activation>
-        <property>
-          <name>!hive11</name>
-        </property>
-      </activation>
-      <properties>
-        <hiveJarSuffix />
-      </properties>
-      <dependencies>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-service</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-metastore</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-common</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
-    <profile>
-      <id>hive11</id>
-      <activation>
-        <property>
-          <name>hive11</name>
-        </property>
-      </activation>
-      <properties>
-        <hiveJarSuffix>.hive11</hiveJarSuffix>
-      </properties>
-      <dependencies>
-        <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-service</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-metastore</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-common</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
-  </profiles>
 </project>

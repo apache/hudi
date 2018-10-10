@@ -19,22 +19,38 @@
 package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import org.apache.avro.generic.GenericRecord;
+import com.uber.hoodie.utilities.sources.helpers.DFSPathSelector;
+import java.util.Optional;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
  * DFS Source that reads json data
  */
-public class JsonDFSSource extends DFSSource {
+public class JsonDFSSource extends JsonSource {
 
-  public JsonDFSSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    super(props, sparkContext, schemaProvider);
+  private final DFSPathSelector pathSelector;
+
+  public JsonDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+      SchemaProvider schemaProvider) {
+    super(props, sparkContext, sparkSession, schemaProvider);
+    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override
-  protected JavaRDD<GenericRecord> fromFiles(AvroConvertor convertor, String pathStr) {
-    return sparkContext.textFile(pathStr).map(convertor::fromJson);
+  protected InputBatch<JavaRDD<String>> fetchNewData(Optional<String> lastCkptStr,
+      long sourceLimit) {
+    Pair<Optional<String>, String> selPathsWithMaxModificationTime =
+        pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+    return selPathsWithMaxModificationTime.getLeft().map(pathStr -> new InputBatch<>(
+        Optional.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
+        .orElse(new InputBatch<>(Optional.empty(), selPathsWithMaxModificationTime.getRight()));
+  }
+
+  private JavaRDD<String> fromFiles(String pathStr) {
+    return sparkContext.textFile(pathStr);
   }
 }

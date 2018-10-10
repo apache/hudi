@@ -85,8 +85,12 @@ Usage: <main class> [options]
       exist first time around. If exists, expected to be a hoodie dataset)
   * --target-table
       name of the target table in Hive
-
-
+    --transformer-class
+      subclass of com.uber.hoodie.utilities.transform.Transformer. UDF to 
+      transform raw source dataset to a target dataset (conforming to target 
+      schema) before writing. Default : Not set. E:g - 
+      com.uber.hoodie.utilities.transform.SqlQueryBasedTransformer (which 
+      allows a SQL query template to be passed as a transformation function)
 ```
 
 

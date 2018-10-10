@@ -22,13 +22,18 @@ import java.sql.{Date, Timestamp}
 import java.util
 
 import com.databricks.spark.avro.SchemaConverters
-import org.apache.avro.generic.GenericData.Record
-import org.apache.avro.generic.GenericRecord
+import com.databricks.spark.avro.SchemaConverters.IncompatibleSchemaException
+import org.apache.avro.Schema.Type._
+import org.apache.avro.generic.GenericData.{Fixed, Record}
+import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
+
+import scala.collection.JavaConverters._
 
 
 object AvroConversionUtils {
@@ -46,6 +51,22 @@ object AvroConversionUtils {
     }
   }
 
+  def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss : SparkSession): Dataset[Row] = {
+    if (rdd.isEmpty()) {
+      ss.emptyDataFrame
+    } else {
+      ss.createDataFrame(rdd.mapPartitions { records =>
+        if (records.isEmpty) Iterator.empty
+        else {
+          val schema = Schema.parse(schemaStr)
+          val dataType = convertAvroSchemaToStructType(schema)
+          val convertor = createConverterToRow(schema, dataType)
+          records.map { x => convertor(x).asInstanceOf[Row] }
+        }
+      }, convertAvroSchemaToStructType(Schema.parse(schemaStr))).asInstanceOf[Dataset[Row]]
+    }
+  }
+
   def getNewRecordNamespace(elementDataType: DataType,
                             currentRecordNamespace: String,
                             elementName: String): String = {
@@ -54,6 +75,185 @@ object AvroConversionUtils {
       case StructType(_) => s"$currentRecordNamespace.$elementName"
       case _ => currentRecordNamespace
     }
+  }
+
+  /**
+    * NOTE : This part of code is copied from com.databricks.spark.avro.SchemaConverters.scala (133:310) (spark-avro)
+    *
+    * Returns a converter function to convert row in avro format to GenericRow of catalyst.
+    *
+    * @param sourceAvroSchema Source schema before conversion inferred from avro file by passed in
+    *                       by user.
+    * @param targetSqlType Target catalyst sql type after the conversion.
+    * @return returns a converter function to convert row in avro format to GenericRow of catalyst.
+    */
+  def createConverterToRow(sourceAvroSchema: Schema,
+                           targetSqlType: DataType): AnyRef => AnyRef = {
+
+    def createConverter(avroSchema: Schema,
+                        sqlType: DataType, path: List[String]): AnyRef => AnyRef = {
+      val avroType = avroSchema.getType
+      (sqlType, avroType) match {
+        // Avro strings are in Utf8, so we have to call toString on them
+        case (StringType, STRING) | (StringType, ENUM) =>
+          (item: AnyRef) => if (item == null) null else item.toString
+        // Byte arrays are reused by avro, so we have to make a copy of them.
+        case (IntegerType, INT) | (BooleanType, BOOLEAN) | (DoubleType, DOUBLE) |
+             (FloatType, FLOAT) | (LongType, LONG) =>
+          identity
+        case (BinaryType, FIXED) =>
+          (item: AnyRef) =>
+            if (item == null) {
+              null
+            } else {
+              item.asInstanceOf[Fixed].bytes().clone()
+            }
+        case (BinaryType, BYTES) =>
+          (item: AnyRef) =>
+            if (item == null) {
+              null
+            } else {
+              val byteBuffer = item.asInstanceOf[ByteBuffer]
+              val bytes = new Array[Byte](byteBuffer.remaining)
+              byteBuffer.get(bytes)
+              bytes
+            }
+
+        case (struct: StructType, RECORD) =>
+          val length = struct.fields.length
+          val converters = new Array[AnyRef => AnyRef](length)
+          val avroFieldIndexes = new Array[Int](length)
+          var i = 0
+          while (i < length) {
+            val sqlField = struct.fields(i)
+            val avroField = avroSchema.getField(sqlField.name)
+            if (avroField != null) {
+              val converter = createConverter(avroField.schema(), sqlField.dataType,
+                path :+ sqlField.name)
+              converters(i) = converter
+              avroFieldIndexes(i) = avroField.pos()
+            } else if (!sqlField.nullable) {
+              throw new IncompatibleSchemaException(
+                s"Cannot find non-nullable field ${sqlField.name} at path ${path.mkString(".")} " +
+                  "in Avro schema\n" +
+                  s"Source Avro schema: $sourceAvroSchema.\n" +
+                  s"Target Catalyst type: $targetSqlType")
+            }
+            i += 1
+          }
+
+          (item: AnyRef) => {
+            if (item == null) {
+              null
+            } else {
+              val record = item.asInstanceOf[GenericRecord]
+
+              val result = new Array[Any](length)
+              var i = 0
+              while (i < converters.length) {
+                if (converters(i) != null) {
+                  val converter = converters(i)
+                  result(i) = converter(record.get(avroFieldIndexes(i)))
+                }
+                i += 1
+              }
+              new GenericRow(result)
+            }
+          }
+        case (arrayType: ArrayType, ARRAY) =>
+          val elementConverter = createConverter(avroSchema.getElementType, arrayType.elementType,
+            path)
+          val allowsNull = arrayType.containsNull
+          (item: AnyRef) => {
+            if (item == null) {
+              null
+            } else {
+              item.asInstanceOf[java.lang.Iterable[AnyRef]].asScala.map { element =>
+                if (element == null && !allowsNull) {
+                  throw new RuntimeException(s"Array value at path ${path.mkString(".")} is not " +
+                    "allowed to be null")
+                } else {
+                  elementConverter(element)
+                }
+              }
+            }
+          }
+        case (mapType: MapType, MAP) if mapType.keyType == StringType =>
+          val valueConverter = createConverter(avroSchema.getValueType, mapType.valueType, path)
+          val allowsNull = mapType.valueContainsNull
+          (item: AnyRef) => {
+            if (item == null) {
+              null
+            } else {
+              item.asInstanceOf[java.util.Map[AnyRef, AnyRef]].asScala.map { x =>
+                if (x._2 == null && !allowsNull) {
+                  throw new RuntimeException(s"Map value at path ${path.mkString(".")} is not " +
+                    "allowed to be null")
+                } else {
+                  (x._1.toString, valueConverter(x._2))
+                }
+              }.toMap
+            }
+          }
+        case (sqlType, UNION) =>
+          if (avroSchema.getTypes.asScala.exists(_.getType == NULL)) {
+            val remainingUnionTypes = avroSchema.getTypes.asScala.filterNot(_.getType == NULL)
+            if (remainingUnionTypes.size == 1) {
+              createConverter(remainingUnionTypes.head, sqlType, path)
+            } else {
+              createConverter(Schema.createUnion(remainingUnionTypes.asJava), sqlType, path)
+            }
+          } else avroSchema.getTypes.asScala.map(_.getType) match {
+            case Seq(t1) => createConverter(avroSchema.getTypes.get(0), sqlType, path)
+            case Seq(a, b) if Set(a, b) == Set(INT, LONG) && sqlType == LongType =>
+              (item: AnyRef) => {
+                item match {
+                  case null => null
+                  case l: java.lang.Long => l
+                  case i: java.lang.Integer => new java.lang.Long(i.longValue())
+                }
+              }
+            case Seq(a, b) if Set(a, b) == Set(FLOAT, DOUBLE) && sqlType == DoubleType =>
+              (item: AnyRef) => {
+                item match {
+                  case null => null
+                  case d: java.lang.Double => d
+                  case f: java.lang.Float => new java.lang.Double(f.doubleValue())
+                }
+              }
+            case other =>
+              sqlType match {
+                case t: StructType if t.fields.length == avroSchema.getTypes.size =>
+                  val fieldConverters = t.fields.zip(avroSchema.getTypes.asScala).map {
+                    case (field, schema) =>
+                      createConverter(schema, field.dataType, path :+ field.name)
+                  }
+
+                  (item: AnyRef) => if (item == null) {
+                    null
+                  } else {
+                    val i = GenericData.get().resolveUnion(avroSchema, item)
+                    val converted = new Array[Any](fieldConverters.length)
+                    converted(i) = fieldConverters(i)(item)
+                    new GenericRow(converted)
+                  }
+                case _ => throw new IncompatibleSchemaException(
+                  s"Cannot convert Avro schema to catalyst type because schema at path " +
+                    s"${path.mkString(".")} is not compatible " +
+                    s"(avroType = $other, sqlType = $sqlType). \n" +
+                    s"Source Avro schema: $sourceAvroSchema.\n" +
+                    s"Target Catalyst type: $targetSqlType")
+              }
+          }
+        case (left, right) =>
+          throw new IncompatibleSchemaException(
+            s"Cannot convert Avro schema to catalyst type because schema at path " +
+              s"${path.mkString(".")} is not compatible (avroType = $left, sqlType = $right). \n" +
+              s"Source Avro schema: $sourceAvroSchema.\n" +
+              s"Target Catalyst type: $targetSqlType")
+      }
+    }
+    createConverter(sourceAvroSchema, targetSqlType, List.empty[String])
   }
 
   def createConverterToAvro(dataType: DataType,
