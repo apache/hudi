@@ -100,7 +100,6 @@ class DataSourceTest extends AssertionsForJUnit {
       .load(basePath + "/*/*/*/*");
     assertEquals(100, hoodieROViewDF2.count()) // still 100, since we only updated
 
-
     // Read Incremental View
     // we have 2 commits, try pulling the first commit (which is not the latest)
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0);

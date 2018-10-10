@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.hive;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -28,7 +29,7 @@ import java.util.List;
  * e.g. Hive table partitioned by datestr=yyyy-mm-dd and hdfs path
  * /app/hoodie/dataset1/YYYY=[yyyy]/MM=[mm]/DD=[dd]
  */
-public interface PartitionValueExtractor {
+public interface PartitionValueExtractor extends Serializable {
 
   List<String> extractPartitionValuesInPath(String partitionPath);
 }

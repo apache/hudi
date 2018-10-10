@@ -73,6 +73,20 @@ public class DFSPropertiesConfiguration {
       }
       visitedFiles.add(file.getName());
       BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(file)));
+      addProperties(reader);
+    } catch (IOException ioe) {
+      log.error("Error reading in properies from dfs", ioe);
+      throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
+    }
+  }
+
+  /**
+   * Add properties from input stream
+   * @param reader Buffered Reader
+   * @throws IOException
+   */
+  public void addProperties(BufferedReader reader) throws IOException {
+    try {
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.startsWith("#") || line.equals("") || !line.contains("=")) {
@@ -85,10 +99,8 @@ public class DFSPropertiesConfiguration {
           props.setProperty(split[0], split[1]);
         }
       }
+    } finally {
       reader.close();
-    } catch (IOException ioe) {
-      log.error("Error reading in properies from dfs", ioe);
-      throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
     }
   }
 

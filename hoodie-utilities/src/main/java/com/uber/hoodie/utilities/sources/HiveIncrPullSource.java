@@ -21,8 +21,6 @@ package com.uber.hoodie.utilities.sources;
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.ImmutablePair;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.IOException;
@@ -44,19 +42,20 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
- * Source to read deltas produced by {@link com.uber.hoodie.utilities.HiveIncrementalPuller}, commit
- * by commit and apply to the target table
+ * Source to read deltas produced by {@link com.uber.hoodie.utilities.HiveIncrementalPuller}, commit by commit and apply
+ * to the target table
  * <p>
  * The general idea here is to have commits sync across the data pipeline.
  * <p>
- * [Source Tables(s)]  ====> HiveIncrementalScanner  ==> incrPullRootPath ==> targetTable
- * {c1,c2,c3,...}                                       {c1,c2,c3,...}       {c1,c2,c3,...}
+ * [Source Tables(s)]  ====> HiveIncrementalScanner  ==> incrPullRootPath ==> targetTable {c1,c2,c3,...}
+ * {c1,c2,c3,...}       {c1,c2,c3,...}
  * <p>
  * This produces beautiful causality, that makes data issues in ETLs very easy to debug
  */
-public class HiveIncrPullSource extends Source {
+public class HiveIncrPullSource extends AvroSource {
 
   private static volatile Logger log = LogManager.getLogger(HiveIncrPullSource.class);
 
@@ -73,9 +72,9 @@ public class HiveIncrPullSource extends Source {
     private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.incrpull.root";
   }
 
-  public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext,
+  public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
-    super(props, sparkContext, schemaProvider);
+    super(props, sparkContext, sparkSession, schemaProvider);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
     this.incrPullRootPath = props.getString(Config.ROOT_INPUT_PATH_PROP);
     this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
@@ -113,15 +112,15 @@ public class HiveIncrPullSource extends Source {
   }
 
   @Override
-  public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(
       Optional<String> lastCheckpointStr, long sourceLimit) {
     try {
       // find the source commit to pull
       Optional<String> commitToPull = findCommitToPull(lastCheckpointStr);
 
       if (!commitToPull.isPresent()) {
-        return new ImmutablePair<>(Optional.empty(),
-                lastCheckpointStr.orElse(""));
+        return new InputBatch<>(Optional.empty(),
+            lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
       }
 
       // read the files out.
@@ -132,7 +131,7 @@ public class HiveIncrPullSource extends Source {
       JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
           AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
           sparkContext.hadoopConfiguration());
-      return new ImmutablePair<>(Optional.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
+      return new InputBatch<>(Optional.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
     } catch (IOException ioe) {
       throw new HoodieIOException(

@@ -29,8 +29,13 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
+import com.uber.hoodie.hive.HiveSyncConfig;
+import com.uber.hoodie.hive.PartitionValueExtractor;
+import com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor;
 import com.uber.hoodie.index.HoodieIndex;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -83,6 +88,17 @@ public class DataSourceUtils {
       return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
+    }
+  }
+
+  /**
+   * Create a partition value extractor class via reflection, passing in any configs needed
+   */
+  public static PartitionValueExtractor createPartitionExtractor(String partitionExtractorClass)  {
+    try {
+      return (PartitionValueExtractor) ReflectionUtils.loadClass(partitionExtractorClass);
+    } catch (Throwable e) {
+      throw new HoodieException("Could not load partition extractor class " + partitionExtractorClass, e);
     }
   }
 
@@ -168,5 +184,29 @@ public class DataSourceUtils {
         .withPath(parameters.get("path"))
         .withProps(parameters).build();
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
+  }
+
+  public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath) {
+    checkRequiredProperties(props, Arrays.asList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
+    hiveSyncConfig.basePath = basePath;
+    hiveSyncConfig.assumeDatePartitioning =
+        props.getBoolean(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(),
+            Boolean.valueOf(DataSourceWriteOptions.DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL()));
+    hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(),
+        DataSourceWriteOptions.DEFAULT_HIVE_DATABASE_OPT_VAL());
+    hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
+    hiveSyncConfig.hiveUser = props.getString(DataSourceWriteOptions.HIVE_USER_OPT_KEY(),
+        DataSourceWriteOptions.DEFAULT_HIVE_USER_OPT_VAL());
+    hiveSyncConfig.hivePass = props.getString(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(),
+        DataSourceWriteOptions.DEFAULT_HIVE_PASS_OPT_VAL());
+    hiveSyncConfig.jdbcUrl = props.getString(DataSourceWriteOptions.HIVE_URL_OPT_KEY(),
+        DataSourceWriteOptions.DEFAULT_HIVE_URL_OPT_VAL());
+    hiveSyncConfig.partitionFields =
+        props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), ",",  new ArrayList<>());
+    hiveSyncConfig.partitionValueExtractorClass =
+          props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+              SlashEncodedDayPartitionValueExtractor.class.getName());
+    return hiveSyncConfig;
   }
 }

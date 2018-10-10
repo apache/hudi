@@ -21,8 +21,6 @@ package com.uber.hoodie.utilities.sources;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.ImmutablePair;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,11 +33,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
  * An implementation of {@link Source}, that emits test upserts.
  */
-public class TestDataSource extends Source {
+public class TestDataSource extends AvroSource {
 
   private static volatile Logger log = LogManager.getLogger(TestDataSource.class);
 
@@ -54,8 +53,9 @@ public class TestDataSource extends Source {
     dataGenerator = null;
   }
 
-  public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    super(props, sparkContext, schemaProvider);
+  public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+      SchemaProvider schemaProvider) {
+    super(props, sparkContext, sparkSession, schemaProvider);
   }
 
   private GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
@@ -68,14 +68,14 @@ public class TestDataSource extends Source {
   }
 
   @Override
-  public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(Optional<String> lastCheckpointStr,
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Optional<String> lastCheckpointStr,
       long sourceLimit) {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String commitTime = String.format("%05d", nextCommitNum);
     // No new data.
     if (sourceLimit <= 0) {
-      return new ImmutablePair<>(Optional.empty(), commitTime);
+      return new InputBatch<>(Optional.empty(), commitTime);
     }
 
     // generate `sourceLimit` number of upserts each time.
@@ -94,6 +94,6 @@ public class TestDataSource extends Source {
     }
     
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
-    return new ImmutablePair<>(Optional.of(avroRDD), commitTime);
+    return new InputBatch<>(Optional.of(avroRDD), commitTime);
   }
 }

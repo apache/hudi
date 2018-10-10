@@ -16,24 +16,22 @@
  *
  */
 
-package com.uber.hoodie.utilities.sources;
+package com.uber.hoodie.utilities.sources.helpers;
 
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.ImmutablePair;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
-import com.uber.hoodie.utilities.schema.SchemaProvider;
-
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import kafka.common.TopicAndPartition;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.streaming.kafka.KafkaCluster;
 import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset;
 import org.apache.spark.streaming.kafka.OffsetRange;
@@ -49,14 +47,13 @@ import scala.util.Either;
 /**
  * Source to read data from Kafka, incrementally
  */
-public abstract class KafkaSource extends Source {
+public class KafkaOffsetGen {
 
-  private static volatile Logger log = LogManager.getLogger(KafkaSource.class);
+  private static volatile Logger log = LogManager.getLogger(KafkaOffsetGen.class);
 
   private static long DEFAULT_MAX_EVENTS_TO_READ = 1000000; // 1M events max
 
-
-  static class CheckpointUtils {
+  public static class CheckpointUtils {
 
     /**
      * Reconstruct checkpoint from string.
@@ -89,7 +86,6 @@ public abstract class KafkaSource extends Source {
           .collect(Collectors.joining(",")));
       return sb.toString();
     }
-
 
     /**
      * Compute the offset ranges to read from Kafka, while handling newly added partitions, skews, event limits.
@@ -174,19 +170,18 @@ public abstract class KafkaSource extends Source {
    * Configs to be passed for this source. All standard Kafka consumer configs are also respected
    */
   static class Config {
+
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final KafkaResetOffsetStrategies DEFAULT_AUTO_RESET_OFFSET = KafkaResetOffsetStrategies.LARGEST;
   }
 
-
-  protected HashMap<String, String> kafkaParams;
-
+  private final HashMap<String, String> kafkaParams;
+  private final TypedProperties props;
   protected final String topicName;
 
-  public KafkaSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    super(props, sparkContext, schemaProvider);
-
-    kafkaParams = new HashMap<>();
+  public KafkaOffsetGen(TypedProperties props) {
+    this.props = props;
+    kafkaParams = new HashMap<String, String>();
     for (Object prop : props.keySet()) {
       kafkaParams.put(prop.toString(), props.getString(prop.toString()));
     }
@@ -194,11 +189,7 @@ public abstract class KafkaSource extends Source {
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
 
-  protected abstract JavaRDD<GenericRecord> toAvroRDD(OffsetRange[] offsetRanges, AvroConvertor avroConvertor);
-
-  @Override
-  public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr, long sourceLimit) {
+  public OffsetRange[] getNextOffsetRanges(Optional<String> lastCheckpointStr, long sourceLimit) {
 
     // Obtain current metadata for the topic
     KafkaCluster cluster = new KafkaCluster(ScalaHelpers.toScalaMap(kafkaParams));
@@ -240,16 +231,15 @@ public abstract class KafkaSource extends Source {
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long numEvents = Math.min(DEFAULT_MAX_EVENTS_TO_READ, sourceLimit);
     OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
-    long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
-    if (totalNewMsgs <= 0) {
-      return new ImmutablePair<>(Optional.empty(), lastCheckpointStr.orElse(""));
-    } else {
-      log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + topicName);
-    }
 
-    // Produce a RDD[GenericRecord]
-    final AvroConvertor avroConvertor = new AvroConvertor(schemaProvider.getSourceSchema().toString());
-    JavaRDD<GenericRecord> newDataRDD = toAvroRDD(offsetRanges, avroConvertor);
-    return new ImmutablePair<>(Optional.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
+    return offsetRanges;
+  }
+
+  public String getTopicName() {
+    return topicName;
+  }
+
+  public HashMap<String, String> getKafkaParams() {
+    return kafkaParams;
   }
 }

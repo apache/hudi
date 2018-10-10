@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *  Copyright (c) 2018 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  *
  */
 
-package com.uber.hoodie.utilities.sources;
+package com.uber.hoodie.utilities.sources.helpers;
 
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
@@ -24,45 +24,38 @@ import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.ImmutablePair;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
-import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
-import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
-/**
- * Source to read data from a given DFS directory structure, incrementally
- */
-public abstract class DFSSource extends Source {
+public class DFSPathSelector {
 
   /**
    * Configs supported
    */
   static class Config {
+
     private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
   }
 
   private static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
 
   private final transient FileSystem fs;
+  private final TypedProperties props;
 
-  public DFSSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    super(props, sparkContext, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
-    this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), sparkContext.hadoopConfiguration());
+  public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
+    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+    this.props = props;
+    this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
   }
 
-  protected abstract JavaRDD<GenericRecord> fromFiles(final AvroConvertor convertor, String pathStr);
-
-  @Override
-  public Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
+  public Pair<Optional<String>, String> getNextFilePathsAndMaxModificationTime(
       Optional<String> lastCheckpointStr, long sourceLimit) {
 
     try {
@@ -111,11 +104,9 @@ public abstract class DFSSource extends Source {
       // read the files out.
       String pathStr = filteredFiles.stream().map(f -> f.getPath().toString())
           .collect(Collectors.joining(","));
-      String schemaStr = schemaProvider.getSourceSchema().toString();
-      final AvroConvertor avroConvertor = new AvroConvertor(schemaStr);
 
       return new ImmutablePair<>(
-          Optional.of(fromFiles(avroConvertor, pathStr)),
+          Optional.ofNullable(pathStr),
           String.valueOf(maxModificationTime));
     } catch (IOException ioe) {
       throw new HoodieIOException(
