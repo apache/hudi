@@ -23,6 +23,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
+import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import java.io.IOException;
@@ -161,7 +162,7 @@ public class HoodieInputFormat extends MapredParquetInputFormat implements Confi
           metadata = getTableMetaClient(status.getPath().getFileSystem(conf),
               status.getPath().getParent());
           nonHoodieBasePath = null;
-        } catch (InvalidDatasetException e) {
+        } catch (DatasetNotFoundException | InvalidDatasetException e) {
           LOG.info("Handling a non-hoodie path " + status.getPath());
           metadata = null;
           nonHoodieBasePath = status.getPath().getParent().toString();
