@@ -66,6 +66,9 @@ public class ITTestHoodieSanity extends ITTestBase {
    */
   public void testRunHoodieJavaAppOnCOWTable(String hiveTableName, boolean singlePartitionKey) throws Exception {
 
+    String hdfsPath = "/" + hiveTableName;
+    String hdfsUrl = "hdfs://namenode" + hdfsPath;
+
     // Drop Table if it exists
     {
       String[] hiveDropCmd = getHiveConsoleCommand("drop table if exists " + hiveTableName);
@@ -91,6 +94,7 @@ public class ITTestHoodieSanity extends ITTestBase {
         cmd = new String[]{
             HOODIE_JAVA_APP,
             "--hive-sync",
+            "--table-path", hdfsUrl,
             "--hive-url", HIVE_SERVER_JDBC_URL,
             "--hive-table", hiveTableName
         };
@@ -98,6 +102,7 @@ public class ITTestHoodieSanity extends ITTestBase {
         cmd = new String[]{
             HOODIE_JAVA_APP,
             "--hive-sync",
+            "--table-path", hdfsUrl,
             "--hive-url", HIVE_SERVER_JDBC_URL,
             "--use-multi-partition-keys",
             "--hive-table", hiveTableName
@@ -133,6 +138,31 @@ public class ITTestHoodieSanity extends ITTestBase {
       LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stdout + ")");
       LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stderr + ")");
       Assert.assertEquals("Expecting 100 rows to be present in the new table", 100,
+          Integer.parseInt(stdout.trim()));
+    }
+
+    // Make the HDFS dataset non-hoodie and run the same query
+    // Checks for interoperability with non-hoodie tables
+    {
+      // Delete Hoodie directory to make it non-hoodie dataset
+      String[] cmd = new String[]{
+          "hadoop", "fs", "-rm", "-r", hdfsPath + "/.hoodie"
+      };
+      TestExecStartResultCallback callback =
+          executeCommandInDocker(ADHOC_1_CONTAINER, cmd, true);
+      String stderr = callback.getStderr().toString().trim();
+      String stdout = callback.getStdout().toString().trim();
+      LOG.info("Got output for (" + Arrays.toString(cmd) + ") : (" + stdout + ")");
+      LOG.info("Got error output for (" + Arrays.toString(cmd) + ") : (" + stderr + ")");
+
+      // Run the count query again. Without Hoodie, all versions are included. So we get a wrong count
+      String[] hiveTableCheck = getHiveConsoleCommand("select count(1) from " + hiveTableName);
+      callback = executeCommandInDocker(ADHOC_1_CONTAINER, hiveTableCheck, true);
+      stderr = callback.getStderr().toString().trim();
+      stdout = callback.getStdout().toString().trim();
+      LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stdout + ")");
+      LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stderr + ")");
+      Assert.assertEquals("Expecting 200 rows to be present in the new table", 200,
           Integer.parseInt(stdout.trim()));
     }
   }
