@@ -152,6 +152,28 @@ object DataSourceWriteOptions {
   val INSERT_DROP_DUPS_OPT_KEY = "hoodie.datasource.write.insert.drop.duplicates"
   val DEFAULT_INSERT_DROP_DUPS_OPT_VAL = "false"
 
+  /**
+   *  Flag to indicate how many times streaming job should retry for a failed microbatch
+   *  By default 3
+   */
+  val STREAMING_RETRY_CNT_OPT_KEY = "hoodie.datasource.write.streaming.retry.count"
+  val DEFAULT_STREAMING_RETRY_CNT_OPT_VAL = "3"
+
+  /**
+   *  Flag to indicate how long (by millisecond) before a retry should issued for failed microbatch
+   *  By default 2000 and it will be doubled by every retry
+   */
+  val STREAMING_RETRY_INTERVAL_MS_OPT_KEY = "hoodie.datasource.write.streaming.retry.interval.ms"
+  val DEFAULT_STREAMING_RETRY_INTERVAL_MS_OPT_VAL = "2000"
+
+  /**
+   *  Flag to indicate whether to ignore any non exception error (e.g. writestatus error)
+   *  within a streaming microbatch
+   *  By default true (in favor of streaming progressing over data integrity)
+   */
+  val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY = "hoodie.datasource.write.streaming.ignore.failed.batch"
+  val DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL = "true"
+
   // HIVE SYNC SPECIFIC CONFIGS
   //NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset

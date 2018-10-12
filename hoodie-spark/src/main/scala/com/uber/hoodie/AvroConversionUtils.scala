@@ -26,6 +26,7 @@ import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row}
 
@@ -34,7 +35,9 @@ object AvroConversionUtils {
 
   def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
     val dataType = df.schema
-    df.rdd.mapPartitions { records =>
+    val encoder = RowEncoder.apply(dataType).resolveAndBind()
+    df.queryExecution.toRdd.map(encoder.fromRow)
+      .mapPartitions { records =>
       if (records.isEmpty) Iterator.empty
       else {
         val convertor = createConverterToAvro(dataType, structName, recordNamespace)
