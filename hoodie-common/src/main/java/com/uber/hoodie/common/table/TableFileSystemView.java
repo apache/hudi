@@ -30,9 +30,9 @@ import java.util.stream.Stream;
 public interface TableFileSystemView {
 
   /**
-   * ReadOptimizedView - methods to provide a view of columnar data files only.
+   * ReadOptimizedView with methods to only access latest version of file for the instant(s) passed.
    */
-  interface ReadOptimizedView {
+  interface ReadOptimizedViewWithLatestSlice {
 
     /**
      * Stream all the latest data files in the given partition
@@ -45,15 +45,15 @@ public interface TableFileSystemView {
     Stream<HoodieDataFile> getLatestDataFiles();
 
     /**
-     * Stream all the latest version data files in the given partition with precondition that
-     * commitTime(file) before maxCommitTime
+     * Stream all the latest version data files in the given partition with precondition that commitTime(file) before
+     * maxCommitTime
      */
     Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
         String maxCommitTime);
 
     /**
-     * Stream all the latest version data files in the given partition with precondition that
-     * instant time of file matches passed in instant time.
+     * Stream all the latest version data files in the given partition with precondition that instant time of file
+     * matches passed in instant time.
      */
     Stream<HoodieDataFile> getLatestDataFilesOn(String partitionPath, String instantTime);
 
@@ -61,7 +61,12 @@ public interface TableFileSystemView {
      * Stream all the latest data files pass
      */
     Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
+  }
 
+  /**
+   * ReadOptimizedView - methods to provide a view of columnar data files only.
+   */
+  interface ReadOptimizedView extends ReadOptimizedViewWithLatestSlice {
     /**
      * Stream all the data file versions grouped by FileId for a given partition
      */
@@ -69,10 +74,9 @@ public interface TableFileSystemView {
   }
 
   /**
-   * RealtimeView - methods to access a combination of columnar data files + log files with real
-   * time data.
+   * RealtimeView with methods to only access latest version of file-slice for the instant(s) passed.
    */
-  interface RealtimeView {
+  interface RealtimeViewWithLatestSlice {
 
     /**
      * Stream all the latest file slices in the given partition
@@ -106,6 +110,12 @@ public interface TableFileSystemView {
      * Stream all the latest file slices, in the given range
      */
     Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);
+  }
+
+  /**
+   * RealtimeView - methods to access a combination of columnar data files + log files with real time data.
+   */
+  interface RealtimeView extends RealtimeViewWithLatestSlice {
 
     /**
      * Stream all the file slices for a given partition, latest or not.

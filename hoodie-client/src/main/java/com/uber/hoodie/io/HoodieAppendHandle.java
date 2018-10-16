@@ -25,7 +25,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
-import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.TableFileSystemView.RealtimeViewWithLatestSlice;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
@@ -68,7 +68,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   List<IndexedRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
   List<String> keysToDelete = new ArrayList<>();
-  private TableFileSystemView.RealtimeView fileSystemView;
+  private RealtimeViewWithLatestSlice fileSystemView;
   private String partitionPath;
   private Iterator<HoodieRecord<T>> recordItr;
   // Total number of records written during an append
@@ -101,7 +101,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     writeStatus.setStat(new HoodieDeltaWriteStat());
     this.writeStatus = writeStatus;
     this.fileId = fileId;
-    this.fileSystemView = hoodieTable.getRTFileSystemView();
+    this.fileSystemView = hoodieTable.getLatestFileSliceOnlyFSView();
     this.recordItr = recordItr;
   }
 

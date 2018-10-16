@@ -19,9 +19,11 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.Optional;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -38,49 +40,53 @@ public class HoodieLogFile implements Serializable {
   public static final String DELTA_EXTENSION = ".log";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
-  private final Path path;
-  private Optional<FileStatus> fileStatus;
+  private final transient Path path;
+  private final String pathStr;
+  private final String fileName;
+  // TODO: varadarb : Use Guava Optional everywhere except public API
+  private Option<Long> fileLen;
 
   public HoodieLogFile(FileStatus fileStatus) {
     this(fileStatus.getPath());
-    this.fileStatus = Optional.of(fileStatus);
+    this.fileLen = Option.of(fileStatus.getLen());
   }
 
   public HoodieLogFile(Path logPath) {
     this.path = logPath;
-    this.fileStatus = Optional.empty();
+    this.fileName = logPath == null ? null : logPath.getName();
+    this.pathStr = logPath == null ? null : logPath.toString();
+    this.fileLen = Option.empty();
   }
 
   public String getFileId() {
-    return FSUtils.getFileIdFromLogPath(path);
+    return FSUtils.getFileIdFromLogPath(path == null ? new Path(pathStr) : path);
   }
 
   public String getBaseCommitTime() {
-    return FSUtils.getBaseCommitTimeFromLogPath(path);
+    return FSUtils.getBaseCommitTimeFromLogPath(path == null ? new Path(pathStr) : path);
   }
 
   public int getLogVersion() {
-    return FSUtils.getFileVersionFromLog(path);
+    return FSUtils.getFileVersionFromLog(path == null ? new Path(pathStr) : path);
   }
 
   public String getFileExtension() {
-    return FSUtils.getFileExtensionFromLog(path);
+    return FSUtils.getFileExtensionFromLog(path == null ? new Path(pathStr) : path);
   }
 
   public Path getPath() {
-    return path;
+    if (null != path) {
+      return path;
+    }
+    return new Path(pathStr);
   }
 
   public String getFileName() {
-    return path.getName();
-  }
-
-  public Optional<FileStatus> getFileStatus() {
-    return fileStatus;
+    return fileName;
   }
 
   public Optional<Long> getFileSize() {
-    return fileStatus.map(FileStatus::getLen);
+    return fileLen.toJavaOptional();
   }
 
   public HoodieLogFile rollOver(FileSystem fs) throws IOException {
@@ -95,7 +101,15 @@ public class HoodieLogFile implements Serializable {
   }
 
   public static Comparator<HoodieLogFile> getBaseInstantAndLogVersionComparator() {
-    return (o1, o2) -> {
+    return new BaseInstantAndLogVersionComparator();
+  }
+
+  /**
+   * Comparator to order log-files
+   */
+  private static class BaseInstantAndLogVersionComparator implements Comparator<HoodieLogFile>, Serializable {
+    @Override
+    public int compare(HoodieLogFile o1, HoodieLogFile o2) {
       String baseInstantTime1 = o1.getBaseCommitTime();
       String baseInstantTime2 = o2.getBaseCommitTime();
       if (baseInstantTime1.equals(baseInstantTime2)) {
@@ -104,7 +118,7 @@ public class HoodieLogFile implements Serializable {
       }
       // reverse the order by base-commits
       return new Integer(baseInstantTime2.compareTo(baseInstantTime1));
-    };
+    }
   }
 
   @Override
@@ -116,16 +130,19 @@ public class HoodieLogFile implements Serializable {
       return false;
     }
     HoodieLogFile that = (HoodieLogFile) o;
-    return path != null ? path.equals(that.path) : that.path == null;
+    return Objects.equals(pathStr, that.pathStr);
   }
 
   @Override
   public int hashCode() {
-    return path != null ? path.hashCode() : 0;
+    return Objects.hash(pathStr);
   }
 
   @Override
   public String toString() {
-    return "HoodieLogFile {" + path + '}';
+    return "HoodieLogFile{"
+        + "pathStr='" + pathStr + '\''
+        + ", fileLen=" + fileLen
+        + '}';
   }
 }

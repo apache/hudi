@@ -145,6 +145,7 @@ public class TestHoodieClientBase implements Serializable {
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
         .withConsistencyCheckEnabled(true)
+        .withWriterFSViewCacheEnabled(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table")

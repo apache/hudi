@@ -24,7 +24,7 @@ import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
-import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.TableFileSystemView.ReadOptimizedViewWithLatestSlice;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
@@ -60,7 +60,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   private Map<String, HoodieRecord<T>> keyToNewRecords;
   private Set<String> writtenRecordKeys;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
-  private TableFileSystemView.ReadOptimizedView fileSystemView;
+  private ReadOptimizedViewWithLatestSlice fileSystemView;
   private Path newFilePath;
   private Path oldFilePath;
   private Path tempPath = null;
@@ -72,7 +72,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Iterator<HoodieRecord<T>> recordItr, String fileId) {
     super(config, commitTime, hoodieTable);
-    this.fileSystemView = hoodieTable.getROFileSystemView();
+    this.fileSystemView = hoodieTable.getLatestFileSliceOnlyFSView();
     String partitionPath = init(fileId, recordItr);
     init(fileId, partitionPath,
         fileSystemView.getLatestDataFiles(partitionPath)
@@ -82,7 +82,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, Optional<HoodieDataFile> dataFileToBeMerged) {
     super(config, commitTime, hoodieTable);
-    this.fileSystemView = hoodieTable.getROFileSystemView();
+    this.fileSystemView = hoodieTable.getLatestFileSliceOnlyFSView();
     this.keyToNewRecords = keyToNewRecords;
     init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get())
         .getPartitionPath(), dataFileToBeMerged);

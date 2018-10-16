@@ -62,6 +62,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
   private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE =
       "hoodie.copyonwrite.use" + ".temp.folder.for.create";
+  private static final String HOODIE_CACHE_WRITER_FS_VIEW = "hoodie.writer.fsview.cache.enabled";
+  //TODO: Will be set to default true after testing
+  private static final String DEFAULT_HOODIE_CACHE_WRITER_FS_VIEW = "false";
   private static final String DEFAULT_HOODIE_COPYONWRITE_USE_TEMP_FOLDER_CREATE = "false";
   private static final String HOODIE_COPYONWRITE_USE_TEMP_FOLDER_MERGE =
       "hoodie.copyonwrite.use" + ".temp.folder.for.merge";
@@ -154,6 +157,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isConsistencyCheckEnabled() {
     return Boolean.parseBoolean(props.getProperty(CONSISTENCY_CHECK_ENABLED));
+  }
+
+  public boolean isWriterFSViewCacheEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HOODIE_CACHE_WRITER_FS_VIEW));
   }
 
   /**
@@ -562,6 +569,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withWriterFSViewCacheEnabled(boolean enabled) {
+      props.setProperty(HOODIE_CACHE_WRITER_FS_VIEW, String.valueOf(enabled));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       // Check for mandatory properties
@@ -594,6 +606,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(CONSISTENCY_CHECK_ENABLED),
           CONSISTENCY_CHECK_ENABLED, DEFAULT_CONSISTENCY_CHECK_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_CACHE_WRITER_FS_VIEW),
+          HOODIE_CACHE_WRITER_FS_VIEW, DEFAULT_HOODIE_CACHE_WRITER_FS_VIEW);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,

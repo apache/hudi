@@ -36,6 +36,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.MetadataNotFoundException;
+import com.uber.hoodie.func.ViewCacheUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
@@ -234,6 +235,12 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
       final HoodieTable hoodieTable) {
+
+    // Cached the file system view
+    if (config.isWriterFSViewCacheEnabled()) {
+      ViewCacheUtils.cachePartitionsView(hoodieTable, partitions.stream());
+    }
+
     // Obtain the latest data files from all the partitions.
     List<Tuple2<String, HoodieDataFile>> dataFilesList = jsc
         .parallelize(partitions, Math.max(partitions.size(), 1)).flatMapToPair(partitionPath -> {
@@ -241,7 +248,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
               .filterCompletedInstants().lastInstant();
           List<Tuple2<String, HoodieDataFile>> filteredFiles = new ArrayList<>();
           if (latestCommitTime.isPresent()) {
-            filteredFiles = hoodieTable.getROFileSystemView()
+            filteredFiles = hoodieTable.getLatestFileSliceOnlyFSView()
                 .getLatestDataFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
                 .map(f -> new Tuple2<>(partitionPath, f)).collect(toList());
           }
@@ -253,7 +260,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       return jsc.parallelize(dataFilesList, Math.max(dataFilesList.size(), 1)).mapToPair(ft -> {
         try {
           String[] minMaxKeys = ParquetUtils
-              .readMinMaxRecordKeys(hoodieTable.getHadoopConf(), ft._2().getFileStatus().getPath());
+              .readMinMaxRecordKeys(hoodieTable.getHadoopConf(), new Path(ft._2().getPath()));
           return new Tuple2<>(ft._1(),
               new BloomIndexFileInfo(ft._2().getFileName(), minMaxKeys[0], minMaxKeys[1]));
         } catch (MetadataNotFoundException me) {

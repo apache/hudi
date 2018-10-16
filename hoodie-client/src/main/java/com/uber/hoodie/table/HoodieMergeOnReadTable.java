@@ -351,7 +351,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
         if (!index.canIndexLogFiles()) {
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
-          Optional<FileSlice> smallFileSlice = getRTFileSystemView()
+          Optional<FileSlice> smallFileSlice = getLatestFileSliceOnlyFSView()
               .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).filter(
                   fileSlice -> fileSlice.getLogFiles().count() < 1
                       && fileSlice.getDataFile().get().getFileSize() < config

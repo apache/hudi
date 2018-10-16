@@ -29,6 +29,8 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
+import com.uber.hoodie.common.table.view.LatestFileSliceOnlyFSViewImpl;
+import com.uber.hoodie.common.table.view.SealedLatestVersionOnlyFSView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
@@ -60,6 +62,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<T> index;
+
+  private SealedLatestVersionOnlyFSView latestFileSliceOnlyFSView;
 
   protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
@@ -118,6 +122,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   public TableFileSystemView.ReadOptimizedView getROFileSystemView() {
     return new HoodieTableFileSystemView(metaClient, getCompletedCommitTimeline());
+  }
+
+  /**
+   * Get the read optimized view of the file system for this table
+   */
+  public synchronized SealedLatestVersionOnlyFSView getLatestFileSliceOnlyFSView() {
+    // Return a new view instance caching is disabled.
+    if ((null == latestFileSliceOnlyFSView) || (!config.isWriterFSViewCacheEnabled())) {
+      latestFileSliceOnlyFSView = new LatestFileSliceOnlyFSViewImpl(metaClient,
+          metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), true);
+    }
+    return latestFileSliceOnlyFSView;
   }
 
   /**

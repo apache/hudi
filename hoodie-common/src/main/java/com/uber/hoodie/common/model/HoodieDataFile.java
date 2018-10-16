@@ -18,53 +18,57 @@ package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.Serializable;
-import java.util.Comparator;
 import org.apache.hadoop.fs.FileStatus;
 
 public class HoodieDataFile implements Serializable {
 
-  private FileStatus fileStatus;
+  // FileStatus not serializable in HDP 2.x (See: https://issues.apache.org/jira/browse/HADOOP-13895)
+  private transient FileStatus fileStatus;
+  private final String fileName;
+  private final String fullPath;
+  private final long fileLen;
 
   public HoodieDataFile(FileStatus fileStatus) {
     this.fileStatus = fileStatus;
+    this.fileName =  hasFileStatus() ? fileStatus.getPath().getName() : null;
+    this.fullPath = hasFileStatus() ? fileStatus.getPath().toString() : null;
+    this.fileLen = hasFileStatus() ?  fileStatus.getLen() : -1;
   }
 
   public String getFileId() {
-    return FSUtils.getFileId(fileStatus.getPath().getName());
+    return FSUtils.getFileId(fileName);
   }
 
   public String getCommitTime() {
-    return FSUtils.getCommitTime(fileStatus.getPath().getName());
+    return FSUtils.getCommitTime(fileName);
   }
 
   public String getPath() {
-    return fileStatus.getPath().toString();
+    return fullPath;
   }
 
   public String getFileName() {
-    return fileStatus.getPath().getName();
+    return fileName;
+  }
+
+  public boolean hasFileStatus() {
+    return fileStatus != null;
   }
 
   public FileStatus getFileStatus() {
     return fileStatus;
   }
 
-  public static Comparator<HoodieDataFile> getCommitTimeComparator() {
-    return (o1, o2) -> {
-      // reverse the order
-      return o2.getCommitTime().compareTo(o1.getCommitTime());
-    };
-  }
-
   public long getFileSize() {
-    return fileStatus.getLen();
+    return fileLen;
   }
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieDataFile {");
-    sb.append("fileStatus=").append(fileStatus);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieDataFile{"
+        + "fullPath=" + fullPath
+        + ", fileName='" + fileName + '\''
+        + ", fileLen=" + fileLen
+        + '}';
   }
 }

@@ -38,6 +38,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.func.ViewCacheUtils;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
@@ -88,6 +89,13 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     List<CompactionOperation> operations = compactionPlan.getOperations().stream().map(
             CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     log.info("Compactor compacting " + operations + " files");
+
+    if (config.isWriterFSViewCacheEnabled()) {
+      // Cached the file system view and seal
+      ViewCacheUtils.cachePartitionsViewAndSeal(hoodieTable,
+          operations.stream().map(CompactionOperation::getPartitionPath).distinct());
+    }
+
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionInstantTime))
         .flatMap(writeStatusesItr -> writeStatusesItr.iterator());
@@ -124,7 +132,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
       return Lists.<WriteStatus>newArrayList();
     }
 
-    Optional<HoodieDataFile> oldDataFileOpt = hoodieCopyOnWriteTable.getROFileSystemView()
+    Optional<HoodieDataFile> oldDataFileOpt = hoodieCopyOnWriteTable.getLatestFileSliceOnlyFSView()
         .getLatestDataFilesOn(operation.getPartitionPath(), operation.getBaseInstantTime())
         .filter(df -> df.getFileId().equals(operation.getFileId())).findFirst();
 

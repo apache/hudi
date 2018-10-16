@@ -20,6 +20,7 @@ package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
@@ -33,10 +34,7 @@ import java.util.stream.Stream;
 public class HoodieFileGroup implements Serializable {
 
   public static Comparator<String> getReverseCommitTimeComparator() {
-    return (o1, o2) -> {
-      // reverse the order
-      return o2.compareTo(o1);
-    };
+    return Comparator.reverseOrder();
   }
 
   /**
@@ -62,14 +60,16 @@ public class HoodieFileGroup implements Serializable {
   /**
    * The last completed instant, that acts as a high watermark for all getters
    */
-  private final Optional<HoodieInstant> lastInstant;
+  private final Option<HoodieInstant> lastInstant;
 
   public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
     this.partitionPath = partitionPath;
     this.id = id;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
-    this.lastInstant = timeline.lastInstant();
+    // Guava Optional is serializable.
+    // TODO : varadarb -> Open another PR to replace java.util.Optional with Guava'a everywhere internally
+    this.lastInstant = Option.fromJavaOptional(timeline.lastInstant());
   }
 
   /**
@@ -207,5 +207,9 @@ public class HoodieFileGroup implements Serializable {
     sb.append(", fileSlices='").append(fileSlices).append('\'');
     sb.append('}');
     return sb.toString();
+  }
+
+  public HoodieTimeline getTimeline() {
+    return timeline;
   }
 }

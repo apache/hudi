@@ -42,6 +42,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,11 +60,11 @@ import org.junit.rules.TemporaryFolder;
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class HoodieTableFileSystemViewTest {
 
-  private HoodieTableMetaClient metaClient;
-  private String basePath;
-  private HoodieTableFileSystemView fsView;
-  private TableFileSystemView.ReadOptimizedView roView;
-  private TableFileSystemView.RealtimeView rtView;
+  protected HoodieTableMetaClient metaClient;
+  protected String basePath;
+  protected HoodieTableFileSystemView fsView;
+  protected TableFileSystemView.ReadOptimizedView roView;
+  protected TableFileSystemView.RealtimeView rtView;
   
   @Rule
   public TemporaryFolder tmpFolder = new TemporaryFolder();
@@ -72,20 +73,27 @@ public class HoodieTableFileSystemViewTest {
   public void init() throws IOException {
     metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());;
     basePath = metaClient.getBasePath();
-    fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+    fsView = getFileSystemView(metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
     roView = (TableFileSystemView.ReadOptimizedView) fsView;
     rtView = (TableFileSystemView.RealtimeView) fsView;
   }
 
-  private void refreshFsView(FileStatus[] statuses) {
+  protected HoodieTableFileSystemView getFileSystemView(HoodieTimeline timeline) {
+    return new HoodieTableFileSystemView(metaClient, timeline);
+  }
+
+  protected HoodieTableFileSystemView getFileSystemView(HoodieTimeline timeline, FileStatus[] statuses) {
+    return new HoodieTableFileSystemView(metaClient, timeline, statuses);
+  }
+
+  protected void refreshFsView(FileStatus[] statuses) {
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     if (statuses != null) {
-      fsView = new HoodieTableFileSystemView(metaClient,
+      fsView = getFileSystemView(
           metaClient.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(),
           statuses);
     } else {
-      fsView = new HoodieTableFileSystemView(metaClient,
+      fsView = getFileSystemView(
           metaClient.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants());
     }
     roView = (TableFileSystemView.ReadOptimizedView) fsView;
@@ -98,6 +106,11 @@ public class HoodieTableFileSystemViewTest {
    */
   @Test
   public void testViewForFileSlicesWithNoBaseFile() throws Exception {
+    testViewForFileSlicesWithNoBaseFile(1, 0);
+  }
+
+  protected void testViewForFileSlicesWithNoBaseFile(int expNumTotalFileSlices, int expNumTotalDataFiles)
+      throws Exception {
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();
@@ -157,26 +170,33 @@ public class HoodieTableFileSystemViewTest {
     assertEquals("Correct number of log-files shows up in file-slice", 2, logFiles.size());
     assertEquals("Log File Order check", fileName2, logFiles.get(0).getFileName());
     assertEquals("Log File Order check", fileName1, logFiles.get(1).getFileName());
+
+    assertEquals("Total number of file-slices in view matches expected", expNumTotalFileSlices,
+        rtView.getAllFileSlices(partitionPath).count());
+    assertEquals("Total number of data-files in view matches expected", expNumTotalDataFiles,
+        roView.getAllDataFiles(partitionPath).count());
+    assertEquals("Total number of file-groups in view matches expected", 1,
+        fsView.getAllFileGroups(partitionPath).count());
   }
 
   @Test
   public void testViewForFileSlicesWithNoBaseFileAndRequestedCompaction() throws Exception {
-    testViewForFileSlicesWithAsyncCompaction(true, false);
+    testViewForFileSlicesWithAsyncCompaction(true, false, 2, 1, true);
   }
 
   @Test
   public void testViewForFileSlicesWithBaseFileAndRequestedCompaction() throws Exception {
-    testViewForFileSlicesWithAsyncCompaction(false, false);
+    testViewForFileSlicesWithAsyncCompaction(false, false, 2, 2, true);
   }
 
   @Test
   public void testViewForFileSlicesWithNoBaseFileAndInflightCompaction() throws Exception {
-    testViewForFileSlicesWithAsyncCompaction(true, true);
+    testViewForFileSlicesWithAsyncCompaction(true, true, 2, 1, true);
   }
 
   @Test
   public void testViewForFileSlicesWithBaseFileAndInflightCompaction() throws Exception {
-    testViewForFileSlicesWithAsyncCompaction(false, true);
+    testViewForFileSlicesWithAsyncCompaction(false, true, 2, 2, true);
   }
 
   /**
@@ -208,10 +228,14 @@ public class HoodieTableFileSystemViewTest {
    *                             simulate inserts going directly to log files
    * @param isCompactionInFlight if set, compaction was inflight (running) when view was tested first time,
    *                             otherwise compaction was in requested state
+   * @param  expTotalFileSlices Total number of file-slices across file-groups in the partition path
+   * @param  expTotalDataFiles  Total number of data-files across file-groups in the partition path
+   * @param includeIncludeInvalidAndInflight Whether view includes inflight and invalid file-groups.
    * @throws Exception
    */
-  private void testViewForFileSlicesWithAsyncCompaction(boolean skipCreatingDataFile,
-      boolean isCompactionInFlight) throws Exception {
+  protected void testViewForFileSlicesWithAsyncCompaction(boolean skipCreatingDataFile,
+      boolean isCompactionInFlight, int expTotalFileSlices, int expTotalDataFiles,
+      boolean includeIncludeInvalidAndInflight) throws Exception {
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();
@@ -259,6 +283,15 @@ public class HoodieTableFileSystemViewTest {
       compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
       commitTimeline.saveToCompactionRequested(compactionInstant, AvroUtils.serializeCompactionPlan(compactionPlan));
     }
+
+    // View immediately after scheduling compaction
+    refreshFsView(null);
+    List<FileSlice> slices = fsView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
+    assertEquals("Expected latest file-slices", 1, slices.size());
+    assertEquals("Base-Instant must be compaction Instant", compactionRequestedTime,
+        slices.get(0).getBaseInstantTime());
+    assertFalse("Latest File Slice must not have data-file", slices.get(0).getDataFile().isPresent());
+    assertTrue("Latest File Slice must not have any log-files", slices.get(0).getLogFiles().count() == 0);
 
     // Fake delta-ingestion after compaction-requested
     String deltaInstantTime4 = "5";
@@ -388,58 +421,60 @@ public class HoodieTableFileSystemViewTest {
       }
       return Stream.empty();
     }).collect(Collectors.toList());
-    assertEquals("Inflight/Orphan data-file is also expected", 2
-        + (isCompactionInFlight ? 1 : 0) + (skipCreatingDataFile ? 0 : 1), dataFiles.size());
-    Set<String> fileNames = dataFiles.stream().map(HoodieDataFile::getFileName).collect(Collectors.toSet());
-    assertTrue("Expect orphan data-file to be present", fileNames.contains(orphanDataFileName));
-    assertTrue("Expect inflight data-file to be present", fileNames.contains(inflightDataFileName));
-    if (!skipCreatingDataFile) {
-      assertTrue("Expect old committed data-file", fileNames.contains(dataFileName));
+
+    if (includeIncludeInvalidAndInflight) {
+      assertEquals("Inflight/Orphan data-file is also expected", 2
+          + (isCompactionInFlight ? 1 : 0) + (skipCreatingDataFile ? 0 : 1), dataFiles.size());
+      Set<String> fileNames = dataFiles.stream().map(HoodieDataFile::getFileName).collect(Collectors.toSet());
+      assertTrue("Expect orphan data-file to be present", fileNames.contains(orphanDataFileName));
+      assertTrue("Expect inflight data-file to be present", fileNames.contains(inflightDataFileName));
+      if (!skipCreatingDataFile) {
+        assertTrue("Expect old committed data-file", fileNames.contains(dataFileName));
+      }
+
+      if (isCompactionInFlight) {
+        assertTrue("Expect inflight compacted data file to be present", fileNames.contains(compactDataFileName));
+      }
+
+      fileSliceList = getLatestRawFileSlices(partitionPath).collect(Collectors.toList());
+      assertEquals("Expect both inflight and orphan file-slice to be included",
+          includeIncludeInvalidAndInflight ? 5 : 1, fileSliceList.size());
+      Map<String, FileSlice> fileSliceMap =
+          fileSliceList.stream().collect(Collectors.toMap(FileSlice::getFileId, r -> r));
+      FileSlice orphanFileSliceWithDataFile = fileSliceMap.get(orphanFileId1);
+      FileSlice orphanFileSliceWithLogFile = fileSliceMap.get(orphanFileId2);
+      FileSlice inflightFileSliceWithDataFile = fileSliceMap.get(inflightFileId1);
+      FileSlice inflightFileSliceWithLogFile = fileSliceMap.get(inflightFileId2);
+
+      assertEquals("Orphan File Slice with data-file check base-commit", invalidInstantId,
+          orphanFileSliceWithDataFile.getBaseInstantTime());
+      assertEquals("Orphan File Slice with data-file check data-file", orphanDataFileName,
+          orphanFileSliceWithDataFile.getDataFile().get().getFileName());
+      assertEquals("Orphan File Slice with data-file check data-file", 0,
+          orphanFileSliceWithDataFile.getLogFiles().count());
+      assertEquals("Inflight File Slice with data-file check base-commit", inflightDeltaInstantTime,
+          inflightFileSliceWithDataFile.getBaseInstantTime());
+      assertEquals("Inflight File Slice with data-file check data-file", inflightDataFileName,
+          inflightFileSliceWithDataFile.getDataFile().get().getFileName());
+      assertEquals("Inflight File Slice with data-file check data-file", 0,
+          inflightFileSliceWithDataFile.getLogFiles().count());
+      assertEquals("Orphan File Slice with log-file check base-commit", invalidInstantId,
+          orphanFileSliceWithLogFile.getBaseInstantTime());
+      assertFalse("Orphan File Slice with log-file check data-file",
+          orphanFileSliceWithLogFile.getDataFile().isPresent());
+      logFiles = orphanFileSliceWithLogFile.getLogFiles().collect(Collectors.toList());
+      assertEquals("Orphan File Slice with log-file check data-file", 1, logFiles.size());
+      assertEquals("Orphan File Slice with log-file check data-file", orphanLogFileName,
+          logFiles.get(0).getFileName());
+      assertEquals("Inflight File Slice with log-file check base-commit", inflightDeltaInstantTime,
+          inflightFileSliceWithLogFile.getBaseInstantTime());
+      assertFalse("Inflight File Slice with log-file check data-file",
+          inflightFileSliceWithLogFile.getDataFile().isPresent());
+      logFiles = inflightFileSliceWithLogFile.getLogFiles().collect(Collectors.toList());
+      assertEquals("Inflight File Slice with log-file check data-file", 1, logFiles.size());
+      assertEquals("Inflight File Slice with log-file check data-file", inflightLogFileName,
+          logFiles.get(0).getFileName());
     }
-
-    if (isCompactionInFlight) {
-      assertTrue("Expect inflight compacted data file to be present", fileNames.contains(compactDataFileName));
-    }
-
-    fileSliceList = getLatestRawFileSlices(partitionPath).collect(Collectors.toList());
-    assertEquals("Expect both inflight and orphan file-slice to be included",
-        5, fileSliceList.size());
-    Map<String, FileSlice> fileSliceMap =
-        fileSliceList.stream().collect(Collectors.toMap(FileSlice::getFileId, r -> r));
-    FileSlice orphanFileSliceWithDataFile =  fileSliceMap.get(orphanFileId1);
-    FileSlice orphanFileSliceWithLogFile =  fileSliceMap.get(orphanFileId2);
-    FileSlice inflightFileSliceWithDataFile = fileSliceMap.get(inflightFileId1);
-    FileSlice inflightFileSliceWithLogFile = fileSliceMap.get(inflightFileId2);
-
-    assertEquals("Orphan File Slice with data-file check base-commit", invalidInstantId,
-        orphanFileSliceWithDataFile.getBaseInstantTime());
-    assertEquals("Orphan File Slice with data-file check data-file", orphanDataFileName,
-        orphanFileSliceWithDataFile.getDataFile().get().getFileName());
-    assertEquals("Orphan File Slice with data-file check data-file", 0,
-        orphanFileSliceWithDataFile.getLogFiles().count());
-    assertEquals("Inflight File Slice with data-file check base-commit", inflightDeltaInstantTime,
-        inflightFileSliceWithDataFile.getBaseInstantTime());
-    assertEquals("Inflight File Slice with data-file check data-file", inflightDataFileName,
-        inflightFileSliceWithDataFile.getDataFile().get().getFileName());
-    assertEquals("Inflight File Slice with data-file check data-file", 0,
-        inflightFileSliceWithDataFile.getLogFiles().count());
-    assertEquals("Orphan File Slice with log-file check base-commit", invalidInstantId,
-        orphanFileSliceWithLogFile.getBaseInstantTime());
-    assertFalse("Orphan File Slice with log-file check data-file",
-        orphanFileSliceWithLogFile.getDataFile().isPresent());
-    logFiles = orphanFileSliceWithLogFile.getLogFiles().collect(Collectors.toList());
-    assertEquals("Orphan File Slice with log-file check data-file", 1, logFiles.size());
-    assertEquals("Orphan File Slice with log-file check data-file", orphanLogFileName,
-        logFiles.get(0).getFileName());
-    assertEquals("Inflight File Slice with log-file check base-commit", inflightDeltaInstantTime,
-        inflightFileSliceWithLogFile.getBaseInstantTime());
-    assertFalse("Inflight File Slice with log-file check data-file",
-        inflightFileSliceWithLogFile.getDataFile().isPresent());
-    logFiles = inflightFileSliceWithLogFile.getLogFiles().collect(Collectors.toList());
-    assertEquals("Inflight File Slice with log-file check data-file", 1, logFiles.size());
-    assertEquals("Inflight File Slice with log-file check data-file", inflightLogFileName,
-        logFiles.get(0).getFileName());
-
     // Now simulate Compaction completing - Check the view
     if (!isCompactionInFlight) {
       // For inflight compaction, we already create a data-file to test concurrent inflight case.
@@ -500,6 +535,14 @@ public class HoodieTableFileSystemViewTest {
       assertEquals("Expect data-file created by compaction be returned", df.getCommitTime(),
           compactionRequestedTime);
     });
+
+    assertEquals("Total number of file-slices in partitions matches expected", expTotalFileSlices,
+        rtView.getAllFileSlices(partitionPath).count());
+    assertEquals("Total number of data-files in partitions matches expected", expTotalDataFiles,
+        roView.getAllDataFiles(partitionPath).count());
+    // file-groups includes inflight/invalid file-ids
+    assertEquals("Total number of file-groups in partitions matches expected",
+        5, fsView.getAllFileGroups(partitionPath).count());
   }
 
   @Test
@@ -550,6 +593,10 @@ public class HoodieTableFileSystemViewTest {
 
   @Test
   public void testStreamLatestVersionInPartition() throws IOException {
+    testStreamLatestVersionInPartition(false);
+  }
+
+  public void testStreamLatestVersionInPartition(boolean isLatestFileSliceOnly) throws IOException {
     // Put some files in the partition
     String fullPartitionPath = basePath + "/2016/05/01/";
     new File(fullPartitionPath).mkdirs();
@@ -590,12 +637,12 @@ public class HoodieTableFileSystemViewTest {
 
     // Check files as of lastest commit.
     List<FileSlice> allSlices = rtView.getAllFileSlices("2016/05/01").collect(Collectors.toList());
-    assertEquals(8, allSlices.size());
+    assertEquals(isLatestFileSliceOnly ? 4 : 8, allSlices.size());
     Map<String, Long> fileSliceMap = allSlices.stream().collect(
         Collectors.groupingBy(slice -> slice.getFileId(), Collectors.counting()));
-    assertEquals(2, fileSliceMap.get(fileId1).longValue());
-    assertEquals(3, fileSliceMap.get(fileId2).longValue());
-    assertEquals(2, fileSliceMap.get(fileId3).longValue());
+    assertEquals(isLatestFileSliceOnly ? 1 : 2, fileSliceMap.get(fileId1).longValue());
+    assertEquals(isLatestFileSliceOnly ? 1 : 3, fileSliceMap.get(fileId2).longValue());
+    assertEquals(isLatestFileSliceOnly ? 1 : 2, fileSliceMap.get(fileId3).longValue());
     assertEquals(1, fileSliceMap.get(fileId4).longValue());
 
     List<HoodieDataFile> dataFileList = roView.getLatestDataFilesBeforeOrOn("2016/05/01", commitTime4)
@@ -625,24 +672,35 @@ public class HoodieTableFileSystemViewTest {
     // Reset the max commit time
     List<HoodieDataFile> dataFiles = roView.getLatestDataFilesBeforeOrOn("2016/05/01", commitTime3)
         .collect(Collectors.toList());
-    assertEquals(dataFiles.size(), 3);
     filenames = Sets.newHashSet();
     for (HoodieDataFile status : dataFiles) {
       filenames.add(status.getFileName());
     }
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime1, 1, fileId1)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId2)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId3)));
+    if (!isLatestFileSliceOnly) {
+      assertEquals(3, dataFiles.size());
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime1, 1, fileId1)));
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId2)));
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId3)));
+    } else {
+      assertEquals(1, dataFiles.size());
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId2)));
+    }
 
-    logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime3).map(slice -> slice.getLogFiles())
-        .flatMap(logFileList -> logFileList).collect(Collectors.toList());
+    logFilesList =
+        rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime3).map(slice -> slice.getLogFiles())
+            .flatMap(logFileList -> logFileList).collect(Collectors.toList());
     assertEquals(logFilesList.size(), 1);
     assertTrue(logFilesList.get(0).getFileName()
         .equals(FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0)));
+
   }
 
   @Test
   public void testStreamEveryVersionInPartition() throws IOException {
+    testStreamEveryVersionInPartition(false);
+  }
+
+  protected void testStreamEveryVersionInPartition(boolean isLatestFileSliceOnly) throws IOException {
     // Put some files in the partition
     String fullPartitionPath = basePath + "/2016/05/01/";
     new File(fullPartitionPath).mkdirs();
@@ -682,21 +740,36 @@ public class HoodieTableFileSystemViewTest {
         assertEquals("All same fileId should be grouped", fileId, dataFile.getFileId());
         filenames.add(dataFile.getFileName());
       });
+      Set<String> expFileNames = new HashSet<>();
       if (fileId.equals(fileId1)) {
-        assertEquals(filenames, Sets.newHashSet(FSUtils.makeDataFileName(commitTime1, 1, fileId1),
-            FSUtils.makeDataFileName(commitTime4, 1, fileId1)));
+        if (!isLatestFileSliceOnly) {
+          expFileNames.add(FSUtils.makeDataFileName(commitTime1, 1, fileId1));
+        }
+        expFileNames.add(FSUtils.makeDataFileName(commitTime4, 1, fileId1));
+        assertEquals(expFileNames, filenames);
       } else if (fileId.equals(fileId2)) {
-        assertEquals(filenames, Sets.newHashSet(FSUtils.makeDataFileName(commitTime1, 1, fileId2),
-            FSUtils.makeDataFileName(commitTime2, 1, fileId2), FSUtils.makeDataFileName(commitTime3, 1, fileId2)));
+        if (!isLatestFileSliceOnly) {
+          expFileNames.add(FSUtils.makeDataFileName(commitTime1, 1, fileId2));
+          expFileNames.add(FSUtils.makeDataFileName(commitTime2, 1, fileId2));
+        }
+        expFileNames.add(FSUtils.makeDataFileName(commitTime3, 1, fileId2));
+        assertEquals(expFileNames, filenames);
       } else {
-        assertEquals(filenames, Sets.newHashSet(FSUtils.makeDataFileName(commitTime3, 1, fileId3),
-            FSUtils.makeDataFileName(commitTime4, 1, fileId3)));
+        if (!isLatestFileSliceOnly) {
+          expFileNames.add(FSUtils.makeDataFileName(commitTime3, 1, fileId3));
+        }
+        expFileNames.add(FSUtils.makeDataFileName(commitTime4, 1, fileId3));
+        assertEquals(expFileNames, filenames);
       }
     }
   }
 
   @Test
-  public void streamLatestVersionInRange() throws IOException {
+  public void testStreamLatestVersionInRange() throws IOException {
+    testStreamLatestVersionInRange(false);
+  }
+
+  protected void testStreamLatestVersionInRange(boolean isLatestFileSliceOnly) throws IOException {
     // Put some files in the partition
     String fullPartitionPath = basePath + "/2016/05/01/";
     new File(fullPartitionPath).mkdirs();
@@ -716,7 +789,7 @@ public class HoodieTableFileSystemViewTest {
     new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime1, 1, fileId2)).createNewFile();
     new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime2, 1, fileId2)).createNewFile();
     new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, 1, fileId2)).createNewFile();
-    new File(fullPartitionPath + FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime4, 0))
+    new File(fullPartitionPath + FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0))
         .createNewFile();
 
     new File(fullPartitionPath + FSUtils.makeDataFileName(commitTime3, 1, fileId3)).createNewFile();
@@ -734,13 +807,17 @@ public class HoodieTableFileSystemViewTest {
     refreshFsView(statuses);
     List<HoodieDataFile> dataFiles = roView.getLatestDataFilesInRange(Lists.newArrayList(commitTime2, commitTime3))
         .collect(Collectors.toList());
-    assertEquals(3, dataFiles.size());
+    assertEquals(isLatestFileSliceOnly ? 2 : 3, dataFiles.size());
     Set<String> filenames = Sets.newHashSet();
     for (HoodieDataFile status : dataFiles) {
       filenames.add(status.getFileName());
     }
+
+    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId1)));
     assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId2)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId3)));
+    if (!isLatestFileSliceOnly) {
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime3, 1, fileId3)));
+    }
 
     List<FileSlice> slices = rtView.getLatestFileSliceInRange(Lists.newArrayList(commitTime3, commitTime4))
         .collect(Collectors.toList());
@@ -751,8 +828,8 @@ public class HoodieTableFileSystemViewTest {
         assertTrue(slice.getDataFile().isPresent());
         assertEquals(slice.getLogFiles().count(), 0);
       } else if (slice.getFileId().equals(fileId2)) {
-        assertEquals(slice.getBaseInstantTime(), commitTime4);
-        assertFalse(slice.getDataFile().isPresent());
+        assertEquals(slice.getBaseInstantTime(), commitTime3);
+        assertTrue(slice.getDataFile().isPresent());
         assertEquals(slice.getLogFiles().count(), 1);
       } else if (slice.getFileId().equals(fileId3)) {
         assertEquals(slice.getBaseInstantTime(), commitTime4);
@@ -763,7 +840,11 @@ public class HoodieTableFileSystemViewTest {
   }
 
   @Test
-  public void streamLatestVersionsBefore() throws IOException {
+  public void testStreamLatestVersionsBefore() throws IOException {
+    testStreamLatestVersionsBefore(false);
+  }
+
+  protected void testStreamLatestVersionsBefore(boolean isLatestFileSliceOnly) throws IOException {
     // Put some files in the partition
     String partitionPath = "2016/05/01/";
     String fullPartitionPath = basePath + "/" + partitionPath;
@@ -796,17 +877,25 @@ public class HoodieTableFileSystemViewTest {
     refreshFsView(null);
     List<HoodieDataFile> dataFiles = roView.getLatestDataFilesBeforeOrOn(partitionPath, commitTime2)
         .collect(Collectors.toList());
-    assertEquals(2, dataFiles.size());
-    Set<String> filenames = Sets.newHashSet();
-    for (HoodieDataFile status : dataFiles) {
-      filenames.add(status.getFileName());
+    if (!isLatestFileSliceOnly) {
+      assertEquals(2, dataFiles.size());
+      Set<String> filenames = Sets.newHashSet();
+      for (HoodieDataFile status : dataFiles) {
+        filenames.add(status.getFileName());
+      }
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime1, 1, fileId1)));
+      assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime2, 1, fileId2)));
+    } else {
+      assertEquals(0, dataFiles.size());
     }
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime1, 1, fileId1)));
-    assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime2, 1, fileId2)));
   }
 
   @Test
-  public void streamLatestVersions() throws IOException {
+  public void testStreamLatestVersions() throws IOException {
+    testStreamLatestVersions(false);
+  }
+
+  protected void testStreamLatestVersions(boolean isLatestFileSliceOnly) throws IOException {
     // Put some files in the partition
     String partitionPath = "2016/05/01/";
     String fullPartitionPath = basePath + "/" + partitionPath;
@@ -851,18 +940,24 @@ public class HoodieTableFileSystemViewTest {
     for (HoodieFileGroup fileGroup : fileGroups) {
       List<FileSlice> slices = fileGroup.getAllFileSlices().collect(Collectors.toList());
       if (fileGroup.getId().equals(fileId1)) {
-        assertEquals(2, slices.size());
+        assertEquals(isLatestFileSliceOnly ? 1 : 2, slices.size());
         assertEquals(commitTime4, slices.get(0).getBaseInstantTime());
-        assertEquals(commitTime1, slices.get(1).getBaseInstantTime());
+        if (!isLatestFileSliceOnly) {
+          assertEquals(commitTime1, slices.get(1).getBaseInstantTime());
+        }
       } else if (fileGroup.getId().equals(fileId2)) {
-        assertEquals(3, slices.size());
+        assertEquals(isLatestFileSliceOnly ? 1 : 3, slices.size());
         assertEquals(commitTime3, slices.get(0).getBaseInstantTime());
-        assertEquals(commitTime2, slices.get(1).getBaseInstantTime());
-        assertEquals(commitTime1, slices.get(2).getBaseInstantTime());
+        if (!isLatestFileSliceOnly) {
+          assertEquals(commitTime2, slices.get(1).getBaseInstantTime());
+          assertEquals(commitTime1, slices.get(2).getBaseInstantTime());
+        }
       } else if (fileGroup.getId().equals(fileId3)) {
-        assertEquals(2, slices.size());
+        assertEquals(isLatestFileSliceOnly ? 1 : 2, slices.size());
         assertEquals(commitTime4, slices.get(0).getBaseInstantTime());
-        assertEquals(commitTime3, slices.get(1).getBaseInstantTime());
+        if (!isLatestFileSliceOnly) {
+          assertEquals(commitTime3, slices.get(1).getBaseInstantTime());
+        }
       }
     }
 

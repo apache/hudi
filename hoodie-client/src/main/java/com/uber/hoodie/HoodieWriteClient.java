@@ -53,6 +53,7 @@ import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.exception.HoodieSavepointException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.func.BulkInsertMapFunction;
+import com.uber.hoodie.func.ViewCacheUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.HoodieCommitArchiveLog;
 import com.uber.hoodie.metrics.HoodieMetrics;
@@ -421,6 +422,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       preppedRecords.persist(StorageLevel.MEMORY_AND_DISK_SER());
     } else {
       logger.info("RDD PreppedRecords was persisted at: " + preppedRecords.getStorageLevel());
+    }
+
+    if (config.isWriterFSViewCacheEnabled()) {
+      // Cache Latest File-System View & Seal
+      ViewCacheUtils.cachePartitionsViewAndSeal(hoodieTable,
+          preppedRecords.map(rec -> rec.getPartitionPath()).distinct().collect().stream());
     }
 
     WorkloadProfile profile = null;

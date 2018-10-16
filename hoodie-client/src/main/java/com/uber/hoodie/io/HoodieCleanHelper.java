@@ -102,7 +102,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
         if (!isFileSliceNeededForPendingCompaction(nextSlice)) {
           if (nextSlice.getDataFile().isPresent()) {
             HoodieDataFile dataFile = nextSlice.getDataFile().get();
-            deletePaths.add(dataFile.getFileStatus().getPath().toString());
+            deletePaths.add(dataFile.getPath());
           }
           if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
             // If merge on read, then clean the log files for the commits as well
@@ -181,7 +181,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
                   HoodieTimeline.GREATER)) {
             // this is a commit, that should be cleaned.
             if (aFile.isPresent()) {
-              deletePaths.add(aFile.get().getFileStatus().getPath().toString());
+              deletePaths.add(aFile.get().getPath());
             }
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well

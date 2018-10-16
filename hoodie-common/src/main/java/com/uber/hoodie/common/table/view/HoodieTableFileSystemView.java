@@ -126,7 +126,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
-  private List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
+  protected List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
     Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = convertFileStatusesToDataFiles(
         statuses)
         .collect(Collectors.groupingBy((dataFile) -> {
@@ -165,16 +165,31 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       fileGroups.add(group);
     });
 
+    List<HoodieFileGroup> newFileGroups = new ArrayList<>();
+
     // add to the cache.
-    fileGroups.forEach(group -> {
+    fileGroups.forEach(gp -> {
+      HoodieFileGroup group = preProcessFileGroup(gp, fileIdToPendingCompaction.containsKey(gp.getId()));
+
       fileGroupMap.put(group.getId(), group);
+      newFileGroups.add(group);
       if (!partitionToFileGroupsMap.containsKey(group.getPartitionPath())) {
         partitionToFileGroupsMap.put(group.getPartitionPath(), new ArrayList<>());
       }
       partitionToFileGroupsMap.get(group.getPartitionPath()).add(group);
     });
 
-    return fileGroups;
+    return newFileGroups;
+  }
+
+  /**
+   * Preprocess file-group before caching in partition Map
+   * @param group FileGroup Map to process
+   * @param  isCompactionPending Is the file-group under pending compaction
+   * @return file-group ready to be cached
+   */
+  protected HoodieFileGroup preProcessFileGroup(HoodieFileGroup group, boolean isCompactionPending) {
+    return group;
   }
 
   private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
@@ -425,11 +440,16 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     }
 
     try {
+      log.info("Building file system view for partition (" + partitionPathStr + ")");
       // Create the path if it does not exist already
       Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
       FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
       FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
       List<HoodieFileGroup> fileGroups = addFilesToView(statuses);
+      if (fileGroups.isEmpty()) {
+        // New Partition. Also add an entry to partitionCache
+        partitionToFileGroupsMap.put(partitionPathStr, fileGroups);
+      }
       return fileGroups.stream();
     } catch (IOException e) {
       throw new HoodieIOException(
