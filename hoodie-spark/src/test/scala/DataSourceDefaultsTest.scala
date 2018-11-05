@@ -107,11 +107,11 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
     // it will provide the record with greatest combine value
     val combinedPayload12 = overWritePayload1.preCombine(overWritePayload2)
     val combinedGR12 = combinedPayload12.getInsertValue(schema).get().asInstanceOf[GenericRecord]
-    assertEquals("field2", combinedGR12.get("field1"))
+    assertEquals("field2", combinedGR12.get("field1").toString)
 
     // and it will be deterministic, to order of processing.
     val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
     val combinedGR21 = combinedPayload21.getInsertValue(schema).get().asInstanceOf[GenericRecord]
-    assertEquals("field2", combinedGR21.get("field1"))
+    assertEquals("field2", combinedGR21.get("field1").toString)
   }
 }

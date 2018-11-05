@@ -23,8 +23,6 @@ import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.HoodieTimer;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
-import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
-import com.uber.hoodie.common.util.collection.converter.StringConverter;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.util.Iterator;
@@ -71,7 +69,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath,
-          new StringConverter(), new HoodieRecordConverter(readerSchema, getPayloadClassFQN()),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(readerSchema));
       // Do the scan and merge
       timer.startTimer();
