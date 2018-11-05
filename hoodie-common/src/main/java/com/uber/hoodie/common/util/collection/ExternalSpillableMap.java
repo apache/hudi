@@ -18,9 +18,9 @@ package com.uber.hoodie.common.util.collection;
 
 import com.twitter.common.objectsize.ObjectSizeCalculator;
 import com.uber.hoodie.common.util.SizeEstimator;
-import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,7 +39,7 @@ import org.apache.log4j.Logger;
  * trade-off: If the spill threshold is too high, the in-memory map may occupy more memory than is available, resulting
  * in OOM. However, if the spill threshold is too low, we spill frequently and incur unnecessary disk writes.
  */
-public class ExternalSpillableMap<T, R> implements Map<T, R> {
+public class ExternalSpillableMap<T extends Serializable, R extends Serializable> implements Map<T, R> {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
@@ -53,10 +53,6 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
-  // Key converter to convert key type to bytes
-  private final Converter<T> keyConverter;
-  // Value converter to convert value type to bytes
-  private final Converter<R> valueConverter;
   // Size Estimator for key type
   private final SizeEstimator<T> keySizeEstimator;
   // Size Estimator for key types
@@ -69,15 +65,12 @@ public class ExternalSpillableMap<T, R> implements Map<T, R> {
   private boolean shouldEstimatePayloadSize = true;
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath,
-      Converter<T> keyConverter, Converter<R> valueConverter,
       SizeEstimator<T> keySizeEstimator, SizeEstimator<R> valueSizeEstimator) throws IOException {
     this.inMemoryMap = new HashMap<>();
-    this.diskBasedMap = new DiskBasedMap<>(baseFilePath, keyConverter, valueConverter);
+    this.diskBasedMap = new DiskBasedMap<>(baseFilePath);
     this.maxInMemorySizeInBytes = (long) Math
         .floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
     this.currentInMemoryMapSize = 0L;
-    this.keyConverter = keyConverter;
-    this.valueConverter = valueConverter;
     this.keySizeEstimator = keySizeEstimator;
     this.valueSizeEstimator = valueSizeEstimator;
   }

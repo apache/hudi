@@ -16,8 +16,8 @@
 
 package com.uber.hoodie.common.util.collection;
 
+import com.uber.hoodie.common.util.SerializationUtils;
 import com.uber.hoodie.common.util.SpillableMapUtils;
-import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
@@ -37,20 +37,16 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   private final RandomAccessFile readOnlyFileHandle;
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, DiskBasedMap.ValueMetadata> inMemoryMetadataOfSpilledData;
-  private final Converter<R> valueConverter;
 
-  public LazyFileIterable(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map,
-      Converter<R> valueConverter) {
+  public LazyFileIterable(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map) {
     this.readOnlyFileHandle = file;
     this.inMemoryMetadataOfSpilledData = map;
-    this.valueConverter = valueConverter;
   }
 
   @Override
   public Iterator<R> iterator() {
     try {
-      return new LazyFileIterator<>(readOnlyFileHandle, inMemoryMetadataOfSpilledData,
-          valueConverter);
+      return new LazyFileIterator<>(readOnlyFileHandle, inMemoryMetadataOfSpilledData);
     } catch (IOException io) {
       throw new HoodieException("Unable to initialize iterator for file on disk", io);
     }
@@ -61,14 +57,11 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
    */
   public class LazyFileIterator<T, R> implements Iterator<R> {
 
-    private final Converter<R> valueConverter;
     private RandomAccessFile readOnlyFileHandle;
     private Iterator<Map.Entry<T, DiskBasedMap.ValueMetadata>> metadataIterator;
 
-    public LazyFileIterator(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map,
-        Converter<R> valueConverter) throws IOException {
+    public LazyFileIterator(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map) throws IOException {
       this.readOnlyFileHandle = file;
-      this.valueConverter = valueConverter;
       // sort the map in increasing order of offset of value so disk seek is only in one(forward) direction
       this.metadataIterator = map
           .entrySet()
@@ -88,7 +81,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     public R next() {
       Map.Entry<T, DiskBasedMap.ValueMetadata> entry = this.metadataIterator.next();
       try {
-        return valueConverter.getData(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
+        return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
             entry.getValue().getOffsetOfValue(), entry.getValue().getSizeOfValue()));
       } catch (IOException e) {
         throw new HoodieIOException("Unable to read hoodie record from value spilled to disk", e);

@@ -16,8 +16,8 @@
 
 package com.uber.hoodie.common.util.collection;
 
+import com.uber.hoodie.common.util.SerializationUtils;
 import com.uber.hoodie.common.util.SpillableMapUtils;
-import com.uber.hoodie.common.util.collection.converter.Converter;
 import com.uber.hoodie.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.AbstractMap;
 import java.util.Collection;
@@ -45,15 +46,11 @@ import org.apache.log4j.Logger;
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
  */
-public final class DiskBasedMap<T, R> implements Map<T, R> {
+public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R> {
 
   private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
-  // Key converter to convert key type to bytes
-  private final Converter<T> keyConverter;
-  // Value converter to convert value type to bytes
-  private final Converter<R> valueConverter;
   // Read only file access to be able to seek to random positions to readFromDisk values
   private RandomAccessFile readOnlyFileHandle;
   // Write only OutputStream to be able to ONLY append to the file
@@ -67,8 +64,7 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
   private String filePath;
 
 
-  protected DiskBasedMap(String baseFilePath,
-      Converter<T> keyConverter, Converter<R> valueConverter) throws IOException {
+  protected DiskBasedMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new HashMap<>();
     File writeOnlyFileHandle = new File(baseFilePath, UUID.randomUUID().toString());
     this.filePath = writeOnlyFileHandle.getPath();
@@ -76,8 +72,6 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
     this.fileOutputStream = new FileOutputStream(writeOnlyFileHandle, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream);
     this.filePosition = new AtomicLong(0L);
-    this.keyConverter = keyConverter;
-    this.valueConverter = valueConverter;
   }
 
   private void initFile(File writeOnlyFileHandle) throws IOException {
@@ -125,7 +119,7 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
    */
   public Iterator<R> iterator() {
     return new LazyFileIterable(readOnlyFileHandle,
-        valueMetadataMap, valueConverter).iterator();
+        valueMetadataMap).iterator();
   }
 
   /**
@@ -162,7 +156,7 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
       return null;
     }
     try {
-      return this.valueConverter.getData(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
+      return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
           entry.getOffsetOfValue(), entry.getSizeOfValue()));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to readFromDisk Hoodie Record from disk", e);
@@ -172,12 +166,12 @@ public final class DiskBasedMap<T, R> implements Map<T, R> {
   @Override
   public R put(T key, R value) {
     try {
-      byte[] val = this.valueConverter.getBytes(value);
+      byte[] val = SerializationUtils.serialize(value);
       Integer valueSize = val.length;
       Long timestamp = new Date().getTime();
       this.valueMetadataMap.put(key,
           new DiskBasedMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
-      byte[] serializedKey = keyConverter.getBytes(key);
+      byte[] serializedKey = SerializationUtils.serialize(key);
       filePosition.set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle,
           new FileEntry(SpillableMapUtils.generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
