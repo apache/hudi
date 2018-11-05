@@ -66,6 +66,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
 
   @Override
   public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Optional.of(HoodieAvroUtils.rewriteRecord(record, schema));
+    return Optional.of(HoodieAvroUtils.rewriteRecord(HoodieAvroUtils.bytesToAvro(recordBytes, Schema.parse(schemaStr)),
+        schema));
   }
 }
