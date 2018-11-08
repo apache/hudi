@@ -74,7 +74,7 @@ summary: "Here we list all possible configurations and what they mean"
         <span style="color:grey">Small files can always happen because of the number of insert records in a paritition in a batch. Hoodie has an option to auto-resolve small files by masking inserts into this partition as updates to existing small files. The size here is the minimum file size considered as a "small file size". This should be less < maxFileSize and setting it to 0, turns off this feature. </span>
         - [insertSplitSize](#insertSplitSize) (size = 500000) <br/>
         <span style="color:grey">Insert Write Parallelism. Number of inserts grouped for a single partition. Writing out 100MB files, with atleast 1kb records, means 100K records per file. Default is to overprovision to 500K. To improve insert latency, tune this to match the number of records in a single file. Setting this to a low number, will result in small files (particularly when compactionSmallFileSize is 0)</span>
-        - [autoTuneInsertSplits](#autoTuneInsertSplits) (false) <br/>
+        - [autoTuneInsertSplits](#autoTuneInsertSplits) (true) <br/>
         <span style="color:grey">Should hoodie dynamically compute the insertSplitSize based on the last 24 commit's metadata. Turned off by default. </span>
         - [approxRecordSize](#approxRecordSize) () <br/>
         <span style="color:grey">The average record size. If specified, hoodie will use this and not compute dynamically based on the last 24 commit's metadata. No value set as default. This is critical in computing the insert parallelism and bin-packing inserts into small files. See above.</span>
