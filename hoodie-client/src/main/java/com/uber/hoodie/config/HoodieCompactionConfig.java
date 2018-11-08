@@ -63,7 +63,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS =
       "hoodie.copyonwrite.insert" + ".auto.split";
   // its off by default
-  public static final String DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = String.valueOf(false);
+  public static final String DEFAULT_COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS = String.valueOf(true);
   // This value is used as a guessimate for the record size, if we can't determine this from
   // previous commits
   public static final String COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE =
