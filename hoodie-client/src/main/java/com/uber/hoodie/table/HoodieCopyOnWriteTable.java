@@ -175,6 +175,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId,
       Iterator<HoodieRecord<T>> recordItr) throws IOException {
+    if (!recordItr.hasNext()) {
+      logger.info("FileId without any records " + fileId);
+      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST)
+          .iterator();
+    }
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileId, recordItr);
     return handleUpdateInternal(upsertHandle, commitTime, fileId);
@@ -701,6 +706,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             long recordsToAppend = Math
                 .min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
                     totalUnassignedInserts);
+            logger.info("RecordsToAppend " + recordsToAppend + " for fileId " + smallFile.location.getFileId());
+            logger.info("MaxParquetSize " + config.getParquetMaxFileSize() + ",SmallFileBytes " + smallFile.sizeBytes);
             if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
               // create a new bucket or re-use an existing bucket
               int bucket;
