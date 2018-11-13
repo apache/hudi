@@ -726,7 +726,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
               insertRecordsPerBucket = config.getParquetMaxFileSize() / averageRecordSize;
             }
 
-            int insertBuckets = (int) Math.max(totalUnassignedInserts / insertRecordsPerBucket, 1L);
+            int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
             logger.info(
                 "After small file assignment: unassignedInserts => " + totalUnassignedInserts
                     + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => "
