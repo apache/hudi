@@ -28,18 +28,16 @@ import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.Map.Entry;
 
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
 /**
- * This filter will only work with hoodie dataset since it will only load partitions
- * with .hoodie_partition_metadata file in it.
+ * This filter will only work with hoodie dataset since it will only load partitions with .hoodie_partition_metadata
+ * file in it.
  */
 public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends HoodieBloomIndex<T> {
 
@@ -53,7 +51,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   @Override
   @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
-                                                             final HoodieTable hoodieTable) {
+      final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
       List<String> allPartitionPaths = FSUtils
@@ -66,45 +64,39 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   }
 
   /**
-   * For each incoming record, produce N output records, 1 each for each file against which the
-   * record's key needs to be checked. For datasets, where the keys have a definite insert order
-   * (e.g: timestamp as prefix), the number of files to be compared gets cut down a lot from range
-   * pruning.
+   * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
+   * checked. For datasets, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
+   * to be compared gets cut down a lot from range pruning.
    *
-   * Sub-partition to ensure the records can be looked up against files & also prune
-   * file<=>record comparisons based on recordKey
-   * ranges in the index info.
-   * the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will be ignored
-   * since the search scope should be bigger than that
+   * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
+   * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will
+   * be ignored since the search scope should be bigger than that
    */
+
   @Override
   @VisibleForTesting
   JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
-    List<Tuple2<String, BloomIndexFileInfo>> indexInfos =
-        partitionToFileIndexInfo.entrySet().stream()
-            .flatMap(e1 -> e1.getValue().stream()
-                .map(e2 -> new Tuple2<>(e1.getKey(), e2)))
-            .collect(Collectors.toList());
+    Map<String, String> indexToPartitionMap = new HashMap<>();
+    for (Entry<String, List<BloomIndexFileInfo>> entry : partitionToFileIndexInfo.entrySet()) {
+      entry.getValue().forEach(indexFile -> indexToPartitionMap.put(indexFile.getFileName(), entry.getKey()));
+    }
 
+    IndexFileFilter indexFileFilter = config.getBloomIndexPruneByRanges()
+        ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
+        : new SimpleGlobalIndexFileFilter(partitionToFileIndexInfo);
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
       String recordKey = partitionRecordKeyPair._2();
-
+      String partitionPath = partitionRecordKeyPair._1();
       List<Tuple2<String, Tuple2<String, HoodieKey>>> recordComparisons = new ArrayList<>();
-      if (indexInfos != null) { // could be null, if there are no files in a given partition yet.
-        // for each candidate file in partition, that needs to be compared.
-        for (Tuple2<String, BloomIndexFileInfo> indexInfo : indexInfos) {
-          if (shouldCompareWithFile(indexInfo._2(), recordKey)) {
-            recordComparisons.add(
-                new Tuple2<>(String.format("%s#%s", indexInfo._2().getFileName(), recordKey),
-                    new Tuple2<>(indexInfo._2().getFileName(),
-                        new HoodieKey(recordKey, indexInfo._1()))));
-          }
-        }
-      }
+      indexFileFilter.getMatchingFiles(partitionPath, recordKey).forEach(matchingFile -> {
+        recordComparisons.add(
+            new Tuple2<>(String.format("%s#%s", matchingFile, recordKey),
+                new Tuple2<>(matchingFile,
+                    new HoodieKey(recordKey, indexToPartitionMap.get(matchingFile)))));
+      });
       return recordComparisons;
     }).flatMapToPair(t -> t.iterator());
   }
-
 }

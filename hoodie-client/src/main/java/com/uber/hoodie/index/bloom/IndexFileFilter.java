@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *  Copyright (c) 2018 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,28 +18,21 @@
 
 package com.uber.hoodie.index.bloom;
 
-import java.util.List;
+import java.io.Serializable;
+import java.util.Set;
 
 /**
- * Encapsulates the result from an index lookup
+ * IndexFile filter to assist in look up of a record key.
  */
-public class IndexLookupResult {
+public interface IndexFileFilter extends Serializable {
 
-  private String fileName;
+  /**
+   * Fetches all matching files for a given record key and partition.
+   *
+   * @param partitionPath the partition path of interest
+   * @param recordKey the record key to be looked up
+   * @return the {@link Set} of matching file names where the record could potentially be present.
+   */
+  Set<String> getMatchingFiles(String partitionPath, String recordKey);
 
-
-  private List<String> matchingRecordKeys;
-
-  public IndexLookupResult(String fileName, List<String> matchingRecordKeys) {
-    this.fileName = fileName;
-    this.matchingRecordKeys = matchingRecordKeys;
-  }
-
-  public String getFileName() {
-    return fileName;
-  }
-
-  public List<String> getMatchingRecordKeys() {
-    return matchingRecordKeys;
-  }
 }
