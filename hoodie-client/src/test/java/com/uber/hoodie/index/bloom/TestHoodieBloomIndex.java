@@ -40,10 +40,7 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.commons.io.IOUtils;
@@ -174,7 +171,7 @@ public class TestHoodieBloomIndex {
     HoodieClientTestUtils
         .writeParquetFile(basePath, "2015/03/12", "4_0_20150312101010.parquet",
             Arrays.asList(record2, record3, record4), schema, null,
-        false);
+            false);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
@@ -211,31 +208,34 @@ public class TestHoodieBloomIndex {
 
   @Test
   public void testRangePruning() {
+    for (Boolean rangePruning : new boolean[]{false, true}) {
+      Map<String, String> props = new HashMap<>();
+      props.put("hoodie.bloom.index.prune.by" + ".ranges", rangePruning.toString());
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
+      HoodieBloomIndex index = new HoodieBloomIndex(config);
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieBloomIndex index = new HoodieBloomIndex(config);
+      final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
+      partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
+          new BloomIndexFileInfo("f2", "000", "000"), new BloomIndexFileInfo("f3", "001", "003"),
+          new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
 
-    final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
-    partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
-        new BloomIndexFileInfo("f2", "000", "000"), new BloomIndexFileInfo("f3", "001", "003"),
-        new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
+      JavaPairRDD<String, String> partitionRecordKeyPairRDD = jsc.parallelize(Arrays.asList(
+          new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"), new Tuple2<>("2017/10/22", "005"),
+          new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
 
-    JavaPairRDD<String, String> partitionRecordKeyPairRDD = jsc.parallelize(Arrays.asList(
-        new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"), new Tuple2<>("2017/10/22", "005"),
-        new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
+      List<Tuple2<String, Tuple2<String, HoodieKey>>> comparisonKeyList = index.explodeRecordRDDWithFileComparisons(
+          partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
 
-    List<Tuple2<String, Tuple2<String, HoodieKey>>> comparisonKeyList = index.explodeRecordRDDWithFileComparisons(
-        partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
+      assertEquals(10, comparisonKeyList.size());
+      Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream().collect(Collectors.groupingBy(
+          t -> t._2()._2().getRecordKey(), Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList())));
 
-    assertEquals(10, comparisonKeyList.size());
-    Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream().collect(Collectors.groupingBy(
-        t -> t._2()._2().getRecordKey(), Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList())));
-
-    assertEquals(4, recordKeyToFileComps.size());
-    assertEquals(Arrays.asList("f1", "f3", "f4"), recordKeyToFileComps.get("002"));
-    assertEquals(Arrays.asList("f1", "f3", "f4"), recordKeyToFileComps.get("003"));
-    assertEquals(Arrays.asList("f1", "f4"), recordKeyToFileComps.get("004"));
-    assertEquals(Arrays.asList("f1", "f4"), recordKeyToFileComps.get("005"));
+      assertEquals(4, recordKeyToFileComps.size());
+      assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("002")));
+      assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("003")));
+      assertEquals(new HashSet<>(Arrays.asList("f1", "f4")), new HashSet<>(recordKeyToFileComps.get("004")));
+      assertEquals(new HashSet<>(Arrays.asList("f1", "f4")), new HashSet<>(recordKeyToFileComps.get("005")));
+    }
   }
 
   @Test
@@ -315,68 +315,76 @@ public class TestHoodieBloomIndex {
 
   @Test
   public void testTagLocation() throws Exception {
-    // We have some records to be tagged (two different partitions)
+    for (Boolean rangePruning : new boolean[]{false, true}) {
+      Map<String, String> props = new HashMap<>();
+      props.put("hoodie.bloom.index.prune.by" + ".ranges", rangePruning.toString());
+      // We have some records to be tagged (two different partitions)
 
-    String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"3eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"4eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-    HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
-        rowChange1);
-    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
-    HoodieRecord record2 = new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()),
-        rowChange2);
-    TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
-    HoodieRecord record3 = new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
-        rowChange3);
-    TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
-    HoodieRecord record4 = new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()),
-        rowChange4);
-    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
+      String rowKey1 = UUID.randomUUID().toString();
+      String rowKey2 = UUID.randomUUID().toString();
+      String rowKey3 = UUID.randomUUID().toString();
+      String rowKey4 = UUID.randomUUID().toString();
+      String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\","
+          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+      String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\","
+          + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+      String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\","
+          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+      String recordStr4 = "{\"_row_key\":\"" + rowKey4 + "\","
+          + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
+      TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+      HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
+          rowChange1);
+      TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+      HoodieRecord record2 = new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()),
+          rowChange2);
+      TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+      HoodieRecord record3 = new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
+          rowChange3);
+      TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
+      HoodieRecord record4 = new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()),
+          rowChange4);
+      JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
-    // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+      // Also create the metadata and config
+      HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
+      HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
-    // Let's tag
-    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
-    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
+      // Let's tag
+      HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
+      JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
-    // Should not find any files
-    for (HoodieRecord record : taggedRecordRDD.collect()) {
-      assertTrue(!record.isCurrentLocationKnown());
-    }
+      // Should not find any files
+      for (HoodieRecord record : taggedRecordRDD.collect()) {
+        assertFalse(record.isCurrentLocationKnown());
+      }
 
-    // We create three parquet file, each having one record. (two different partitions)
-    String filename1 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
-    String filename2 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
-    String filename3 =
-        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
+      // We create three parquet file, each having one record. (two different partitions)
+      String filename1 =
+          HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
+      String filename2 =
+          HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
+      String filename3 =
+          HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
 
-    // We do the tag again
-    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+      // We do the tag again
+      metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
-    taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
+      taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
-    // Check results
-    for (HoodieRecord record : taggedRecordRDD.collect()) {
-      if (record.getRecordKey().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename1)));
-      } else if (record.getRecordKey().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
-      } else if (record.getRecordKey().equals("3eb5b87c-1fej-4edd-87b4-6ec96dc405a0")) {
-        assertTrue(!record.isCurrentLocationKnown());
-      } else if (record.getRecordKey().equals("4eb5b87c-1fej-4edd-87b4-6ec96dc405a0")) {
-        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
+      // Check results
+      for (HoodieRecord record : taggedRecordRDD.collect()) {
+        if (record.getRecordKey().equals(rowKey1)) {
+          assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename1)));
+        } else if (record.getRecordKey().equals(rowKey2)) {
+          assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
+        } else if (record.getRecordKey().equals(rowKey3)) {
+          assertTrue(!record.isCurrentLocationKnown());
+        } else if (record.getRecordKey().equals(rowKey4)) {
+          assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
+        }
       }
     }
   }
