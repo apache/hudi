@@ -17,6 +17,7 @@
 package com.uber.hoodie.common.table.log;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.storage.StorageSchemes;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.WriterBuilder;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
@@ -68,26 +69,32 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
     Path path = logFile.getPath();
     if (fs.exists(path)) {
-      log.info(logFile + " exists. Appending to existing file");
-      try {
-        this.output = fs.append(path, bufferSize);
-      } catch (RemoteException e) {
-        log.warn("Remote Exception, attempting to handle or recover lease", e);
-        handleAppendExceptionOrRecoverLease(path, e);
-      } catch (IOException ioe) {
-        if (ioe.getMessage().equalsIgnoreCase("Not supported")) {
-          log.info("Append not supported. Opening a new log file..");
-          this.logFile = logFile.rollOver(fs);
-          createNewFile();
-        } else {
-          throw ioe;
+      boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
+      if (isAppendSupported) {
+        log.info(logFile + " exists. Appending to existing file");
+        try {
+          this.output = fs.append(path, bufferSize);
+        } catch (RemoteException e) {
+          log.warn("Remote Exception, attempting to handle or recover lease", e);
+          handleAppendExceptionOrRecoverLease(path, e);
+        } catch (IOException ioe) {
+          if (ioe.getMessage().toLowerCase().contains("not supported")) {
+            // may still happen if scheme is viewfs.
+            isAppendSupported = false;
+          } else {
+            throw ioe;
+          }
         }
+      }
+      if (!isAppendSupported) {
+        this.logFile = logFile.rollOver(fs);
+        log.info("Append not supported.. Rolling over to " + logFile);
+        createNewFile();
       }
     } else {
       log.info(logFile + " does not exist. Create a new file");
       // Block size does not matter as we will always manually autoflush
       createNewFile();
-      // TODO - append a file level meta block
     }
   }
 
