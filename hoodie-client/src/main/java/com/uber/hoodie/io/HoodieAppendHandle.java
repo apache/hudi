@@ -127,6 +127,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       writeStatus.getStat().setPrevCommit(baseInstantTime);
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
+      writeStatus.getStat().setPartitionPath(partitionPath);
       writeStatus.getStat().setFileId(fileId);
       averageRecordSize = SizeEstimator.estimate(record);
       try {

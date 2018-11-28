@@ -127,6 +127,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
+      writeStatus.getStat().setPartitionPath(partitionPath);
       writeStatus.getStat().setFileId(fileId);
       writeStatus.getStat().setPaths(new Path(config.getBasePath()), newFilePath, tempPath);
       // Create the writer for writing the new version file

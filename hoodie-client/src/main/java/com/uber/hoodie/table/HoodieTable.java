@@ -23,6 +23,7 @@ import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
@@ -252,15 +253,15 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Finalize the written data onto storage. Perform any final cleanups
    *
    * @param jsc Spark Context
-   * @param writeStatuses List of WriteStatus
+   * @param stats List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
-  public void finalizeWrite(JavaSparkContext jsc, List<WriteStatus> writeStatuses)
+  public void finalizeWrite(JavaSparkContext jsc, List<HoodieWriteStat> stats)
       throws HoodieIOException {
     if (config.isConsistencyCheckEnabled()) {
-      List<String> pathsToCheck = writeStatuses.stream()
-          .map(ws -> ws.getStat().getTempPath() != null
-              ? ws.getStat().getTempPath() : ws.getStat().getPath())
+      List<String> pathsToCheck = stats.stream()
+          .map(stat -> stat.getTempPath() != null
+              ? stat.getTempPath() : stat.getPath())
           .collect(Collectors.toList());
 
       List<String> failingPaths = new ConsistencyCheck(config.getBasePath(), pathsToCheck, jsc,
