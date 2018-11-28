@@ -162,7 +162,7 @@ public class HoodieMetrics {
     }
   }
 
-  public void updateFinalizeWriteMetrics(long durationInMs, int numFilesFinalized) {
+  public void updateFinalizeWriteMetrics(long durationInMs, long numFilesFinalized) {
     if (config.isMetricsOn()) {
       logger.info(String
           .format("Sending finalize write metrics (duration=%d, numFilesFinalized=%d)",

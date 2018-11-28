@@ -149,6 +149,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       storageWriter.close();
 
       HoodieWriteStat stat = new HoodieWriteStat();
+      stat.setPartitionPath(status.getPartitionPath());
       stat.setNumWrites(recordsWritten);
       stat.setNumDeletes(recordsDeleted);
       stat.setNumInserts(insertRecordsWritten);
