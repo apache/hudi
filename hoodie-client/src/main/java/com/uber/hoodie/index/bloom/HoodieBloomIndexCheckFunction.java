@@ -43,7 +43,7 @@ import scala.Tuple2;
  */
 public class HoodieBloomIndexCheckFunction implements
     Function2<Integer, Iterator<Tuple2<String, Tuple2<String, HoodieKey>>>,
-        Iterator<List<IndexLookupResult>>> {
+        Iterator<List<KeyLookupResult>>> {
 
   private static Logger logger = LogManager.getLogger(HoodieBloomIndexCheckFunction.class);
 
@@ -81,14 +81,14 @@ public class HoodieBloomIndexCheckFunction implements
   }
 
   @Override
-  public Iterator<List<IndexLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> filePartitionRecordKeyTripletItr)
+  public Iterator<List<KeyLookupResult>> call(Integer partition,
+      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr)
       throws Exception {
-    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
+    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends
-      LazyIterableIterator<Tuple2<String, Tuple2<String, HoodieKey>>, List<IndexLookupResult>> {
+      LazyIterableIterator<Tuple2<String, Tuple2<String, HoodieKey>>, List<KeyLookupResult>> {
 
     private List<String> candidateRecordKeys;
 
@@ -125,9 +125,9 @@ public class HoodieBloomIndexCheckFunction implements
     }
 
     @Override
-    protected List<IndexLookupResult> computeNext() {
+    protected List<KeyLookupResult> computeNext() {
 
-      List<IndexLookupResult> ret = new ArrayList<>();
+      List<KeyLookupResult> ret = new ArrayList<>();
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
@@ -162,7 +162,7 @@ public class HoodieBloomIndexCheckFunction implements
               logger
                   .debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
             }
-            ret.add(new IndexLookupResult(currentFile,
+            ret.add(new KeyLookupResult(currentFile,
                 checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath)));
 
             initState(fileName, partitionPath);
@@ -185,7 +185,7 @@ public class HoodieBloomIndexCheckFunction implements
           if (logger.isDebugEnabled()) {
             logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
           }
-          ret.add(new IndexLookupResult(currentFile,
+          ret.add(new KeyLookupResult(currentFile,
               checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath)));
         }
 

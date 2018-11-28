@@ -211,10 +211,10 @@ public class TestHoodieGlobalBloomIndex {
         t -> t._2()._2().getRecordKey(), Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
-    assertEquals(Arrays.asList("f4", "f1", "f3"), recordKeyToFileComps.get("002"));
-    assertEquals(Arrays.asList("f4", "f1", "f3"), recordKeyToFileComps.get("003"));
-    assertEquals(Arrays.asList("f4", "f1"), recordKeyToFileComps.get("004"));
-    assertEquals(Arrays.asList("f4", "f1"), recordKeyToFileComps.get("005"));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("002")));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("003")));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1")), new HashSet<>(recordKeyToFileComps.get("004")));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1")), new HashSet<>(recordKeyToFileComps.get("005")));
   }
 
 
