@@ -73,6 +73,11 @@
       <name>Nishith Agarwal</name>
       <organization>Uber</organization>
     </developer>
+    <developer>
+      <id>bvaradar</id>
+      <name>Balaji Varadharajan</name>
+      <organization>Uber</organization>
+    </developer>
   </developers>
 
   <contributors>
@@ -98,10 +103,6 @@
     </contributor>
     <contributor>
       <name>Kaushik Devarajaiah</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Balaji Varadharajan</name>
       <organization>Uber</organization>
     </contributor>
     <contributor>
