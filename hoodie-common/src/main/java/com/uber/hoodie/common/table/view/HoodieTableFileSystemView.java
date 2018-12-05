@@ -426,7 +426,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
 
     try {
       // Create the path if it does not exist already
-      Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
+      Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
       FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
       FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
       List<HoodieFileGroup> fileGroups = addFilesToView(statuses);

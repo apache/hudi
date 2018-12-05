@@ -101,12 +101,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
-          new Path(config.getBasePath()), new Path(config.getBasePath(), partitionPath));
+          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
 
       oldFilePath = new Path(
           config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
-      String relativePath = new Path(partitionPath + "/" + FSUtils
+      String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/") + FSUtils
           .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId)).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
       if (config.shouldUseTempFolderForCopyOnWriteForMerge()) {

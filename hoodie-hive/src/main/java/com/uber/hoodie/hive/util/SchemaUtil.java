@@ -406,8 +406,9 @@ public class SchemaUtil {
 
     List<String> partitionFields = new ArrayList<>();
     for (String partitionKey : config.partitionFields) {
+      String partitionKeyWithTicks = tickSurround(partitionKey);
       partitionFields.add(new StringBuilder().append(partitionKey).append(" ")
-          .append(getPartitionKeyType(hiveSchema, partitionKey)).toString());
+          .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
     }
 
     String partitionsStr = partitionFields.stream().collect(Collectors.joining(","));

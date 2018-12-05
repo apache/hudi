@@ -68,7 +68,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
     try {
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
-          new Path(config.getBasePath()), new Path(config.getBasePath(), partitionPath));
+          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
       this.storageWriter = HoodieStorageWriterFactory
           .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
