@@ -49,7 +49,7 @@ public class HiveSyncConfig implements Serializable {
   public String basePath;
 
   @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by",
-      required = true)
+      required = false)
   public List<String> partitionFields = new ArrayList<>();
 
   @Parameter(names = "-partition-value-extractor", description = "Class which implements "

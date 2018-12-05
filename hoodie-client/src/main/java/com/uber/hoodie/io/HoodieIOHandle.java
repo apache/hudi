@@ -85,7 +85,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   }
 
   public Path makeNewPath(String partitionPath, int taskPartitionId, String fileName) {
-    Path path = new Path(config.getBasePath(), partitionPath);
+    Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
       fs.mkdirs(path); // create a new partition as needed.
     } catch (IOException e) {

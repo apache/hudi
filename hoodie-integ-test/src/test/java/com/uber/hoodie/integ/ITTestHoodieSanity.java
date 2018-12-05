@@ -25,6 +25,12 @@ import org.junit.Test;
  */
 public class ITTestHoodieSanity extends ITTestBase {
 
+  enum PartitionType {
+    SINGLE_KEY_PARTITIONED,
+    MULTI_KEYS_PARTITIONED,
+    NON_PARTITIONED,
+  }
+
   @Test
   public void testRunEcho() throws Exception {
     String[] cmd = new String[]{"echo", "Happy Testing"};
@@ -44,7 +50,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_single_partition_key_cow_test";
-    testRunHoodieJavaAppOnCOWTable(hiveTableName, true);
+    testRunHoodieJavaAppOnCOWTable(hiveTableName, PartitionType.SINGLE_KEY_PARTITIONED);
   }
 
   @Test
@@ -55,7 +61,18 @@ public class ITTestHoodieSanity extends ITTestBase {
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_multi_partition_key_cow_test";
-    testRunHoodieJavaAppOnCOWTable(hiveTableName, false);
+    testRunHoodieJavaAppOnCOWTable(hiveTableName, PartitionType.MULTI_KEYS_PARTITIONED);
+  }
+
+  @Test
+  /**
+   * A basic integration test that runs HoodieJavaApp to create a sample non-partitioned COW Hoodie
+   * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count
+   * query in hive console.
+   */
+  public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
+    String hiveTableName = "docker_hoodie_non_partition_key_cow_test";
+    testRunHoodieJavaAppOnCOWTable(hiveTableName, PartitionType.NON_PARTITIONED);
   }
 
   /**
@@ -64,7 +81,7 @@ public class ITTestHoodieSanity extends ITTestBase {
    * query in hive console.
    * TODO: Add spark-shell test-case
    */
-  public void testRunHoodieJavaAppOnCOWTable(String hiveTableName, boolean singlePartitionKey) throws Exception {
+  public void testRunHoodieJavaAppOnCOWTable(String hiveTableName, PartitionType partitionType) throws Exception {
 
     String hdfsPath = "/" + hiveTableName;
     String hdfsUrl = "hdfs://namenode" + hdfsPath;
@@ -90,12 +107,21 @@ public class ITTestHoodieSanity extends ITTestBase {
     // Run Hoodie Java App
     {
       String[] cmd = null;
-      if (singlePartitionKey) {
+      if (partitionType == PartitionType.SINGLE_KEY_PARTITIONED) {
         cmd = new String[]{
             HOODIE_JAVA_APP,
             "--hive-sync",
             "--table-path", hdfsUrl,
             "--hive-url", HIVE_SERVER_JDBC_URL,
+            "--hive-table", hiveTableName
+        };
+      } else if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
+        cmd = new String[]{
+            HOODIE_JAVA_APP,
+            "--hive-sync",
+            "--table-path", hdfsUrl,
+            "--hive-url", HIVE_SERVER_JDBC_URL,
+            "--use-multi-partition-keys",
             "--hive-table", hiveTableName
         };
       } else {
@@ -104,7 +130,7 @@ public class ITTestHoodieSanity extends ITTestBase {
             "--hive-sync",
             "--table-path", hdfsUrl,
             "--hive-url", HIVE_SERVER_JDBC_URL,
-            "--use-multi-partition-keys",
+            "--non-partitioned",
             "--hive-table", hiveTableName
         };
       }
