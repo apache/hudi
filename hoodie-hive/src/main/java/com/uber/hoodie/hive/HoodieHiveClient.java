@@ -154,7 +154,7 @@ public class HoodieHiveClient {
         .append(" ADD IF NOT EXISTS ");
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      String fullPartitionPath = new Path(syncConfig.basePath, partition).toString();
+      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
       alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '")
           .append(fullPartitionPath).append("' ");
     }
@@ -185,7 +185,7 @@ public class HoodieHiveClient {
     String alterTable = "ALTER TABLE " + syncConfig.databaseName + "." + syncConfig.tableName;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      String fullPartitionPath = new Path(syncConfig.basePath, partition).toString();
+      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
       String changePartition =
           alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
       changePartitions.add(changePartition);
@@ -210,16 +210,18 @@ public class HoodieHiveClient {
 
     List<PartitionEvent> events = Lists.newArrayList();
     for (String storagePartition : partitionStoragePartitions) {
-      String fullStoragePartitionPath = new Path(syncConfig.basePath, storagePartition).toString();
+      String fullStoragePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition).toString();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor
           .extractPartitionValuesInPath(storagePartition);
       Collections.sort(storagePartitionValues);
-      String storageValue = String.join(", ", storagePartitionValues);
-      if (!paths.containsKey(storageValue)) {
-        events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
-      } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
-        events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+      if (!storagePartitionValues.isEmpty()) {
+        String storageValue = String.join(", ", storagePartitionValues);
+        if (!paths.containsKey(storageValue)) {
+          events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
+        } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
+          events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+        }
       }
     }
     return events;

@@ -147,7 +147,9 @@ public class FSUtils {
   public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
     String partitionFullPath = partitionPath.toString();
     int partitionStartIndex = partitionFullPath.lastIndexOf(basePath.getName());
-    return partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);
+    // Partition-Path could be empty for non-partitioned tables
+    return partitionStartIndex + basePath.getName().length() == partitionFullPath.length() ? "" :
+        partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);
   }
 
   /**
@@ -395,5 +397,11 @@ public class FSUtils {
 
   public static Long getSizeInMB(long sizeInBytes) {
     return sizeInBytes / (1024 * 1024);
+  }
+
+  public static Path getPartitionPath(String basePath, String partitionPath) {
+    // FOr non-partitioned table, return only base-path
+    return ((partitionPath == null) || (partitionPath.isEmpty())) ? new Path(basePath) :
+        new Path(basePath, partitionPath);
   }
 }
