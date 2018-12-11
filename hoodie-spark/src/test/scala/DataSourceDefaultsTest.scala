@@ -38,10 +38,10 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
   }
 
 
-  private def getKeyConfig(recordKeyFieldName: String, paritionPathField: String): TypedProperties = {
+  private def getKeyConfig(recordKeyFieldName: String, partitionPathField: String): TypedProperties = {
     val props = new TypedProperties()
     props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, recordKeyFieldName)
-    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, paritionPathField)
+    props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, partitionPathField)
     props
   }
 
