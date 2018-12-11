@@ -20,7 +20,7 @@ import com.google.common.base.Objects;
 import java.io.Serializable;
 
 /**
- * Location of a HoodieRecord within the parition it belongs to. Ultimately, this points to an
+ * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an
  * actual file on disk
  */
 public class HoodieRecordLocation implements Serializable {

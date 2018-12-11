@@ -143,10 +143,10 @@ public class TestHoodieCompactionStrategy {
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
       Map<Long, List<Long>> sizesMap) {
-    Map<Long, String> keyToParitionMap = sizesMap.entrySet().stream().map(e ->
+    Map<Long, String> keyToPartitionMap = sizesMap.entrySet().stream().map(e ->
         Pair.of(e.getKey(), partitionPaths[new Random().nextInt(partitionPaths.length - 1)]))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    return createCompactionOperations(config, sizesMap, keyToParitionMap);
+    return createCompactionOperations(config, sizesMap, keyToPartitionMap);
   }
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,

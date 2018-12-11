@@ -38,7 +38,7 @@ import org.apache.spark.api.java.function.Function2;
 import scala.Tuple2;
 
 /**
- * Function performing actual checking of RDD parition containing (fileId, hoodieKeys) against the
+ * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the
  * actual files
  */
 public class HoodieBloomIndexCheckFunction implements
@@ -82,9 +82,9 @@ public class HoodieBloomIndexCheckFunction implements
 
   @Override
   public Iterator<List<IndexLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr)
+      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> filePartitionRecordKeyTripletItr)
       throws Exception {
-    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
+    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends
@@ -96,15 +96,15 @@ public class HoodieBloomIndexCheckFunction implements
 
     private String currentFile;
 
-    private String currentParitionPath;
+    private String currentPartitionPath;
 
     LazyKeyCheckIterator(
-        Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr) {
-      super(fileParitionRecordKeyTripletItr);
+        Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> filePartitionRecordKeyTripletItr) {
+      super(filePartitionRecordKeyTripletItr);
       currentFile = null;
       candidateRecordKeys = new ArrayList<>();
       bloomFilter = null;
-      currentParitionPath = null;
+      currentPartitionPath = null;
     }
 
     @Override
@@ -118,7 +118,7 @@ public class HoodieBloomIndexCheckFunction implements
             .readBloomFilterFromParquetMetadata(metaClient.getHadoopConf(), filePath);
         candidateRecordKeys = new ArrayList<>();
         currentFile = fileName;
-        currentParitionPath = partitionPath;
+        currentPartitionPath = partitionPath;
       } catch (Exception e) {
         throw new HoodieIndexException("Error checking candidate keys against file.", e);
       }
@@ -154,7 +154,7 @@ public class HoodieBloomIndexCheckFunction implements
             }
           } else {
             // do the actual checking of file & break out
-            Path filePath = new Path(basePath + "/" + currentParitionPath + "/" + currentFile);
+            Path filePath = new Path(basePath + "/" + currentPartitionPath + "/" + currentFile);
             logger.info(
                 "#1 After bloom filter, the candidate row keys is reduced to " + candidateRecordKeys
                     .size() + " for " + filePath);
@@ -178,7 +178,7 @@ public class HoodieBloomIndexCheckFunction implements
 
         // handle case, where we ran out of input, close pending work, update return val
         if (!inputItr.hasNext()) {
-          Path filePath = new Path(basePath + "/" + currentParitionPath + "/" + currentFile);
+          Path filePath = new Path(basePath + "/" + currentPartitionPath + "/" + currentFile);
           logger.info(
               "#2 After bloom filter, the candidate row keys is reduced to " + candidateRecordKeys
                   .size() + " for " + filePath);

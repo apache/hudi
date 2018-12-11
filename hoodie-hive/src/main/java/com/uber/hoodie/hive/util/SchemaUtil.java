@@ -410,12 +410,12 @@ public class SchemaUtil {
           .append(getPartitionKeyType(hiveSchema, partitionKey)).toString());
     }
 
-    String paritionsStr = partitionFields.stream().collect(Collectors.joining(","));
+    String partitionsStr = partitionFields.stream().collect(Collectors.joining(","));
     StringBuilder sb = new StringBuilder("CREATE EXTERNAL TABLE  IF NOT EXISTS ");
     sb = sb.append(config.databaseName).append(".").append(config.tableName);
     sb = sb.append("( ").append(columns).append(")");
     if (!config.partitionFields.isEmpty()) {
-      sb = sb.append(" PARTITIONED BY (").append(paritionsStr).append(")");
+      sb = sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
     sb = sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
     sb = sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
