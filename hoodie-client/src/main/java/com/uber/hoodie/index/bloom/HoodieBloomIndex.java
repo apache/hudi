@@ -187,13 +187,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       for (String partitionPath : recordsPerPartition.keySet()) {
         long numRecords = recordsPerPartition.get(partitionPath);
         long numFiles =
-            filesPerPartition.containsKey(partitionPath) ? filesPerPartition.get(partitionPath)
-                : 1L;
+                filesPerPartition.getOrDefault(partitionPath, 1L);
 
         totalComparisons += numFiles * numRecords;
         totalFiles +=
-            filesPerPartition.containsKey(partitionPath) ? filesPerPartition.get(partitionPath)
-                : 0L;
+                filesPerPartition.getOrDefault(partitionPath, 0L);
         totalRecords += numRecords;
       }
       logger.info("TotalRecords: " + totalRecords + ", TotalFiles: " + totalFiles
@@ -340,7 +338,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         }
       }
       return recordComparisons;
-    }).flatMapToPair(t -> t.iterator());
+    }).flatMapToPair(List::iterator);
   }
 
   /**
@@ -369,7 +367,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
     return fileSortedTripletRDD.mapPartitionsWithIndex(
         new HoodieBloomIndexCheckFunction(metaClient, config.getBasePath()), true)
-        .flatMap(indexLookupResults -> indexLookupResults.iterator())
+        .flatMap(List::iterator)
         .filter(lookupResult -> lookupResult.getMatchingRecordKeys().size() > 0)
         .flatMapToPair(lookupResult -> {
           List<Tuple2<String, String>> vals = new ArrayList<>();

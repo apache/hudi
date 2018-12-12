@@ -90,7 +90,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     log.info("Compactor compacting " + operations + " files");
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionInstantTime))
-        .flatMap(writeStatusesItr -> writeStatusesItr.iterator());
+        .flatMap(List::iterator);
   }
 
   private List<WriteStatus> compact(HoodieCopyOnWriteTable hoodieCopyOnWriteTable, HoodieTableMetaClient metaClient,
@@ -141,7 +141,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     }
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream)
-        .map(s -> {
+        .peek(s -> {
           s.getStat().setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
           s.getStat().setTotalLogFilesCompacted(scanner.getTotalLogFiles());
           s.getStat().setTotalLogRecords(scanner.getTotalLogRecords());
@@ -154,7 +154,6 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
           RuntimeStats runtimeStats = new RuntimeStats();
           runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
           s.getStat().setRuntimeStats(runtimeStats);
-          return s;
         }).collect(toList());
   }
 

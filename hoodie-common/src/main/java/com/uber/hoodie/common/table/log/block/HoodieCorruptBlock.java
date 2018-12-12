@@ -57,7 +57,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
       long blockSize,
       long blockEndPos,
       Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) throws IOException {
+      Map<HeaderMetadataType, String> footer) {
 
     return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily,
         Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),

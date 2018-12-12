@@ -254,9 +254,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   public WriteStatus close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
-      Iterator<String> pendingRecordsItr = keyToNewRecords.keySet().iterator();
-      while (pendingRecordsItr.hasNext()) {
-        String key = pendingRecordsItr.next();
+      for (String key : keyToNewRecords.keySet()) {
         if (!writtenRecordKeys.contains(key)) {
           HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
           writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(schema));

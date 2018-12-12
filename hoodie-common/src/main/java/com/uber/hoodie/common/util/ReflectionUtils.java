@@ -83,7 +83,7 @@ public class ReflectionUtils {
    */
   public static Object loadClass(String clazz, Object... constructorArgs) {
     Class<?>[] constructorArgTypes = Arrays.stream(constructorArgs)
-        .map(arg -> arg.getClass()).toArray(Class<?>[]::new);
+        .map(Object::getClass).toArray(Class<?>[]::new);
     return loadClass(clazz, constructorArgTypes, constructorArgs);
   }
 

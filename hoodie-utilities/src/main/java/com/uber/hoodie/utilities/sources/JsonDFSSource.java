@@ -35,6 +35,6 @@ public class JsonDFSSource extends DFSSource {
 
   @Override
   protected JavaRDD<GenericRecord> fromFiles(AvroConvertor convertor, String pathStr) {
-    return sparkContext.textFile(pathStr).map((String j) -> convertor.fromJson(j));
+    return sparkContext.textFile(pathStr).map(convertor::fromJson);
   }
 }

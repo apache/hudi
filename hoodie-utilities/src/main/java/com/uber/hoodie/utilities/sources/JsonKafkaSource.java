@@ -40,6 +40,6 @@ public class JsonKafkaSource extends KafkaSource {
   protected JavaRDD<GenericRecord> toAvroRDD(OffsetRange[] offsetRanges, AvroConvertor avroConvertor) {
     return KafkaUtils.createRDD(sparkContext, String.class, String.class, StringDecoder.class, StringDecoder.class,
         kafkaParams, offsetRanges)
-        .values().map(jsonStr -> avroConvertor.fromJson(jsonStr));
+        .values().map(avroConvertor::fromJson);
   }
 }

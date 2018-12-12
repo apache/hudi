@@ -95,14 +95,8 @@ public class UtilHelpers {
     }
     long len = fs.getFileStatus(p).getLen();
     ByteBuffer buf = ByteBuffer.allocate((int) len);
-    FSDataInputStream inputStream = null;
-    try {
-      inputStream = fs.open(p);
+    try (FSDataInputStream inputStream = fs.open(p)) {
       inputStream.readFully(0, buf.array(), 0, buf.array().length);
-    } finally {
-      if (inputStream != null) {
-        inputStream.close();
-      }
     }
     return new String(buf.array());
   }

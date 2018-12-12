@@ -97,7 +97,7 @@ public class ConsistencyCheck implements Serializable {
                 .filter(p -> !fileNames.contains(new Path(basePath, p).getName()))
                 .collect(Collectors.toList());
           })
-          .flatMap(itr -> itr.iterator()).collect();
+          .flatMap(List::iterator).collect();
       if (remainingPaths.size() == 0) {
         break; // we are done.
       }

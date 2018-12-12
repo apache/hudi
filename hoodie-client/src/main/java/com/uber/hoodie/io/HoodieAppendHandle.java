@@ -65,9 +65,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private final WriteStatus writeStatus;
   private final String fileId;
   // Buffer for holding records in memory before they are flushed to disk
-  List<IndexedRecord> recordList = new ArrayList<>();
+  private List<IndexedRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
-  List<String> keysToDelete = new ArrayList<>();
+  private List<String> keysToDelete = new ArrayList<>();
   private TableFileSystemView.RealtimeView fileSystemView;
   private String partitionPath;
   private Iterator<HoodieRecord<T>> recordItr;

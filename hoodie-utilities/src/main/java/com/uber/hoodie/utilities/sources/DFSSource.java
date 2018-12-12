@@ -26,10 +26,7 @@ import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
@@ -58,7 +55,7 @@ public abstract class DFSSource extends Source {
 
   public DFSSource(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
     super(props, sparkContext, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
     this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), sparkContext.hadoopConfiguration());
   }
 
@@ -75,16 +72,14 @@ public abstract class DFSSource extends Source {
           new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
       while (fitr.hasNext()) {
         LocatedFileStatus fileStatus = fitr.next();
-        if (fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream().filter(
-            pfx -> fileStatus.getPath().getName().startsWith(pfx)).count() > 0) {
+        if (fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
+                .anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
           continue;
         }
         eligibleFiles.add(fileStatus);
       }
       // sort them by modification time.
-      eligibleFiles.sort((FileStatus f1, FileStatus f2) -> Long.valueOf(f1.getModificationTime())
-          .compareTo(Long.valueOf(
-              f2.getModificationTime())));
+      eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
 
       // Filter based on checkpoint & input size, if needed
       long currentBytes = 0;
@@ -110,8 +105,7 @@ public abstract class DFSSource extends Source {
       // no data to read
       if (filteredFiles.size() == 0) {
         return new ImmutablePair<>(Optional.empty(),
-            lastCheckpointStr.isPresent() ? lastCheckpointStr.get()
-                : String.valueOf(Long.MIN_VALUE));
+                lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
       }
 
       // read the files out.

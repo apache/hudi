@@ -95,27 +95,24 @@ public class HoodieTableConfig implements Serializable {
       fs.mkdirs(metadataFolder);
     }
     Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
-    FSDataOutputStream outputStream = fs.create(propertyPath);
-    try {
+    try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
       if (!properties.containsKey(HOODIE_TABLE_NAME_PROP_NAME)) {
         throw new IllegalArgumentException(
-            HOODIE_TABLE_NAME_PROP_NAME + " property needs to be specified");
+                HOODIE_TABLE_NAME_PROP_NAME + " property needs to be specified");
       }
       if (!properties.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
         properties.setProperty(HOODIE_TABLE_TYPE_PROP_NAME, DEFAULT_TABLE_TYPE.name());
       }
       if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME) == HoodieTableType.MERGE_ON_READ
-          .name()
-          && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
+              .name()
+              && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
         properties.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS);
       }
       if (!properties.containsKey(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME)) {
         properties.setProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
       }
       properties
-          .store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
-    } finally {
-      outputStream.close();
+              .store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
   }
 

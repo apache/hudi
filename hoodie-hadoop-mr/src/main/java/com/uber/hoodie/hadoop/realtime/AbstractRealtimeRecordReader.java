@@ -131,9 +131,9 @@ public abstract class AbstractRealtimeRecordReader {
     builder.append(String.format("(Size: %s)[", values.length));
     for (Writable w : values) {
       if (w instanceof ArrayWritable) {
-        builder.append(arrayWritableToString((ArrayWritable) w) + " ");
+        builder.append(arrayWritableToString((ArrayWritable) w)).append(" ");
       } else {
-        builder.append(w + " ");
+        builder.append(w).append(" ");
       }
     }
     builder.append("]");
@@ -186,7 +186,7 @@ public abstract class AbstractRealtimeRecordReader {
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: "
-            + schemaFieldsMap.keySet().stream().collect(Collectors.toList()));
+            + new ArrayList<>(schemaFieldsMap.keySet()));
       }
       projectedFields
           .add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
