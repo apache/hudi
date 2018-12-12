@@ -91,10 +91,10 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     List<HoodieInstant> pendingCompactionInstants =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
     this.fileIdToPendingCompaction = ImmutableMap.copyOf(
-        CompactionUtils.getAllPendingCompactionOperations(metaClient).entrySet().stream().map(entry -> {
-          return Pair.of(entry.getKey(), Pair.of(entry.getValue().getKey(),
-              CompactionOperation.convertFromAvroRecordInstance(entry.getValue().getValue())));
-        }).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+        CompactionUtils.getAllPendingCompactionOperations(metaClient).entrySet().stream()
+                .map(entry -> Pair.of(entry.getKey(), Pair.of(entry.getValue().getKey(),
+                        CompactionOperation.convertFromAvroRecordInstance(entry.getValue().getValue()))))
+                .collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
   }
 
   /**
@@ -152,10 +152,10 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       String fileId = pair.getValue();
       HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), fileId, visibleActiveTimeline);
       if (dataFiles.containsKey(pair)) {
-        dataFiles.get(pair).forEach(dataFile -> group.addDataFile(dataFile));
+        dataFiles.get(pair).forEach(group::addDataFile);
       }
       if (logFiles.containsKey(pair)) {
-        logFiles.get(pair).forEach(logFile -> group.addLogFile(logFile));
+        logFiles.get(pair).forEach(group::addLogFile);
       }
       if (fileIdToPendingCompaction.containsKey(fileId)) {
         // If there is no delta-commit after compaction request, this step would ensure a new file-slice appears
@@ -219,9 +219,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   @Override
   public Stream<HoodieDataFile> getLatestDataFiles() {
     return fileGroupMap.values().stream()
-        .map(fileGroup -> {
-          return fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
-        })
+        .map(fileGroup -> fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst())
         .filter(Optional::isPresent)
         .map(Optional::get);
   }
@@ -230,15 +228,13 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
       String maxCommitTime) {
     return getAllFileGroups(partitionPath)
-        .map(fileGroup -> {
-          return fileGroup.getAllDataFiles()
-              .filter(dataFile ->
-                  HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
-                      maxCommitTime,
-                      HoodieTimeline.LESSER_OR_EQUAL))
-              .filter(df -> !isDataFileDueToPendingCompaction(df))
-              .findFirst();
-        })
+        .map(fileGroup -> fileGroup.getAllDataFiles()
+            .filter(dataFile ->
+                HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
+                    maxCommitTime,
+                    HoodieTimeline.LESSER_OR_EQUAL))
+            .filter(df -> !isDataFileDueToPendingCompaction(df))
+            .findFirst())
         .filter(Optional::isPresent)
         .map(Optional::get);
   }
@@ -246,12 +242,10 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   @Override
   public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
     return fileGroupMap.values().stream()
-        .map(fileGroup -> {
-          return fileGroup.getAllDataFiles()
-              .filter(dataFile -> commitsToReturn.contains(dataFile.getCommitTime())
-                  && !isDataFileDueToPendingCompaction(dataFile))
-              .findFirst();
-        })
+        .map(fileGroup -> fileGroup.getAllDataFiles()
+            .filter(dataFile -> commitsToReturn.contains(dataFile.getCommitTime())
+                && !isDataFileDueToPendingCompaction(dataFile))
+            .findFirst())
         .filter(Optional::isPresent)
         .map(Optional::get);
   }
@@ -259,15 +253,13 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   @Override
   public Stream<HoodieDataFile> getLatestDataFilesOn(String partitionPath, String instantTime) {
     return getAllFileGroups(partitionPath)
-        .map(fileGroup -> {
-          return fileGroup.getAllDataFiles()
-              .filter(dataFile ->
-                  HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
-                      instantTime,
-                      HoodieTimeline.EQUAL))
-              .filter(df -> !isDataFileDueToPendingCompaction(df))
-              .findFirst();
-        })
+        .map(fileGroup -> fileGroup.getAllDataFiles()
+            .filter(dataFile ->
+                HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
+                    instantTime,
+                    HoodieTimeline.EQUAL))
+            .filter(df -> !isDataFileDueToPendingCompaction(df))
+            .findFirst())
         .filter(Optional::isPresent)
         .map(Optional::get);
   }
@@ -275,7 +267,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   @Override
   public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
     return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getAllDataFiles())
+        .map(HoodieFileGroup::getAllDataFiles)
         .flatMap(dataFileList -> dataFileList)
         .filter(df -> !isDataFileDueToPendingCompaction(df));
   }
@@ -283,7 +275,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   @Override
   public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
     return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getLatestFileSlice())
+        .map(HoodieFileGroup::getLatestFileSlice)
         .filter(Optional::isPresent)
         .map(Optional::get)
         .map(this::filterDataFileAfterPendingCompaction);
@@ -312,11 +304,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
    */
   private boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
     Pair<String, CompactionOperation> compactionWithInstantTime = fileIdToPendingCompaction.get(fileSlice.getFileId());
-    if ((null != compactionWithInstantTime)
-        && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.getKey())) {
-      return true;
-    }
-    return false;
+    return (null != compactionWithInstantTime)
+            && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.getKey());
   }
 
   /**
@@ -330,7 +319,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       // Data file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
-      fileSlice.getLogFiles().forEach(lf -> transformed.addLogFile(lf));
+      fileSlice.getLogFiles().forEach(transformed::addLogFile);
       return transformed;
     }
     return fileSlice;
@@ -358,8 +347,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       merged.setDataFile(penultimateSlice.getDataFile().get());
     }
     // Add Log files from penultimate and last slices
-    penultimateSlice.getLogFiles().forEach(lf -> merged.addLogFile(lf));
-    lastSlice.getLogFiles().forEach(lf -> merged.addLogFile(lf));
+    penultimateSlice.getLogFiles().forEach(merged::addLogFile);
+    lastSlice.getLogFiles().forEach(merged::addLogFile);
     return merged;
   }
 
@@ -409,7 +398,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   @Override
   public Stream<FileSlice> getAllFileSlices(String partitionPath) {
     return getAllFileGroups(partitionPath)
-        .map(group -> group.getAllFileSlices())
+        .map(HoodieFileGroup::getAllFileSlices)
         .flatMap(sliceList -> sliceList);
   }
 

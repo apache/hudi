@@ -25,7 +25,8 @@ import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.net.URL;
-import java.util.Arrays;
+import java.util.Collections;
+
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -55,7 +56,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.SCHEMA_REGISTRY_URL_PROP));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SCHEMA_REGISTRY_URL_PROP));
     String registryUrl = props.getString(Config.SCHEMA_REGISTRY_URL_PROP);
     try {
       this.schema = new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));

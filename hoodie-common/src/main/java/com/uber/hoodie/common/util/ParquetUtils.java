@@ -80,10 +80,8 @@ public class ParquetUtils {
     Schema readSchema = HoodieAvroUtils.getRecordKeySchema();
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
-    ParquetReader reader = null;
     Set<String> rowKeys = new HashSet<>();
-    try {
-      reader = AvroParquetReader.builder(filePath).withConf(conf).build();
+    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -97,15 +95,8 @@ public class ParquetUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read row keys from Parquet " + filePath, e);
 
-    } finally {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          // ignore
-        }
-      }
     }
+    // ignore
     return rowKeys;
   }
 
@@ -212,10 +203,7 @@ public class ParquetUtils {
 
     @Override
     public Boolean apply(String recordKey) {
-      if (candidateKeys.contains(recordKey)) {
-        return true;
-      }
-      return false;
+      return candidateKeys.contains(recordKey);
     }
   }
 }

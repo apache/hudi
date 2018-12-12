@@ -25,11 +25,8 @@ import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Optional;
+
+import java.util.*;
 import java.util.stream.Collectors;
 import kafka.common.TopicAndPartition;
 import org.apache.avro.generic.GenericRecord;
@@ -85,7 +82,7 @@ public abstract class KafkaSource extends Source {
      */
     public static String offsetsToStr(OffsetRange[] ranges) {
       StringBuilder sb = new StringBuilder();
-      // atleast 1 partition will be present.
+      // at least 1 partition will be present.
       sb.append(ranges[0].topic() + ",");
       sb.append(Arrays.stream(ranges)
           .map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
@@ -106,8 +103,7 @@ public abstract class KafkaSource extends Source {
         HashMap<TopicAndPartition, LeaderOffset> toOffsetMap,
         long numEvents) {
 
-      Comparator<OffsetRange> byPartition = (OffsetRange o1, OffsetRange o2) ->
-          Integer.valueOf(o1.partition()).compareTo(Integer.valueOf(o2.partition()));
+      Comparator<OffsetRange> byPartition = Comparator.comparing(OffsetRange::partition);
 
       // Create initial offset ranges for each 'to' partition, with from = to offsets.
       OffsetRange[] ranges = new OffsetRange[toOffsetMap.size()];
@@ -144,7 +140,7 @@ public abstract class KafkaSource extends Source {
     }
 
     public static long totalNewMessages(OffsetRange[] ranges) {
-      return Arrays.asList(ranges).stream().mapToLong(r -> r.count()).sum();
+      return Arrays.stream(ranges).mapToLong(OffsetRange::count).sum();
     }
   }
 
@@ -166,13 +162,20 @@ public abstract class KafkaSource extends Source {
     }
   }
 
+  /**
+   * Kafka reset offset strategies
+   */
+  enum KafkaResetOffsetStrategies {
+    LARGEST,
+    SMALLEST
+  }
 
   /**
    * Configs to be passed for this source. All standard Kafka consumer configs are also respected
    */
   static class Config {
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
-    private static final String DEFAULT_AUTO_RESET_OFFSET = "largest";
+    private static final KafkaResetOffsetStrategies DEFAULT_AUTO_RESET_OFFSET = KafkaResetOffsetStrategies.LARGEST;
   }
 
 
@@ -187,7 +190,7 @@ public abstract class KafkaSource extends Source {
     for (Object prop : props.keySet()) {
       kafkaParams.put(prop.toString(), props.getString(prop.toString()));
     }
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.KAFKA_TOPIC_NAME));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
 
@@ -200,7 +203,7 @@ public abstract class KafkaSource extends Source {
     // Obtain current metadata for the topic
     KafkaCluster cluster = new KafkaCluster(ScalaHelpers.toScalaMap(kafkaParams));
     Either<ArrayBuffer<Throwable>, Set<TopicAndPartition>> either = cluster.getPartitions(
-        ScalaHelpers.toScalaSet(new HashSet<>(Arrays.asList(topicName))));
+        ScalaHelpers.toScalaSet(new HashSet<>(Collections.singletonList(topicName))));
     if (either.isLeft()) {
       // log errors. and bail out.
       throw new HoodieDeltaStreamerException("Error obtaining partition metadata",
@@ -213,17 +216,20 @@ public abstract class KafkaSource extends Source {
     if (lastCheckpointStr.isPresent()) {
       fromOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     } else {
-      String autoResetValue = props
-          .getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET);
-      if (autoResetValue.equals("smallest")) {
-        fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
-            cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
-      } else if (autoResetValue.equals("largest")) {
-        fromOffsets = new HashMap(
-            ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
-      } else {
-        throw new HoodieNotSupportedException(
-            "Auto reset value must be one of 'smallest' or 'largest' ");
+      KafkaResetOffsetStrategies autoResetValue =  KafkaResetOffsetStrategies.valueOf(
+              props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
+      switch (autoResetValue) {
+        case SMALLEST:
+          fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
+                  cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
+          break;
+        case LARGEST:
+          fromOffsets = new HashMap(
+                  ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
+          break;
+        default:
+          throw new HoodieNotSupportedException(
+                  "Auto reset value must be one of 'smallest' or 'largest' ");
       }
     }
 
@@ -236,7 +242,7 @@ public abstract class KafkaSource extends Source {
     OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
-      return new ImmutablePair<>(Optional.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+      return new ImmutablePair<>(Optional.empty(), lastCheckpointStr.orElse(""));
     } else {
       log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + topicName);
     }

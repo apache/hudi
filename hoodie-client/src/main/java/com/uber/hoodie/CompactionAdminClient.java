@@ -238,8 +238,8 @@ public class CompactionAdminClient implements Serializable {
         fileSystemView.getLatestMergedFileSlicesBeforeOrOn(op.getPartitionPath(), lastInstant.getTimestamp())
             .filter(fs -> fs.getFileId().equals(op.getFileId())).findFirst().get();
     final int maxVersion =
-        op.getDeltaFilePaths().stream().map(lf -> FSUtils.getFileVersionFromLog(new Path(lf)))
-            .reduce((x, y) -> x > y ? x : y).map(x -> x).orElse(0);
+            op.getDeltaFilePaths().stream().map(lf -> FSUtils.getFileVersionFromLog(new Path(lf)))
+                    .reduce((x, y) -> x > y ? x : y).orElse(0);
     List<HoodieLogFile> logFilesToBeMoved =
         merged.getLogFiles().filter(lf -> lf.getLogVersion() > maxVersion).collect(Collectors.toList());
     return logFilesToBeMoved.stream().map(lf -> {
@@ -322,8 +322,7 @@ public class CompactionAdminClient implements Serializable {
           Set<HoodieLogFile> diff =
               logFilesInFileSlice.stream().filter(lf -> !logFilesInCompactionOp.contains(lf))
                   .collect(Collectors.toSet());
-          Preconditions.checkArgument(diff.stream()
-                  .filter(lf -> !lf.getBaseCommitTime().equals(compactionInstant)).count() == 0,
+          Preconditions.checkArgument(diff.stream().allMatch(lf -> lf.getBaseCommitTime().equals(compactionInstant)),
               "There are some log-files which are neither specified in compaction plan "
                   + "nor present after compaction request instant. Some of these :" + diff);
         } else {
@@ -438,14 +437,14 @@ public class CompactionAdminClient implements Serializable {
         fileSystemView.getLatestMergedFileSlicesBeforeOrOn(operation.getPartitionPath(), lastInstant.getTimestamp())
             .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst().get();
     List<HoodieLogFile> logFilesToRepair =
-        merged.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(compactionInstant))
-            .collect(Collectors.toList());
-    logFilesToRepair.sort(HoodieLogFile.getBaseInstantAndLogVersionComparator().reversed());
+            merged.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(compactionInstant))
+                    .sorted(HoodieLogFile.getBaseInstantAndLogVersionComparator().reversed())
+                    .collect(Collectors.toList());
     FileSlice fileSliceForCompaction =
         fileSystemView.getLatestFileSlicesBeforeOrOn(operation.getPartitionPath(), operation.getBaseInstantTime())
             .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst().get();
     int maxUsedVersion =
-        fileSliceForCompaction.getLogFiles().findFirst().map(lf -> lf.getLogVersion())
+        fileSliceForCompaction.getLogFiles().findFirst().map(HoodieLogFile::getLogVersion)
             .orElse(HoodieLogFile.LOGFILE_BASE_VERSION - 1);
     String logExtn = fileSliceForCompaction.getLogFiles().findFirst().map(lf -> "." + lf.getFileExtension())
         .orElse(HoodieLogFile.DELTA_EXTENSION);

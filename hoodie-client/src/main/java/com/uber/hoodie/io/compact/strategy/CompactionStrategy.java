@@ -74,7 +74,7 @@ public abstract class CompactionStrategy implements Serializable {
     metrics.put(TOTAL_IO_WRITE_MB, totalIOWrite.doubleValue());
     metrics.put(TOTAL_IO_MB, totalIO.doubleValue());
     metrics.put(TOTAL_LOG_FILE_SIZE, totalLogFileSize.doubleValue());
-    metrics.put(TOTAL_LOG_FILES, Double.valueOf(logFiles.size()));
+    metrics.put(TOTAL_LOG_FILES, (double) logFiles.size());
     return metrics;
   }
 

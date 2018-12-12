@@ -143,9 +143,8 @@ public class StatsCommand implements CommandMarker {
     Snapshot s = globalHistogram.getSnapshot();
     rows.add(printFileSizeHistogram("ALL", s));
 
-    Function<Object, String> converterFunction = entry -> {
-      return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
-    };
+    Function<Object, String> converterFunction = entry ->
+            NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put("Min", converterFunction);
     fieldNameToConverterMap.put("10th", converterFunction);

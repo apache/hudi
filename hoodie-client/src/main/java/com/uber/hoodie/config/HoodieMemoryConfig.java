@@ -117,10 +117,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
 
       if (SparkEnv.get() != null) {
         // 1 GB is the default conf used by Spark, look at SparkContext.scala
-        long executorMemoryInBytes = Long.valueOf(
-            Utils.memoryStringToMb(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_PROP,
+        long executorMemoryInBytes = Utils.memoryStringToMb(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_PROP,
                 DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024
-                * 1024L);
+                * 1024L;
         // 0.6 is the default value used by Spark,
         // look at {@link
         // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}

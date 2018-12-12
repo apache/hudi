@@ -103,7 +103,7 @@ public class HoodieLogFile implements Serializable {
         return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
       }
       // reverse the order by base-commits
-      return new Integer(baseInstantTime2.compareTo(baseInstantTime1));
+      return baseInstantTime2.compareTo(baseInstantTime1);
     };
   }
 

@@ -195,12 +195,11 @@ public class HoodieCommitArchiveLog {
 
     // Remove older meta-data from auxiliary path too
     Optional<HoodieInstant> latestCommitted =
-        archivedInstants.stream()
-            .filter(i -> {
-              return i.isCompleted()
-                  && (i.getAction().equals(COMMIT_ACTION) || (i.getAction().equals(DELTA_COMMIT_ACTION)));
-            })
-            .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed()).findFirst();
+            archivedInstants.stream()
+                    .filter(i -> {
+                      return i.isCompleted()
+                              && (i.getAction().equals(COMMIT_ACTION) || (i.getAction().equals(DELTA_COMMIT_ACTION)));
+                    }).max(Comparator.comparing(HoodieInstant::getTimestamp));
     if (latestCommitted.isPresent()) {
       success &= deleteAllInstantsOlderorEqualsInAuxMetaFolder(latestCommitted.get());
     }

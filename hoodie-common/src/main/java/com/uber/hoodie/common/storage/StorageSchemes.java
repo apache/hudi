@@ -53,14 +53,13 @@ public enum StorageSchemes {
   }
 
   public static boolean isSchemeSupported(String scheme) {
-    return Arrays.stream(values()).filter(s -> s.getScheme().equals(scheme)).count() > 0;
+    return Arrays.stream(values()).anyMatch(s -> s.getScheme().equals(scheme));
   }
 
   public static boolean isAppendSupported(String scheme) {
     if (!isSchemeSupported(scheme)) {
       throw new IllegalArgumentException("Unsupported scheme :" + scheme);
     }
-    return Arrays.stream(StorageSchemes.values())
-        .filter(s -> s.supportsAppend() && s.scheme.equals(scheme)).count() > 0;
+    return Arrays.stream(StorageSchemes.values()).anyMatch(s -> s.supportsAppend() && s.scheme.equals(scheme));
   }
 }

@@ -104,7 +104,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
         }
       }
       return recordComparisons;
-    }).flatMapToPair(t -> t.iterator());
+    }).flatMapToPair(List::iterator);
   }
 
 }

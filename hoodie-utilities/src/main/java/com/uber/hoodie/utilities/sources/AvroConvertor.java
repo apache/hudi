@@ -87,7 +87,7 @@ public class AvroConvertor implements Serializable {
   }
 
 
-  public GenericRecord fromAvroBinary(byte[] avroBinary) throws IOException {
+  public GenericRecord fromAvroBinary(byte[] avroBinary) {
     initSchema();
     initInjection();
     return recordInjection.invert(avroBinary).get();
