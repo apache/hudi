@@ -39,9 +39,8 @@ public class AvroKafkaSource extends KafkaSource {
 
   @Override
   protected JavaRDD<GenericRecord> toAvroRDD(OffsetRange[] offsetRanges, AvroConvertor avroConvertor) {
-    JavaRDD<GenericRecord> recordRDD = KafkaUtils
+    return KafkaUtils
         .createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class, kafkaParams,
             offsetRanges).values().map(obj -> (GenericRecord) obj);
-    return recordRDD;
   }
 }

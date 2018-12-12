@@ -145,7 +145,7 @@ public class HoodieMetrics {
   public void updateRollbackMetrics(long durationInMs, long numFilesDeleted) {
     if (config.isMetricsOn()) {
       logger.info(String
-          .format("Sending rollback metrics (duration=%d, numFilesDeleted=$d)", durationInMs,
+          .format("Sending rollback metrics (duration=%d, numFilesDeleted=%d)", durationInMs,
               numFilesDeleted));
       registerGauge(getMetricsName("rollback", "duration"), durationInMs);
       registerGauge(getMetricsName("rollback", "numFilesDeleted"), numFilesDeleted);
@@ -180,12 +180,7 @@ public class HoodieMetrics {
   void registerGauge(String metricName, final long value) {
     try {
       MetricRegistry registry = Metrics.getInstance().getRegistry();
-      registry.register(metricName, new Gauge<Long>() {
-        @Override
-        public Long getValue() {
-          return value;
-        }
-      });
+      registry.register(metricName, (Gauge<Long>) () -> value);
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
       // metrics system

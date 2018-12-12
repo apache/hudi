@@ -99,7 +99,7 @@ public class HoodieSnapshotCopier implements Serializable {
       Path outputPath = new Path(outputDir);
       if (fs.exists(outputPath)) {
         logger.warn(
-            String.format("The output path %targetBasePath already exists, deleting", outputPath));
+            String.format("The output path %s targetBasePath already exists, deleting", outputPath));
         fs.delete(new Path(outputDir), true);
       }
 
@@ -155,7 +155,7 @@ public class HoodieSnapshotCopier implements Serializable {
         }
         if (fs.exists(targetFilePath)) {
           logger.error(String.format(
-              "The target output commit file (%targetBasePath) already exists.", targetFilePath));
+              "The target output commit file (%s targetBasePath) already exists.", targetFilePath));
         }
         FileUtil.copy(fs, commitStatus.getPath(), fs, targetFilePath, false, fs.getConf());
       }
@@ -166,7 +166,8 @@ public class HoodieSnapshotCopier implements Serializable {
     // Create the _SUCCESS tag
     Path successTagPath = new Path(outputDir + "/_SUCCESS");
     if (!fs.exists(successTagPath)) {
-      logger.info("Creating _SUCCESS under targetBasePath: " + outputDir);
+      logger.info(String.format(
+              "Creating _SUCCESS under targetBasePath: $s", outputDir));
       fs.createNewFile(successTagPath);
     }
   }
@@ -175,7 +176,7 @@ public class HoodieSnapshotCopier implements Serializable {
     // Take input configs
     final Config cfg = new Config();
     new JCommander(cfg, args);
-    logger.info(String.format("Snapshot hoodie table from %targetBasePath to %targetBasePath",
+    logger.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath",
         cfg.basePath, cfg.outputPath));
 
     // Create a spark job to do the snapshot copy

@@ -76,7 +76,7 @@ public class HiveIncrPullSource extends Source {
   public HiveIncrPullSource(TypedProperties props, JavaSparkContext sparkContext,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, schemaProvider);
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
     this.incrPullRootPath = props.getString(Config.ROOT_INPUT_PATH_PROP);
     this.fs = FSUtils.getFs(incrPullRootPath, sparkContext.hadoopConfiguration());
   }
@@ -121,7 +121,7 @@ public class HiveIncrPullSource extends Source {
 
       if (!commitToPull.isPresent()) {
         return new ImmutablePair<>(Optional.empty(),
-            lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+                lastCheckpointStr.orElse(""));
       }
 
       // read the files out.

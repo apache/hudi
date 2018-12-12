@@ -56,7 +56,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   // TODO : Figure out a valid HoodieWriteConfig
   val hoodieTable = HoodieTable.getHoodieTable(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
     sqlContext.sparkContext)
-  val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants();
+  val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
@@ -90,7 +90,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
     // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
     // will filter out all the files incorrectly.
-    sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class");
+    sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
     val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
     sqlContext.read.options(sOpts)
       .schema(latestSchema) // avoid AnalysisException for empty input

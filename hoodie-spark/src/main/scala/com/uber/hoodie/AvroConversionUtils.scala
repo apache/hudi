@@ -58,7 +58,7 @@ object AvroConversionUtils {
 
   def createConverterToAvro(dataType: DataType,
                             structName: String,
-                            recordNamespace: String): (Any) => Any = {
+                            recordNamespace: String): Any => Any = {
     dataType match {
       case BinaryType => (item: Any) =>
         item match {

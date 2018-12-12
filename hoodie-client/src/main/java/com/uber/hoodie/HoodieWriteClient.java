@@ -440,7 +440,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
           } else {
             return hoodieTable.handleInsertPartition(commitTime, partition, recordItr, partitioner);
           }
-        }, true).flatMap(writeStatuses -> writeStatuses.iterator());
+        }, true).flatMap(List::iterator);
 
     return updateIndexAndCommitIfNeeded(writeStatusRDD, hoodieTable, commitTime);
   }
@@ -469,7 +469,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       Partitioner partitioner) {
     return dedupedRecords.mapToPair(record -> new Tuple2<>(
         new Tuple2<>(record.getKey(), Option.apply(record.getCurrentLocation())), record))
-        .partitionBy(partitioner).map(tuple -> tuple._2());
+        .partitionBy(partitioner).map(Tuple2::_2);
   }
 
   /**
@@ -499,7 +499,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
 
-    List<HoodieWriteStat> stats = writeStatuses.map(status -> status.getStat()).collect();
+    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
 
     updateMetadataAndRollingStats(actionType, metadata, stats);
 
@@ -522,7 +522,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
     // add in extra metadata
     if (extraMetadata.isPresent()) {
-      extraMetadata.get().forEach((k, v) -> metadata.addMetadata(k, v));
+      extraMetadata.get().forEach(metadata::addMetadata);
     }
 
     try {
@@ -806,7 +806,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     });
 
     List<String> pendingCompactionToRollback =
-        commits.stream().filter(c -> pendingCompactions.contains(c)).collect(Collectors.toList());
+        commits.stream().filter(pendingCompactions::contains).collect(Collectors.toList());
     List<String> commitsToRollback =
         commits.stream().filter(c -> !pendingCompactions.contains(c)).collect(Collectors.toList());
 
@@ -837,12 +837,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       }
 
       // Remove interleaving pending compactions before rolling back commits
-      pendingCompactionToRollback.stream().forEach(this::deletePendingCompaction);
+      pendingCompactionToRollback.forEach(this::deletePendingCompaction);
 
       List<HoodieRollbackStat> stats = table.rollback(jsc, commitsToRollback);
 
       // cleanup index entries
-      commitsToRollback.stream().forEach(s -> {
+      commitsToRollback.forEach(s -> {
         if (!index.rollbackCommit(s)) {
           throw new HoodieRollbackException("Rollback index changes failed, for time :" + s);
         }
@@ -1076,7 +1076,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
           // everything
           // so pick it from one of the records.
           return new HoodieRecord<T>(rec1.getKey(), reducedData);
-        }, parallelism).map(recordTuple -> recordTuple._2());
+        }, parallelism).map(Tuple2::_2);
   }
 
   /**
@@ -1099,7 +1099,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    if (table.getMetaClient().getCommitActionType() == HoodieTimeline.COMMIT_ACTION) {
+    if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
       writeContext = metrics.getCommitCtx();
     } else {
       writeContext = metrics.getDeltaCommitCtx();
@@ -1214,7 +1214,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
   private HoodieCommitMetadata doCompactionCommit(JavaRDD<WriteStatus> writeStatuses,
       HoodieTableMetaClient metaClient, String compactionCommitTime, Optional<Map<String, String>> extraMetadata) {
-    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(writeStatus -> writeStatus.getStat())
+    List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat)
         .collect();
 
     HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);

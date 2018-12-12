@@ -21,10 +21,7 @@ package com.uber.hoodie.common.model;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import java.io.Serializable;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -33,10 +30,7 @@ import java.util.stream.Stream;
 public class HoodieFileGroup implements Serializable {
 
   public static Comparator<String> getReverseCommitTimeComparator() {
-    return (o1, o2) -> {
-      // reverse the order
-      return o2.compareTo(o1);
-    };
+    return Comparator.reverseOrder();
   }
 
   /**
@@ -127,7 +121,7 @@ public class HoodieFileGroup implements Serializable {
    * Get all the the file slices including in-flight ones as seen in underlying file-system
    */
   public Stream<FileSlice> getAllFileSlicesIncludingInflight() {
-    return fileSlices.entrySet().stream().map(sliceEntry -> sliceEntry.getValue());
+    return fileSlices.entrySet().stream().map(Map.Entry::getValue);
   }
 
   /**
@@ -143,8 +137,8 @@ public class HoodieFileGroup implements Serializable {
   public Stream<FileSlice> getAllFileSlices() {
     if (!timeline.empty()) {
       return fileSlices.entrySet().stream()
-          .map(sliceEntry -> sliceEntry.getValue())
-          .filter(slice -> isFileSliceCommitted(slice));
+          .map(Map.Entry::getValue)
+          .filter(this::isFileSliceCommitted);
     }
     return Stream.empty();
   }

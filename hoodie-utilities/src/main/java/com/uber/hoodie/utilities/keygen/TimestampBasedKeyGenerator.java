@@ -28,6 +28,7 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.TimeZone;
 import org.apache.avro.generic.GenericRecord;
@@ -73,7 +74,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       DataSourceUtils
-          .checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
+          .checkRequiredProperties(config, Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.inputDateFormat = new SimpleDateFormat(
           config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.inputDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));

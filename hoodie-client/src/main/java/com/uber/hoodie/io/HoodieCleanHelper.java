@@ -168,8 +168,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
           // The window of commit retain == max query run time. So a query could be running which
           // still
           // uses this file.
-          if (fileCommitTime.equals(lastVersion) || (lastVersionBeforeEarliestCommitToRetain != null
-              && fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain))) {
+          if (fileCommitTime.equals(lastVersion) || (fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain))) {
             // move on to the next file
             continue;
           }
@@ -180,9 +179,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime,
                   HoodieTimeline.GREATER)) {
             // this is a commit, that should be cleaned.
-            if (aFile.isPresent()) {
-              deletePaths.add(aFile.get().getFileStatus().getPath().toString());
-            }
+            aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getFileStatus().getPath().toString()));
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
               deletePaths.addAll(aSlice.getLogFiles().map(file -> file.getPath().toString())

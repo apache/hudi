@@ -79,7 +79,7 @@ object DataSourceWriteOptions {
   val BULK_INSERT_OPERATION_OPT_VAL = "bulk_insert"
   val INSERT_OPERATION_OPT_VAL = "insert"
   val UPSERT_OPERATION_OPT_VAL = "upsert"
-  val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL;
+  val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
     * The storage type for the underlying data, for this write.

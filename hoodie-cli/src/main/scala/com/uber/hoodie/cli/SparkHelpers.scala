@@ -94,12 +94,9 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @return
     */
   def isFileContainsKey(rowKey: String, file: String): Boolean = {
-    println(s"Checking ${file} for key ${rowKey}")
-    val ff = getRowKeyDF(file).filter(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}` = '${rowKey}'")
-    if (ff.count() > 0)
-      return true
-    else
-      return false
+    println(s"Checking $file for key $rowKey")
+    val ff = getRowKeyDF(file).filter(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}` = '$rowKey'")
+    if (ff.count() > 0) true else false
   }
 
   /**
@@ -109,7 +106,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @param sqlContext
     */
   def getKeyCount(file: String, sqlContext: org.apache.spark.sql.SQLContext) = {
-    println(getRowKeyDF(file).collect().size)
+    println(getRowKeyDF(file).collect().length)
   }
 
 
@@ -128,8 +125,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     val bf = new com.uber.hoodie.common.BloomFilter(bfStr)
     val foundCount = sqlContext.parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
-      .collect().
-      filter(r => !bf.mightContain(r.getString(0))).size
+      .collect().count(r => !bf.mightContain(r.getString(0)))
     val totalCount = getKeyCount(file, sqlContext)
     s"totalCount: ${totalCount}, foundCount: ${foundCount}"
     totalCount == foundCount
