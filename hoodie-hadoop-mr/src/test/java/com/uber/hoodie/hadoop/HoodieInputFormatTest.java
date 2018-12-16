@@ -29,6 +29,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -173,7 +174,8 @@ public class HoodieInputFormatTest {
         files, "200", 1);
   }
 
-  //TODO enable this after enabling predicate pushdown
+  @Test
+  @Ignore("enable this after enabling predicate pushdown")
   public void testPredicatePushDown() throws IOException {
     // initial commit
     Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");

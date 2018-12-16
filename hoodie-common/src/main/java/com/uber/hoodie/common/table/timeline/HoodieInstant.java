@@ -56,7 +56,7 @@ public class HoodieInstant implements Serializable {
     timestamp = fileName.replace(fileExtension, "");
 
     // Next read the action for this marker
-    action = fileExtension.replaceFirst(".", "");
+    action = fileExtension.replaceFirst("\\.", "");
     if (action.equals("inflight")) {
       // This is to support backwards compatibility on how in-flight commit files were written
       // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight

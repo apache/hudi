@@ -40,7 +40,9 @@ public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProduc
   @Override
   public void produce(BoundedInMemoryQueue<I, ?> queue) {
     logger.info("starting function which will enqueue records");
-    producerFunction.apply(queue);
+    // maybe we should use a Consumer rather than a Function if
+    // we're always ignoring the result?
+    boolean ignored = producerFunction.apply(queue);
     logger.info("finished function which will enqueue records");
   }
 }

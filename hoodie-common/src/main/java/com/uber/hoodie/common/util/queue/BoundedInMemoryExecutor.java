@@ -30,7 +30,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -87,8 +86,8 @@ public class BoundedInMemoryExecutor<I, O, E> {
     final CountDownLatch latch = new CountDownLatch(producers.size());
     final ExecutorCompletionService<Boolean> completionService =
         new ExecutorCompletionService<Boolean>(executorService);
-    producers.stream().map(producer -> {
-      return completionService.submit(() -> {
+    producers.stream().forEach(producer -> {
+      completionService.submit(() -> {
         try {
           preExecute();
           producer.produce(queue);
@@ -107,7 +106,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
         }
         return true;
       });
-    }).collect(Collectors.toList());
+    });
     return completionService;
   }
 

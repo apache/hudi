@@ -32,6 +32,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
@@ -79,8 +80,8 @@ public class TestHoodieSnapshotCopier {
     assertFalse(fs.exists(new Path(outputPath + "/_SUCCESS")));
   }
 
-  //TODO - uncomment this after fixing test failures
-  //@Test
+  @Test
+  @Ignore("uncomment this after fixing test failures")
   public void testSnapshotCopy() throws Exception {
     // Generate some commits and corresponding parquets
     String commitTime1 = "20160501010101";

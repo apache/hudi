@@ -58,12 +58,12 @@ public class SchemaTestUtil {
       throws IOException, URISyntaxException {
     GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
     // Required to register the necessary JAR:// file system
-    URI resource = SchemaTestUtil.class.getClass().getResource("/sample.data").toURI();
+    URI resource = SchemaTestUtil.class.getResource("/sample.data").toURI();
     Path dataPath;
     if (resource.toString().contains("!")) {
       dataPath = uriToPath(resource);
     } else {
-      dataPath = Paths.get(SchemaTestUtil.class.getClass().getResource("/sample.data").toURI());
+      dataPath = Paths.get(SchemaTestUtil.class.getResource("/sample.data").toURI());
     }
 
     try (Stream<String> stream = Files.lines(dataPath)) {

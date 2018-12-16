@@ -127,7 +127,7 @@ public class HoodieClientTestUtils {
       String commitTime) {
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
-      new HoodieException("No commit exists at " + commitTime);
+      throw new HoodieException("No commit exists at " + commitTime);
     }
     try {
       HashMap<String, String> paths = getLatestFileIDsToFullPath(basePath, commitTimeline,
