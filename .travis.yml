@@ -6,3 +6,6 @@ env:
   - HUDI_QUIETER_LOGGING=1
 services:
   - docker
+cache:
+  directories:
+  - $HOME/.m2
