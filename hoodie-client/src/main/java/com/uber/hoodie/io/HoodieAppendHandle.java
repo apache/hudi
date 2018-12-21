@@ -20,6 +20,7 @@ import com.beust.jcommander.internal.Maps;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;
+import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
@@ -67,7 +68,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   // Buffer for holding records in memory before they are flushed to disk
   private List<IndexedRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
-  private List<String> keysToDelete = new ArrayList<>();
+  private List<HoodieKey> keysToDelete = new ArrayList<>();
   private TableFileSystemView.RealtimeView fileSystemView;
   private String partitionPath;
   private Iterator<HoodieRecord<T>> recordItr;
@@ -209,7 +210,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       }
       if (keysToDelete.size() > 0) {
         writer = writer.appendBlock(
-            new HoodieDeleteBlock(keysToDelete.stream().toArray(String[]::new), header));
+            new HoodieDeleteBlock(keysToDelete.stream().toArray(HoodieKey[]::new), header));
         keysToDelete.clear();
       }
     } catch (Exception e) {
@@ -286,7 +287,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     if (indexedRecord.isPresent()) {
       recordList.add(indexedRecord.get());
     } else {
-      keysToDelete.add(record.getRecordKey());
+      keysToDelete.add(record.getKey());
     }
     numberOfRecords++;
   }

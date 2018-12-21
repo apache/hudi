@@ -117,4 +117,15 @@ public class SpillableMapUtils {
             .loadPayload(payloadClazz, new Object[]{Optional.of(rec)}, Optional.class));
     return (R) hoodieRecord;
   }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class
+   */
+  public static <R> R generateEmptyPayload(String recKey, String partitionPath, String payloadClazz) {
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
+        new HoodieKey(recKey, partitionPath),
+        ReflectionUtils
+            .loadPayload(payloadClazz, new Object[]{Optional.empty()}, Optional.class));
+    return (R) hoodieRecord;
+  }
 }
