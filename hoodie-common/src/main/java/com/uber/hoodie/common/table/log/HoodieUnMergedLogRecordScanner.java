@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.common.table.log;
 
+import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import java.util.List;
@@ -43,7 +44,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   }
 
   @Override
-  protected void processNextDeletedKey(String key) {
+  protected void processNextDeletedKey(HoodieKey key) {
     throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
   }
 

@@ -326,8 +326,8 @@ public class TestMergeOnReadTable {
 
     List<String> dataFiles = roView.getLatestDataFiles().map(hf -> hf.getPath()).collect(Collectors.toList());
     List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(dataFiles, basePath);
-    //Wrote 40 records and deleted 20 records, so remaining 40-20 = 20
-    assertEquals("Must contain 20 records", 20, recordsRead.size());
+    //Wrote 20 records and deleted 20 records, so remaining 20-20 = 0
+    assertEquals("Must contain 0 records", 0, recordsRead.size());
   }
 
   @Test
