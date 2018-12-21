@@ -24,7 +24,9 @@ import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
@@ -60,13 +62,20 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {
-      GenericRecord rec = (GenericRecord) hoodieRecord.getData().getInsertValue(getReaderSchema()).get();
+      Optional<IndexedRecord> recordOptional = hoodieRecord.getData().getInsertValue(getReaderSchema());
+      ArrayWritable aWritable;
       String key = hoodieRecord.getRecordKey();
-      // we assume, a later safe record in the log, is newer than what we have in the map &
-      // replace it.
-      // TODO : handle deletes here
-      ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(rec, getWriterSchema());
-      deltaRecordMap.put(key, aWritable);
+      if (recordOptional.isPresent()) {
+        GenericRecord rec = (GenericRecord) recordOptional.get();
+        // we assume, a later safe record in the log, is newer than what we have in the map &
+        // replace it.
+        // TODO : handle deletes here
+        aWritable = (ArrayWritable) avroToArrayWritable(rec, getWriterSchema());
+        deltaRecordMap.put(key, aWritable);
+      } else {
+        aWritable = new ArrayWritable(Writable.class, new Writable[0]);
+        deltaRecordMap.put(key, aWritable);
+      }
       if (LOG.isDebugEnabled()) {
         LOG.debug("Log record : " + arrayWritableToString(aWritable));
       }
@@ -92,8 +101,13 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
             arrayWritableToString(arrayWritable), arrayWritableToString(deltaRecordMap.get(key))));
       }
       if (deltaRecordMap.containsKey(key)) {
-        // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro ?
+        // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
+        // deltaRecord may not be a full record and needs values of columns from the parquet
         Writable[] replaceValue = deltaRecordMap.get(key).get();
+        if (replaceValue.length < 1) {
+          // This record has been deleted, move to the next record
+          return next(aVoid, arrayWritable);
+        }
         Writable[] originalValue = arrayWritable.get();
         try {
           System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);

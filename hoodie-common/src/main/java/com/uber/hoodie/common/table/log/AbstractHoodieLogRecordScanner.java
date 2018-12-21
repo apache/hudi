@@ -19,6 +19,7 @@ package com.uber.hoodie.common.table.log;
 import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
 
+import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -63,7 +64,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   private static final Logger log = LogManager.getLogger(AbstractHoodieLogRecordScanner.class);
 
   // Reader schema for the records
-  private final Schema readerSchema;
+  protected final Schema readerSchema;
   // Latest valid instant time
   // Log-Blocks belonging to inflight delta-instants are filtered-out using this high-watermark.
   private final String latestInstantTime;
@@ -291,7 +292,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    *
    * @param key Deleted record key
    */
-  protected abstract void processNextDeletedKey(String key);
+  protected abstract void processNextDeletedKey(HoodieKey key);
 
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.

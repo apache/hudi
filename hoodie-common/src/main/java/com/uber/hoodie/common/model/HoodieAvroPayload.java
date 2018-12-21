@@ -36,7 +36,11 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
 
   public HoodieAvroPayload(Optional<GenericRecord> record) {
     try {
-      this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
+      if (record.isPresent()) {
+        this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
+      } else {
+        this.recordBytes = new byte[0];
+      }
     } catch (IOException io) {
       throw new HoodieIOException("Cannot convert record to bytes", io);
     }
@@ -55,6 +59,9 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
 
   @Override
   public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    if (recordBytes.length == 0) {
+      return Optional.empty();
+    }
     Optional<GenericRecord> record = Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
     return record.map(r -> HoodieAvroUtils.rewriteRecord(r, schema));
   }

@@ -22,6 +22,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.HoodieTimer;
+import com.uber.hoodie.common.util.SpillableMapUtils;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
@@ -102,10 +103,11 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   }
 
   @Override
-  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) {
+  protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws IOException {
     String key = hoodieRecord.getRecordKey();
     if (records.containsKey(key)) {
-      // Merge and store the merged record
+      // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
+      // done when a delete (empty payload) is encountered before or after an insert/update.
       HoodieRecordPayload combinedValue = records.get(key).getData().preCombine(hoodieRecord.getData());
       records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue));
     } else {
@@ -115,10 +117,9 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   }
 
   @Override
-  protected void processNextDeletedKey(String key) {
-    // TODO : If delete is the only block written and/or records are present in parquet file
-    // TODO : Mark as tombstone (optional.empty()) for data instead of deleting the entry
-    records.remove(key);
+  protected void processNextDeletedKey(HoodieKey hoodieKey) {
+    records.put(hoodieKey.getRecordKey(), SpillableMapUtils.generateEmptyPayload(hoodieKey.getRecordKey(),
+        hoodieKey.getPartitionPath(), getPayloadClassFQN()));
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {

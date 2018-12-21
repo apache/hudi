@@ -16,16 +16,16 @@
 
 package com.uber.hoodie.common.table.log.block;
 
+import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
-import com.uber.hoodie.common.util.StringUtils;
+import com.uber.hoodie.common.util.SerializationUtils;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -36,9 +36,9 @@ import org.apache.hadoop.fs.FSDataInputStream;
  */
 public class HoodieDeleteBlock extends HoodieLogBlock {
 
-  private String[] keysToDelete;
+  private HoodieKey[] keysToDelete;
 
-  public HoodieDeleteBlock(String[] keysToDelete,
+  public HoodieDeleteBlock(HoodieKey[] keysToDelete,
       Map<HeaderMetadataType, String> header) {
     this(Optional.empty(), null, false, Optional.empty(), header, new HashMap<>());
     this.keysToDelete = keysToDelete;
@@ -64,15 +64,14 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
-    byte[] bytesToWrite = StringUtils.join(getKeysToDelete(), ",")
-        .getBytes(Charset.forName("utf-8"));
+    byte[] bytesToWrite = SerializationUtils.serialize(getKeysToDelete());
     output.writeInt(HoodieLogBlock.version);
     output.writeInt(bytesToWrite.length);
     output.write(bytesToWrite);
     return baos.toByteArray();
   }
 
-  public String[] getKeysToDelete() {
+  public HoodieKey[] getKeysToDelete() {
     try {
       if (keysToDelete == null) {
         if (!getContent().isPresent() && readBlockLazily) {
@@ -86,7 +85,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
         int dataLength = dis.readInt();
         byte[] data = new byte[dataLength];
         dis.readFully(data);
-        this.keysToDelete = new String(data).split(",");
+        this.keysToDelete = SerializationUtils.deserialize(data);
         deflate();
       }
       return keysToDelete;
