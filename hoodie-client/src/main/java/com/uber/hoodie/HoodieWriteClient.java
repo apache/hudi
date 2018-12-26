@@ -584,11 +584,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   public boolean savepoint(String user, String comment) {
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
-    if (table.getCompletedCommitTimeline().empty()) {
+    if (table.getCompletedCommitsTimeline().empty()) {
       throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
     }
 
-    String latestCommit = table.getCompletedCommitTimeline().lastInstant().get().getTimestamp();
+    String latestCommit = table.getCompletedCommitsTimeline().lastInstant().get().getTimestamp();
     logger.info("Savepointing latest commit " + latestCommit);
     return savepoint(latestCommit, user, comment);
   }
@@ -615,7 +615,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION,
         commitTime);
-    if (!table.getCompletedCommitTimeline().containsInstant(commitInstant)) {
+    if (!table.getCompletedCommitsTimeline().containsInstant(commitInstant)) {
       throw new HoodieSavepointException(
           "Could not savepoint non-existing commit " + commitInstant);
     }
@@ -628,7 +628,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             table.getActiveTimeline().getInstantDetails(cleanInstant.get()).get());
         lastCommitRetained = cleanMetadata.getEarliestCommitToRetain();
       } else {
-        lastCommitRetained = table.getCompletedCommitTimeline().firstInstant().get().getTimestamp();
+        lastCommitRetained = table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp();
       }
 
       // Cannot allow savepoint time on a commit that could have been cleaned
@@ -792,7 +792,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         table.getActiveTimeline().filterPendingCompactionTimeline().getInstants()
             .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
     HoodieTimeline inflightCommitTimeline = table.getInflightCommitTimeline();
-    HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
+    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
 
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
     List<String> savepoints = table.getCompletedSavepointTimeline().getInstants()

@@ -150,7 +150,7 @@ public class HoodieCommitArchiveLog {
 
     //TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concats
-    HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
+    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     Optional<HoodieInstant> oldestPendingCompactionInstant =
         table.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
 

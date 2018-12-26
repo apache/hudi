@@ -327,7 +327,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       List<SmallFile> smallFileLocations = new ArrayList<>();
 
       // Init here since this class (and member variables) might not have been initialized
-      HoodieTimeline commitTimeline = getCompletedCommitTimeline();
+      HoodieTimeline commitTimeline = getCompletedCommitsTimeline();
 
       // Find out all eligible small file slices
       if (!commitTimeline.empty()) {

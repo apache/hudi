@@ -126,8 +126,8 @@ public class TestCleaner extends TestHoodieClientBase {
     // Should have 100 records in table (check using Index), all in locations marked at commit
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
 
-    assertFalse(table.getCompletedCommitTimeline().empty());
-    String commitTime = table.getCompletedCommitTimeline().getInstants().findFirst().get().getTimestamp();
+    assertFalse(table.getCompletedCommitsTimeline().empty());
+    String commitTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
     assertFalse(table.getCompletedCleanTimeline().empty());
     assertEquals("The clean instant should be the same as the commit instant", commitTime,
         table.getCompletedCleanTimeline().getInstants().findFirst().get().getTimestamp());
@@ -380,7 +380,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
         HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
         HoodieTable table1 = HoodieTable.getHoodieTable(metadata, cfg, jsc);
-        HoodieTimeline activeTimeline = table1.getCompletedCommitTimeline();
+        HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
         Optional<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
         Set<HoodieInstant> acceptableCommits = activeTimeline.getInstants().collect(Collectors.toSet());
         if (earliestRetainedCommit.isPresent()) {

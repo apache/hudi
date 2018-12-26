@@ -53,7 +53,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     this.config = config;
     this.fs = hoodieTable.getMetaClient().getFs();
     this.hoodieTable = hoodieTable;
-    this.hoodieTimeline = hoodieTable.getCompletedCommitTimeline();
+    this.hoodieTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.schema = createHoodieWriteSchema(config);
     this.timer = new HoodieTimer().startTimer();
   }
