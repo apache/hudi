@@ -493,7 +493,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   private List<HoodieDataFile> getCurrentLatestDataFiles(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(table.getMetaClient().getFs(), cfg.getBasePath());
     HoodieTableFileSystemView
-        view = new HoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitTimeline(), allFiles);
+        view = new HoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allFiles);
     List<HoodieDataFile> dataFilesToRead = view.getLatestDataFiles().collect(Collectors.toList());
     return dataFilesToRead;
   }
