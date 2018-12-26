@@ -773,7 +773,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       // smallFiles only for partitionPath
       List<SmallFile> smallFileLocations = new ArrayList<>();
 
-      HoodieTimeline commitTimeline = getCompletedCommitTimeline();
+      HoodieTimeline commitTimeline = getCompletedCommitsTimeline();
 
       if (!commitTimeline.empty()) { // if we have some commits
         HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
