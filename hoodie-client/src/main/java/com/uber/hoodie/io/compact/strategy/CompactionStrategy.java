@@ -105,9 +105,19 @@ public abstract class CompactionStrategy implements Serializable {
    * @param pendingCompactionPlans Pending Compaction Plans for strategy to schedule next compaction plan
    * @return list of compactions to perform in this run
    */
-  protected List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations,
       List<HoodieCompactionPlan> pendingCompactionPlans) {
     return operations;
+  }
+
+  /**
+   * Filter the partition paths based on compaction strategy
+   * @param writeConfig
+   * @param allPartitionPaths
+   * @return
+   */
+  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    return allPartitionPaths;
   }
 }
