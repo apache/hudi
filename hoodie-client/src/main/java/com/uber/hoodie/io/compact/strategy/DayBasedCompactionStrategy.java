@@ -70,4 +70,12 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
         .collect(Collectors.toList());
     return filteredList;
   }
+
+  @Override
+  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> filteredPartitionPaths = allPartitionPaths.stream().map(partition -> partition.replace("/", "-"))
+        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
+        .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
+    return filteredPartitionPaths;
+  }
 }
