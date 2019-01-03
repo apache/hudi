@@ -98,7 +98,7 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
-   * Filter this timeline to just include inflight and requested compaction instants
+   * Filter this timeline to just include requested and inflight compaction instants
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();

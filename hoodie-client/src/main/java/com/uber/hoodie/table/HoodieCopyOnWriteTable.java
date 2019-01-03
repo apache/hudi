@@ -16,7 +16,6 @@
 
 package com.uber.hoodie.table;
 
-import com.google.common.collect.Maps;
 import com.google.common.hash.Hashing;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
@@ -203,9 +202,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       AvroReadSupport.setAvroReadSchema(getHadoopConf(), upsertHandle.getSchema());
       BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;
       try (ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(upsertHandle.getOldFilePath())
-              .withConf(getHadoopConf()).build()) {
+          .withConf(getHadoopConf()).build()) {
         wrapper = new SparkBoundedInMemoryExecutor(config, new ParquetReaderIterator(reader),
-                new UpdateHandler(upsertHandle), x -> x);
+            new UpdateHandler(upsertHandle), x -> x);
         wrapper.execute();
       } catch (Exception e) {
         throw new HoodieException(e);
@@ -313,18 +312,17 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    * Common method used for cleaning out parquet files under a partition path during rollback of a
    * set of commits
    */
-  protected Map<FileStatus, Boolean> deleteCleanedFiles(String partitionPath, List<String> commits)
+  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, String partitionPath,
+      PathFilter filter)
       throws IOException {
-    Map<FileStatus, Boolean> results = Maps.newHashMap();
-    // PathFilter to get all parquet files and log files that need to be deleted
-    PathFilter filter = (path) -> {
-      if (path.toString().contains(".parquet")) {
-        String fileCommitTime = FSUtils.getCommitTime(path.getName());
-        return commits.contains(fileCommitTime);
-      }
-      return false;
-    };
-    deleteCleanedFiles(results, partitionPath, filter);
+    logger.info("Cleaning path " + partitionPath);
+    FileSystem fs = getMetaClient().getFs();
+    FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
+    for (FileStatus file : toBeDeleted) {
+      boolean success = fs.delete(file.getPath(), false);
+      results.put(file, success);
+      logger.info("Delete file " + file.getPath() + "\t" + success);
+    }
     return results;
   }
 
@@ -332,11 +330,18 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    * Common method used for cleaning out parquet files under a partition path during rollback of a
    * set of commits
    */
-  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, String partitionPath,
-      PathFilter filter)
+  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, List<String> commits, String
+      partitionPath)
       throws IOException {
     logger.info("Cleaning path " + partitionPath);
     FileSystem fs = getMetaClient().getFs();
+    PathFilter filter = (path) -> {
+      if (path.toString().contains(".parquet")) {
+        String fileCommitTime = FSUtils.getCommitTime(path.getName());
+        return commits.contains(fileCommitTime);
+      }
+      return false;
+    };
     FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
@@ -367,9 +372,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
             config.shouldAssumeDatePartitioning()))
         .map((Function<String, HoodieRollbackStat>) partitionPath -> {
           // Scan all partitions files with this commit time
-          Map<FileStatus, Boolean> results = deleteCleanedFiles(partitionPath, commits);
+          final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
+          deleteCleanedFiles(filesToDeletedStatus, commits, partitionPath);
           return HoodieRollbackStat.newBuilder().withPartitionPath(partitionPath)
-              .withDeletedFileResults(results).build();
+              .withDeletedFileResults(filesToDeletedStatus).build();
         }).collect();
 
     // clean temporary data files
