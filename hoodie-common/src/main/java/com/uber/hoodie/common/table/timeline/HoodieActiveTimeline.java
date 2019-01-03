@@ -262,6 +262,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     Preconditions.checkArgument(inflightInstant.isInflight());
     HoodieInstant requestedInstant =
         new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, inflightInstant.getTimestamp());
+    // Pass empty data since it is read from the corresponding .aux/.compaction instant file
     transitionState(inflightInstant, requestedInstant, Optional.empty());
     return requestedInstant;
   }
@@ -310,7 +311,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     Preconditions.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     Path commitFilePath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
     try {
-      // open a new file and write the commit metadata in
+      // Re-create the .inflight file by opening a new file and write the commit metadata in
       Path inflightCommitFile = new Path(metaClient.getMetaPath(), fromInstant.getFileName());
       createFileInMetaPath(fromInstant.getFileName(), data);
       boolean success = metaClient.getFs().rename(inflightCommitFile, commitFilePath);

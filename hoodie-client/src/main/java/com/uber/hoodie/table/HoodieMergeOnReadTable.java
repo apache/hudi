@@ -52,7 +52,16 @@ import com.uber.hoodie.io.HoodieAppendHandle;
 import com.uber.hoodie.io.compact.HoodieRealtimeTableCompactor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -168,10 +177,15 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits, boolean deleteInstants)
       throws IOException {
 
-    //At the moment, MOR table type does not support nested rollbacks
+    // At the moment, MOR table type does not support bulk nested rollbacks. Nested rollbacks is an experimental
+    // feature that is expensive. To perform nested rollbacks, initiate multiple requests of client.rollback
+    // (commitToRollback).
+    // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
+    // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
     if (commits.size() > 1) {
-      throw new UnsupportedOperationException("Nested Rollbacks are not supported");
+      throw new UnsupportedOperationException("Bulk Nested Rollbacks are not supported");
     }
+    // Atomically un-publish all non-inflight commits
     Map<String, HoodieInstant> commitsAndCompactions = this.getActiveTimeline()
         .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
             HoodieActiveTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION)).getInstants()
@@ -188,6 +202,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
             config.shouldAssumeDatePartitioning()))
         .map((Function<String, List<HoodieRollbackStat>>) partitionPath -> commits.stream().map(commit -> {
           HoodieInstant instant = commitsAndCompactions.get(commit);
+          HoodieActiveTimeline activeTimeline = this.getActiveTimeline().reload();
           HoodieRollbackStat hoodieRollbackStats = null;
           // Need to put the path filter here since Filter is not serializable
           // PathFilter to get all parquet files and log files that need to be deleted
@@ -203,14 +218,43 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
             return false;
           };
 
+          final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
+
           switch (instant.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
+              try {
+                // Rollback of a commit should delete the newly created parquet files along with any log
+                // files created with this as baseCommit. This is required to support multi-rollbacks in a MOR table.
+                super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, filter);
+                hoodieRollbackStats = HoodieRollbackStat.newBuilder()
+                    .withPartitionPath(partitionPath).withDeletedFileResults(filesToDeletedStatus).build();
+                break;
+              } catch (IOException io) {
+                throw new UncheckedIOException("Failed to rollback for commit " + commit, io);
+              }
             case HoodieTimeline.COMPACTION_ACTION:
               try {
-                Map<FileStatus, Boolean> results = super
-                    .deleteCleanedFiles(partitionPath, Collections.singletonList(commit));
-                hoodieRollbackStats = HoodieRollbackStat.newBuilder()
-                    .withPartitionPath(partitionPath).withDeletedFileResults(results).build();
+                // If there is no delta commit present after the current commit (if compaction), no action, else we
+                // need to make sure that a compaction commit rollback also deletes any log files written as part of the
+                // succeeding deltacommit.
+                boolean higherDeltaCommits = !activeTimeline.getDeltaCommitTimeline()
+                    .filterCompletedInstants().findInstantsAfter(commit, 1).empty();
+                if (higherDeltaCommits) {
+                  // Rollback of a compaction action with no higher deltacommit means that the compaction is scheduled
+                  // and has not yet finished. In this scenario we should delete only the newly created parquet files
+                  // and not corresponding base commit log files created with this as baseCommit since updates would
+                  // have been written to the log files.
+                  super.deleteCleanedFiles(filesToDeletedStatus, commits, partitionPath);
+                  hoodieRollbackStats = HoodieRollbackStat.newBuilder()
+                      .withPartitionPath(partitionPath).withDeletedFileResults(filesToDeletedStatus).build();
+                } else {
+                  // No deltacommits present after this compaction commit (inflight or requested). In this case, we
+                  // can also delete any log files that were created with this compaction commit as base
+                  // commit.
+                  super.deleteCleanedFiles(filesToDeletedStatus, partitionPath, filter);
+                  hoodieRollbackStats = HoodieRollbackStat.newBuilder()
+                      .withPartitionPath(partitionPath).withDeletedFileResults(filesToDeletedStatus).build();
+                }
                 break;
               } catch (IOException io) {
                 throw new UncheckedIOException("Failed to rollback for commit " + commit, io);
@@ -246,7 +290,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                         .get(), HoodieCommitMetadata.class);
 
                 // read commit file and (either append delete blocks or delete file)
-                final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
                 Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
 
                 // In case all data was inserts and the commit failed, delete the file belonging to that commit
@@ -457,7 +500,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
         .filter(wStat -> {
           // Filter out stats without prevCommit since they are all inserts
           return wStat != null && wStat.getPrevCommit() != HoodieWriteStat.NULL_COMMIT && wStat.getPrevCommit() != null
-                  && !deletedFiles.contains(wStat.getFileId());
+              && !deletedFiles.contains(wStat.getFileId());
         }).forEach(wStat -> {
           HoodieLogFormat.Writer writer = null;
           String baseCommitTime = wStat.getPrevCommit();
