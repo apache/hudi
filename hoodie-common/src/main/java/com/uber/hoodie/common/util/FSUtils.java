@@ -19,6 +19,7 @@ package com.uber.hoodie.common.util;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidHoodiePathException;
@@ -38,6 +39,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.LogManager;
@@ -135,7 +137,14 @@ public class FSUtils {
   public static List<String> getAllFoldersThreeLevelsDown(FileSystem fs, String basePath)
       throws IOException {
     List<String> datePartitions = new ArrayList<>();
-    FileStatus[] folders = fs.globStatus(new Path(basePath + "/*/*/*"));
+    // Avoid listing and including any folders under the metafolder
+    PathFilter filter = (path) -> {
+      if (path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        return false;
+      }
+      return true;
+    };
+    FileStatus[] folders = fs.globStatus(new Path(basePath + "/*/*/*"), filter);
     for (FileStatus status : folders) {
       Path path = status.getPath();
       datePartitions.add(String.format("%s/%s/%s", path.getParent().getParent().getName(),
