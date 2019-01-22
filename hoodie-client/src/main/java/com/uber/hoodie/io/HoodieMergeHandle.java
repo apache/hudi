@@ -28,7 +28,6 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
-import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -54,7 +53,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
 
   private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
 
-  private WriteStatus writeStatus;
   private Map<String, HoodieRecord<T>> keyToNewRecords;
   private Set<String> writtenRecordKeys;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
@@ -91,10 +89,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
    */
   private void init(String fileId, String partitionPath, Optional<HoodieDataFile> dataFileToBeMerged) {
     this.writtenRecordKeys = new HashSet<>();
-
-    WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     writeStatus.setStat(new HoodieWriteStat());
-    this.writeStatus = writeStatus;
     try {
       //TODO: dataFileToBeMerged must be optional. Will be fixed by Nishith's changes to support insert to log-files
       String latestValidFilePath = dataFileToBeMerged.get().getFileName();

@@ -25,6 +25,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.func.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
 import java.util.List;
 import java.util.Optional;
 import org.apache.avro.generic.IndexedRecord;
@@ -55,13 +56,13 @@ public class TestBoundedInMemoryExecutor {
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
-    BoundedInMemoryQueueConsumer<Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer> consumer =
-        new BoundedInMemoryQueueConsumer<Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer>() {
+    BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           private int count = 0;
 
           @Override
-          protected void consumeOneRecord(Tuple2<HoodieRecord, Optional<IndexedRecord>> record) {
+          protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
           }
 

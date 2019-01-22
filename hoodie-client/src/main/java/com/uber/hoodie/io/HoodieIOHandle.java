@@ -24,6 +24,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieTimer;
+import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
@@ -47,6 +48,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   protected final Schema schema;
   protected HoodieTimeline hoodieTimeline;
   protected HoodieTimer timer;
+  protected final WriteStatus writeStatus;
 
   public HoodieIOHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable) {
     this.commitTime = commitTime;
@@ -56,6 +58,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     this.hoodieTimeline = hoodieTable.getCompletedCommitTimeline();
     this.schema = createHoodieWriteSchema(config);
     this.timer = new HoodieTimer().startTimer();
+    this.writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
   }
 
   /**
@@ -123,6 +126,20 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
    */
   public void write(HoodieRecord record, Optional<IndexedRecord> insertValue) {
     // NO_OP
+  }
+
+  /**
+   * Perform the actual writing of the given record into the backing file.
+   */
+  public void write(HoodieRecord record, Optional<IndexedRecord> avroRecord, Optional<Exception> exception) {
+    Optional recordMetadata = record.getData().getMetadata();
+    if (exception.isPresent() && exception.get() instanceof Throwable) {
+      // Not throwing exception from here, since we don't want to fail the entire job for a single record
+      writeStatus.markFailure(record, exception.get(), recordMetadata);
+      logger.error("Error writing record " + record, exception.get());
+    } else {
+      write(record, avroRecord);
+    }
   }
 
   public abstract WriteStatus close();
