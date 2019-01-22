@@ -33,7 +33,6 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieAppendException;
 import com.uber.hoodie.exception.HoodieUpsertException;
@@ -63,7 +62,6 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private static Logger logger = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
   private static AtomicLong recordIndex = new AtomicLong(1);
-  private final WriteStatus writeStatus;
   private final String fileId;
   // Buffer for holding records in memory before they are flushed to disk
   private List<IndexedRecord> recordList = new ArrayList<>();
@@ -98,9 +96,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String fileId, Iterator<HoodieRecord<T>> recordItr) {
     super(config, commitTime, hoodieTable);
-    WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     writeStatus.setStat(new HoodieDeltaWriteStat());
-    this.writeStatus = writeStatus;
     this.fileId = fileId;
     this.fileSystemView = hoodieTable.getRTFileSystemView();
     this.recordItr = recordItr;

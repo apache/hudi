@@ -25,9 +25,6 @@ import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
-import org.apache.avro.generic.IndexedRecord;
-import scala.Tuple2;
 
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new
@@ -49,8 +46,8 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
   protected class MergeOnReadInsertHandler extends CopyOnWriteInsertHandler {
 
     @Override
-    protected void consumeOneRecord(Tuple2<HoodieRecord<T>, Optional<IndexedRecord>> payload) {
-      final HoodieRecord insertPayload = payload._1();
+    protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
+      final HoodieRecord insertPayload = payload.record;
       List<WriteStatus> statuses = new ArrayList<>();
       // lazily initialize the handle, for the first time
       if (handle == null) {
@@ -58,14 +55,14 @@ public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extend
       }
       if (handle.canWrite(insertPayload)) {
         // write the payload, if the handle has capacity
-        handle.write(insertPayload, payload._2);
+        handle.write(insertPayload, payload.insertValue, payload.exception);
       } else {
         // handle is full.
         handle.close();
         statuses.add(handle.getWriteStatus());
         // Need to handle the rejected payload & open new handle
         handle = new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable);
-        handle.write(insertPayload, payload._2); // we should be able to write 1 payload.
+        handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
     }
   }
