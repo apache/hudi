@@ -18,20 +18,15 @@
 
 package com.uber.hoodie
 
-import java.util.concurrent.ConcurrentHashMap
-
 import com.uber.hoodie.DataSourceReadOptions._
 import com.uber.hoodie.exception.HoodieException
 import org.apache.log4j.LogManager
+import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
-
-import scala.collection.JavaConversions._
-import scala.collection.mutable
 
 /**
   * Hoodie Spark Datasource, for reading and writing hoodie datasets
@@ -51,22 +46,12 @@ class DefaultSource extends RelationProvider
     createRelation(sqlContext, parameters, null)
   }
 
-  /**
-    * Add default options for unspecified read options keys.
-    *
-    * @param parameters
-    * @return
-    */
-  def parametersWithReadDefaults(parameters: Map[String, String]): mutable.Map[String, String] = {
-    val defaultsMap = new ConcurrentHashMap[String, String](mapAsJavaMap(parameters))
-    defaultsMap.putIfAbsent(VIEW_TYPE_OPT_KEY, DEFAULT_VIEW_TYPE_OPT_VAL)
-    mapAsScalaMap(defaultsMap)
-  }
-
   override def createRelation(sqlContext: SQLContext,
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
-    val parameters = parametersWithReadDefaults(optParams)
+    // Add default options for unspecified read options keys.
+    val parameters = Map(VIEW_TYPE_OPT_KEY -> DEFAULT_VIEW_TYPE_OPT_VAL) ++: optParams
+
     val path = parameters.get("path")
     if (path.isEmpty) {
       throw new HoodieException("'path' must be specified.")
@@ -92,7 +77,7 @@ class DefaultSource extends RelationProvider
         sparkSession = sqlContext.sparkSession,
         userSpecifiedSchema = Option(schema),
         className = "parquet",
-        options = parameters.toMap)
+        options = parameters)
         .resolveRelation()
     }
   }
@@ -102,7 +87,7 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
 
-    val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams).toMap
+    val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams)
     HoodieSparkSqlWriter.write(sqlContext, mode, parameters, df)
     createRelation(sqlContext, parameters, df.schema)
   }
@@ -111,7 +96,7 @@ class DefaultSource extends RelationProvider
                           optParams: Map[String, String],
                           partitionColumns: Seq[String],
                           outputMode: OutputMode): Sink = {
-    val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams).toMap
+    val parameters = HoodieSparkSqlWriter.parametersWithWriteDefaults(optParams)
     new HoodieStreamingSink(
       sqlContext,
       parameters,
