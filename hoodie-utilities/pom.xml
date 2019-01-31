@@ -56,6 +56,8 @@
               <minimizeJar>true</minimizeJar>
               <artifactSet>
                 <includes>
+                  <include>commons-dbcp:commons-dbcp</include>
+                  <include>commons-pool:commons-pool</include>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.uber.hoodie:hoodie-client</include>
                   <include>com.uber.hoodie:hoodie-spark</include>
@@ -76,8 +78,50 @@
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
+                  <include>org.apache.hive:hive-common</include>
+                  <include>org.apache.hive:hive-service</include>
+                  <include>org.apache.hive:hive-metastore</include>
+                  <include>org.apache.hive:hive-jdbc</include>
                 </includes>
               </artifactSet>
+              <relocations>
+                <relocation>
+                  <pattern>org.apache.commons.dbcp.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.commons.dbcp.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.pool.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.commons.pool.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.jdbc.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hive.jdbc.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.metastore.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.common.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hive.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.common.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.common.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.conf.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.conf.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hive.service.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hive.service.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.service.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
+                </relocation>
+              </relocations>
             </configuration>
           </execution>
         </executions>
@@ -155,6 +199,30 @@
     </dependency>
 
     <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-exec</artifactId>
+      <version>${hive.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+      <version>${hive.version}</version>
+      <classifier>standalone</classifier>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-hive</artifactId>
       <version>${project.version}</version>
@@ -185,6 +253,11 @@
       <groupId>commons-dbcp</groupId>
       <artifactId>commons-dbcp</artifactId>
     </dependency>
+    <dependency>
+      <groupId>commons-pool</groupId>
+      <artifactId>commons-pool</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
@@ -303,59 +376,4 @@
     </dependency>
 
   </dependencies>
-
-  <profiles>
-    <profile>
-      <id>hive12</id>
-      <activation>
-        <property>
-          <name>!hive11</name>
-        </property>
-      </activation>
-      <dependencies>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive12.version}</version>
-          <classifier>standalone</classifier>
-          <exclusions>
-            <exclusion>
-              <groupId>org.slf4j</groupId>
-              <artifactId>slf4j-api</artifactId>
-            </exclusion>
-            <exclusion>
-              <groupId>javax.servlet</groupId>
-              <artifactId>servlet-api</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-      </dependencies>
-    </profile>
-    <profile>
-      <id>hive11</id>
-      <activation>
-        <property>
-          <name>hive11</name>
-        </property>
-      </activation>
-      <dependencies>
-        <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive11.version}</version>
-          <classifier>standalone</classifier>
-          <exclusions>
-            <exclusion>
-              <groupId>org.slf4j</groupId>
-              <artifactId>slf4j-api</artifactId>
-            </exclusion>
-            <exclusion>
-              <groupId>javax.servlet</groupId>
-              <artifactId>servlet-api</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-      </dependencies>
-    </profile>
-  </profiles>
 </project>
