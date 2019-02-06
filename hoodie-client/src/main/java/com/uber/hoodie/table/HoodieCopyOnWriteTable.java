@@ -347,7 +347,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits)
+  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits, boolean deleteInstants)
       throws IOException {
     String actionType = metaClient.getCommitActionType();
     HoodieActiveTimeline activeTimeline = this.getActiveTimeline();
@@ -375,11 +375,27 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     // clean temporary data files
     cleanTemporaryDataFiles(jsc);
 
-    // Remove the rolled back inflight commits
-    commits.stream().map(s -> new HoodieInstant(true, actionType, s))
-        .forEach(activeTimeline::deleteInflight);
-    logger.info("Deleted inflight commits " + commits);
+    // Delete Inflight instants if enabled
+    deleteInflightInstants(deleteInstants, activeTimeline,
+        commits.stream().map(s -> new HoodieInstant(true, actionType, s)).collect(Collectors.toList()));
     return stats;
+  }
+
+  /**
+   * Delete Inflight instants if enabled
+   * @param deleteInstants Enable Deletion of Inflight instants
+   * @param activeTimeline  Hoodie active timeline
+   * @param instantsToBeDeleted Instants to be deleted
+   */
+  protected static void deleteInflightInstants(boolean deleteInstants, HoodieActiveTimeline activeTimeline,
+      List<HoodieInstant> instantsToBeDeleted) {
+    // Remove the rolled back inflight commits
+    if (deleteInstants) {
+      instantsToBeDeleted.forEach(activeTimeline::deleteInflight);
+      logger.info("Deleted inflight commits " + instantsToBeDeleted);
+    } else {
+      logger.warn("Rollback finished without deleting inflight instant files. Instants=" + instantsToBeDeleted);
+    }
   }
 
   /**

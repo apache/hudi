@@ -33,6 +33,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
@@ -51,6 +52,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Test;
 
@@ -76,6 +78,64 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Override
   public void tearDown() throws IOException {
     super.tearDown();
+  }
+
+  @Test
+  public void testRollbackForInflightCompaction() throws Exception {
+    // Rollback inflight compaction
+    HoodieWriteConfig cfg = getConfig(false);
+    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
+
+    String firstInstantTime = "001";
+    String secondInstantTime = "004";
+    String compactionInstantTime = "005";
+
+    int numRecs = 2000;
+
+    List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
+    runNextDeltaCommits(client, Arrays.asList(firstInstantTime, secondInstantTime),
+        records, cfg, true, new ArrayList<>());
+
+    // Schedule compaction but do not run them
+    scheduleCompaction(compactionInstantTime, client, cfg);
+
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
+
+    HoodieInstant pendingCompactionInstant =
+        metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
+    assertTrue("Pending Compaction instant has expected instant time",
+        pendingCompactionInstant.getTimestamp().equals(compactionInstantTime));
+    assertTrue("Pending Compaction instant has expected state",
+        pendingCompactionInstant.getState().equals(State.REQUESTED));
+
+    moveCompactionFromRequestedToInflight(compactionInstantTime, client, cfg);
+
+    // Reload and rollback inflight compaction
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    hoodieTable.rollback(jsc, Arrays.asList(compactionInstantTime), false);
+
+    client.rollbackInflightCompaction(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
+    pendingCompactionInstant = metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
+        .getInstants().findFirst().get();
+    assertEquals("compaction", pendingCompactionInstant.getAction());
+    assertEquals(State.REQUESTED, pendingCompactionInstant.getState());
+    assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp());
+
+    // We indirectly test for the race condition where a inflight instant was first deleted then created new. Every
+    // time this happens, the pending compaction instant file in Hoodie Meta path becomes an empty file (Note: Hoodie
+    // reads compaction plan from aux path which is untouched). TO test for regression, we simply get file status
+    // and look at the file size
+    FileStatus fstatus =
+        metaClient.getFs().getFileStatus(new Path(metaClient.getMetaPath(), pendingCompactionInstant.getFileName()));
+    assertTrue(fstatus.getLen() > 0);
+  }
+
+  private Path getInstantPath(HoodieTableMetaClient metaClient, String timestamp, String action, State state) {
+    HoodieInstant instant = new HoodieInstant(state, action, timestamp);
+    return new Path(metaClient.getMetaPath(), instant.getFileName());
   }
 
   @Test

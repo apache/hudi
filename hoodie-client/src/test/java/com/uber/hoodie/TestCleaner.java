@@ -634,14 +634,14 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTable table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config,
         jsc);
-    table.rollback(jsc, Collections.emptyList());
+    table.rollback(jsc, Collections.emptyList(), true);
     assertEquals("Some temp files are created.", tempFiles.size(), getTotalTempFiles());
 
     config = HoodieWriteConfig.newBuilder().withPath(basePath).withUseTempFolderCopyOnWriteForCreate(true)
         .withUseTempFolderCopyOnWriteForMerge(false).build();
     table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
         config, jsc);
-    table.rollback(jsc, Collections.emptyList());
+    table.rollback(jsc, Collections.emptyList(), true);
     assertEquals("All temp files are deleted.", 0, getTotalTempFiles());
   }
 

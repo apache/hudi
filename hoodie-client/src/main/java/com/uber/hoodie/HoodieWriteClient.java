@@ -839,7 +839,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       // Remove interleaving pending compactions before rolling back commits
       pendingCompactionToRollback.forEach(this::deletePendingCompaction);
 
-      List<HoodieRollbackStat> stats = table.rollback(jsc, commitsToRollback);
+      List<HoodieRollbackStat> stats = table.rollback(jsc, commitsToRollback, true);
 
       // cleanup index entries
       commitsToRollback.forEach(s -> {
@@ -1206,8 +1206,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * @param inflightInstant Inflight Compaction Instant
    * @param table Hoodie Table
    */
-  private void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable table) throws IOException {
-    table.rollback(jsc, ImmutableList.copyOf(new String[] { inflightInstant.getTimestamp() }));
+  @VisibleForTesting
+  void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable table) throws IOException {
+    table.rollback(jsc, ImmutableList.copyOf(new String[] { inflightInstant.getTimestamp() }), false);
     // Revert instant state file
     table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
