@@ -13,7 +13,7 @@ issues or pull requests against this repo. Before you do so, please sign the
 Also, be sure to write unit tests for your bug fix or feature to show that it works as expected.
 If the reviewer feels this contributions needs to be in the release notes, please add it to CHANGELOG.md as well.
 
-If you want to participate in day-day conversations, please join our [slack group](https://hoodielib.slack.com/x-147852474016-157730502112/signup).
+If you want to participate in day-day conversations, please join our [slack group](https://join.slack.com/t/apache-hudi/signup).
 If you are from select pre-listed email domains, you can self signup. Others, please add your email onto this [issue](https://github.com/uber/hoodie/issues/143)
 
 ## Becoming a Committer 
