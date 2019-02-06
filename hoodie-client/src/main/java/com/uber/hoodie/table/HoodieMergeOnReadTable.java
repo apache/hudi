@@ -165,7 +165,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits)
+  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits, boolean deleteInstants)
       throws IOException {
 
     //At the moment, MOR table type does not support nested rollbacks
@@ -274,11 +274,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
           return hoodieRollbackStats;
         }).collect(Collectors.toList())).flatMap(List::iterator).filter(Objects::nonNull).collect();
 
-    commitsAndCompactions.entrySet().stream().map(
-        entry -> new HoodieInstant(true, entry.getValue().getAction(),
-            entry.getValue().getTimestamp())).forEach(this.getActiveTimeline()::deleteInflight);
-    logger
-        .debug("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
+    // Delete Inflight instants if enabled
+    deleteInflightInstants(deleteInstants, this.getActiveTimeline(),
+        commitsAndCompactions.entrySet().stream().map(
+            entry -> new HoodieInstant(true, entry.getValue().getAction(), entry.getValue().getTimestamp()))
+            .collect(Collectors.toList()));
+
+    logger.debug("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
 
     return allRollbackStats;
   }
