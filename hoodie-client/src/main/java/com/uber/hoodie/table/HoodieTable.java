@@ -251,9 +251,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1)
    * Atomically unpublish this commit (2) clean indexing data (3) clean new generated parquet files
-   * / log blocks (4) Finally, delete .<action>.commit or .<action>.inflight file
+   * / log blocks (4) Finally, delete .<action>.commit or .<action>.inflight file if deleteInstants = true
    */
-  public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits)
+  public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits, boolean deleteInstants)
       throws IOException;
 
   /**
