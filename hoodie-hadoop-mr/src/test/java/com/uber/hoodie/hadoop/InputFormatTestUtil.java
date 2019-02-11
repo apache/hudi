@@ -99,11 +99,26 @@ public class InputFormatTestUtil {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
+    createData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
+    return partitionPath;
+  }
+
+  public static File prepareNonPartitionedParquetDataset(TemporaryFolder baseDir, Schema schema,
+      int numberOfFiles, int numberOfRecords, String commitNumber) throws IOException {
+    baseDir.create();
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), baseDir.getRoot().toString());
+    File basePath = baseDir.getRoot();
+    createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
+    return basePath;
+  }
+
+  private static void createData(Schema schema,
+      File partitionPath,  int numberOfFiles, int numberOfRecords, String commitNumber)
+      throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i);
       File dataFile = new File(partitionPath, fileId);
-      // dataFile.createNewFile();
       parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber,
@@ -114,8 +129,6 @@ public class InputFormatTestUtil {
         parquetWriter.close();
       }
     }
-    return partitionPath;
-
   }
 
   private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema,
