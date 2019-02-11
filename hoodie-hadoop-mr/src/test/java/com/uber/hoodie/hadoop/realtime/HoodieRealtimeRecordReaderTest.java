@@ -109,13 +109,23 @@ public class HoodieRealtimeRecordReaderTest {
 
   @Test
   public void testReader() throws Exception {
+    testReader(true);
+  }
+
+  @Test
+  public void testNonPartitionedReader() throws Exception {
+    testReader(false);
+  }
+
+  public void testReader(boolean partitioned) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
         HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
-    File partitionDir = InputFormatTestUtil
-        .prepareParquetDataset(basePath, schema, 1, 100, commitTime);
+    File partitionDir =
+        partitioned ? InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 100, commitTime)
+        : InputFormatTestUtil.prepareNonPartitionedParquetDataset(basePath, schema, 1, 100, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -146,7 +156,9 @@ public class HoodieRealtimeRecordReaderTest {
         .collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
-    jobConf.set("partition_columns", "datestr");
+    if (partitioned) {
+      jobConf.set("partition_columns", "datestr");
+    }
 
     //validate record reader compaction
     HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
