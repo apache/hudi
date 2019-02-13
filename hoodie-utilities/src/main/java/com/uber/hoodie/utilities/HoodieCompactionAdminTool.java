@@ -5,6 +5,7 @@ import com.beust.jcommander.Parameter;
 import com.uber.hoodie.CompactionAdminClient;
 import com.uber.hoodie.CompactionAdminClient.RenameOpResult;
 import com.uber.hoodie.CompactionAdminClient.ValidationOpResult;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.ObjectOutputStream;
@@ -60,7 +61,8 @@ public class HoodieCompactionAdminTool {
         break;
       case UNSCHEDULE_FILE:
         List<RenameOpResult> r =
-            admin.unscheduleCompactionFileId(cfg.fileId, cfg.skipValidation, cfg.dryRun);
+            admin.unscheduleCompactionFileId(new HoodieFileGroupId(cfg.partitionPath, cfg.fileId),
+                cfg.skipValidation, cfg.dryRun);
         if (cfg.printOutput) {
           System.out.println(r);
         }
@@ -132,6 +134,8 @@ public class HoodieCompactionAdminTool {
     public String basePath = null;
     @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time", required = false)
     public String compactionInstantTime = null;
+    @Parameter(names = {"--partition-path", "-pp"}, description = "Partition Path", required = false)
+    public String partitionPath = null;
     @Parameter(names = {"--file-id", "-id"}, description = "File Id", required = false)
     public String fileId = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)

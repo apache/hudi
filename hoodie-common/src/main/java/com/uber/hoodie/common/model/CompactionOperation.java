@@ -38,8 +38,7 @@ public class CompactionOperation implements Serializable {
   private Optional<String> dataFileCommitTime;
   private List<String> deltaFilePaths;
   private Optional<String> dataFilePath;
-  private String fileId;
-  private String partitionPath;
+  private HoodieFileGroupId id;
   private Map<String, Double> metrics;
 
   //Only for serialization/de-serialization
@@ -52,17 +51,16 @@ public class CompactionOperation implements Serializable {
     if (dataFile.isPresent()) {
       this.baseInstantTime = dataFile.get().getCommitTime();
       this.dataFilePath = Optional.of(dataFile.get().getPath());
-      this.fileId = dataFile.get().getFileId();
+      this.id = new HoodieFileGroupId(partitionPath, dataFile.get().getFileId());
       this.dataFileCommitTime = Optional.of(dataFile.get().getCommitTime());
     } else {
       assert logFiles.size() > 0;
       this.dataFilePath = Optional.absent();
       this.baseInstantTime = FSUtils.getBaseCommitTimeFromLogPath(logFiles.get(0).getPath());
-      this.fileId = FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath());
+      this.id = new HoodieFileGroupId(partitionPath, FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath()));
       this.dataFileCommitTime = Optional.absent();
     }
 
-    this.partitionPath = partitionPath;
     this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString())
         .collect(Collectors.toList());
     this.metrics = metrics;
@@ -85,15 +83,19 @@ public class CompactionOperation implements Serializable {
   }
 
   public String getFileId() {
-    return fileId;
+    return id.getFileId();
   }
 
   public String getPartitionPath() {
-    return partitionPath;
+    return id.getPartitionPath();
   }
 
   public Map<String, Double> getMetrics() {
     return metrics;
+  }
+
+  public HoodieFileGroupId getFileGroupId() {
+    return id;
   }
 
   /**
@@ -106,9 +108,8 @@ public class CompactionOperation implements Serializable {
     op.baseInstantTime = operation.getBaseInstantTime();
     op.dataFilePath = Optional.fromNullable(operation.getDataFilePath());
     op.deltaFilePaths = new ArrayList<>(operation.getDeltaFilePaths());
-    op.fileId = operation.getFileId();
+    op.id = new HoodieFileGroupId(operation.getPartitionPath(), operation.getFileId());
     op.metrics = operation.getMetrics() == null ? new HashMap<>() : new HashMap<>(operation.getMetrics());
-    op.partitionPath = operation.getPartitionPath();
     return op;
   }
 }

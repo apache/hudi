@@ -21,6 +21,7 @@ import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -70,12 +71,12 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   // mapping from partition paths to file groups contained within them
   protected HashMap<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
   // mapping from file id to the file group.
-  protected HashMap<String, HoodieFileGroup> fileGroupMap;
+  protected HashMap<HoodieFileGroupId, HoodieFileGroup> fileGroupMap;
 
   /**
-   * File Id to pending compaction instant time
+   * PartitionPath + File-Id to pending compaction instant time
    */
-  private final Map<String, Pair<String, CompactionOperation>> fileIdToPendingCompaction;
+  private final Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
 
   /**
    * Create a file system view, as of the given timeline
@@ -90,7 +91,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     // Build fileId to Pending Compaction Instants
     List<HoodieInstant> pendingCompactionInstants =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
-    this.fileIdToPendingCompaction = ImmutableMap.copyOf(
+    this.fgIdToPendingCompaction = ImmutableMap.copyOf(
         CompactionUtils.getAllPendingCompactionOperations(metaClient).entrySet().stream()
                 .map(entry -> Pair.of(entry.getKey(), Pair.of(entry.getValue().getKey(),
                         CompactionOperation.convertFromAvroRecordInstance(entry.getValue().getValue()))))
@@ -123,6 +124,10 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     out.defaultWriteObject();
   }
 
+  private String getPartitionPathFromFileStatus(FileStatus fileStatus) {
+    return FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), fileStatus.getPath().getParent());
+  }
+
   /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
@@ -130,9 +135,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = convertFileStatusesToDataFiles(
         statuses)
         .collect(Collectors.groupingBy((dataFile) -> {
-          String partitionPathStr = FSUtils.getRelativePartitionPath(
-              new Path(metaClient.getBasePath()),
-              dataFile.getFileStatus().getPath().getParent());
+          String partitionPathStr = getPartitionPathFromFileStatus(dataFile.getFileStatus());
           return Pair.of(partitionPathStr, dataFile.getFileId());
         }));
     Map<Pair<String, String>, List<HoodieLogFile>> logFiles = convertFileStatusesToLogFiles(
@@ -157,17 +160,18 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
       if (logFiles.containsKey(pair)) {
         logFiles.get(pair).forEach(group::addLogFile);
       }
-      if (fileIdToPendingCompaction.containsKey(fileId)) {
+      HoodieFileGroupId fgId = group.getFileGroupId();
+      if (fgIdToPendingCompaction.containsKey(fgId)) {
         // If there is no delta-commit after compaction request, this step would ensure a new file-slice appears
         // so that any new ingestion uses the correct base-instant
-        group.addNewFileSliceAtInstant(fileIdToPendingCompaction.get(fileId).getKey());
+        group.addNewFileSliceAtInstant(fgIdToPendingCompaction.get(fgId).getKey());
       }
       fileGroups.add(group);
     });
 
     // add to the cache.
     fileGroups.forEach(group -> {
-      fileGroupMap.put(group.getId(), group);
+      fileGroupMap.put(group.getFileGroupId(), group);
       if (!partitionToFileGroupsMap.containsKey(group.getPartitionPath())) {
         partitionToFileGroupsMap.put(group.getPartitionPath(), new ArrayList<>());
       }
@@ -198,7 +202,9 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
    * @param dataFile Data File
    */
   private boolean isDataFileDueToPendingCompaction(HoodieDataFile dataFile) {
-    Pair<String, CompactionOperation> compactionWithInstantTime = fileIdToPendingCompaction.get(dataFile.getFileId());
+    final String partitionPath = getPartitionPathFromFileStatus(dataFile.getFileStatus());
+    HoodieFileGroupId fgId = new HoodieFileGroupId(partitionPath, dataFile.getFileId());
+    Pair<String, CompactionOperation> compactionWithInstantTime = fgIdToPendingCompaction.get(fgId);
     if ((null != compactionWithInstantTime) && (null != compactionWithInstantTime.getLeft())
         && dataFile.getCommitTime().equals(compactionWithInstantTime.getKey())) {
       return true;
@@ -210,7 +216,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
   public Stream<HoodieDataFile> getLatestDataFiles(final String partitionPath) {
     return getAllFileGroups(partitionPath)
         .map(fileGroup -> {
-          return fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
+          return fileGroup.getAllDataFiles()
+              .filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
         })
         .filter(Optional::isPresent)
         .map(Optional::get);
@@ -278,7 +285,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
         .map(HoodieFileGroup::getLatestFileSlice)
         .filter(Optional::isPresent)
         .map(Optional::get)
-        .map(this::filterDataFileAfterPendingCompaction);
+        .map(fs -> filterDataFileAfterPendingCompaction(fs));
   }
 
   @Override
@@ -288,7 +295,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
           FileSlice fileSlice = fileGroup.getLatestFileSlice().get();
           // if the file-group is under compaction, pick the latest before compaction instant time.
           if (isFileSliceAfterPendingCompaction(fileSlice)) {
-            String compactionInstantTime = fileIdToPendingCompaction.get(fileSlice.getFileId()).getLeft();
+            String compactionInstantTime = fgIdToPendingCompaction.get(fileSlice.getFileGroupId()).getLeft();
             return fileGroup.getLatestFileSliceBefore(compactionInstantTime);
           }
           return Optional.of(fileSlice);
@@ -303,7 +310,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
    * @return
    */
   private boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
-    Pair<String, CompactionOperation> compactionWithInstantTime = fileIdToPendingCompaction.get(fileSlice.getFileId());
+    Pair<String, CompactionOperation> compactionWithInstantTime =
+        fgIdToPendingCompaction.get(fileSlice.getFileGroupId());
     return (null != compactionWithInstantTime)
             && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.getKey());
   }
@@ -318,7 +326,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     if (isFileSliceAfterPendingCompaction(fileSlice)) {
       // Data file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
-      FileSlice transformed = new FileSlice(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+      FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(),
+          fileSlice.getBaseInstantTime(), fileSlice.getFileId());
       fileSlice.getLogFiles().forEach(transformed::addLogFile);
       return transformed;
     }
@@ -332,7 +341,7 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
         .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
         .filter(Optional::isPresent)
         .map(Optional::get)
-        .map(this::filterDataFileAfterPendingCompaction);
+        .map(fs -> filterDataFileAfterPendingCompaction(fs));
   }
 
   /**
@@ -342,7 +351,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
    * @param penultimateSlice Penultimate file slice for a file-group in commit timeline order
    */
   private static FileSlice mergeCompactionPendingFileSlices(FileSlice lastSlice, FileSlice penultimateSlice) {
-    FileSlice merged = new FileSlice(penultimateSlice.getBaseInstantTime(), penultimateSlice.getFileId());
+    FileSlice merged = new FileSlice(penultimateSlice.getPartitionPath(),
+        penultimateSlice.getBaseInstantTime(), penultimateSlice.getFileId());
     if (penultimateSlice.getDataFile().isPresent()) {
       merged.setDataFile(penultimateSlice.getDataFile().get());
     }
@@ -361,8 +371,9 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
    */
   private FileSlice getMergedFileSlice(HoodieFileGroup fileGroup, FileSlice fileSlice) {
     // if the file-group is under construction, pick the latest before compaction instant time.
-    if (fileIdToPendingCompaction.containsKey(fileSlice.getFileId())) {
-      String compactionInstantTime = fileIdToPendingCompaction.get(fileSlice.getFileId()).getKey();
+    HoodieFileGroupId fgId = fileSlice.getFileGroupId();
+    if (fgIdToPendingCompaction.containsKey(fgId)) {
+      String compactionInstantTime = fgIdToPendingCompaction.get(fgId).getKey();
       if (fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
         Optional<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
         if (prevFileSlice.isPresent()) {
@@ -426,8 +437,8 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     }
   }
 
-  public Map<String, Pair<String, CompactionOperation>> getFileIdToPendingCompaction() {
-    return fileIdToPendingCompaction;
+  public Map<HoodieFileGroupId, Pair<String, CompactionOperation>> getFgIdToPendingCompaction() {
+    return fgIdToPendingCompaction;
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {

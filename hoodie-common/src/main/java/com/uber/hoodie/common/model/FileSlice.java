@@ -30,9 +30,9 @@ import java.util.stream.Stream;
 public class FileSlice implements Serializable {
 
   /**
-   * id of the slice
+   * File Group Id of the Slice
    */
-  private String fileId;
+  private HoodieFileGroupId fileGroupId;
 
   /**
    * Point in the timeline, at which the slice was created
@@ -50,8 +50,12 @@ public class FileSlice implements Serializable {
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
-  public FileSlice(String baseInstantTime, String fileId) {
-    this.fileId = fileId;
+  public FileSlice(String partitionPath, String baseInstantTime, String fileId) {
+    this(new HoodieFileGroupId(partitionPath, fileId), baseInstantTime);
+  }
+
+  public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime) {
+    this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.dataFile = null;
     this.logFiles = new TreeSet<>(HoodieLogFile.getBaseInstantAndLogVersionComparator());
@@ -73,8 +77,16 @@ public class FileSlice implements Serializable {
     return baseInstantTime;
   }
 
+  public String getPartitionPath() {
+    return fileGroupId.getPartitionPath();
+  }
+
   public String getFileId() {
-    return fileId;
+    return fileGroupId.getFileId();
+  }
+
+  public HoodieFileGroupId getFileGroupId() {
+    return fileGroupId;
   }
 
   public Optional<HoodieDataFile> getDataFile() {
@@ -84,6 +96,7 @@ public class FileSlice implements Serializable {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FileSlice {");
+    sb.append("fileGroupId=").append(fileGroupId);
     sb.append("baseCommitTime=").append(baseInstantTime);
     sb.append(", dataFile='").append(dataFile).append('\'');
     sb.append(", logFiles='").append(logFiles).append('\'');

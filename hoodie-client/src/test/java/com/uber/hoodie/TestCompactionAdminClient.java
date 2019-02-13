@@ -334,7 +334,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     // Call the main unschedule API
-    client.unscheduleCompactionFileId(op.getFileId(), false, false);
+    client.unscheduleCompactionFileId(op.getFileGroupId(), false, false);
 
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     final HoodieTableFileSystemView newFsView =

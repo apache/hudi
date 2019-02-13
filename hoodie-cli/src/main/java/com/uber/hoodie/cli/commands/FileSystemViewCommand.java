@@ -78,7 +78,7 @@ public class FileSystemViewCommand implements CommandMarker {
       // For ReadOptimized Views, do not display any delta-file related columns
       Comparable[] row = new Comparable[readOptimizedOnly ? 5 : 8];
       row[idx++] = fg.getPartitionPath();
-      row[idx++] = fg.getId();
+      row[idx++] = fg.getFileGroupId().getFileId();
       row[idx++] = fs.getBaseInstantTime();
       row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getPath() : "";
       row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getFileSize() : -1;

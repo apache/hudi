@@ -118,7 +118,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         baseInstantTime = fileSlice.get().getBaseInstantTime();
       } else {
         // This means there is no base data file, start appending to a new log file
-        fileSlice = Optional.of(new FileSlice(baseInstantTime, this.fileId));
+        fileSlice = Optional.of(new FileSlice(partitionPath, baseInstantTime, this.fileId));
         logger.info("New InsertHandle for partition :" + partitionPath);
       }
       writeStatus.getStat().setPrevCommit(baseInstantTime);
