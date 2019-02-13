@@ -124,7 +124,7 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
     assertEquals("Expecting a single commit.", 1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, client.config, jsc);
 
     assertFalse(table.getCompletedCommitsTimeline().empty());
     String commitTime = table.getCompletedCommitsTimeline().getInstants().findFirst().get().getTimestamp();
@@ -194,7 +194,7 @@ public class TestCleaner extends TestHoodieClientBase {
         .withParallelism(1, 1).withBulkInsertParallelism(1)
         .withFinalizeWriteParallelism(1).withConsistencyCheckEnabled(true)
         .build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
 
     final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
         generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
@@ -355,7 +355,7 @@ public class TestCleaner extends TestHoodieClientBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainCommits(maxCommits).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1)
         .withFinalizeWriteParallelism(1).withConsistencyCheckEnabled(true).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
 
     final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
         generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);

@@ -195,6 +195,16 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * Reload ActiveTimeline and cache
+   *
+   * @return Active instants timeline
+   */
+  public synchronized HoodieActiveTimeline reloadActiveTimeline() {
+    activeTimeline = new HoodieActiveTimeline(this);
+    return activeTimeline;
+  }
+
+  /**
    * Get the archived commits as a timeline. This is costly operation, as all data from the archived
    * files are read. This should not be used, unless for historical debugging purposes
    *
@@ -405,5 +415,21 @@ public class HoodieTableMetaClient implements Serializable {
     sb.append(", tableType=").append(tableType);
     sb.append('}');
     return sb.toString();
+  }
+
+  public void setBasePath(String basePath) {
+    this.basePath = basePath;
+  }
+
+  public void setMetaPath(String metaPath) {
+    this.metaPath = metaPath;
+  }
+
+  public void setActiveTimeline(HoodieActiveTimeline activeTimeline) {
+    this.activeTimeline = activeTimeline;
+  }
+
+  public void setTableConfig(HoodieTableConfig tableConfig) {
+    this.tableConfig = tableConfig;
   }
 }

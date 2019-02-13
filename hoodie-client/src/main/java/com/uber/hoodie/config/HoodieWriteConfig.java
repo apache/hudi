@@ -19,6 +19,7 @@ package com.uber.hoodie.config;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
+import com.uber.hoodie.common.table.view.FileSystemViewStorageConfig;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
@@ -71,9 +72,20 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_FINALIZE_WRITE_PARALLELISM = DEFAULT_PARALLELISM;
   private static final String CONSISTENCY_CHECK_ENABLED = "hoodie.consistency.check.enabled";
   private static final String DEFAULT_CONSISTENCY_CHECK_ENABLED = "false";
+  private static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
+  private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "false";
+
+  // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
+  // We keep track of original config and rewritten config
+  private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
+  private FileSystemViewStorageConfig viewStorageConfig;
 
   private HoodieWriteConfig(Properties props) {
     super(props);
+    Properties newProps = new Properties();
+    newProps.putAll(props);
+    this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
+    this.viewStorageConfig = clientSpecifiedViewStorageConfig;
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -155,6 +167,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isConsistencyCheckEnabled() {
     return Boolean.parseBoolean(props.getProperty(CONSISTENCY_CHECK_ENABLED));
+  }
+
+  public boolean isEmbeddedTimelineServerEnabled() {
+    return Boolean.parseBoolean(props.getProperty(EMBEDDED_TIMELINE_SERVER_ENABLED));
   }
 
   /**
@@ -434,6 +450,22 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.valueOf(props.getProperty(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION_PROP));
   }
 
+  public FileSystemViewStorageConfig getViewStorageConfig() {
+    return viewStorageConfig;
+  }
+
+  public void setViewStorageConfig(FileSystemViewStorageConfig viewStorageConfig) {
+    this.viewStorageConfig = viewStorageConfig;
+  }
+
+  public void resetViewStorageConfig() {
+    this.setViewStorageConfig(getClientSpecifiedViewStorageConfig());
+  }
+
+  public FileSystemViewStorageConfig getClientSpecifiedViewStorageConfig() {
+    return clientSpecifiedViewStorageConfig;
+  }
+
   public static class Builder {
 
     private final Properties props = new Properties();
@@ -442,6 +474,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isCompactionConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isMemoryConfigSet = false;
+    private boolean isViewConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       FileReader reader = new FileReader(propertiesFile);
@@ -569,6 +602,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withFileSystemViewConfig(FileSystemViewStorageConfig viewStorageConfig) {
+      props.putAll(viewStorageConfig.getProps());
+      isViewConfigSet = true;
+      return this;
+    }
+
     public Builder withFinalizeWriteParallelism(int parallelism) {
       props.setProperty(FINALIZE_WRITE_PARALLELISM, String.valueOf(parallelism));
       return this;
@@ -579,10 +618,13 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withEmbeddedTimelineServerEnabled(boolean enabled) {
+      props.setProperty(EMBEDDED_TIMELINE_SERVER_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public HoodieWriteConfig build() {
-      HoodieWriteConfig config = new HoodieWriteConfig(props);
       // Check for mandatory properties
-      Preconditions.checkArgument(config.getBasePath() != null);
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM),
@@ -611,6 +653,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(CONSISTENCY_CHECK_ENABLED),
           CONSISTENCY_CHECK_ENABLED, DEFAULT_CONSISTENCY_CHECK_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(EMBEDDED_TIMELINE_SERVER_ENABLED),
+          EMBEDDED_TIMELINE_SERVER_ENABLED, DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,
@@ -623,6 +667,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HoodieMetricsConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMemoryConfigSet,
           HoodieMemoryConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isViewConfigSet,
+          FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
+
+      // Build WriteConfig at the end
+      HoodieWriteConfig config = new HoodieWriteConfig(props);
+      Preconditions.checkArgument(config.getBasePath() != null);
       return config;
     }
   }

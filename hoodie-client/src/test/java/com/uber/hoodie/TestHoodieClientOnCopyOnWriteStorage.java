@@ -133,7 +133,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       boolean isPrepped) throws Exception {
     // Set autoCommit false
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
 
     String prevCommitTime = "000";
     String newCommitTime = "001";
@@ -428,7 +428,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     assertEquals("2 files needs to be committed.", 2, statuses.size());
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+
+    HoodieTable table = getHoodieTable(metadata, config);
     TableFileSystemView.ReadOptimizedView fileSystemView = table.getROFileSystemView();
     List<HoodieDataFile> files = fileSystemView.getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3)
         .collect(Collectors.toList());
@@ -465,6 +466,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     }
     assertEquals("Total updates in commit3 must add up", inserts2.size(), numTotalUpdatesInCommit3);
     assertEquals("Total inserts in commit3 must add up", keys3.size(), numTotalInsertsInCommit3);
+  }
+
+  protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+    return HoodieTable.getHoodieTable(metaClient, config, jsc);
   }
 
   /**
@@ -532,7 +537,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("2 files needs to be committed.", 2, statuses.size());
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieDataFile> files = table.getROFileSystemView()
         .getLatestDataFilesBeforeOrOn(testPartitionPath, commitTime3)
         .collect(Collectors.toList());
@@ -555,7 +560,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   public void testCommitWritesRelativePaths() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
@@ -602,7 +607,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   public void testRollingStatsInMetadata() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
@@ -674,7 +679,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   @Test
   public void testConsistencyCheckDuringFinalize() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         basePath);
 

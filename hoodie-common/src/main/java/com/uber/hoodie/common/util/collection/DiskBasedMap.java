@@ -31,13 +31,16 @@ import java.net.InetAddress;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -51,8 +54,6 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
-  // Read only file access to be able to seek to random positions to readFromDisk values
-  private RandomAccessFile readOnlyFileHandle;
   // Write only OutputStream to be able to ONLY append to the file
   private SizeAwareDataOutputStream writeOnlyFileHandle;
   // FileOutputStream for the file handle to be able to force fsync
@@ -62,16 +63,37 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   private AtomicLong filePosition;
   // FilePath to store the spilled data
   private String filePath;
+  // Thread-safe random access file
+  private ThreadLocal<RandomAccessFile> randomAccessFile = new ThreadLocal<>();
+  private Queue<RandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
 
-
-  protected DiskBasedMap(String baseFilePath) throws IOException {
-    this.valueMetadataMap = new HashMap<>();
+  public DiskBasedMap(String baseFilePath) throws IOException {
+    this.valueMetadataMap = new ConcurrentHashMap<>();
     File writeOnlyFileHandle = new File(baseFilePath, UUID.randomUUID().toString());
     this.filePath = writeOnlyFileHandle.getPath();
     initFile(writeOnlyFileHandle);
     this.fileOutputStream = new FileOutputStream(writeOnlyFileHandle, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream);
     this.filePosition = new AtomicLong(0L);
+  }
+
+  /**
+   * RandomAcessFile is not thread-safe. This API opens a new file handle per thread and returns.
+   * @return
+   */
+  private RandomAccessFile getRandomAccessFile()  {
+    try {
+      RandomAccessFile readHandle = randomAccessFile.get();
+      if (readHandle == null) {
+        readHandle = new RandomAccessFile(filePath, "r");
+        readHandle.seek(0);
+        randomAccessFile.set(readHandle);
+        openedAccessFiles.offer(readHandle);
+      }
+      return readHandle;
+    } catch (IOException ioe) {
+      throw new HoodieException(ioe);
+    }
   }
 
   private void initFile(File writeOnlyFileHandle) throws IOException {
@@ -86,9 +108,6 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     log.info(
         "Spilling to file location " + writeOnlyFileHandle.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
             .getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName() + ")");
-    // Open file in readFromDisk-only mode
-    readOnlyFileHandle = new RandomAccessFile(filePath, "r");
-    readOnlyFileHandle.seek(0);
     // Make sure file is deleted when JVM exits
     writeOnlyFileHandle.deleteOnExit();
     addShutDownHook();
@@ -107,6 +126,17 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
             fileOutputStream.getChannel().force(false);
             writeOnlyFileHandle.close();
           }
+
+          while (!openedAccessFiles.isEmpty()) {
+            RandomAccessFile file = openedAccessFiles.poll();
+            if (null != file) {
+              try {
+                file.close();
+              } catch (IOException ioe) {
+                // skip exception
+              }
+            }
+          }
         } catch (Exception e) {
           // fail silently for any sort of exception
         }
@@ -118,8 +148,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
    * Custom iterator to iterate over values written to disk
    */
   public Iterator<R> iterator() {
-    return new LazyFileIterable(readOnlyFileHandle,
-        valueMetadataMap).iterator();
+    return new LazyFileIterable(filePath, valueMetadataMap).iterator();
   }
 
   /**
@@ -155,16 +184,24 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     if (entry == null) {
       return null;
     }
+    return get(entry);
+  }
+
+  private R get(ValueMetadata entry) {
+    return get(entry, getRandomAccessFile());
+  }
+
+  public static <R> R get(ValueMetadata entry, RandomAccessFile file) {
     try {
-      return SerializationUtils.<R>deserialize(SpillableMapUtils
-          .readBytesFromDisk(readOnlyFileHandle, entry.getOffsetOfValue(), entry.getSizeOfValue()));
+      return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(file,
+          entry.getOffsetOfValue(), entry.getSizeOfValue()));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to readFromDisk Hoodie Record from disk", e);
     }
   }
 
   @Override
-  public R put(T key, R value) {
+  public synchronized R put(T key, R value) {
     try {
       byte[] val = SerializationUtils.serialize(value);
       Integer valueSize = val.length;
@@ -198,14 +235,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   @Override
   public void clear() {
     valueMetadataMap.clear();
-    // close input/output streams
-    try {
-      writeOnlyFileHandle.flush();
-      writeOnlyFileHandle.close();
-      new File(filePath).delete();
-    } catch (IOException e) {
-      throw new HoodieIOException("unable to clear map or delete file on disk", e);
-    }
+    // Do not delete file-handles & file as there is no way to do it without synchronizing get/put(and
+    // reducing concurrency). Instead, just clear the pointer map. The file will be removed on exit.
   }
 
   @Override
@@ -216,6 +247,12 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   @Override
   public Collection<R> values() {
     throw new HoodieException("Unsupported Operation Exception");
+  }
+
+  public Stream<R> valueStream() {
+    final RandomAccessFile file = getRandomAccessFile();
+    return valueMetadataMap.values().stream().sorted().sequential()
+        .map(valueMetaData -> (R)get(valueMetaData, file));
   }
 
   @Override
@@ -277,7 +314,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     }
   }
 
-  public final class ValueMetadata {
+  public static final class ValueMetadata implements Comparable<ValueMetadata> {
 
     // FilePath to store the spilled data
     private String filePath;
@@ -309,6 +346,11 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
     public long getTimestamp() {
       return timestamp;
+    }
+
+    @Override
+    public int compareTo(ValueMetadata o) {
+      return Long.compare(this.offsetOfValue, o.offsetOfValue);
     }
   }
 }

@@ -182,7 +182,7 @@ public class CompactionTestUtils {
     private final String path;
 
     public TestHoodieDataFile(String path) {
-      super(null);
+      super("/tmp/ce481ee7-9e53-4a2e-9992-f9e295fa79c0_11_20180918020003.parquet");
       this.path = path;
     }
 
