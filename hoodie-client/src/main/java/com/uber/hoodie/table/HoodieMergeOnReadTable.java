@@ -147,7 +147,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     try {
       return compactor.generateCompactionPlan(jsc, this, config, instantTime,
           new HashSet<>(((HoodieTableFileSystemView)getRTFileSystemView())
-              .getFileIdToPendingCompaction().keySet()));
+              .getFgIdToPendingCompaction().keySet()));
     } catch (IOException e) {
       throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
     }

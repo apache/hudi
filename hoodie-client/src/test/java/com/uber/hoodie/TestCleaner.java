@@ -33,6 +33,7 @@ import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
@@ -204,16 +205,14 @@ public class TestCleaner extends TestHoodieClientBase {
 
     insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn);
 
-    Map<String, String> selectedFileIdForCompaction = new HashMap<>();
-    Map<String, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
+    Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metadata, getConfig(), jsc);
     for (String partitionPath : dataGen.getPartitionPaths()) {
       TableFileSystemView fsView = table.getFileSystemView();
       Optional<Boolean> added = fsView.getAllFileGroups(partitionPath).findFirst()
           .map(fg -> {
-            selectedFileIdForCompaction.put(fg.getId(), partitionPath);
-            fg.getLatestFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getId(), fs));
+            fg.getLatestFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getFileGroupId(), fs));
             return true;
           });
       if (added.isPresent()) {
@@ -224,7 +223,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
     // Create workload with selected file-slices
     List<Pair<String, FileSlice>> partitionFileSlicePairs = compactionFileIdToLatestFileSlice.entrySet().stream()
-        .map(e -> Pair.of(selectedFileIdForCompaction.get(e.getKey()), e.getValue())).collect(Collectors.toList());
+        .map(e -> Pair.of(e.getKey().getPartitionPath(), e.getValue())).collect(Collectors.toList());
     HoodieCompactionPlan compactionPlan =
         CompactionUtils.buildFromFileSlices(partitionFileSlicePairs, Optional.empty(), Optional.empty());
     List<String> instantTimes = HoodieTestUtils.monotonicIncreasingCommitTimestamps(9, 1);
@@ -270,18 +269,18 @@ public class TestCleaner extends TestHoodieClientBase {
           List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
 
           for (HoodieFileGroup fileGroup : fileGroups) {
-            if (selectedFileIdForCompaction.containsKey(fileGroup.getId())) {
+            if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
               // Ensure latest file-slice selected for compaction is retained
               Optional<HoodieDataFile> dataFileForCompactionPresent =
                   fileGroup.getAllDataFiles().filter(df -> {
-                    return compactionFileIdToLatestFileSlice.get(fileGroup.getId())
+                    return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId())
                         .getBaseInstantTime().equals(df.getCommitTime());
                   }).findAny();
               Assert.assertTrue("Data File selected for compaction is retained",
                   dataFileForCompactionPresent.isPresent());
             } else {
               // file has no more than max versions
-              String fileId = fileGroup.getId();
+              String fileId = fileGroup.getFileGroupId().getFileId();
               List<HoodieDataFile> dataFiles = fileGroup.getAllDataFiles().collect(Collectors.toList());
 
               assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
