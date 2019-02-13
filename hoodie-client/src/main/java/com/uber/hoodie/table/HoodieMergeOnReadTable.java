@@ -32,13 +32,13 @@ import com.uber.hoodie.common.model.HoodieRollingStat;
 import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.SyncableFileSystemView;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCommandBlock.HoodieCommandBlockTypeEnum;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
@@ -55,7 +55,6 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -155,8 +154,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     HoodieRealtimeTableCompactor compactor = new HoodieRealtimeTableCompactor();
     try {
       return compactor.generateCompactionPlan(jsc, this, config, instantTime,
-          new HashSet<>(((HoodieTableFileSystemView)getRTFileSystemView())
-              .getFgIdToPendingCompaction().keySet()));
+          ((SyncableFileSystemView)getRTFileSystemView()).getPendingCompactionOperations()
+              .map(instantTimeCompactionopPair -> instantTimeCompactionopPair.getValue().getFileGroupId())
+              .collect(Collectors.toSet()));
+
     } catch (IOException e) {
       throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
     }
@@ -460,7 +461,8 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     // TODO (NA) : Make this static part of utility
     @VisibleForTesting
     public long convertLogFilesSizeToExpectedParquetSize(List<HoodieLogFile> hoodieLogFiles) {
-      long totalSizeOfLogFiles = hoodieLogFiles.stream().map(hoodieLogFile -> hoodieLogFile.getFileSize().get())
+      long totalSizeOfLogFiles = hoodieLogFiles.stream().map(hoodieLogFile -> hoodieLogFile.getFileSize())
+          .filter(size -> size > 0)
           .reduce((a, b) -> (a + b)).orElse(0L);
       // Here we assume that if there is no base parquet file, all log files contain only inserts.
       // We can then just get the parquet equivalent size of these log files, compare that with

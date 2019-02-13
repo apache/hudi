@@ -17,6 +17,7 @@
 package com.uber.hoodie.common.table.timeline;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -58,7 +59,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
   private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
-  private HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient metaClient;
 
   /**
    * Returns next commit time in the {@link #COMMIT_FORMATTER} format.
@@ -71,9 +72,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
     try {
-      this.instants = HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
-          new Path(metaClient.getMetaPath()), includedExtensions);
-      log.info("Loaded instants " + instants);
+      this.setInstants(HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
+          new Path(metaClient.getMetaPath()), includedExtensions));
+      log.info("Loaded instants " + getInstants());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
@@ -85,7 +86,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
-    this(metaClient, VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+    this(metaClient,
+        new ImmutableSet.Builder<String>()
+            .addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build());
   }
 
   /**
@@ -158,7 +161,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * @param actions actions allowed in the timeline
    */
   public HoodieTimeline getTimelineOfActions(Set<String> actions) {
-    return new HoodieDefaultTimeline(instants.stream().filter(s -> actions.contains(s.getAction())),
+    return new HoodieDefaultTimeline(getInstants().filter(s -> actions.contains(s.getAction())),
         (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
   }
 
@@ -195,9 +198,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
   }
 
-
   protected Stream<HoodieInstant> filterInstantsByAction(String action) {
-    return instants.stream().filter(s -> s.getAction().equals(action));
+    return getInstants().filter(s -> s.getAction().equals(action));
   }
 
   public void createInflight(HoodieInstant instant) {

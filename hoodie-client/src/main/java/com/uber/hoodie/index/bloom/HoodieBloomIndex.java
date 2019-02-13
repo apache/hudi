@@ -224,6 +224,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
       final HoodieTable hoodieTable) {
+
     // Obtain the latest data files from all the partitions.
     List<Tuple2<String, HoodieDataFile>> dataFilesList = jsc
         .parallelize(partitions, Math.max(partitions.size(), 1)).flatMapToPair(partitionPath -> {
@@ -243,7 +244,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       return jsc.parallelize(dataFilesList, Math.max(dataFilesList.size(), 1)).mapToPair(ft -> {
         try {
           String[] minMaxKeys = ParquetUtils
-              .readMinMaxRecordKeys(hoodieTable.getHadoopConf(), ft._2().getFileStatus().getPath());
+              .readMinMaxRecordKeys(hoodieTable.getHadoopConf(), new Path(ft._2().getPath()));
           return new Tuple2<>(ft._1(),
               new BloomIndexFileInfo(ft._2().getFileName(), minMaxKeys[0], minMaxKeys[1]));
         } catch (MetadataNotFoundException me) {

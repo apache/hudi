@@ -77,6 +77,10 @@ public class HoodieTableConfig implements Serializable {
     this.props = props;
   }
 
+  public HoodieTableConfig(Properties props) {
+    this.props = props;
+  }
+
   /**
    * For serailizing and de-serializing
    *

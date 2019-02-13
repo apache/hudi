@@ -16,98 +16,97 @@
 
 package com.uber.hoodie.common.table.view;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.model.CompactionOperation;
-import com.uber.hoodie.common.model.FileSlice;
-import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
 import com.uber.hoodie.common.model.HoodieFileGroupId;
-import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
-import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.util.CompactionUtils;
-import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
-import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.Predicate;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Common abstract implementation for multiple TableFileSystemView Implementations. 2 possible
- * implementations are ReadOptimizedView and RealtimeView <p> Concrete implementations extending
- * this abstract class, should only implement getDataFilesInPartition which includes files to be
- * included in the view
- *
+ * TableFileSystemView Implementations based on in-memory storage.
  * @see TableFileSystemView
  * @since 0.3.0
  */
-public class HoodieTableFileSystemView implements TableFileSystemView,
-    TableFileSystemView.ReadOptimizedView,
-    TableFileSystemView.RealtimeView, Serializable {
+public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
   private static Logger log = LogManager.getLogger(HoodieTableFileSystemView.class);
 
-  protected HoodieTableMetaClient metaClient;
-  // This is the commits that will be visible for all views extending this view
-  protected HoodieTimeline visibleActiveTimeline;
-
   // mapping from partition paths to file groups contained within them
-  protected HashMap<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
-  // mapping from file id to the file group.
-  protected HashMap<HoodieFileGroupId, HoodieFileGroup> fileGroupMap;
+  protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
 
   /**
    * PartitionPath + File-Id to pending compaction instant time
    */
-  private final Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
+  protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
+
+  /**
+   * Flag to determine if closed
+   */
+  private boolean closed = false;
+
+  HoodieTableFileSystemView(boolean enableIncrementalTimelineSync) {
+    super(enableIncrementalTimelineSync);
+  }
 
   /**
    * Create a file system view, as of the given timeline
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
-      HoodieTimeline visibleActiveTimeline) {
-    this.metaClient = metaClient;
-    this.visibleActiveTimeline = visibleActiveTimeline;
-    this.fileGroupMap = new HashMap<>();
-    this.partitionToFileGroupsMap = new HashMap<>();
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    this(metaClient, visibleActiveTimeline, false);
+  }
 
-    // Build fileId to Pending Compaction Instants
-    List<HoodieInstant> pendingCompactionInstants =
-        metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
-    this.fgIdToPendingCompaction = ImmutableMap.copyOf(
-        CompactionUtils.getAllPendingCompactionOperations(metaClient).entrySet().stream()
-                .map(entry -> Pair.of(entry.getKey(), Pair.of(entry.getValue().getKey(),
-                        CompactionOperation.convertFromAvroRecordInstance(entry.getValue().getValue()))))
-                .collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+  /**
+   * Create a file system view, as of the given timeline
+   */
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      boolean enableIncrementalTimelineSync) {
+    super(enableIncrementalTimelineSync);
+    init(metaClient, visibleActiveTimeline);
+  }
+
+  @Override
+  public void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
+    this.partitionToFileGroupsMap = createPartitionToFileGroups();
+    super.init(metaClient, visibleActiveTimeline);
+  }
+
+  @Override
+  protected void resetViewState() {
+    this.fgIdToPendingCompaction = null;
+    this.partitionToFileGroupsMap = null;
+  }
+
+  protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
+    return new ConcurrentHashMap<>();
+  }
+
+  protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
+      Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
+    return fileIdToPendingCompaction;
   }
 
   /**
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
-  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient,
-      HoodieTimeline visibleActiveTimeline,
+  public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses) {
     this(metaClient, visibleActiveTimeline);
     addFilesToView(fileStatuses);
   }
-
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -124,293 +123,39 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
     out.defaultWriteObject();
   }
 
-  private String getPartitionPathFromFileStatus(FileStatus fileStatus) {
-    return FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), fileStatus.getPath().getParent());
+  @Override
+  protected boolean isPendingCompactionScheduledForFileId(HoodieFileGroupId fgId) {
+    return fgIdToPendingCompaction.containsKey(fgId);
   }
 
-  /**
-   * Adds the provided statuses into the file system view, and also caches it inside this object.
-   */
-  private List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
-    Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = convertFileStatusesToDataFiles(
-        statuses)
-        .collect(Collectors.groupingBy((dataFile) -> {
-          String partitionPathStr = getPartitionPathFromFileStatus(dataFile.getFileStatus());
-          return Pair.of(partitionPathStr, dataFile.getFileId());
-        }));
-    Map<Pair<String, String>, List<HoodieLogFile>> logFiles = convertFileStatusesToLogFiles(
-        statuses)
-        .collect(Collectors.groupingBy((logFile) -> {
-          String partitionPathStr = FSUtils.getRelativePartitionPath(
-              new Path(metaClient.getBasePath()),
-              logFile.getPath().getParent());
-          return Pair.of(partitionPathStr, logFile.getFileId());
-        }));
+  @Override
+  protected void resetPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    // Build fileId to Pending Compaction Instants
+    this.fgIdToPendingCompaction = createFileIdToPendingCompactionMap(
+        operations.map(entry -> {
+          return Pair.of(entry.getValue().getFileGroupId(), Pair.of(entry.getKey(),entry.getValue()));
+        }).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+  }
 
-    Set<Pair<String, String>> fileIdSet = new HashSet<>(dataFiles.keySet());
-    fileIdSet.addAll(logFiles.keySet());
-
-    List<HoodieFileGroup> fileGroups = new ArrayList<>();
-    fileIdSet.forEach(pair -> {
-      String fileId = pair.getValue();
-      HoodieFileGroup group = new HoodieFileGroup(pair.getKey(), fileId, visibleActiveTimeline);
-      if (dataFiles.containsKey(pair)) {
-        dataFiles.get(pair).forEach(group::addDataFile);
-      }
-      if (logFiles.containsKey(pair)) {
-        logFiles.get(pair).forEach(group::addLogFile);
-      }
-      HoodieFileGroupId fgId = group.getFileGroupId();
-      if (fgIdToPendingCompaction.containsKey(fgId)) {
-        // If there is no delta-commit after compaction request, this step would ensure a new file-slice appears
-        // so that any new ingestion uses the correct base-instant
-        group.addNewFileSliceAtInstant(fgIdToPendingCompaction.get(fgId).getKey());
-      }
-      fileGroups.add(group);
+  @Override
+  protected void addPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    operations.forEach(opInstantPair -> {
+      Preconditions.checkArgument(!fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
+          "Duplicate FileGroupId found in pending compaction operations. FgId :"
+              + opInstantPair.getValue().getFileGroupId());
+      fgIdToPendingCompaction.put(opInstantPair.getValue().getFileGroupId(),
+          Pair.of(opInstantPair.getKey(), opInstantPair.getValue()));
     });
+  }
 
-    // add to the cache.
-    fileGroups.forEach(group -> {
-      fileGroupMap.put(group.getFileGroupId(), group);
-      if (!partitionToFileGroupsMap.containsKey(group.getPartitionPath())) {
-        partitionToFileGroupsMap.put(group.getPartitionPath(), new ArrayList<>());
-      }
-      partitionToFileGroupsMap.get(group.getPartitionPath()).add(group);
+  @Override
+  protected void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations) {
+    operations.forEach(opInstantPair -> {
+      Preconditions.checkArgument(fgIdToPendingCompaction.containsKey(opInstantPair.getValue().getFileGroupId()),
+          "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+              + opInstantPair.getValue().getFileGroupId());
+      fgIdToPendingCompaction.remove(opInstantPair.getValue().getFileGroupId());
     });
-
-    return fileGroups;
-  }
-
-  private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> roFilePredicate = fileStatus ->
-        fileStatus.getPath().getName()
-            .contains(metaClient.getTableConfig().getROFileFormat().getFileExtension());
-    return Arrays.stream(statuses).filter(roFilePredicate).map(HoodieDataFile::new);
-  }
-
-  private Stream<HoodieLogFile> convertFileStatusesToLogFiles(FileStatus[] statuses) {
-    Predicate<FileStatus> rtFilePredicate = fileStatus ->
-        fileStatus.getPath().getName()
-            .contains(metaClient.getTableConfig().getRTFileFormat().getFileExtension());
-    return Arrays.stream(statuses).filter(rtFilePredicate).map(HoodieLogFile::new);
-  }
-
-  /**
-   * With async compaction, it is possible to see partial/complete data-files due to inflight-compactions, Ignore
-   * those data-files
-   *
-   * @param dataFile Data File
-   */
-  private boolean isDataFileDueToPendingCompaction(HoodieDataFile dataFile) {
-    final String partitionPath = getPartitionPathFromFileStatus(dataFile.getFileStatus());
-    HoodieFileGroupId fgId = new HoodieFileGroupId(partitionPath, dataFile.getFileId());
-    Pair<String, CompactionOperation> compactionWithInstantTime = fgIdToPendingCompaction.get(fgId);
-    if ((null != compactionWithInstantTime) && (null != compactionWithInstantTime.getLeft())
-        && dataFile.getCommitTime().equals(compactionWithInstantTime.getKey())) {
-      return true;
-    }
-    return false;
-  }
-
-  @Override
-  public Stream<HoodieDataFile> getLatestDataFiles(final String partitionPath) {
-    return getAllFileGroups(partitionPath)
-        .map(fileGroup -> {
-          return fileGroup.getAllDataFiles()
-              .filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
-        })
-        .filter(Optional::isPresent)
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<HoodieDataFile> getLatestDataFiles() {
-    return fileGroupMap.values().stream()
-        .map(fileGroup -> fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst())
-        .filter(Optional::isPresent)
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
-      String maxCommitTime) {
-    return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getAllDataFiles()
-            .filter(dataFile ->
-                HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
-                    maxCommitTime,
-                    HoodieTimeline.LESSER_OR_EQUAL))
-            .filter(df -> !isDataFileDueToPendingCompaction(df))
-            .findFirst())
-        .filter(Optional::isPresent)
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn) {
-    return fileGroupMap.values().stream()
-        .map(fileGroup -> fileGroup.getAllDataFiles()
-            .filter(dataFile -> commitsToReturn.contains(dataFile.getCommitTime())
-                && !isDataFileDueToPendingCompaction(dataFile))
-            .findFirst())
-        .filter(Optional::isPresent)
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<HoodieDataFile> getLatestDataFilesOn(String partitionPath, String instantTime) {
-    return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getAllDataFiles()
-            .filter(dataFile ->
-                HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
-                    instantTime,
-                    HoodieTimeline.EQUAL))
-            .filter(df -> !isDataFileDueToPendingCompaction(df))
-            .findFirst())
-        .filter(Optional::isPresent)
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<HoodieDataFile> getAllDataFiles(String partitionPath) {
-    return getAllFileGroups(partitionPath)
-        .map(HoodieFileGroup::getAllDataFiles)
-        .flatMap(dataFileList -> dataFileList)
-        .filter(df -> !isDataFileDueToPendingCompaction(df));
-  }
-
-  @Override
-  public Stream<FileSlice> getLatestFileSlices(String partitionPath) {
-    return getAllFileGroups(partitionPath)
-        .map(HoodieFileGroup::getLatestFileSlice)
-        .filter(Optional::isPresent)
-        .map(Optional::get)
-        .map(fs -> filterDataFileAfterPendingCompaction(fs));
-  }
-
-  @Override
-  public Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath) {
-    return getAllFileGroups(partitionPath)
-        .map(fileGroup -> {
-          FileSlice fileSlice = fileGroup.getLatestFileSlice().get();
-          // if the file-group is under compaction, pick the latest before compaction instant time.
-          if (isFileSliceAfterPendingCompaction(fileSlice)) {
-            String compactionInstantTime = fgIdToPendingCompaction.get(fileSlice.getFileGroupId()).getLeft();
-            return fileGroup.getLatestFileSliceBefore(compactionInstantTime);
-          }
-          return Optional.of(fileSlice);
-        })
-        .map(Optional::get);
-  }
-
-  /**
-   * Returns true if the file-group is under pending-compaction and the file-slice' baseInstant matches
-   * compaction Instant
-   * @param fileSlice File Slice
-   * @return
-   */
-  private boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
-    Pair<String, CompactionOperation> compactionWithInstantTime =
-        fgIdToPendingCompaction.get(fileSlice.getFileGroupId());
-    return (null != compactionWithInstantTime)
-            && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.getKey());
-  }
-
-  /**
-   * With async compaction, it is possible to see partial/complete data-files due to inflight-compactions,
-   * Ignore those data-files
-   * @param fileSlice File Slice
-   * @return
-   */
-  private FileSlice filterDataFileAfterPendingCompaction(FileSlice fileSlice) {
-    if (isFileSliceAfterPendingCompaction(fileSlice)) {
-      // Data file is filtered out of the file-slice as the corresponding compaction
-      // instant not completed yet.
-      FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(),
-          fileSlice.getBaseInstantTime(), fileSlice.getFileId());
-      fileSlice.getLogFiles().forEach(transformed::addLogFile);
-      return transformed;
-    }
-    return fileSlice;
-  }
-
-  @Override
-  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
-      String maxCommitTime) {
-    return getAllFileGroups(partitionPath)
-        .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
-        .filter(Optional::isPresent)
-        .map(Optional::get)
-        .map(fs -> filterDataFileAfterPendingCompaction(fs));
-  }
-
-  /**
-   * Helper to merge last 2 file-slices. These 2 file-slices do not have compaction done yet.
-   *
-   * @param lastSlice        Latest File slice for a file-group
-   * @param penultimateSlice Penultimate file slice for a file-group in commit timeline order
-   */
-  private static FileSlice mergeCompactionPendingFileSlices(FileSlice lastSlice, FileSlice penultimateSlice) {
-    FileSlice merged = new FileSlice(penultimateSlice.getPartitionPath(),
-        penultimateSlice.getBaseInstantTime(), penultimateSlice.getFileId());
-    if (penultimateSlice.getDataFile().isPresent()) {
-      merged.setDataFile(penultimateSlice.getDataFile().get());
-    }
-    // Add Log files from penultimate and last slices
-    penultimateSlice.getLogFiles().forEach(merged::addLogFile);
-    lastSlice.getLogFiles().forEach(merged::addLogFile);
-    return merged;
-  }
-
-  /**
-   * If the file-slice is because of pending compaction instant, this method merges the file-slice with the one before
-   * the compaction instant time
-   * @param fileGroup File Group for which the file slice belongs to
-   * @param fileSlice File Slice which needs to be merged
-   * @return
-   */
-  private FileSlice getMergedFileSlice(HoodieFileGroup fileGroup, FileSlice fileSlice) {
-    // if the file-group is under construction, pick the latest before compaction instant time.
-    HoodieFileGroupId fgId = fileSlice.getFileGroupId();
-    if (fgIdToPendingCompaction.containsKey(fgId)) {
-      String compactionInstantTime = fgIdToPendingCompaction.get(fgId).getKey();
-      if (fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
-        Optional<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
-        if (prevFileSlice.isPresent()) {
-          return mergeCompactionPendingFileSlices(fileSlice, prevFileSlice.get());
-        }
-      }
-    }
-    return fileSlice;
-  }
-
-  @Override
-  public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
-    return getAllFileGroups(partitionPath)
-        .map(fileGroup -> {
-          Optional<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
-          // if the file-group is under construction, pick the latest before compaction instant time.
-          if (fileSlice.isPresent()) {
-            fileSlice = Optional.of(getMergedFileSlice(fileGroup, fileSlice.get()));
-          }
-          return fileSlice;
-        })
-        .filter(Optional::isPresent)
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn) {
-    return fileGroupMap.values().stream()
-        .map(fileGroup -> fileGroup.getLatestFileSliceInRange(commitsToReturn))
-        .map(Optional::get);
-  }
-
-  @Override
-  public Stream<FileSlice> getAllFileSlices(String partitionPath) {
-    return getAllFileGroups(partitionPath)
-        .map(HoodieFileGroup::getAllFileSlices)
-        .flatMap(sliceList -> sliceList);
   }
 
   /**
@@ -418,30 +163,55 @@ public class HoodieTableFileSystemView implements TableFileSystemView,
    * partition level go through this.
    */
   @Override
-  public Stream<HoodieFileGroup> getAllFileGroups(String partitionPathStr) {
-    // return any previously fetched groups.
-    if (partitionToFileGroupsMap.containsKey(partitionPathStr)) {
-      return partitionToFileGroupsMap.get(partitionPathStr).stream();
-    }
-
-    try {
-      // Create the path if it does not exist already
-      Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
-      FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
-      FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
-      List<HoodieFileGroup> fileGroups = addFilesToView(statuses);
-      return fileGroups.stream();
-    } catch (IOException e) {
-      throw new HoodieIOException(
-          "Failed to list data files in partition " + partitionPathStr, e);
-    }
-  }
-
-  public Map<HoodieFileGroupId, Pair<String, CompactionOperation>> getFgIdToPendingCompaction() {
-    return fgIdToPendingCompaction;
+  Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
+    final List<HoodieFileGroup> fileGroups = new ArrayList<>();
+    fileGroups.addAll(partitionToFileGroupsMap.get(partition));
+    return fileGroups.stream();
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {
-    return fileGroupMap.values().stream();
+    return fetchAllStoredFileGroups();
+  }
+
+  @Override
+  Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
+    return fgIdToPendingCompaction.values().stream();
+
+  }
+
+  @Override
+  protected Option<Pair<String, CompactionOperation>> getPendingCompactionOperationWithInstant(HoodieFileGroupId fgId) {
+    return Option.ofNullable(fgIdToPendingCompaction.get(fgId));
+  }
+
+  @Override
+  protected boolean isPartitionAvailableInStore(String partitionPath) {
+    return partitionToFileGroupsMap.containsKey(partitionPath);
+  }
+
+  @Override
+  protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
+    log.info("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
+    partitionToFileGroupsMap.put(partitionPath, newList);
+  }
+
+
+  @Override
+  public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
+    return partitionToFileGroupsMap.values().stream().flatMap(fg -> {
+      return fg.stream();
+    });
+  }
+
+  public void close() {
+    closed = true;
+    super.reset();
+    partitionToFileGroupsMap = null;
+    fgIdToPendingCompaction = null;
+  }
+
+  public boolean isClosed() {
+    return closed;
   }
 }

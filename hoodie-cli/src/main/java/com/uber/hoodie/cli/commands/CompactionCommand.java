@@ -163,7 +163,7 @@ public class CompactionCommand implements CommandMarker {
             op.getBaseInstantTime(),
             op.getDataFilePath(),
             op.getDeltaFilePaths().size(),
-            op.getMetrics().toString()
+            op.getMetrics() == null ? "" : op.getMetrics().toString()
         });
       }
     }

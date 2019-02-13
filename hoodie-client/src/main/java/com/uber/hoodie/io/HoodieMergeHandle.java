@@ -24,7 +24,6 @@ import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
-import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
@@ -56,7 +55,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   private Map<String, HoodieRecord<T>> keyToNewRecords;
   private Set<String> writtenRecordKeys;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
-  private TableFileSystemView.ReadOptimizedView fileSystemView;
   private Path newFilePath;
   private Path oldFilePath;
   private Path tempPath = null;
@@ -69,20 +67,17 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Iterator<HoodieRecord<T>> recordItr, String fileId) {
     super(config, commitTime, hoodieTable);
-    this.fileSystemView = hoodieTable.getROFileSystemView();
     String partitionPath = init(fileId, recordItr);
     init(fileId, partitionPath,
-        fileSystemView.getLatestDataFiles(partitionPath)
-            .filter(dataFile -> dataFile.getFileId().equals(fileId)).findFirst());
+        hoodieTable.getROFileSystemView().getLatestDataFile(partitionPath, fileId).get());
   }
 
   /**
    * Called by compactor code path
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, Optional<HoodieDataFile> dataFileToBeMerged) {
+      Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieDataFile dataFileToBeMerged) {
     super(config, commitTime, hoodieTable);
-    this.fileSystemView = hoodieTable.getROFileSystemView();
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, keyToNewRecords.get(keyToNewRecords.keySet().stream().findFirst().get())
@@ -92,12 +87,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus
    */
-  private void init(String fileId, String partitionPath, Optional<HoodieDataFile> dataFileToBeMerged) {
+  private void init(String fileId, String partitionPath, HoodieDataFile dataFileToBeMerged) {
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
-      //TODO: dataFileToBeMerged must be optional. Will be fixed by Nishith's changes to support insert to log-files
-      String latestValidFilePath = dataFileToBeMerged.get().getFileName();
+      String latestValidFilePath = dataFileToBeMerged.getFileName();
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
@@ -276,7 +270,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
         storageWriter.close();
       }
 
-      writeStatus.getStat().setTotalWriteBytes(FSUtils.getFileSize(fs, getStorageWriterPath()));
+      long fileSizeInBytes = FSUtils.getFileSize(fs, getStorageWriterPath());
+      writeStatus.getStat().setTotalWriteBytes(fileSizeInBytes);
+      writeStatus.getStat().setFileSizeInBytes(fileSizeInBytes);
       writeStatus.getStat().setNumWrites(recordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);

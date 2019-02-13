@@ -61,9 +61,9 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         // This is okay because only tooling will load the archived commit timeline today
         readCommits.put(key.toString(), Arrays.copyOf(val.getBytes(), val.getLength()));
       }
-      this.instants = readCommits.keySet().stream().map(
+      this.setInstants(readCommits.keySet().stream().map(
           s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)).collect(
-          Collectors.toList());
+          Collectors.toList()));
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + archiveLogPath, e);
