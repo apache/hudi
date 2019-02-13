@@ -27,6 +27,7 @@ import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
@@ -398,13 +399,13 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
    **/
 
   private void validateDeltaCommit(String latestDeltaCommit,
-      final Map<String, Pair<String, HoodieCompactionOperation>> fileIdToCompactionOperation,
+      final Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToCompactionOperation,
       HoodieWriteConfig cfg) throws IOException {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table, cfg);
     fileSliceList.forEach(fileSlice -> {
-      Pair<String, HoodieCompactionOperation> opPair = fileIdToCompactionOperation.get(fileSlice.getFileId());
+      Pair<String, HoodieCompactionOperation> opPair = fgIdToCompactionOperation.get(fileSlice.getFileGroupId());
       if (opPair != null) {
         System.out.println("FileSlice :" + fileSlice);
         assertTrue("Expect baseInstant to match compaction Instant",
@@ -430,7 +431,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
         pendingCompactions.stream().map(pc -> pc.getKey().getTimestamp()).sorted().collect(Collectors.toList());
     assertEquals(expPendingCompactionInstants, gotPendingCompactionInstants);
 
-    Map<String, Pair<String, HoodieCompactionOperation>> fileIdToCompactionOperation =
+    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToCompactionOperation =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 
     if (insertFirst) {
@@ -451,7 +452,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       List<HoodieDataFile> dataFilesToRead = getCurrentLatestDataFiles(hoodieTable, cfg);
       assertTrue("RealtimeTableView should list the parquet files we wrote in the delta commit",
           dataFilesToRead.stream().findAny().isPresent());
-      validateDeltaCommit(firstInstant, fileIdToCompactionOperation, cfg);
+      validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
 
     int numRecords = records.size();
@@ -459,7 +460,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       records = dataGen.generateUpdates(instantTime, numRecords);
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       createNextDeltaCommit(instantTime, records, client, metaClient, cfg, false);
-      validateDeltaCommit(instantTime, fileIdToCompactionOperation, cfg);
+      validateDeltaCommit(instantTime, fgIdToCompactionOperation, cfg);
     }
     return records;
   }

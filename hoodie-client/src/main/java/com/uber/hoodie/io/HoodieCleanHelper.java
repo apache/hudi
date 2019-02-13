@@ -21,6 +21,7 @@ import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -52,7 +53,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
   private final TableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
-  private final Map<String, CompactionOperation> fileIdToPendingCompactionOperations;
+  private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
   private HoodieTable<T> hoodieTable;
   private HoodieWriteConfig config;
 
@@ -61,8 +62,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
     this.fileSystemView = hoodieTable.getCompletedFileSystemView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
     this.config = config;
-    this.fileIdToPendingCompactionOperations =
-        ((HoodieTableFileSystemView)hoodieTable.getRTFileSystemView()).getFileIdToPendingCompaction().entrySet()
+    this.fgIdToPendingCompactionOperations =
+        ((HoodieTableFileSystemView)hoodieTable.getRTFileSystemView()).getFgIdToPendingCompaction().entrySet()
             .stream().map(entry -> Pair.of(entry.getKey(), entry.getValue().getValue()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
@@ -249,7 +250,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
    * @return true if file slice needs to be preserved, false otherwise.
    */
   private boolean isFileSliceNeededForPendingCompaction(FileSlice fileSlice) {
-    CompactionOperation op = fileIdToPendingCompactionOperations.get(fileSlice.getFileId());
+    CompactionOperation op = fgIdToPendingCompactionOperations.get(fileSlice.getFileGroupId());
     if (null != op) {
       // If file slice's instant time is newer or same as that of operation, do not clean
       return HoodieTimeline.compareTimestamps(fileSlice.getBaseInstantTime(), op.getBaseInstantTime(),

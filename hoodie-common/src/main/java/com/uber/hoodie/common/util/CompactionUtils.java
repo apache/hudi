@@ -20,6 +20,7 @@ import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.FileSlice;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -134,36 +135,38 @@ public class CompactionUtils {
   }
 
   /**
-   * Get all file-ids with pending Compaction operations and their target compaction instant time
+   * Get all PartitionPath + file-ids with pending Compaction operations and their target compaction instant time
    *
    * @param metaClient Hoodie Table Meta Client
    */
-  public static Map<String, Pair<String, HoodieCompactionOperation>> getAllPendingCompactionOperations(
+  public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> getAllPendingCompactionOperations(
       HoodieTableMetaClient metaClient) {
     List<Pair<HoodieInstant, HoodieCompactionPlan>> pendingCompactionPlanWithInstants =
         getAllPendingCompactionPlans(metaClient);
 
-    Map<String, Pair<String, HoodieCompactionOperation>> fileIdToPendingCompactionWithInstantMap = new HashMap<>();
+    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToPendingCompactionWithInstantMap =
+        new HashMap<>();
     pendingCompactionPlanWithInstants.stream().flatMap(instantPlanPair -> {
       HoodieInstant instant = instantPlanPair.getKey();
       HoodieCompactionPlan compactionPlan = instantPlanPair.getValue();
       List<HoodieCompactionOperation> ops = compactionPlan.getOperations();
       if (null != ops) {
         return ops.stream().map(op -> {
-          return Pair.of(op.getFileId(), Pair.of(instant.getTimestamp(), op));
+          return Pair.of(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
+              Pair.of(instant.getTimestamp(), op));
         });
       } else {
         return Stream.empty();
       }
     }).forEach(pair -> {
       // Defensive check to ensure a single-fileId does not have more than one pending compaction
-      if (fileIdToPendingCompactionWithInstantMap.containsKey(pair.getKey())) {
+      if (fgIdToPendingCompactionWithInstantMap.containsKey(pair.getKey())) {
         String msg = "Hoodie File Id (" + pair.getKey() + ") has more thant 1 pending compactions. Instants: "
-            + pair.getValue() + ", " + fileIdToPendingCompactionWithInstantMap.get(pair.getKey());
+            + pair.getValue() + ", " + fgIdToPendingCompactionWithInstantMap.get(pair.getKey());
         throw new IllegalStateException(msg);
       }
-      fileIdToPendingCompactionWithInstantMap.put(pair.getKey(), pair.getValue());
+      fgIdToPendingCompactionWithInstantMap.put(pair.getKey(), pair.getValue());
     });
-    return fileIdToPendingCompactionWithInstantMap;
+    return fgIdToPendingCompactionWithInstantMap;
   }
 }

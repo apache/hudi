@@ -34,14 +34,9 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Partition containing the file group.
+   * file group id
    */
-  private final String partitionPath;
-
-  /**
-   * uniquely identifies the file group
-   */
-  private final String id;
+  private final HoodieFileGroupId fileGroupId;
 
   /**
    * Slices of files in this group, sorted with greater commit first.
@@ -59,8 +54,11 @@ public class HoodieFileGroup implements Serializable {
   private final Optional<HoodieInstant> lastInstant;
 
   public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
-    this.partitionPath = partitionPath;
-    this.id = id;
+    this(new HoodieFileGroupId(partitionPath, id), timeline);
+  }
+
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline) {
+    this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
     this.lastInstant = timeline.lastInstant();
@@ -72,7 +70,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public void addNewFileSliceAtInstant(String baseInstantTime) {
     if (!fileSlices.containsKey(baseInstantTime)) {
-      fileSlices.put(baseInstantTime, new FileSlice(baseInstantTime, id));
+      fileSlices.put(baseInstantTime, new FileSlice(fileGroupId, baseInstantTime));
     }
   }
 
@@ -81,7 +79,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public void addDataFile(HoodieDataFile dataFile) {
     if (!fileSlices.containsKey(dataFile.getCommitTime())) {
-      fileSlices.put(dataFile.getCommitTime(), new FileSlice(dataFile.getCommitTime(), id));
+      fileSlices.put(dataFile.getCommitTime(), new FileSlice(fileGroupId, dataFile.getCommitTime()));
     }
     fileSlices.get(dataFile.getCommitTime()).setDataFile(dataFile);
   }
@@ -91,17 +89,17 @@ public class HoodieFileGroup implements Serializable {
    */
   public void addLogFile(HoodieLogFile logFile) {
     if (!fileSlices.containsKey(logFile.getBaseCommitTime())) {
-      fileSlices.put(logFile.getBaseCommitTime(), new FileSlice(logFile.getBaseCommitTime(), id));
+      fileSlices.put(logFile.getBaseCommitTime(), new FileSlice(fileGroupId, logFile.getBaseCommitTime()));
     }
     fileSlices.get(logFile.getBaseCommitTime()).addLogFile(logFile);
   }
 
-  public String getId() {
-    return id;
+  public String getPartitionPath() {
+    return fileGroupId.getPartitionPath();
   }
 
-  public String getPartitionPath() {
-    return partitionPath;
+  public HoodieFileGroupId getFileGroupId() {
+    return fileGroupId;
   }
 
   /**
@@ -197,7 +195,7 @@ public class HoodieFileGroup implements Serializable {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
-    sb.append("id=").append(id);
+    sb.append("id=").append(fileGroupId);
     sb.append(", fileSlices='").append(fileSlices).append('\'');
     sb.append('}');
     return sb.toString();

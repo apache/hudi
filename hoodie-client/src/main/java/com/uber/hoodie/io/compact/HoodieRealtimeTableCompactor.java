@@ -26,6 +26,7 @@ import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
@@ -160,7 +161,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
   @Override
   public HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc,
       HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime,
-      Set<String> fileIdsWithPendingCompactions) throws IOException {
+      Set<HoodieFileGroupId> fgIdsInPendingCompactions) throws IOException {
 
     totalLogFiles = new LongAccumulator();
     totalFileSlices = new LongAccumulator();
@@ -190,7 +191,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         jsc.parallelize(partitionPaths, partitionPaths.size())
             .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
                 .getLatestFileSlices(partitionPath)
-                .filter(slice -> !fileIdsWithPendingCompactions.contains(slice.getFileId()))
+                .filter(slice ->
+                    !fgIdsInPendingCompactions.contains(slice.getFileGroupId()))
                 .map(
                     s -> {
                       List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile
@@ -215,11 +217,11 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // compactions only
     HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
-    Preconditions.checkArgument(compactionPlan.getOperations().stream()
-            .filter(op -> fileIdsWithPendingCompactions.contains(op.getFileId())).count() == 0,
+    Preconditions.checkArgument(compactionPlan.getOperations().stream().noneMatch(
+        op -> fgIdsInPendingCompactions.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
         "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
             + "Please fix your strategy implementation."
-            + "FileIdsWithPendingCompactions :" + fileIdsWithPendingCompactions
+            + "FileIdsWithPendingCompactions :" + fgIdsInPendingCompactions
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
       log.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
