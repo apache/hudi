@@ -232,7 +232,9 @@ public class CommitsCommand implements CommandMarker {
       for (HoodieWriteStat stat : stats) {
         rows.add(new Comparable[]{path, stat.getFileId(), stat.getPrevCommit(), stat.getNumUpdateWrites(),
             stat.getNumWrites(), stat.getTotalWriteBytes(),
-            stat.getTotalWriteErrors()});
+            stat.getTotalWriteErrors(),
+            stat.getFileSizeInBytes()
+        });
       }
     }
 
@@ -243,7 +245,8 @@ public class CommitsCommand implements CommandMarker {
         .addTableHeaderField("Total Records Updated")
         .addTableHeaderField("Total Records Written")
         .addTableHeaderField("Total Bytes Written")
-        .addTableHeaderField("Total Errors");
+        .addTableHeaderField("Total Errors")
+        .addTableHeaderField("File Size");
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }

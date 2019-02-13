@@ -69,6 +69,11 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-timeline-service</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>

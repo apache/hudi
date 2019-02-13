@@ -124,6 +124,11 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
@@ -197,8 +202,12 @@
                    <shadedPattern>com.uber.hoodie.parquet.schema</shadedPattern>
                  </relocation>
                  <relocation>
-                   <pattern>org.apache.commons</pattern>
-                   <shadedPattern>com.uber.hoodie.org.apache.commons</shadedPattern>
+                   <pattern>org.apache.commons.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.apache.commons.codec.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.codec.</shadedPattern>
                  </relocation>
                  <relocation>
                    <pattern>com.esotericsoftware.kryo.</pattern>
@@ -226,6 +235,7 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
               <filters>

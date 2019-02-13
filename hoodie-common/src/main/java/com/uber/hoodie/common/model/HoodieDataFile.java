@@ -18,53 +18,82 @@ package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.Serializable;
-import java.util.Comparator;
+import java.util.Objects;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
 public class HoodieDataFile implements Serializable {
 
-  private FileStatus fileStatus;
+  private transient FileStatus fileStatus;
+  private final String fullPath;
+  private long fileLen;
 
   public HoodieDataFile(FileStatus fileStatus) {
     this.fileStatus = fileStatus;
+    this.fullPath = fileStatus.getPath().toString();
+    this.fileLen = fileStatus.getLen();
+  }
+
+  public HoodieDataFile(String filePath) {
+    this.fileStatus = null;
+    this.fullPath = filePath;
+    this.fileLen = -1;
   }
 
   public String getFileId() {
-    return FSUtils.getFileId(fileStatus.getPath().getName());
+    return FSUtils.getFileId(getFileName());
   }
 
   public String getCommitTime() {
-    return FSUtils.getCommitTime(fileStatus.getPath().getName());
+    return FSUtils.getCommitTime(getFileName());
   }
 
   public String getPath() {
-    return fileStatus.getPath().toString();
+    return fullPath;
   }
 
   public String getFileName() {
-    return fileStatus.getPath().getName();
+    return new Path(fullPath).getName();
   }
 
   public FileStatus getFileStatus() {
     return fileStatus;
   }
 
-  public static Comparator<HoodieDataFile> getCommitTimeComparator() {
-    return (o1, o2) -> {
-      // reverse the order
-      return o2.getCommitTime().compareTo(o1.getCommitTime());
-    };
+  public long getFileSize() {
+    return fileLen;
   }
 
-  public long getFileSize() {
-    return fileStatus.getLen();
+  public void setFileLen(long fileLen) {
+    this.fileLen = fileLen;
+  }
+
+  public long getFileLen() {
+    return fileLen;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HoodieDataFile dataFile = (HoodieDataFile) o;
+    return Objects.equals(fullPath, dataFile.fullPath);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(fullPath);
   }
 
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder("HoodieDataFile {");
-    sb.append("fileStatus=").append(fileStatus);
-    sb.append('}');
-    return sb.toString();
+    return "HoodieDataFile{"
+        + "fullPath=" + fullPath
+        + ", fileLen=" + fileLen
+        + '}';
   }
 }

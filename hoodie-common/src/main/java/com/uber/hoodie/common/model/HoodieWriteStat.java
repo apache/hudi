@@ -133,6 +133,11 @@ public class HoodieWriteStat implements Serializable {
    */
   private long totalRollbackBlocks;
 
+  /**
+   * File Size as of close
+   */
+  private long fileSizeInBytes;
+
   @Nullable
   @JsonIgnore
   private RuntimeStats runtimeStats;
@@ -283,6 +288,14 @@ public class HoodieWriteStat implements Serializable {
 
   public void setTotalRollbackBlocks(Long totalRollbackBlocks) {
     this.totalRollbackBlocks = totalRollbackBlocks;
+  }
+
+  public long getFileSizeInBytes() {
+    return fileSizeInBytes;
+  }
+
+  public void setFileSizeInBytes(long fileSizeInBytes) {
+    this.fileSizeInBytes = fileSizeInBytes;
   }
 
   @Nullable

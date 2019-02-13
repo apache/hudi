@@ -84,10 +84,8 @@ public class FileSystemViewCommand implements CommandMarker {
       row[idx++] = fs.getDataFile().isPresent() ? fs.getDataFile().get().getFileSize() : -1;
       if (!readOptimizedOnly) {
         row[idx++] = fs.getLogFiles().count();
-        row[idx++] = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
-            .mapToLong(lf -> lf.getFileSize().get()).sum();
-        row[idx++] = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
-            .collect(Collectors.toList()).toString();
+        row[idx++] = fs.getLogFiles().mapToLong(lf -> lf.getFileSize()).sum();
+        row[idx++] = fs.getLogFiles().collect(Collectors.toList()).toString();
       }
       rows.add(row);
     }));
@@ -162,16 +160,15 @@ public class FileSystemViewCommand implements CommandMarker {
 
       if (!readOptimizedOnly) {
         row[idx++] = fs.getLogFiles().count();
-        row[idx++] = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
-            .mapToLong(lf -> lf.getFileSize().get()).sum();
-        long logFilesScheduledForCompactionTotalSize = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
+        row[idx++] = fs.getLogFiles().mapToLong(lf -> lf.getFileSize()).sum();
+        long logFilesScheduledForCompactionTotalSize = fs.getLogFiles()
             .filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
-            .mapToLong(lf -> lf.getFileSize().get()).sum();
+            .mapToLong(lf -> lf.getFileSize()).sum();
         row[idx++] = logFilesScheduledForCompactionTotalSize;
 
-        long logFilesUnscheduledTotalSize = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
+        long logFilesUnscheduledTotalSize = fs.getLogFiles()
             .filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
-            .mapToLong(lf -> lf.getFileSize().get()).sum();
+            .mapToLong(lf -> lf.getFileSize()).sum();
         row[idx++] = logFilesUnscheduledTotalSize;
 
         double logSelectedForCompactionToBaseRatio =
@@ -181,10 +178,10 @@ public class FileSystemViewCommand implements CommandMarker {
             dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
         row[idx++] = logUnscheduledToBaseRatio;
 
-        row[idx++] = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
+        row[idx++] = fs.getLogFiles()
             .filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
             .collect(Collectors.toList()).toString();
-        row[idx++] = fs.getLogFiles().filter(lf -> lf.getFileSize().isPresent())
+        row[idx++] = fs.getLogFiles()
             .filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
             .collect(Collectors.toList()).toString();
       }

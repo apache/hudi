@@ -60,7 +60,7 @@ public class TestMultiFS implements Serializable {
   private static JavaSparkContext jsc;
   private static SQLContext sqlContext;
   private String tablePath = "file:///tmp/hoodie/sample-table";
-  private String tableName = "hoodie_rt";
+  protected String tableName = "hoodie_rt";
   private String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
   @BeforeClass
@@ -96,6 +96,13 @@ public class TestMultiFS implements Serializable {
     FileSystem.closeAll();
   }
 
+  protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .forTable(tableName).withIndexConfig(
+        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+  }
+
   @Test
   public void readLocalWriteHDFS() throws Exception {
 
@@ -108,10 +115,7 @@ public class TestMultiFS implements Serializable {
             HoodieAvroPayload.class.getName());
 
     //Create write client to write some records in
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(dfsBasePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable(tableName).withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+    HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
     HoodieWriteClient hdfsWriteClient = new HoodieWriteClient(jsc, cfg);
 
     // Write generated data to hdfs (only inserts)
@@ -132,10 +136,7 @@ public class TestMultiFS implements Serializable {
     HoodieTableMetaClient
         .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
             HoodieAvroPayload.class.getName());
-    HoodieWriteConfig localConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable(tableName).withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+    HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
     HoodieWriteClient localWriteClient = new HoodieWriteClient(jsc, localConfig);
 
     String writeCommitTime = localWriteClient.startCommit();
@@ -151,5 +152,8 @@ public class TestMultiFS implements Serializable {
     timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
     Dataset<Row> localReadRecords = HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime);
     assertEquals("Should contain 100 records", localReadRecords.count(), localRecords.size());
+
+    hdfsWriteClient.close();
+    localWriteClient.close();
   }
 }

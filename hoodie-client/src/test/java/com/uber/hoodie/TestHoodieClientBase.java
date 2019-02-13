@@ -75,6 +75,28 @@ public class TestHoodieClientBase implements Serializable {
   protected TemporaryFolder folder = null;
   protected transient HoodieTestDataGenerator dataGen = null;
 
+  private HoodieWriteClient writeClient;
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws Exception {
+    closeClient();
+    writeClient = new HoodieWriteClient(jsc, cfg);
+    return writeClient;
+  }
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit)
+      throws Exception {
+    closeClient();
+    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit);
+    return writeClient;
+  }
+
+  private void closeClient() {
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
+    }
+  }
+
   @Before
   public void init() throws IOException {
     // Initialize a local spark env
@@ -105,6 +127,8 @@ public class TestHoodieClientBase implements Serializable {
    * Properly release resources at end of each test
    */
   public void tearDown() throws IOException {
+    closeClient();
+
     if (null != sqlContext) {
       logger.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();

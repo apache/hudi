@@ -24,7 +24,7 @@ public class TestHoodieDataFile extends HoodieDataFile {
   private final long size;
 
   public TestHoodieDataFile(long size) {
-    super(null);
+    super("/tmp/XYXYXYXYXYYX_11_20180918020003.parquet");
     this.size = size;
   }
 

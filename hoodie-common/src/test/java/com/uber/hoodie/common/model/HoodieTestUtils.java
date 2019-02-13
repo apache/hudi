@@ -89,9 +89,14 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(String basePath)
       throws IOException {
-    return initTableType(getDefaultHadoopConf(), basePath, HoodieTableType.COPY_ON_WRITE);
+    return init(basePath, HoodieTableType.COPY_ON_WRITE);
   }
-  
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType)
+      throws IOException {
+    return initTableType(getDefaultHadoopConf(), basePath, tableType);
+  }
+
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath)
       throws IOException {
     return initTableType(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);

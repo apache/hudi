@@ -20,7 +20,6 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
-import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieTimer;
@@ -48,7 +47,6 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   protected final HoodieTable<T> hoodieTable;
   protected final Schema originalSchema;
   protected final Schema writerSchema;
-  protected HoodieTimeline hoodieTimeline;
   protected HoodieTimer timer;
   protected final WriteStatus writeStatus;
 
@@ -57,7 +55,6 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     this.config = config;
     this.fs = hoodieTable.getMetaClient().getFs();
     this.hoodieTable = hoodieTable;
-    this.hoodieTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.originalSchema = new Schema.Parser().parse(config.getSchema());
     this.writerSchema = createHoodieWriteSchema(originalSchema);
     this.timer = new HoodieTimer().startTimer();
