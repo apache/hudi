@@ -204,7 +204,7 @@
                   <exclude>org.apache.derby:derby</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${project.artifactId}-${project.version}${hiveJarSuffix}</finalName>
+              <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>
         </executions>
