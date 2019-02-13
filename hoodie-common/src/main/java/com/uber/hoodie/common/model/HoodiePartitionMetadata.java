@@ -120,14 +120,19 @@ public class HoodiePartitionMetadata {
   /**
    * Read out the metadata for this partition
    */
-  public void readFromFS() {
+  public void readFromFS() throws IOException {
+    FSDataInputStream is = null;
     try {
       Path metaFile = new Path(partitionPath, HOODIE_PARTITION_METAFILE);
-      FSDataInputStream is = fs.open(metaFile);
+      is = fs.open(metaFile);
       props.load(is);
     } catch (IOException ioe) {
       throw new HoodieException("Error reading Hoodie partition metadata for " + partitionPath,
           ioe);
+    } finally {
+      if (is != null) {
+        is.close();
+      }
     }
   }
 
