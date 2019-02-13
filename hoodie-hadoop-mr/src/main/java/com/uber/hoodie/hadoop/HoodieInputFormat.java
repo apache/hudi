@@ -206,7 +206,8 @@ public class HoodieInputFormat extends MapredParquetInputFormat implements Confi
    * Read the table metadata from a data path. This assumes certain hierarchy of files which should
    * be changed once a better way is figured out to pass in the hoodie meta directory
    */
-  protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath) {
+  protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath)
+      throws IOException {
     int levels = HoodieHiveUtil.DEFAULT_LEVELS_TO_BASEPATH;
     if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
