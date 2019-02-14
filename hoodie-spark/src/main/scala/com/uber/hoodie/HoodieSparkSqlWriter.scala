@@ -52,11 +52,10 @@ private[hoodie] object HoodieSparkSqlWriter {
     if (path.isEmpty || tblName.isEmpty) {
       throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}', 'path' must be set.")
     }
-    val serializer = sparkContext.getConf.get("spark.serializer")
-    if (!serializer.equals("org.apache.spark.serializer.KryoSerializer")) {
-      throw new HoodieException(s"${serializer} serialization is not supported by hoodie. Please use kryo.")
+    sparkContext.getConf.getOption("spark.serializer") match {
+      case Some(ser) if ser.equals("org.apache.spark.serializer.KryoSerializer") =>
+      case _ => throw new HoodieException("hoodie only support org.apache.spark.serializer.KryoSerializer as spark.serializer")
     }
-
     val storageType = parameters(STORAGE_TYPE_OPT_KEY)
     val operation =
     // It does not make sense to allow upsert() operation if INSERT_DROP_DUPS_OPT_KEY is true
