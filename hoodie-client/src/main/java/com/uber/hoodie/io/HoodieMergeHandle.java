@@ -202,9 +202,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
    */
   public void write(GenericRecord oldRecord) {
     String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
     boolean copyOldRecord = true;
     if (keyToNewRecords.containsKey(key)) {
+      // If we have duplicate records that we are updating, then the hoodie record will be deflated after
+      // writing the first record. So make a copy of the record to be merged
+      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Optional<IndexedRecord> combinedAvroRecord = hoodieRecord.getData()
             .combineAndGetUpdateValue(oldRecord, schema);
