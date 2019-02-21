@@ -213,7 +213,7 @@
                   <include>commons-logging:commons-logging</include>
                 </includes>
               </artifactSet>
-              <finalName>${project.artifactId}-${project.version}${hiveJarSuffix}</finalName>
+              <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>
         </executions>
