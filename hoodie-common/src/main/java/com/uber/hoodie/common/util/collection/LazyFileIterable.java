@@ -81,8 +81,9 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     public R next() {
       Map.Entry<T, DiskBasedMap.ValueMetadata> entry = this.metadataIterator.next();
       try {
-        return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
-            entry.getValue().getOffsetOfValue(), entry.getValue().getSizeOfValue()));
+        return SerializationUtils.<R>deserialize(SpillableMapUtils
+            .readBytesFromDisk(readOnlyFileHandle, entry.getValue().getOffsetOfValue(),
+                entry.getValue().getSizeOfValue()));
       } catch (IOException e) {
         throw new HoodieIOException("Unable to read hoodie record from value spilled to disk", e);
       }
