@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie-hadoop-docker</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.5-SNAPSHOT</version>
+    <version>0.4.5</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <packaging>pom</packaging>
@@ -52,14 +52,10 @@
             <phase>package</phase>
             <configuration>
               <tasks>
-                <copy file="${project.basedir}/../../../../packaging/hoodie-hadoop-mr-bundle/target/hoodie-hadoop-mr-bundle-${project.version}.jar"
-                      tofile="target/hoodie-hadoop-mr-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-${project.version}.jar"
-                      tofile="target/hoodie-hive-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-${project.version}.jar"
-                      tofile="target/hoodie-spark-bundle.jar" />
-                <copy file="${project.basedir}/../../../../hoodie-utilities/target/hoodie-utilities-${project.version}.jar"
-                      tofile="target/hoodie-utilities.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hoodie-hadoop-mr-bundle/target/hoodie-hadoop-mr-bundle-${project.version}.jar" tofile="target/hoodie-hadoop-mr-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-${project.version}.jar" tofile="target/hoodie-hive-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
+                <copy file="${project.basedir}/../../../../hoodie-utilities/target/hoodie-utilities-${project.version}.jar" tofile="target/hoodie-utilities.jar" />
               </tasks>
             </configuration>
             <goals>
