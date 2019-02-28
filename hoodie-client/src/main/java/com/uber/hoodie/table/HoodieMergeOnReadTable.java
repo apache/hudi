@@ -174,7 +174,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits, boolean deleteInstants)
+  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, String commit, boolean deleteInstants)
       throws IOException {
 
     // At the moment, MOR table type does not support bulk nested rollbacks. Nested rollbacks is an experimental
@@ -182,26 +182,23 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     // (commitToRollback).
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
-    if (commits.size() > 1) {
-      throw new UnsupportedOperationException("Bulk Nested Rollbacks are not supported");
-    }
     // Atomically un-publish all non-inflight commits
-    Map<String, HoodieInstant> commitsAndCompactions = this.getActiveTimeline()
+    Optional<HoodieInstant> commitOrCompactionOption = this.getActiveTimeline()
         .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
             HoodieActiveTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION)).getInstants()
-        .filter(i -> commits.contains(i.getTimestamp()))
-        .collect(Collectors.toMap(HoodieInstant::getTimestamp, i -> i));
-
+        .filter(i -> commit.equals(i.getTimestamp()))
+        .findFirst();
+    HoodieInstant instantToRollback = commitOrCompactionOption.get();
     // Atomically un-publish all non-inflight commits
-    commitsAndCompactions.entrySet().stream().map(Map.Entry::getValue)
-        .filter(i -> !i.isInflight()).forEach(this.getActiveTimeline()::revertToInflight);
-    logger.info("Unpublished " + commits);
+    if (!instantToRollback.isInflight()) {
+      this.getActiveTimeline().revertToInflight(instantToRollback);
+    }
+    logger.info("Unpublished " + commit);
     Long startTime = System.currentTimeMillis();
     List<HoodieRollbackStat> allRollbackStats = jsc.parallelize(FSUtils
         .getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
             config.shouldAssumeDatePartitioning()))
-        .map((Function<String, List<HoodieRollbackStat>>) partitionPath -> commits.stream().map(commit -> {
-          HoodieInstant instant = commitsAndCompactions.get(commit);
+        .map((Function<String, HoodieRollbackStat>) partitionPath -> {
           HoodieActiveTimeline activeTimeline = this.getActiveTimeline().reload();
           HoodieRollbackStat hoodieRollbackStats = null;
           // Need to put the path filter here since Filter is not serializable
@@ -209,18 +206,18 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
           PathFilter filter = (path) -> {
             if (path.toString().contains(".parquet")) {
               String fileCommitTime = FSUtils.getCommitTime(path.getName());
-              return commits.contains(fileCommitTime);
+              return commit.equals(fileCommitTime);
             } else if (path.toString().contains(".log")) {
               // Since the baseCommitTime is the only commit for new log files, it's okay here
               String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
-              return commits.contains(fileCommitTime);
+              return commit.equals(fileCommitTime);
             }
             return false;
           };
 
           final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
 
-          switch (instant.getAction()) {
+          switch (instantToRollback.getAction()) {
             case HoodieTimeline.COMMIT_ACTION:
               try {
                 // Rollback of a commit should delete the newly created parquet files along with any log
@@ -244,7 +241,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
                   // and has not yet finished. In this scenario we should delete only the newly created parquet files
                   // and not corresponding base commit log files created with this as baseCommit since updates would
                   // have been written to the log files.
-                  super.deleteCleanedFiles(filesToDeletedStatus, commits, partitionPath);
+                  super.deleteCleanedFiles(filesToDeletedStatus, commit, partitionPath);
                   hoodieRollbackStats = HoodieRollbackStat.newBuilder()
                       .withPartitionPath(partitionPath).withDeletedFileResults(filesToDeletedStatus).build();
                 } else {
@@ -286,7 +283,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
               try {
                 HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                     metaClient.getCommitTimeline().getInstantDetails(
-                        new HoodieInstant(true, instant.getAction(), instant.getTimestamp()))
+                        new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
                         .get(), HoodieCommitMetadata.class);
 
                 // read commit file and (either append delete blocks or delete file)
@@ -315,13 +312,11 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
               break;
           }
           return hoodieRollbackStats;
-        }).collect(Collectors.toList())).flatMap(List::iterator).filter(Objects::nonNull).collect();
+        }).filter(Objects::nonNull).collect();
 
     // Delete Inflight instants if enabled
-    deleteInflightInstants(deleteInstants, this.getActiveTimeline(),
-        commitsAndCompactions.entrySet().stream().map(
-            entry -> new HoodieInstant(true, entry.getValue().getAction(), entry.getValue().getTimestamp()))
-            .collect(Collectors.toList()));
+    deleteInflightInstant(deleteInstants, this.getActiveTimeline(), new HoodieInstant(true, instantToRollback
+        .getAction(), instantToRollback.getTimestamp()));
 
     logger.debug("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
 

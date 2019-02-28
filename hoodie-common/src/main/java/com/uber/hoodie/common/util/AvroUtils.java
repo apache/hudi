@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.uber.hoodie.avro.model.HoodieCleanMetadata;
 import com.uber.hoodie.avro.model.HoodieCleanPartitionMetadata;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
+import com.uber.hoodie.avro.model.HoodieRestoreMetadata;
 import com.uber.hoodie.avro.model.HoodieRollbackMetadata;
 import com.uber.hoodie.avro.model.HoodieRollbackPartitionMetadata;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
@@ -34,6 +35,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -114,16 +116,28 @@ public class AvroUtils {
         totalDeleted, earliestCommitToRetain, partitionMetadataBuilder.build());
   }
 
+  public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
+      Optional<Long> durationInMs, List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {
+    ImmutableMap.Builder<String, List<HoodieRollbackMetadata>> commitToStatBuilder = ImmutableMap.builder();
+    for (Map.Entry<String, List<HoodieRollbackStat>> commitToStat : commitToStats.entrySet()) {
+      commitToStatBuilder.put(commitToStat.getKey(), Arrays.asList(convertRollbackMetadata(startRestoreTime,
+          durationInMs, commits, commitToStat.getValue())));
+    }
+    return new HoodieRestoreMetadata(startRestoreTime, durationInMs.orElseGet(() -> -1L), commits,
+        commitToStatBuilder.build());
+  }
+
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime,
-      Optional<Long> durationInMs, List<String> commits, List<HoodieRollbackStat> stats) {
+      Optional<Long> durationInMs, List<String> commits, List<HoodieRollbackStat> rollbackStats) {
     ImmutableMap.Builder<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder =
         ImmutableMap.builder();
     int totalDeleted = 0;
-    for (HoodieRollbackStat stat : stats) {
+    for (HoodieRollbackStat stat : rollbackStats) {
       HoodieRollbackPartitionMetadata metadata =
           new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
               stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
-      partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
+      partitionMetadataBuilder
+          .put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
     }
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L),
@@ -161,6 +175,11 @@ public class AvroUtils {
   public static Optional<byte[]> serializeRollbackMetadata(
       HoodieRollbackMetadata rollbackMetadata) throws IOException {
     return serializeAvroMetadata(rollbackMetadata, HoodieRollbackMetadata.class);
+  }
+
+  public static Optional<byte[]> serializeRestoreMetadata(
+      HoodieRestoreMetadata restoreMetadata) throws IOException {
+    return serializeAvroMetadata(restoreMetadata, HoodieRestoreMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> Optional<byte[]> serializeAvroMetadata(T metadata,

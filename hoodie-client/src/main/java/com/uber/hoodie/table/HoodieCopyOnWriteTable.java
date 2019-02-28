@@ -330,7 +330,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    * Common method used for cleaning out parquet files under a partition path during rollback of a
    * set of commits
    */
-  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, List<String> commits, String
+  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, String commit, String
       partitionPath)
       throws IOException {
     logger.info("Cleaning path " + partitionPath);
@@ -338,7 +338,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     PathFilter filter = (path) -> {
       if (path.toString().contains(".parquet")) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
-        return commits.contains(fileCommitTime);
+        return commit.equals(fileCommitTime);
       }
       return false;
     };
@@ -352,28 +352,27 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, List<String> commits, boolean deleteInstants)
+  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, String commit, boolean deleteInstants)
       throws IOException {
     String actionType = metaClient.getCommitActionType();
     HoodieActiveTimeline activeTimeline = this.getActiveTimeline();
     List<String> inflights = this.getInflightCommitTimeline().getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    // Atomically unpublish the commits
+    if (!inflights.contains(commit)) {
+      activeTimeline.revertToInflight(new HoodieInstant(false, actionType, commit));
+    }
+    logger.info("Unpublished " + commit);
 
-    // Atomically unpublish all the commits
-    commits.stream().filter(s -> !inflights.contains(s))
-        .map(s -> new HoodieInstant(false, actionType, s))
-        .forEach(activeTimeline::revertToInflight);
-    logger.info("Unpublished " + commits);
-
-    // delete all the data files for all these commits
-    logger.info("Clean out all parquet files generated for commits: " + commits);
+    // delete all the data files for this commit
+    logger.info("Clean out all parquet files generated for commit: " + commit);
     List<HoodieRollbackStat> stats = jsc.parallelize(FSUtils
         .getAllPartitionPaths(metaClient.getFs(), getMetaClient().getBasePath(),
             config.shouldAssumeDatePartitioning()))
         .map((Function<String, HoodieRollbackStat>) partitionPath -> {
           // Scan all partitions files with this commit time
           final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
-          deleteCleanedFiles(filesToDeletedStatus, commits, partitionPath);
+          deleteCleanedFiles(filesToDeletedStatus, commit, partitionPath);
           return HoodieRollbackStat.newBuilder().withPartitionPath(partitionPath)
               .withDeletedFileResults(filesToDeletedStatus).build();
         }).collect();
@@ -381,26 +380,26 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     // clean temporary data files
     cleanTemporaryDataFiles(jsc);
 
-    // Delete Inflight instants if enabled
-    deleteInflightInstants(deleteInstants, activeTimeline,
-        commits.stream().map(s -> new HoodieInstant(true, actionType, s)).collect(Collectors.toList()));
+    // Delete Inflight instant if enabled
+    deleteInflightInstant(deleteInstants, activeTimeline,
+        new HoodieInstant(true, actionType, commit));
     return stats;
   }
 
   /**
-   * Delete Inflight instants if enabled
-   * @param deleteInstants Enable Deletion of Inflight instants
+   * Delete Inflight instant if enabled
+   * @param deleteInstant Enable Deletion of Inflight instant
    * @param activeTimeline  Hoodie active timeline
-   * @param instantsToBeDeleted Instants to be deleted
+   * @param instantToBeDeleted Instant to be deleted
    */
-  protected static void deleteInflightInstants(boolean deleteInstants, HoodieActiveTimeline activeTimeline,
-      List<HoodieInstant> instantsToBeDeleted) {
+  protected static void deleteInflightInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
+      HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
-    if (deleteInstants) {
-      instantsToBeDeleted.forEach(activeTimeline::deleteInflight);
-      logger.info("Deleted inflight commits " + instantsToBeDeleted);
+    if (deleteInstant) {
+      activeTimeline.deleteInflight(instantToBeDeleted);
+      logger.info("Deleted inflight commit " + instantToBeDeleted);
     } else {
-      logger.warn("Rollback finished without deleting inflight instant files. Instants=" + instantsToBeDeleted);
+      logger.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
     }
   }
 
