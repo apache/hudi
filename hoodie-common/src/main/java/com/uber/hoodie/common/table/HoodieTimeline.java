@@ -48,6 +48,7 @@ public interface HoodieTimeline extends Serializable {
   // (compaction-requested), (compaction-inflight), (completed)
   String COMPACTION_ACTION = "compaction";
   String REQUESTED_EXTENSION = ".requested";
+  String RESTORE_ACTION = "restore";
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -66,6 +67,8 @@ public interface HoodieTimeline extends Serializable {
       StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
   String INFLIGHT_COMPACTION_EXTENSION =
       StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
+  String INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION;
+  String RESTORE_EXTENSION = "." + RESTORE_ACTION;
 
   /**
    * Filter this timeline to just include the in-flights
@@ -246,6 +249,14 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedCompactionFileName(String commitTime) {
     return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+  }
+
+  static String makeRestoreFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.RESTORE_EXTENSION);
+  }
+
+  static String makeInflightRestoreFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_RESTORE_EXTENSION);
   }
 
   static String makeDeltaFileName(String commitTime) {

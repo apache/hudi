@@ -114,7 +114,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     // Reload and rollback inflight compaction
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
-    hoodieTable.rollback(jsc, Arrays.asList(compactionInstantTime), false);
+    hoodieTable.rollback(jsc, compactionInstantTime, false);
 
     client.rollbackInflightCompaction(
         new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
