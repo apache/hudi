@@ -55,7 +55,6 @@ import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -628,19 +627,12 @@ public class TestCleaner extends TestHoodieClientBase {
     assertEquals("Some temp files are created.", tempFiles.size(), getTotalTempFiles());
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withUseTempFolderCopyOnWriteForCreate(false)
+        .withUseTempFolderCopyOnWriteForCreate(true)
         .withUseTempFolderCopyOnWriteForMerge(false).build();
-    HoodieTable table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config,
-        jsc);
-    table.rollback(jsc, Collections.emptyList(), true);
-    assertEquals("Some temp files are created.", tempFiles.size(), getTotalTempFiles());
-
-    config = HoodieWriteConfig.newBuilder().withPath(basePath).withUseTempFolderCopyOnWriteForCreate(true)
-        .withUseTempFolderCopyOnWriteForMerge(false).build();
-    table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true),
+    HoodieTable table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), config
+            .getBasePath(), true),
         config, jsc);
-    table.rollback(jsc, Collections.emptyList(), true);
+    table.rollback(jsc, "000", true);
     assertEquals("All temp files are deleted.", 0, getTotalTempFiles());
   }
 

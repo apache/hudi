@@ -54,7 +54,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
           INFLIGHT_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
-          CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION}));
+          CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
+          INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
   private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
   private HoodieTableMetaClient metaClient;
@@ -183,6 +184,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getSavePointTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(SAVEPOINT_ACTION),
+        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+  }
+
+  /**
+   * Get only the restore action (inflight and completed) in the active timeline
+   */
+  public HoodieTimeline getRestoreTimeline() {
+    return new HoodieDefaultTimeline(filterInstantsByAction(RESTORE_ACTION),
         (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
   }
 

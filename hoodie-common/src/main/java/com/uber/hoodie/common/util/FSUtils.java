@@ -398,6 +398,20 @@ public class FSUtils {
     });
   }
 
+  public static void deleteOlderRestoreMetaFiles(FileSystem fs, String metaPath,
+      Stream<HoodieInstant> instants) {
+    //TODO - this should be archived when archival is made general for all meta-data
+    // skip MIN_ROLLBACK_TO_KEEP and delete rest
+    instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
+      try {
+        return fs.delete(new Path(metaPath, s.getFileName()), false);
+      } catch (IOException e) {
+        throw new HoodieIOException(
+            "Could not delete restore meta files " + s.getFileName(), e);
+      }
+    });
+  }
+
   public static void createPathIfNotExists(FileSystem fs, Path partitionPath) throws IOException {
     if (!fs.exists(partitionPath)) {
       fs.mkdirs(partitionPath);

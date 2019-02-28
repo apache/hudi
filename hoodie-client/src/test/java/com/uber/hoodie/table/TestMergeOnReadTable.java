@@ -721,7 +721,7 @@ public class TestMergeOnReadTable {
     copyOfRecords.clear();
 
     // Rollback latest commit first
-    client.restoreToCommit("000");
+    client.restoreToInstant("000");
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     allFiles = HoodieTestUtils.listAllDataFilesInPath(metaClient.getFs(), cfg.getBasePath());
