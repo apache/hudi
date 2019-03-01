@@ -68,6 +68,12 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     this.newLocation = null;
   }
 
+  public HoodieRecord(HoodieRecord<T> record) {
+    this(record.key, record.data);
+    this.currentLocation = record.currentLocation;
+    this.newLocation = record.newLocation;
+  }
+
   public HoodieKey getKey() {
     return key;
   }
