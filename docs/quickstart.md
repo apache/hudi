@@ -450,13 +450,14 @@ automatically initializes the datasets in the file-system if they do not exist y
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --props /var/demo/config/kafka-source.properties
 ....
 ....
 2018-09-24 22:20:00 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
 2018-09-24 22:20:00 INFO  SparkContext:54 - Successfully stopped SparkContext
+
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --props /var/demo/config/kafka-source.properties
 ....
 2018-09-24 22:22:01 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
 2018-09-24 22:22:01 INFO  SparkContext:54 - Successfully stopped SparkContext
@@ -724,10 +725,10 @@ cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --props /var/demo/config/kafka-source.properties 
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --props /var/demo/config/kafka-source.properties
 
 exit
 ```
