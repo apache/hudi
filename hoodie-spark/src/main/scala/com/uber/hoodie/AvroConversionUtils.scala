@@ -265,8 +265,12 @@ object AvroConversionUtils {
           case null => null
           case bytes: Array[Byte] => ByteBuffer.wrap(bytes)
         }
-      case ByteType | ShortType | IntegerType | LongType |
+      case IntegerType | LongType |
            FloatType | DoubleType | StringType | BooleanType => identity
+      case ByteType => (item: Any) =>
+        if (item == null) null else item.asInstanceOf[Byte].intValue
+      case ShortType => (item: Any) =>
+        if (item == null) null else item.asInstanceOf[Short].intValue
       case _: DecimalType => (item: Any) => if (item == null) null else item.toString
       case TimestampType => (item: Any) =>
         if (item == null) null else item.asInstanceOf[Timestamp].getTime
