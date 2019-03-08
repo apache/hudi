@@ -261,7 +261,7 @@ You can also use the sample queries in __hoodie-utilities/src/test/java/HoodieSp
 
 Checkout the 'master' branch on OSS Presto, build it, and place your installation somewhere.
 
-* Copy the hoodie-hadoop-mr-* jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
+* Copy the hudi/packaging/hoodie-presto-bundle/target/hoodie-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
 * Startup your server and you should be able to query the same Hive table via Presto
 
 ```
