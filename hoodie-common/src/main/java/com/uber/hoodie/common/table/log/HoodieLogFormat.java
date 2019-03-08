@@ -19,9 +19,11 @@ package com.uber.hoodie.common.table.log;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -47,6 +49,8 @@ public interface HoodieLogFormat {
    * bumped and corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
   int currentVersion = 1;
+
+  String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
   /**
    * Writer interface to allow appending block to this file format
@@ -106,6 +110,10 @@ public interface HoodieLogFormat {
     private Integer logVersion;
     // Location of the directory containing the log
     private Path parentPath;
+    // Log File Write Token
+    private String logWriteToken;
+    // Rollover Log file write token
+    private String rolloverLogWriteToken;
 
     public WriterBuilder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
@@ -114,6 +122,16 @@ public interface HoodieLogFormat {
 
     public WriterBuilder withReplication(short replication) {
       this.replication = replication;
+      return this;
+    }
+
+    public WriterBuilder withLogWriteToken(String writeToken) {
+      this.logWriteToken = writeToken;
+      return this;
+    }
+
+    public WriterBuilder withRolloverLogWriteToken(String rolloverLogWriteToken) {
+      this.rolloverLogWriteToken = rolloverLogWriteToken;
       return this;
     }
 
@@ -169,17 +187,37 @@ public interface HoodieLogFormat {
       if (parentPath == null) {
         throw new IllegalArgumentException("Log file parent location is not specified");
       }
+
+      if (rolloverLogWriteToken == null) {
+        rolloverLogWriteToken = UNKNOWN_WRITE_TOKEN;
+      }
+
       if (logVersion == null) {
         log.info("Computing the next log version for " + logFileId + " in " + parentPath);
-        logVersion =
-            FSUtils.getCurrentLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
+        Optional<Pair<Integer, String>> versionAndWriteToken =
+            FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
+        if (versionAndWriteToken.isPresent()) {
+          logVersion = versionAndWriteToken.get().getKey();
+          logWriteToken = versionAndWriteToken.get().getValue();
+        } else {
+          logVersion = HoodieLogFile.LOGFILE_BASE_VERSION;
+          // this is the case where there is no existing log-file.
+          // Use rollover write token as write token to create new log file with tokens
+          logWriteToken = rolloverLogWriteToken;
+        }
         log.info(
             "Computed the next log version for " + logFileId + " in " + parentPath + " as "
-                + logVersion);
+                + logVersion + " with write-token " + logWriteToken);
+      }
+
+      if (logWriteToken == null) {
+        // This is the case where we have existing log-file with old format. rollover to avoid any conflicts
+        logVersion += 1;
+        logWriteToken = rolloverLogWriteToken;
       }
 
       Path logPath = new Path(parentPath,
-          FSUtils.makeLogFileName(logFileId, fileExtension, commitTime, logVersion));
+          FSUtils.makeLogFileName(logFileId, fileExtension, commitTime, logVersion, logWriteToken));
       log.info("HoodieLogFile on path " + logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath);
 
@@ -192,9 +230,9 @@ public interface HoodieLogFormat {
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold);
+      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, logWriteToken,
+          rolloverLogWriteToken);
     }
-
   }
 
   static WriterBuilder newWriterBuilder() {

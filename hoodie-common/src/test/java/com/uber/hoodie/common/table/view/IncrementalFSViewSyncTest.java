@@ -69,6 +69,8 @@ import org.junit.rules.TemporaryFolder;
 
 public class IncrementalFSViewSyncTest {
 
+  private static String TEST_WRITE_TOKEN = "1-0-1";
+
   protected HoodieTableMetaClient metaClient;
   protected String basePath;
 
@@ -756,8 +758,8 @@ public class IncrementalFSViewSyncTest {
       return fileIdsPerPartition.stream().map(f -> {
         try {
           File file = new File(basePath + "/" + p + "/"
-              + (deltaCommit ? FSUtils.makeLogFileName(f, ".log", baseInstant, Integer.parseInt(instant)) :
-              FSUtils.makeDataFileName(instant, 0, f)));
+              + (deltaCommit ? FSUtils.makeLogFileName(f, ".log", baseInstant,
+              Integer.parseInt(instant), TEST_WRITE_TOKEN) : FSUtils.makeDataFileName(instant, TEST_WRITE_TOKEN, f)));
           file.createNewFile();
           HoodieWriteStat w = new HoodieWriteStat();
           w.setFileId(f);

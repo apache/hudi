@@ -201,7 +201,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                 .map(
                     s -> {
                       List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile
-                          .getBaseInstantAndLogVersionComparator().reversed()).collect(Collectors.toList());
+                          .getLogFileComparator()).collect(Collectors.toList());
                       totalLogFiles.add((long) logFiles.size());
                       totalFileSlices.add(1L);
                       // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO

@@ -16,6 +16,7 @@
 
 package com.uber.hoodie;
 
+import static com.uber.hoodie.common.table.HoodieTableMetaClient.MARKER_EXTN;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -38,6 +39,7 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -245,37 +247,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Upsert API using temporary folders.
-   */
-  @Test
-  public void testUpsertsWithFinalizeWrite() throws Exception {
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withUseTempFolderCopyOnWriteForCreate(true)
-        .withUseTempFolderCopyOnWriteForMerge(true)
-        .build();
-    testUpsertsInternal(hoodieWriteConfig,
-        HoodieWriteClient::upsert, false);
-  }
-
-  /**
    * Test UpsertPrepped API
    */
   @Test
   public void testUpsertsPrepped() throws Exception {
     testUpsertsInternal(getConfig(),
-        HoodieWriteClient::upsertPreppedRecords, true);
-  }
-
-  /**
-   * Test UpsertPrepped API using temporary folders.
-   */
-  @Test
-  public void testUpsertsPreppedWithFinalizeWrite() throws Exception {
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withUseTempFolderCopyOnWriteForCreate(true)
-        .withUseTempFolderCopyOnWriteForMerge(true)
-        .build();
-    testUpsertsInternal(hoodieWriteConfig,
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -385,7 +361,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("Just 1 file needs to be added.", 1, statuses.size());
     String file1 = statuses.get(0).getFileId();
     assertEquals("file should contain 100 records", ParquetUtils.readRowKeysFromParquet(jsc.hadoopConfiguration(),
-        new Path(basePath, testPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, 0, file1))).size(), 100);
+        new Path(basePath, statuses.get(0).getStat().getPath())).size(), 100);
 
     // Update + Inserts such that they just expand file1
     String commitTime2 = "002";
@@ -403,7 +379,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("Just 1 file needs to be updated.", 1, statuses.size());
     assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
     assertEquals("Existing file should be expanded", commitTime1, statuses.get(0).getStat().getPrevCommit());
-    Path newFile = new Path(basePath, testPartitionPath + "/" + FSUtils.makeDataFileName(commitTime2, 0, file1));
+    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals("file should contain 140 records",
         ParquetUtils.readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(), 140);
 
@@ -499,7 +475,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("Just 1 file needs to be added.", 1, statuses.size());
     String file1 = statuses.get(0).getFileId();
     assertEquals("file should contain 100 records", ParquetUtils.readRowKeysFromParquet(jsc.hadoopConfiguration(),
-        new Path(basePath, testPartitionPath + "/" + FSUtils.makeDataFileName(commitTime1, 0, file1))).size(), 100);
+        new Path(basePath, statuses.get(0).getStat().getPath())).size(), 100);
 
     // Second, set of Inserts should just expand file1
     String commitTime2 = "002";
@@ -513,7 +489,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("Just 1 file needs to be updated.", 1, statuses.size());
     assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
     assertEquals("Existing file should be expanded", commitTime1, statuses.get(0).getStat().getPrevCommit());
-    Path newFile = new Path(basePath, testPartitionPath + "/" + FSUtils.makeDataFileName(commitTime2, 0, file1));
+    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals("file should contain 140 records",
         ParquetUtils.readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(), 140);
 
@@ -678,22 +654,59 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    */
   @Test
   public void testConsistencyCheckDuringFinalize() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = getHoodieWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         basePath);
-
     String commitTime = "000";
-    client.startCommitWithTime(commitTime);
-    JavaRDD<HoodieRecord> writeRecords = jsc
-        .parallelize(dataGen.generateInserts(commitTime, 200), 1);
-    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    Pair<Path, JavaRDD<WriteStatus>> result = testConsistencyCheck(metaClient, commitTime);
 
-    // move one of the files & commit should fail
-    WriteStatus status = result.take(1).get(0);
-    Path origPath = new Path(basePath + "/" + status.getStat().getPath());
-    Path hidePath = new Path(basePath + "/" + status.getStat().getPath() + "_hide");
-    metaClient.getFs().rename(origPath, hidePath);
+    // Delete orphan marker and commit should succeed
+    metaClient.getFs().delete(result.getKey(), false);
+    assertTrue("Commit should succeed", client.commit(commitTime, result.getRight()));
+    assertTrue("After explicit commit, commit file should be created",
+        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+    // Marker directory must be removed
+    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(commitTime))));
+  }
+
+  @Test
+  public void testRollbackAfterConsistencyCheckFailure() throws Exception {
+    String commitTime = "000";
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    testConsistencyCheck(metaClient, commitTime);
+
+    // Rollback of this commit should succeed
+    client.rollback(commitTime);
+    assertFalse("After explicit rollback, commit file should not be present",
+        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+    // Marker directory must be removed after rollback
+    assertFalse(metaClient.getFs().exists(new Path(metaClient.getMarkerFolderPath(commitTime))));
+  }
+
+  private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String commitTime)
+      throws Exception {
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withMaxConsistencyCheckIntervalMs(1)
+        .withInitialConsistencyCheckIntervalMs(1).build();
+    HoodieWriteClient client = getHoodieWriteClient(cfg);
+
+    client.startCommitWithTime(commitTime);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(dataGen.generateInserts(commitTime, 200), 1);
+    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+    result.collect();
+
+    // Create a dummy marker file to simulate the case that a marker file was created without data file.
+    // This should fail the commit
+    String partitionPath = Arrays.stream(fs.globStatus(new Path(String.format("%s/*/*/*/*",
+        metaClient.getMarkerFolderPath(commitTime))),
+        path -> path.toString().endsWith(MARKER_EXTN))).limit(1)
+        .map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
+    Path markerFilePath = new Path(String.format("%s/%s", partitionPath,
+        FSUtils.makeMarkerFile(commitTime, "1-0-1", UUID.randomUUID().toString())));
+    metaClient.getFs().create(markerFilePath);
+    logger.info("Created a dummy marker path=" + markerFilePath);
 
     try {
       client.commit(commitTime, result);
@@ -701,12 +714,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     } catch (HoodieCommitException cme) {
       assertTrue(cme.getCause() instanceof HoodieIOException);
     }
-
-    // Re-introduce & commit should succeed
-    metaClient.getFs().rename(hidePath, origPath);
-    assertTrue("Commit should succeed", client.commit(commitTime, result));
-    assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+    return Pair.of(markerFilePath, result);
   }
 
   /**

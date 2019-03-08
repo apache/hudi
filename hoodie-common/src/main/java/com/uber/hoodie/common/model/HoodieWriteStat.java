@@ -310,11 +310,8 @@ public class HoodieWriteStat implements Serializable {
   /**
    * Set path and tempPath relative to the given basePath.
    */
-  public void setPaths(Path basePath, Path path, Path tempPath) {
+  public void setPath(Path basePath, Path path) {
     this.path = path.toString().replace(basePath + "/", "");
-    if (tempPath != null) {
-      this.tempPath = tempPath.toString().replace(basePath + "/", "");
-    }
   }
 
   @Override
