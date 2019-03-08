@@ -37,6 +37,8 @@ import org.junit.rules.TemporaryFolder;
 
 public class TestHoodieSnapshotCopier {
 
+  private static String TEST_WRITE_TOKEN = "1-0-1";
+
   private String rootPath = null;
   private String basePath = null;
   private String outputPath = null;
@@ -102,35 +104,35 @@ public class TestHoodieSnapshotCopier {
             basePath);
     // Make commit1
     File file11 = new File(
-        basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime1, 1, "id11"));
+        basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id11"));
     file11.createNewFile();
     File file12 = new File(
-        basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime1, 1, "id12"));
+        basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id12"));
     file12.createNewFile();
     File file13 = new File(
-        basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime1, 1, "id13"));
+        basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, "id13"));
     file13.createNewFile();
 
     // Make commit2
     File file21 = new File(
-        basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime2, 1, "id21"));
+        basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, "id21"));
     file21.createNewFile();
     File file22 = new File(
-        basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime2, 1, "id22"));
+        basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, "id22"));
     file22.createNewFile();
     File file23 = new File(
-        basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime2, 1, "id23"));
+        basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime2, TEST_WRITE_TOKEN, "id23"));
     file23.createNewFile();
 
     // Make commit3
     File file31 = new File(
-        basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime3, 1, "id31"));
+        basePath + "/2016/05/01/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, "id31"));
     file31.createNewFile();
     File file32 = new File(
-        basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime3, 1, "id32"));
+        basePath + "/2016/05/02/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, "id32"));
     file32.createNewFile();
     File file33 = new File(
-        basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime3, 1, "id33"));
+        basePath + "/2016/05/06/" + FSUtils.makeDataFileName(commitTime3, TEST_WRITE_TOKEN, "id33"));
     file33.createNewFile();
 
     // Do a snapshot copy

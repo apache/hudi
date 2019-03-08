@@ -74,13 +74,14 @@ public class TestHoodieCommitArchiveLog {
 
   @AfterClass
   public static void cleanUp() throws Exception {
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
+    // same JVM
+    FileSystem.closeAll();
+
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       dfsCluster.shutdown();
     }
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
-    // same JVM
-    FileSystem.closeAll();
   }
 
   @BeforeClass
@@ -245,7 +246,7 @@ public class TestHoodieCommitArchiveLog {
 
     //read the file
     HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(dfs,
-        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
+        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1_1-0-1")),
         HoodieArchivedMetaEntry.getClassSchema());
 
     int archivedRecordsCount = 0;

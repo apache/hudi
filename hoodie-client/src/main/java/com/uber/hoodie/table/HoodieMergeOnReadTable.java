@@ -121,13 +121,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String commitTime,
+  public Iterator<List<WriteStatus>> handleInsert(String commitTime, String idPfx,
       Iterator<HoodieRecord<T>> recordItr) throws Exception {
     // If canIndexLogFiles, write inserts to log files else write inserts to parquet files
     if (index.canIndexLogFiles()) {
-      return new MergeOnReadLazyInsertIterable<>(recordItr, config, commitTime, this);
+      return new MergeOnReadLazyInsertIterable<>(recordItr, config, commitTime, this, idPfx);
     } else {
-      return super.handleInsert(commitTime, recordItr);
+      return super.handleInsert(commitTime, idPfx, recordItr);
     }
   }
 
@@ -325,10 +325,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public void finalizeWrite(JavaSparkContext jsc, List<HoodieWriteStat> stats)
+  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
       throws HoodieIOException {
     // delegate to base class for MOR tables
-    super.finalizeWrite(jsc, stats);
+    super.finalizeWrite(jsc, instantTs, stats);
   }
 
   @Override
@@ -362,6 +362,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
       super(profile);
     }
 
+    @Override
     protected List<SmallFile> getSmallFiles(String partitionPath) {
 
       // smallFiles only for partitionPath

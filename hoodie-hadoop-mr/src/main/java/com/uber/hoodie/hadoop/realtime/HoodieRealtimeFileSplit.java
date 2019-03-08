@@ -97,4 +97,14 @@ public class HoodieRealtimeFileSplit extends FileSplit {
       deltaFilePaths.add(readString(in));
     }
   }
+
+  @Override
+  public String toString() {
+    return "HoodieRealtimeFileSplit{"
+        + "DataPath=" + getPath()
+        + ", deltaFilePaths=" + deltaFilePaths
+        + ", maxCommitTime='" + maxCommitTime + '\''
+        + ", basePath='" + basePath + '\''
+        + '}';
+  }
 }

@@ -72,6 +72,10 @@ public class HoodieLogFile implements Serializable {
     return FSUtils.getFileVersionFromLog(getPath());
   }
 
+  public String getLogWriteToken() {
+    return FSUtils.getWriteTokenFromLogPath(getPath());
+  }
+
   public String getFileExtension() {
     return FSUtils.getFileExtensionFromLog(getPath());
   }
@@ -96,7 +100,11 @@ public class HoodieLogFile implements Serializable {
     return fileStatus;
   }
 
-  public HoodieLogFile rollOver(FileSystem fs) throws IOException {
+  public void setFileStatus(FileStatus fileStatus) {
+    this.fileStatus = fileStatus;
+  }
+
+  public HoodieLogFile rollOver(FileSystem fs, String logWriteToken) throws IOException {
     String fileId = getFileId();
     String baseCommitTime = getBaseCommitTime();
     Path path = getPath();
@@ -105,28 +113,50 @@ public class HoodieLogFile implements Serializable {
         .computeNextLogVersion(fs, path.getParent(), fileId,
             extension, baseCommitTime);
     return new HoodieLogFile(new Path(path.getParent(),
-        FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion)));
+        FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion, logWriteToken)));
   }
 
-  public static Comparator<HoodieLogFile> getBaseInstantAndLogVersionComparator() {
-    return new BaseInstantAndLogVersionComparator();
+  public static Comparator<HoodieLogFile> getLogFileComparator() {
+    return new LogFileComparator();
+  }
+
+  public static Comparator<HoodieLogFile> getReverseLogFileComparator() {
+    return new LogFileComparator().reversed();
   }
 
   /**
    * Comparator to order log-files
    */
-  private static class BaseInstantAndLogVersionComparator implements Comparator<HoodieLogFile>, Serializable {
+  public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
+
+    private transient Comparator<HoodieLogFile> writeTokenComparator;
+
+    private Comparator<HoodieLogFile> getWriteTokenComparator() {
+      if (null == writeTokenComparator) {
+        // writeTokenComparator is not serializable. Hence, lazy loading
+        writeTokenComparator = Comparator.nullsFirst(Comparator.comparing(HoodieLogFile::getLogWriteToken));
+      }
+      return writeTokenComparator;
+    }
 
     @Override
     public int compare(HoodieLogFile o1, HoodieLogFile o2) {
       String baseInstantTime1 = o1.getBaseCommitTime();
       String baseInstantTime2 = o2.getBaseCommitTime();
+
       if (baseInstantTime1.equals(baseInstantTime2)) {
-        // reverse the order by log-version when base-commit is same
-        return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
+
+        if (o1.getLogVersion() == o2.getLogVersion()) {
+          // Compare by write token when base-commit and log-version is same
+          return getWriteTokenComparator().compare(o1, o2);
+        }
+
+        // compare by log-version when base-commit is same
+        return Integer.compare(o1.getLogVersion(), o2.getLogVersion());
       }
-      // reverse the order by base-commits
-      return baseInstantTime2.compareTo(baseInstantTime1);
+
+      // compare by base-commits
+      return baseInstantTime1.compareTo(baseInstantTime2);
     }
   }
 

@@ -66,6 +66,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -620,18 +621,17 @@ public class TestCleaner extends TestHoodieClientBase {
    * Test Cleaning functionality of table.rollback() API.
    */
   @Test
-  public void testCleanTemporaryDataFilesOnRollback() throws IOException {
+  public void testCleanMarkerDataFilesOnRollback() throws IOException {
     HoodieTestUtils.createCommitFiles(basePath, "000");
-    List<String> tempFiles = createTempFiles("000", 10);
-    assertEquals("Some temp files are created.", 10, tempFiles.size());
-    assertEquals("Some temp files are created.", tempFiles.size(), getTotalTempFiles());
+    List<String> markerFiles = createMarkerFiles("000", 10);
+    assertEquals("Some marker files are created.", 10, markerFiles.size());
+    assertEquals("Some marker files are created.", markerFiles.size(), getTotalTempFiles());
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withUseTempFolderCopyOnWriteForCreate(true)
-        .withUseTempFolderCopyOnWriteForMerge(false).build();
-    HoodieTable table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), config
-            .getBasePath(), true),
-        config, jsc);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieTable table = HoodieTable.getHoodieTable(
+        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config,
+        jsc);
+
     table.rollback(jsc, "000", true);
     assertEquals("All temp files are deleted.", 0, getTotalTempFiles());
   }
@@ -901,10 +901,10 @@ public class TestCleaner extends TestHoodieClientBase {
    * @return generated files
    * @throws IOException in case of error
    */
-  private List<String> createTempFiles(String commitTime, int numFiles) throws IOException {
+  private List<String> createMarkerFiles(String commitTime, int numFiles) throws IOException {
     List<String> files = new ArrayList<>();
     for (int i = 0; i < numFiles; i++) {
-      files.add(HoodieTestUtils.createNewDataFile(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, commitTime));
+      files.add(HoodieTestUtils.createNewMarkerFile(basePath, "2019/03/29", commitTime));
     }
     return files;
   }
@@ -915,7 +915,13 @@ public class TestCleaner extends TestHoodieClientBase {
    * @throws IOException in case of error
    */
   private int getTotalTempFiles() throws IOException {
-    return fs.listStatus(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME)).length;
+    RemoteIterator itr = fs.listFiles(new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME), true);
+    int count = 0;
+    while (itr.hasNext()) {
+      count++;
+      itr.next();
+    }
+    return count;
   }
 
   private Stream<Pair<String, String>> convertPathToFileIdWithCommitTime(
