@@ -36,6 +36,8 @@ import org.junit.rules.TemporaryFolder;
 
 public class InputFormatTestUtil {
 
+  private static String TEST_WRITE_TOKEN = "1-0-1";
+
   public static File prepareDataset(TemporaryFolder basePath, int numberOfFiles,
       String commitNumber) throws IOException {
     basePath.create();
@@ -43,7 +45,7 @@ public class InputFormatTestUtil {
     File partitionPath = basePath.newFolder("2016", "05", "01");
     for (int i = 0; i < numberOfFiles; i++) {
       File dataFile = new File(partitionPath,
-          FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i));
+          FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i));
       dataFile.createNewFile();
     }
     return partitionPath;
@@ -65,7 +67,7 @@ public class InputFormatTestUtil {
         .subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
-      File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, 1, fileId));
+      File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
       dataFile.createNewFile();
     }
   }
@@ -117,7 +119,7 @@ public class InputFormatTestUtil {
       throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, 1, "fileid" + i);
+      String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i);
       File dataFile = new File(partitionPath, fileId);
       parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
       try {
@@ -149,7 +151,7 @@ public class InputFormatTestUtil {
       }
     })[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
-    File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, 1, fileId));
+    File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
     AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()),
         schema);
     try {

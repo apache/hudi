@@ -105,7 +105,7 @@ public class HoodieClientTestUtils {
       throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, 0, fileId));
+    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, "1-0-1", fileId));
     new File(path).createNewFile();
     new RandomAccessFile(path, "rw").setLength(length);
   }
@@ -236,7 +236,7 @@ public class HoodieClientTestUtils {
     Thread.sleep(1000);
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(commitTime, 1, fileId);
+    String filename = FSUtils.makeDataFileName(commitTime, "1-0-1", fileId);
     HoodieTestUtils.createCommitFiles(basePath, commitTime);
     return HoodieClientTestUtils
         .writeParquetFile(basePath, partitionPath, filename, records, schema, filter, createCommitTime);

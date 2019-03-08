@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.io.storage;
+package com.uber.hoodie.common.io.storage;
 
+import com.uber.hoodie.common.util.ConsistencyGuard;
+import com.uber.hoodie.exception.HoodieException;
 import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 
 /**
  * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This
@@ -30,11 +34,17 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   private final Runnable closeCallback;
   // Keep track of the bytes written
   private final AtomicLong bytesWritten = new AtomicLong(0L);
+  // Path
+  private final Path path;
+  // Consistency guard
+  private final ConsistencyGuard consistencyGuard;
 
-  public SizeAwareFSDataOutputStream(FSDataOutputStream out, Runnable closeCallback)
-      throws IOException {
+  public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out,
+      ConsistencyGuard consistencyGuard, Runnable closeCallback) throws IOException {
     super(out);
+    this.path = path;
     this.closeCallback = closeCallback;
+    this.consistencyGuard = consistencyGuard;
   }
 
   @Override
@@ -52,6 +62,11 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   @Override
   public void close() throws IOException {
     super.close();
+    try {
+      consistencyGuard.waitTillFileAppears(path);
+    } catch (TimeoutException e) {
+      throw new HoodieException(e);
+    }
     closeCallback.run();
   }
 

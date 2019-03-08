@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.Assert;
 import org.junit.Test;
 import scala.Option;
 
@@ -107,7 +108,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
     filteredRDD = readClient.filterExists(recordsRDD);
     List<HoodieRecord> result = filteredRDD.collect();
     // Check results
-    assertTrue(result.size() == 25);
+    Assert.assertEquals(25, result.size());
   }
 
   /**

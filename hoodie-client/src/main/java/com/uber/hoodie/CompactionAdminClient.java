@@ -29,6 +29,7 @@ import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
@@ -245,7 +246,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
           "Expect new log version to be sane");
       HoodieLogFile newLogFile = new HoodieLogFile(new Path(lf.getPath().getParent(),
           FSUtils.makeLogFileName(lf.getFileId(), "." + FSUtils.getFileExtensionFromLog(lf.getPath()),
-              compactionInstant, lf.getLogVersion() - maxVersion)));
+              compactionInstant, lf.getLogVersion() - maxVersion, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       return Pair.of(lf, newLogFile);
     }).collect(Collectors.toList());
   }
@@ -436,7 +437,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
             .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst().get();
     List<HoodieLogFile> logFilesToRepair =
             merged.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(compactionInstant))
-                    .sorted(HoodieLogFile.getBaseInstantAndLogVersionComparator().reversed())
+                    .sorted(HoodieLogFile.getLogFileComparator())
                     .collect(Collectors.toList());
     FileSlice fileSliceForCompaction =
         fileSystemView.getLatestFileSlicesBeforeOrOn(operation.getPartitionPath(), operation.getBaseInstantTime())
@@ -451,7 +452,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     for (HoodieLogFile toRepair : logFilesToRepair) {
       int version = maxUsedVersion + 1;
       HoodieLogFile newLf = new HoodieLogFile(new Path(parentPath, FSUtils.makeLogFileName(operation.getFileId(),
-          logExtn, operation.getBaseInstantTime(), version)));
+          logExtn, operation.getBaseInstantTime(), version, HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
       result.add(Pair.of(toRepair, newLf));
       maxUsedVersion = version;
     }

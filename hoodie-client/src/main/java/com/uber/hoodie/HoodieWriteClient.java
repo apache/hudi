@@ -72,6 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -333,9 +334,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       String commitTime, HoodieTable<T> table,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;
+    final int parallelism = config.getBulkInsertShuffleParallelism();
     if (bulkInsertPartitioner.isDefined()) {
       repartitionedRecords = bulkInsertPartitioner.get()
-          .repartitionRecords(dedupedRecords, config.getBulkInsertShuffleParallelism());
+          .repartitionRecords(dedupedRecords, parallelism);
     } else {
       // Now, sort the records and line them up nicely for loading.
       repartitionedRecords = dedupedRecords.sortBy(record -> {
@@ -343,10 +345,16 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         // the records split evenly across RDD partitions, such that small partitions fit
         // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
         return String.format("%s+%s", record.getPartitionPath(), record.getRecordKey());
-      }, true, config.getBulkInsertShuffleParallelism());
+      }, true, parallelism);
     }
+
+    //generate new file ID prefixes for each output partition
+    final List<String> fileIDPrefixes = IntStream.range(0, parallelism)
+        .mapToObj(i -> FSUtils.createNewFileIdPfx())
+        .collect(Collectors.toList());
+
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
-        .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table), true)
+        .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table, fileIDPrefixes), true)
         .flatMap(writeStatuses -> writeStatuses.iterator());
 
     return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
@@ -498,20 +506,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     updateMetadataAndRollingStats(actionType, metadata, stats);
 
     // Finalize write
-    final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
-    try {
-      table.finalizeWrite(jsc, stats);
-      if (finalizeCtx != null) {
-        Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
-        durationInMs.ifPresent(duration -> {
-          logger.info("Finalize write elapsed time (milliseconds): " + duration);
-          metrics.updateFinalizeWriteMetrics(duration, stats.size());
-        });
-      }
-    } catch (HoodieIOException ioe) {
-      throw new HoodieCommitException(
-          "Failed to complete commit " + commitTime + " due to finalize errors.", ioe);
-    }
+    finalizeWrite(table, commitTime, stats);
 
     // add in extra metadata
     if (extraMetadata.isPresent()) {
@@ -1270,7 +1265,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       String compactionCommitTime, boolean autoCommit, Optional<Map<String, String>> extraMetadata) {
     if (autoCommit) {
       HoodieCommitMetadata metadata =
-          doCompactionCommit(compactedStatuses, table.getMetaClient(), compactionCommitTime, extraMetadata);
+          doCompactionCommit(table, compactedStatuses, compactionCommitTime, extraMetadata);
       if (compactionTimer != null) {
         long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
         try {
@@ -1288,6 +1283,23 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
   }
 
+  private void finalizeWrite(HoodieTable<T> table, String instantTime, List<HoodieWriteStat> stats) {
+    try {
+      final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
+      table.finalizeWrite(jsc, instantTime, stats);
+      if (finalizeCtx != null) {
+        Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
+        durationInMs.ifPresent(duration -> {
+          logger.info("Finalize write elapsed time (milliseconds): " + duration);
+          metrics.updateFinalizeWriteMetrics(duration, stats.size());
+        });
+      }
+    } catch (HoodieIOException ioe) {
+      throw new HoodieCommitException(
+          "Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
+    }
+  }
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
    *
@@ -1301,8 +1313,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
 
-  private HoodieCommitMetadata doCompactionCommit(JavaRDD<WriteStatus> writeStatuses,
-      HoodieTableMetaClient metaClient, String compactionCommitTime, Optional<Map<String, String>> extraMetadata) {
+  private HoodieCommitMetadata doCompactionCommit(HoodieTable<T> table, JavaRDD<WriteStatus> writeStatuses,
+      String compactionCommitTime, Optional<Map<String, String>> extraMetadata) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat)
         .collect();
 
@@ -1310,6 +1323,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     for (HoodieWriteStat stat : updateStatusMap) {
       metadata.addWriteStat(stat.getPartitionPath(), stat);
     }
+
+    // Finalize write
+    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
+    finalizeWrite(table, compactionCommitTime, stats);
 
     // Copy extraMetadata
     extraMetadata.ifPresent(m -> {

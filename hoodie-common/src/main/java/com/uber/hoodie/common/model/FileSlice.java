@@ -59,7 +59,7 @@ public class FileSlice implements Serializable {
     this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.dataFile = null;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getBaseInstantAndLogVersionComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
   }
 
   public void setDataFile(HoodieDataFile dataFile) {
@@ -92,6 +92,10 @@ public class FileSlice implements Serializable {
 
   public Optional<HoodieDataFile> getDataFile() {
     return Optional.ofNullable(dataFile);
+  }
+
+  public Optional<HoodieLogFile> getLatestLogFile() {
+    return logFiles.stream().findFirst();
   }
 
   /**

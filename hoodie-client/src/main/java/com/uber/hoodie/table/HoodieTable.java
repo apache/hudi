@@ -34,19 +34,30 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.FileSystemViewManager;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
+import com.uber.hoodie.common.util.ConsistencyGuard;
+import com.uber.hoodie.common.util.ConsistencyGuard.FileVisibility;
+import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.FailSafeConsistencyGuard;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieSavepointException;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.io.ConsistencyCheck;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -56,10 +67,7 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
 
-  // time between successive attempts to ensure written data's metadata is consistent on storage
-  private static long INITIAL_CONSISTENCY_CHECK_INTERVAL_MS = 2000L;
-  // maximum number of checks, for consistency of written data. Will wait upto 256 Secs
-  private static int MAX_CONSISTENCY_CHECKS = 7;
+  private static Logger logger = LogManager.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
@@ -279,20 +287,126 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * @param stats List of HoodieWriteStats
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
-  public void finalizeWrite(JavaSparkContext jsc, List<HoodieWriteStat> stats)
+  public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
       throws HoodieIOException {
-    if (config.isConsistencyCheckEnabled()) {
-      List<String> pathsToCheck = stats.stream()
-          .map(stat -> stat.getTempPath() != null
-              ? stat.getTempPath() : stat.getPath())
-          .collect(Collectors.toList());
+    cleanFailedWrites(jsc, instantTs, stats, config.isConsistencyCheckEnabled());
+  }
 
-      List<String> failingPaths = new ConsistencyCheck(config.getBasePath(), pathsToCheck, jsc,
-          config.getFinalizeWriteParallelism())
-          .check(MAX_CONSISTENCY_CHECKS, INITIAL_CONSISTENCY_CHECK_INTERVAL_MS);
-      if (failingPaths.size() > 0) {
-        throw new HoodieIOException("Could not verify consistency of paths : " + failingPaths);
+  /**
+   * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
+   * retries.
+   *
+   * @param jsc       Spark Context
+   * @param instantTs Instant Timestamp
+   * @param stats   Hoodie Write Stat
+   * @param consistencyCheckEnabled  Consistency Check Enabled
+   * @throws HoodieIOException
+   */
+  protected void cleanFailedWrites(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats,
+      boolean consistencyCheckEnabled) throws HoodieIOException {
+    try {
+      // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
+      // (but succeeded on retry) tasks are removed.
+      String basePath = getMetaClient().getBasePath();
+      FileSystem fs = getMetaClient().getFs();
+      Path markerDir = new Path(metaClient.getMarkerFolderPath(instantTs));
+
+      if (!fs.exists(markerDir)) {
+        // Happens when all writes are appends
+        return;
       }
+
+      List<String> invalidDataPaths = FSUtils.getAllDataFilesForMarkers(fs, basePath, instantTs, markerDir.toString());
+      List<String> validDataPaths = stats.stream().map(w -> String.format("%s/%s", basePath, w.getPath()))
+          .filter(p -> p.endsWith(".parquet")).collect(Collectors.toList());
+      // Contains list of partially created files. These needs to be cleaned up.
+      invalidDataPaths.removeAll(validDataPaths);
+      logger.warn("InValid data paths=" + invalidDataPaths);
+
+      Map<String, List<Pair<String, String>>> groupByPartition = invalidDataPaths.stream()
+          .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp))
+          .collect(Collectors.groupingBy(Pair::getKey));
+
+      if (!groupByPartition.isEmpty()) {
+        // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
+        // Otherwise, we may miss deleting such files. If files are not found even after retries, fail the commit
+        if (consistencyCheckEnabled) {
+          // This will either ensure all files to be deleted are present.
+          waitForAllFiles(jsc, groupByPartition, FileVisibility.APPEAR);
+        }
+
+        // Now delete partially written files
+        jsc.parallelize(new ArrayList<>(groupByPartition.values()), config.getFinalizeWriteParallelism())
+            .map(partitionWithFileList -> {
+              final FileSystem fileSystem = metaClient.getFs();
+              logger.info("Deleting invalid data files=" + partitionWithFileList);
+              if (partitionWithFileList.isEmpty()) {
+                return true;
+              }
+              // Delete
+              partitionWithFileList.stream().map(Pair::getValue).forEach(file -> {
+                try {
+                  fileSystem.delete(new Path(file), false);
+                } catch (IOException e) {
+                  throw new HoodieIOException(e.getMessage(), e);
+                }
+              });
+
+              return true;
+            }).collect();
+
+        // Now ensure the deleted files disappear
+        if (consistencyCheckEnabled) {
+          // This will either ensure all files to be deleted are absent.
+          waitForAllFiles(jsc, groupByPartition, FileVisibility.DISAPPEAR);
+        }
+      }
+      // Now delete the marker directory
+      if (fs.exists(markerDir)) {
+        // For append only case, we do not write to marker dir. Hence, the above check
+        logger.info("Removing marker directory=" + markerDir);
+        fs.delete(markerDir, true);
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
+
+  /**
+   * Ensures all files passed either appear or disappear
+   * @param jsc   JavaSparkContext
+   * @param groupByPartition Files grouped by partition
+   * @param visibility Appear/Disappear
+   */
+  private void waitForAllFiles(JavaSparkContext jsc, Map<String, List<Pair<String, String>>> groupByPartition,
+      FileVisibility visibility) {
+    // This will either ensure all files to be deleted are present.
+    boolean checkPassed =
+        jsc.parallelize(new ArrayList<>(groupByPartition.entrySet()), config.getFinalizeWriteParallelism())
+            .map(partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
+                partitionWithFileList.getValue().stream(), visibility))
+            .collect().stream().allMatch(x -> x);
+    if (!checkPassed) {
+      throw new HoodieIOException("Consistency check failed to ensure all files " + visibility);
+    }
+  }
+
+  private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths,
+      FileVisibility visibility) {
+    final FileSystem fileSystem = metaClient.getFs();
+    List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
+    try {
+      getFailSafeConsistencyGuard(fileSystem).waitTill(partitionPath, fileList, visibility);
+    } catch (IOException | TimeoutException ioe) {
+      logger.error("Got exception while waiting for files to show up", ioe);
+      return false;
+    }
+    return true;
+  }
+
+  private ConsistencyGuard getFailSafeConsistencyGuard(FileSystem fileSystem) {
+    return new FailSafeConsistencyGuard(fileSystem, config.getMaxConsistencyChecks(),
+        config.getInitialConsistencyCheckIntervalMs(),
+        config.getMaxConsistencyCheckIntervalMs());
   }
 }
