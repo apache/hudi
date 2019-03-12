@@ -47,8 +47,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String MIN_COMMITS_TO_KEEP_PROP = "hoodie.keep.min.commits";
   // Upsert uses this file size to compact new data onto existing files..
   public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = "hoodie.parquet.small.file.limit";
-  // Turned off by default
-  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(0);
+  // By default, treat any file <= 100MB as a small file.
+  public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(104857600);
   /**
    * Configs related to specific table types
    **/
