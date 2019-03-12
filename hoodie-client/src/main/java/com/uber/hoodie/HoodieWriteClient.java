@@ -528,8 +528,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     try {
       activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, commitTime),
           Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-      // Save was a success
-      // Do a inline compaction if enabled
+      // Save was a success & Do a inline compaction if enabled
       if (config.isInlineCompaction()) {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
         forceCompact(extraMetadata);
@@ -1103,7 +1102,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             HoodieTimeline.compareTimestamps(instant.getTimestamp(), instantTime,
                 HoodieTimeline.GREATER_OR_EQUAL)).collect(Collectors.toList());
     Preconditions.checkArgument(conflictingInstants.isEmpty(),
-        "Following instants have timestamps >= compactionInstant. Instants :"
+        "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
             + conflictingInstants);
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieCompactionPlan workload = table.scheduleCompaction(jsc, instantTime);
@@ -1343,8 +1342,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   }
 
   /**
-   * Performs a compaction operation on a dataset. WARNING: Compaction operation cannot be executed
-   * asynchronously. Please always use this serially before or after an insert/upsert action.
+   * Performs a compaction operation on a dataset, serially before or after an insert/upsert action.
    */
   private Optional<String> forceCompact(Optional<Map<String, String>> extraMetadata) throws IOException {
     Optional<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);

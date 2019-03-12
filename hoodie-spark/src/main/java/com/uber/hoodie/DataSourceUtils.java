@@ -126,6 +126,12 @@ public class DataSourceUtils {
 
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr,
       String basePath, String tblName, Map<String, String> parameters) throws Exception {
+
+    // inline compaction is on by default for MOR
+    boolean inlineCompact = parameters.containsKey(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
+        && parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY()).equals(DataSourceWriteOptions
+        .MOR_STORAGE_TYPE_OPT_VAL());
+
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().combineInput(true, true)
         .withPath(basePath).withAutoCommit(false)
         .withSchema(schemaStr).forTable(tblName).withIndexConfig(
@@ -134,6 +140,7 @@ public class DataSourceUtils {
             .withPayloadClass(parameters.get(
                 DataSourceWriteOptions
                     .PAYLOAD_CLASS_OPT_KEY()))
+            .withInlineCompaction(inlineCompact)
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();

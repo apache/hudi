@@ -36,6 +36,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -323,17 +324,22 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) throws Exception {
+  private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
             .withAutoCommit(false)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withPayloadClass(cfg.payloadClassName)
+                // turn on inline compaction by default, for MOR tables
+                .withInlineCompaction(HoodieTableType.valueOf(cfg.storageType) == HoodieTableType.MERGE_ON_READ)
+                .build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(props);
     if (null != schemaProvider) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
     }
+
     return builder.build();
   }
 
