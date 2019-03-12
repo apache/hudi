@@ -59,10 +59,10 @@ public class UtilitiesTestBase {
   protected static HdfsTestService hdfsTestService;
   protected static MiniDFSCluster dfsCluster;
   protected static DistributedFileSystem dfs;
+  protected static HiveServer2 hiveServer;
   protected transient JavaSparkContext jsc = null;
   protected transient SparkSession sparkSession = null;
   protected transient SQLContext sqlContext;
-  protected static HiveServer2 hiveServer;
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -92,27 +92,8 @@ public class UtilitiesTestBase {
     }
   }
 
-  @Before
-  public void setup() throws Exception {
-    TestDataSource.initDataGen();
-    jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[2]");
-    sqlContext = new SQLContext(jsc);
-    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
-  }
-
-  @After
-  public void teardown() throws Exception {
-    TestDataSource.resetDataGen();
-    if (jsc != null) {
-      jsc.stop();
-    }
-  }
-
   /**
    * Helper to get hive sync config
-   * @param basePath
-   * @param tableName
-   * @return
    */
   protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
@@ -129,7 +110,6 @@ public class UtilitiesTestBase {
 
   /**
    * Initialize Hive DB
-   * @throws IOException
    */
   private static void clearHiveDb() throws IOException {
     HiveConf hiveConf = new HiveConf();
@@ -142,6 +122,22 @@ public class UtilitiesTestBase {
     client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
     client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
     client.close();
+  }
+
+  @Before
+  public void setup() throws Exception {
+    TestDataSource.initDataGen();
+    jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[1]");
+    sqlContext = new SQLContext(jsc);
+    sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
+  }
+
+  @After
+  public void teardown() throws Exception {
+    TestDataSource.resetDataGen();
+    if (jsc != null) {
+      jsc.stop();
+    }
   }
 
   public static class Helpers {
@@ -175,10 +171,10 @@ public class UtilitiesTestBase {
       os.close();
     }
 
-    public static TypedProperties setupSchemaOnDFS() throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+    public static TypedProperties setupSchemaOnDFS(String filePath) throws IOException {
+      UtilitiesTestBase.Helpers.copyToDFS(filePath, dfs, dfsBasePath + "/" + filePath);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filePath);
       return props;
     }
 

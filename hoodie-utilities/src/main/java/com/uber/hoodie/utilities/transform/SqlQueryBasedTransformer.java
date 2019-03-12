@@ -34,18 +34,9 @@ import org.apache.spark.sql.SparkSession;
  */
 public class SqlQueryBasedTransformer implements Transformer {
 
-  private static volatile Logger log = LogManager.getLogger(SqlQueryBasedTransformer.class);
-
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";
-
-  /**
-   * Configs supported
-   */
-  static class Config {
-
-    private static final String TRANSFORMER_SQL = "hoodie.deltastreamer.transformer.sql";
-  }
+  private static volatile Logger log = LogManager.getLogger(SqlQueryBasedTransformer.class);
 
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession,
@@ -62,5 +53,13 @@ public class SqlQueryBasedTransformer implements Transformer {
     String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
     log.info("SQL Query for transformation : (" + sqlStr + ")");
     return sparkSession.sql(sqlStr);
+  }
+
+  /**
+   * Configs supported
+   */
+  static class Config {
+
+    private static final String TRANSFORMER_SQL = "hoodie.deltastreamer.transformer.sql";
   }
 }

@@ -233,9 +233,9 @@ public class HoodieTestDataGenerator {
 
   public List<HoodieRecord> generateSameKeyInserts(String commitTime, List<HoodieRecord> origin) throws IOException {
     List<HoodieRecord> copy = new ArrayList<>();
-    for (HoodieRecord r: origin) {
+    for (HoodieRecord r : origin) {
       HoodieKey key = r.getKey();
-      HoodieRecord record = new HoodieRecord(key,  generateRandomValue(key, commitTime));
+      HoodieRecord record = new HoodieRecord(key, generateRandomValue(key, commitTime));
       copy.add(record);
     }
     return copy;
@@ -365,6 +365,15 @@ public class HoodieTestDataGenerator {
         throw new HoodieIOException(e.getMessage(), e);
       }
     });
+  }
+
+  public List<GenericRecord> generateGenericRecords(int numRecords) {
+    List<GenericRecord> list = new ArrayList<>();
+    IntStream.range(0, numRecords).forEach(i -> {
+      list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
+          .toString(), rand.nextDouble()));
+    });
+    return list;
   }
 
   public String[] getPartitionPaths() {

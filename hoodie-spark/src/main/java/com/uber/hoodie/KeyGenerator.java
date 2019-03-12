@@ -40,4 +40,5 @@ public abstract class KeyGenerator implements Serializable {
    * Generate a Hoodie Key out of provided generic record.
    */
   public abstract HoodieKey getKey(GenericRecord record);
+
 }

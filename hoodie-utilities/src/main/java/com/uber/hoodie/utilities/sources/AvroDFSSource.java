@@ -20,8 +20,10 @@ package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.utilities.UtilHelpers;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.DFSPathSelector;
+import java.io.IOException;
 import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
@@ -40,9 +42,11 @@ public class AvroDFSSource extends AvroSource {
   private final DFSPathSelector pathSelector;
 
   public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider)throws IOException {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
+    // TODO : make the path selector an interface, pass it to the source
+    this.pathSelector = UtilHelpers.createSourceSelector(DFSPathSelector.class.getName(), props, sparkContext
+        .hadoopConfiguration());
   }
 
   @Override
@@ -50,6 +54,7 @@ public class AvroDFSSource extends AvroSource {
       long sourceLimit) {
     Pair<Optional<String>, String> selectPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+    log.info("Path with max modification time => " + selectPathsWithMaxModificationTime);
     return selectPathsWithMaxModificationTime.getLeft().map(pathStr -> new InputBatch<>(
         Optional.of(fromFiles(pathStr)),
         selectPathsWithMaxModificationTime.getRight()))
@@ -57,6 +62,7 @@ public class AvroDFSSource extends AvroSource {
   }
 
   private JavaRDD<GenericRecord> fromFiles(String pathStr) {
+    log.info("Path to read files from => " + pathStr);
     JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
         AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
         sparkContext.hadoopConfiguration());

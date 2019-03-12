@@ -39,11 +39,13 @@
     <module>hoodie-spark</module>
     <module>hoodie-timeline-service</module>
     <module>hoodie-utilities</module>
+    <module>hoodie-bench</module>
     <module>packaging/hoodie-hadoop-mr-bundle</module>
     <module>packaging/hoodie-hive-bundle</module>
     <module>packaging/hoodie-spark-bundle</module>
     <module>packaging/hoodie-presto-bundle</module>
     <module>packaging/hoodie-utilities-bundle</module>
+    <module>packaging/hoodie-bench-bundle</module>
     <module>docker/hoodie/hadoop</module>
     <module>hoodie-integ-test</module>
   </modules>

@@ -96,6 +96,9 @@ public class TestUtil {
     if (hiveServer == null) {
       HiveTestService hiveService = new HiveTestService(configuration);
       hiveServer = hiveService.start();
+      configuration.iterator().forEachRemaining(a -> {
+        System.out.println(a);
+      });
     }
     fileSystem = FileSystem.get(configuration);
 

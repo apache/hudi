@@ -199,7 +199,7 @@ public class TestHoodieClientBase implements Serializable {
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
-        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(
+        .withEmbeddedTimelineServerEnabled(false).withFileSystemViewConfig(
           FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
               .build());
   }

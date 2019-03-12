@@ -145,6 +145,13 @@ object DataSourceWriteOptions {
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = classOf[SimpleKeyGenerator].getName
 
   /**
+    * Key generator class, that implements will extract the key out of incoming record
+    *
+    */
+  val KEYTRANSLATOR_CLASS_OPT_KEY = "hoodie.datasource.write.keytranslator.class"
+  val DEFAULT_KEYTRANSLATOR_CLASS_OPT_KEY_CLASS_OPT_VAL = classOf[KeyTranslator].getName
+
+  /**
     * Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata.
     * This is useful to store checkpointing information, in a consistent way with the hoodie timeline
     */

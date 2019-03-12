@@ -505,7 +505,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         createMetaClient(true), config, jsc);
 
-    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline =  table.getActiveTimeline();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
 
     List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();

@@ -151,6 +151,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertTrue("Commit should succeed", client.commit(newCommitTime, result));
     assertTrue("After explicit commit, commit file should be created",
         HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+    client.clean();
+    System.out.println("testing");
   }
 
   /**

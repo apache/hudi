@@ -218,6 +218,8 @@ public class HoodieHiveClient {
       List<String> storagePartitionValues = partitionValueExtractor
           .extractPartitionValuesInPath(storagePartition);
       Collections.sort(storagePartitionValues);
+
+
       if (!storagePartitionValues.isEmpty()) {
         String storageValue = String.join(", ", storagePartitionValues);
         if (!paths.containsKey(storageValue)) {
@@ -445,8 +447,9 @@ public class HoodieHiveClient {
    */
   public boolean doesTableExist() {
     try {
-      return client.tableExists(syncConfig.databaseName, syncConfig.tableName);
-    } catch (TException e) {
+      LOG.info("Checking if tables exists");
+      return false; // client.tableExists(syncConfig.databaseName, syncConfig.tableName);
+    } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to check if table exists " + syncConfig.tableName,
           e);
     }
@@ -591,9 +594,9 @@ public class HoodieHiveClient {
     // Set the last commit time from the TBLproperties
     String lastCommitSynced = activeTimeline.lastInstant().get().getTimestamp();
     try {
-      Table table = client.getTable(syncConfig.databaseName, syncConfig.tableName);
-      table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
-      client.alter_table(syncConfig.databaseName, syncConfig.tableName, table);
+      // Table table = client.getTable(syncConfig.databaseName, syncConfig.tableName);
+      // table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
+      // client.alter_table(syncConfig.databaseName, syncConfig.tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to get update last commit time synced to " + lastCommitSynced, e);
@@ -676,5 +679,9 @@ public class HoodieHiveClient {
           + ", url='" + url + '\''
           + '}';
     }
+  }
+
+  public HiveMetaStoreClient getClient() {
+    return client;
   }
 }

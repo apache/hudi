@@ -27,6 +27,7 @@ import com.beust.jcommander.ParameterException;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.OverwriteWithLatestAvroPayload;
+import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -63,6 +64,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
@@ -82,20 +84,20 @@ import org.apache.spark.sql.SparkSession;
  */
 public class HoodieDeltaStreamer implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieDeltaStreamer.class);
-
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
 
   private final transient Config cfg;
 
-  private transient DeltaSyncService deltaSyncService;
+  protected transient DeltaSyncService deltaSyncService;
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
+  private static volatile Logger log = LogManager.getLogger(HoodieDeltaStreamer.class);
+
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws Exception {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         getDefaultHiveConf(jssc.hadoopConfiguration()));
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws IOException {
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf) throws Exception {
     this.cfg = cfg;
     this.deltaSyncService = new DeltaSyncService(cfg, jssc, fs, hiveConf);
   }
@@ -374,11 +376,11 @@ public class HoodieDeltaStreamer implements Serializable {
         try {
           while (!isShutdownRequested()) {
             try {
-              Optional<String> scheduledCompactionInstant = deltaSync.syncOnce();
-              if (scheduledCompactionInstant.isPresent()) {
+              Pair<Optional<String>, JavaRDD<WriteStatus>> scheduledCompactionInstant = deltaSync.syncOnce();
+              if (scheduledCompactionInstant.getLeft().isPresent()) {
                 log.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
                 asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION,
-                    scheduledCompactionInstant.get()));
+                    scheduledCompactionInstant.getLeft().get()));
                 asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
               }
             } catch (Exception e) {

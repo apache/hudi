@@ -25,7 +25,11 @@ import com.uber.hoodie.common.util.collection.ImmutablePair;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -33,21 +37,24 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 public class DFSPathSelector {
+  protected static volatile Logger log = LogManager.getLogger(DFSPathSelector.class);
 
   /**
    * Configs supported
    */
-  static class Config {
+  public static class Config {
 
-    private static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
+    public static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
   }
 
-  private static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
+  protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
 
-  private final transient FileSystem fs;
-  private final TypedProperties props;
+  protected final transient FileSystem fs;
+  protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
     DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
@@ -60,6 +67,7 @@ public class DFSPathSelector {
 
     try {
       // obtain all eligible files under root folder.
+      log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
       List<FileStatus> eligibleFiles = new ArrayList<>();
       RemoteIterator<LocatedFileStatus> fitr = fs.listFiles(
           new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
@@ -73,7 +81,7 @@ public class DFSPathSelector {
       }
       // sort them by modification time.
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
-
+      log.info("Eligible files => " + eligibleFiles.size());
       // Filter based on checkpoint & input size, if needed
       long currentBytes = 0;
       long maxModificationTime = Long.MIN_VALUE;

@@ -21,7 +21,6 @@ package com.uber.hoodie.hive.util;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
-import com.uber.hoodie.common.model.HoodieTestUtils;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -88,7 +87,7 @@ public class HiveTestService {
     Preconditions.checkState(workDir != null, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
-      hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+      hadoopConf = new Configuration();
     }
 
     String localHiveLocation = getHiveLocation(workDir);
@@ -134,6 +133,7 @@ public class HiveTestService {
   }
 
   private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
+    LOG.info("configuring hive");
     conf.set("hive.metastore.local", "false");
     conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
     conf.set(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST.varname, bindIP);

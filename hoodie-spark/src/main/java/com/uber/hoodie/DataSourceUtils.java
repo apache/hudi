@@ -210,9 +210,9 @@ public class DataSourceUtils {
 
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
-                                                     JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     Map<String, String> parameters,
-                                                     Optional<EmbeddedTimelineService> timelineService)
+      JavaRDD<HoodieRecord> incomingHoodieRecords,
+      Map<String, String> parameters,
+      Optional<EmbeddedTimelineService> timelineService)
       throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig
         .newBuilder()
@@ -240,8 +240,8 @@ public class DataSourceUtils {
     hiveSyncConfig.partitionFields =
         props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), ",",  new ArrayList<>());
     hiveSyncConfig.partitionValueExtractorClass =
-          props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
-              SlashEncodedDayPartitionValueExtractor.class.getName());
+        props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+            SlashEncodedDayPartitionValueExtractor.class.getName());
     return hiveSyncConfig;
   }
 }

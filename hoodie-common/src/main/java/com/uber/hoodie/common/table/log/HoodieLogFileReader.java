@@ -377,7 +377,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
       inputStream.seek(blockEndPos);
       throw new CorruptedLogFileException(
           "Found possible corrupted block, cannot read log file in reverse, "
-              + "fallback to forward reading of logfile");
+              + "fallback to forward reading of logfile " + logFile);
     }
     boolean hasNext = hasNext();
     reverseLogFilePosition -= blockSize;

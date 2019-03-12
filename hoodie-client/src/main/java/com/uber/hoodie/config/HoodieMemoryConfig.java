@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
+import java.util.Random;
 import javax.annotation.concurrent.Immutable;
 import org.apache.spark.SparkEnv;
 import org.apache.spark.util.Utils;
@@ -102,6 +103,7 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
     public Builder withMaxDFSStreamBufferSize(int maxStreamBufferSize) {
       props.setProperty(MAX_DFS_STREAM_BUFFER_SIZE_PROP,
           String.valueOf(maxStreamBufferSize));
+      Random i = new Random();
       return this;
     }
 
@@ -131,8 +133,7 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       if (SparkEnv.get() != null) {
         // 1 GB is the default conf used by Spark, look at SparkContext.scala
         long executorMemoryInBytes = Utils.memoryStringToMb(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_PROP,
-            DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024
-            * 1024L;
+            DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024 * 1024L;
         // 0.6 is the default value used by Spark,
         // look at {@link
         // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}

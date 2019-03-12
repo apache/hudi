@@ -31,6 +31,7 @@ import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.Source;
+import com.uber.hoodie.utilities.sources.helpers.DFSPathSelector;
 import com.uber.hoodie.utilities.transform.Transformer;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -41,6 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -85,6 +87,17 @@ public class UtilHelpers {
       return transformerClass == null ? null : (Transformer) ReflectionUtils.loadClass(transformerClass);
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class " + transformerClass, e);
+    }
+  }
+
+  public static DFSPathSelector createSourceSelector(String sourceSelectorClass, TypedProperties props,
+      Configuration conf) throws IOException {
+    try {
+      return (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+          new Class<?>[]{TypedProperties.class, Configuration.class},
+          props, conf);
+    } catch (Throwable e) {
+      throw new IOException("Could not load source selector class " + sourceSelectorClass, e);
     }
   }
 

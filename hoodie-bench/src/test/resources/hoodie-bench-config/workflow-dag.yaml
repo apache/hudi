@@ -1,0 +1,35 @@
+first_insert:
+  config:
+    record_size: 1000
+    num_partitions: 1
+    repeat_count: 1
+    num_records_insert: 1000
+  type: InsertNode
+  deps: none
+second_insert:
+  config:
+    record_size: 1000
+    num_partitions: 1
+    repeat_count: 1
+    num_records_insert: 1000
+  deps: first_insert
+  type: InsertNode
+first_validate:
+  config:
+  deps: second_insert
+  type: ValidateNode
+third_upsert:
+  config:
+    record_size: 1000
+    num_partitions: 1
+    repeat_count: 1
+    num_records_upsert: 1000
+  type: InsertNode
+  deps: second_insert,first_validate
+first_hive_query:
+  config:
+    hive_queries:
+      query1: "select count(*) from testdb1.table1 groupby _row_key having count(*) > 1"
+      result1: 0
+  type: HiveQueryNode
+  deps: third_upsert

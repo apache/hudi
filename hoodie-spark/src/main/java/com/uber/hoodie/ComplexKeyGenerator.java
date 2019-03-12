@@ -19,6 +19,7 @@
 package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieException;
 import java.util.Arrays;
@@ -35,15 +36,21 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
 
+  public static final String DEFAULT_RECORD_KEY_SEPARATOR = "#";
+
   protected final List<String> recordKeyFields;
 
   protected final List<String> partitionPathFields;
+
+  protected final KeyTranslator keyTranslator;
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
     this.partitionPathFields = Arrays.asList(props
             .getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","));
+    this.keyTranslator = ReflectionUtils.loadClass(props
+        .getOrDefault(DataSourceWriteOptions.KEYTRANSLATOR_CLASS_OPT_KEY(), KeyTranslator.class.getName()).toString());
   }
 
   @Override
@@ -68,7 +75,8 @@ public class ComplexKeyGenerator extends KeyGenerator {
       partitionPath = partitionPath.append(DEFAULT_PARTITION_PATH);
     }
 
-    return new HoodieKey(recordKey.toString(), partitionPath.toString());
+    return new HoodieKey(this.keyTranslator.translateRecordKey(recordKey.toString()), this.keyTranslator
+        .translatePartitionPath(partitionPath.toString()));
   }
 
   public List<String> getRecordKeyFields() {

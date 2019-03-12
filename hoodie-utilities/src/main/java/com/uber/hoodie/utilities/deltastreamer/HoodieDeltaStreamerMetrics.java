@@ -23,16 +23,17 @@ import static com.uber.hoodie.metrics.Metrics.registerGauge;
 import com.codahale.metrics.Timer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.metrics.Metrics;
+import java.io.Serializable;
 
-public class HoodieDeltaStreamerMetrics {
+public class HoodieDeltaStreamerMetrics implements Serializable {
 
   private HoodieWriteConfig config = null;
   private String tableName = null;
 
   public String overallTimerName = null;
   public String hiveSyncTimerName = null;
-  private Timer overallTimer = null;
-  public Timer hiveSyncTimer = null;
+  private transient Timer overallTimer = null;
+  public transient Timer hiveSyncTimer = null;
 
   public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
     this.config = config;

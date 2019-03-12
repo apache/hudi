@@ -191,8 +191,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle upsertHandle,
-      String commitTime, String fileId)
-      throws IOException {
+      String commitTime, String fileId) throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + commitTime + " for fileId: " + fileId);

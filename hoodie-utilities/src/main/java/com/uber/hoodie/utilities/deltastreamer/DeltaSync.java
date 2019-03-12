@@ -44,6 +44,7 @@ import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HiveSyncTool;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.utilities.UtilHelpers;
+import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
 import com.uber.hoodie.utilities.schema.RowBasedSchemaProvider;
@@ -203,8 +204,8 @@ public class DeltaSync implements Serializable {
   /**
    * Run one round of delta sync and return new compaction instant if one got scheduled
    */
-  public Optional<String> syncOnce() throws Exception {
-    Optional<String> scheduledCompaction = Optional.empty();
+  public Pair<Optional<String>, JavaRDD<WriteStatus>> syncOnce() throws Exception {
+    Pair<Optional<String>, JavaRDD<WriteStatus>> result = null;
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
@@ -224,19 +225,19 @@ public class DeltaSync implements Serializable {
         setupWriteClient();
       }
 
-      scheduledCompaction = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
+      result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
 
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
-    return scheduledCompaction;
+    return result;
   }
 
   /**
    * Read from Upstream Source and apply transformation if needed
    */
-  private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
       Optional<HoodieTimeline> commitTimelineOpt) throws Exception {
     // Retrieve the previous round checkpoints, if any
     Optional<String> resumeCheckpointStr = Optional.empty();
@@ -309,7 +310,7 @@ public class DeltaSync implements Serializable {
    * @param metrics Metrics
    * @return Optional Compaction instant if one is scheduled
    */
-  private Optional<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
+  private Pair<Optional<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
       HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
 
     Optional<String> scheduledCompactionInstant = Optional.empty();
@@ -323,7 +324,7 @@ public class DeltaSync implements Serializable {
 
       if (records.isEmpty()) {
         log.info("No new data, nothing to commit.. ");
-        return Optional.empty();
+        return Pair.of(Optional.empty(), jssc.emptyRDD());
       }
     }
 
@@ -366,7 +367,7 @@ public class DeltaSync implements Serializable {
 
         // Sync to hive if enabled
         Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
-        syncHive();
+        syncHiveIfNeeded();
         hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
       } else {
         log.info("Commit " + commitTime + " failed!");
@@ -392,7 +393,7 @@ public class DeltaSync implements Serializable {
     // Send DeltaStreamer Metrics
     metrics.updateDeltaStreamerMetrics(overallTimeMs, hiveSyncTimeMs);
 
-    return scheduledCompactionInstant;
+    return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
   private String startCommit() {
@@ -419,14 +420,23 @@ public class DeltaSync implements Serializable {
   /**
    * Sync to Hive
    */
-  private void syncHive() {
+  public void syncHiveIfNeeded() {
     if (cfg.enableHiveSync) {
-      HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
-      log.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName
-          + "). Hive metastore URL :" + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
-
-      new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
+      syncHive();
     }
+  }
+
+  public void syncHive() {
+    HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
+    log.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName
+        + "). Hive metastore URL :" + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+    log.info("Hive Conf => " + hiveConf.getAllProperties().toString());
+    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
+  }
+
+  public void syncHive(HiveConf conf) {
+    this.hiveConf = conf;
+    syncHive();
   }
 
   /**
@@ -491,5 +501,25 @@ public class DeltaSync implements Serializable {
       writeClient.close();
       writeClient = null;
     }
+  }
+
+  public Optional<HoodieTimeline> getCommitTimelineOpt() {
+    return commitTimelineOpt;
+  }
+
+  public FileSystem getFs() {
+    return fs;
+  }
+
+  public TypedProperties getProps() {
+    return props;
+  }
+
+  public HiveConf getHiveConf() {
+    return hiveConf;
+  }
+
+  public Config getCfg() {
+    return cfg;
   }
 }
