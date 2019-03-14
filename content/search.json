@@ -1,0 +1,265 @@
+[
+
+
+
+
+{
+"title": "Admin Guide",
+"tags": "",
+"keywords": "hudi, administration, operation, devops",
+"url": "admin_guide.html",
+"summary": "This section offers an overview of tools available to operate an ecosystem of Hudi datasets"
+}
+,
+
+
+
+{
+"title": "Community",
+"tags": "",
+"keywords": "hudi, use cases, big data, apache",
+"url": "community.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "Comparison",
+"tags": "",
+"keywords": "apache, hudi, kafka, kudu, hive, hbase, stream processing",
+"url": "comparison.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "Concepts",
+"tags": "",
+"keywords": "hudi, design, storage, views, timeline",
+"url": "concepts.html",
+"summary": "Here we introduce some basic concepts & give a broad technical overview of Hudi"
+}
+,
+
+
+
+{
+"title": "Configurations",
+"tags": "",
+"keywords": "garbage collection, hudi, jvm, configs, tuning",
+"url": "configurations.html",
+"summary": "Here we list all possible configurations and what they mean"
+}
+,
+
+
+
+{
+"title": "Developer Setup",
+"tags": "",
+"keywords": "hudi, ide, developer, setup",
+"url": "contributing.html",
+"summary": ""
+}
+,
+
+
+
+
+
+{
+"title": "GCS Filesystem",
+"tags": "",
+"keywords": "hudi, hive, google cloud, storage, spark, presto",
+"url": "gcs_hoodie.html",
+"summary": "In this page, we go over how to configure hudi with Google Cloud Storage."
+}
+,
+
+
+
+{
+"title": "Implementation",
+"tags": "",
+"keywords": "hudi, index, storage, compaction, cleaning, implementation",
+"url": "implementation.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "Incremental Processing",
+"tags": "",
+"keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
+"url": "incremental_processing.html",
+"summary": "In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes."
+}
+,
+
+
+
+{
+"title": "What is Hudi?",
+"tags": "getting_started",
+"keywords": "big data, stream processing, cloud, hdfs, storage, upserts, change capture",
+"url": "index.html",
+"summary": "Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing."
+}
+,
+
+
+
+{
+"title": "Migration Guide",
+"tags": "",
+"keywords": "hudi, migration, use case",
+"url": "migration_guide.html",
+"summary": "In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset"
+}
+,
+
+
+
+{
+"title": "Scroll layout",
+"tags": "special_layouts",
+"keywords": "json, scrolling, scrollto, jquery plugin",
+"url": "jsmydoc_scroll.html",
+"summary": "This page demonstrates how you the integration of a script called ScrollTo, which is used here to link definitions of a JSON code sample to a list of definitions for that particular term. The scenario here is that the JSON blocks are really long, with extensive nesting and subnesting, which makes it difficult for tables below the JSON to adequately explain the term in a usable way."
+}
+,
+
+
+
+{
+"title": "News",
+"tags": "",
+"keywords": "apache, hudi, news, blog, updates, release notes, announcements",
+"url": "news.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "News",
+"tags": "",
+"keywords": "news, blog, updates, release notes, announcements",
+"url": "news_archive.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "Talks &amp; Powered By",
+"tags": "",
+"keywords": "hudi, talks, presentation",
+"url": "powered_by.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "Privacy Policy",
+"tags": "",
+"keywords": "hudi, privacy",
+"url": "privacy.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "Quickstart",
+"tags": "quickstart",
+"keywords": "hudi, quickstart",
+"url": "quickstart.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "S3 Filesystem",
+"tags": "",
+"keywords": "hudi, hive, aws, s3, spark, presto",
+"url": "s3_hoodie.html",
+"summary": "In this page, we go over how to configure Hudi with S3 filesystem."
+}
+,
+
+
+
+
+
+
+
+{
+"title": "SQL Queries",
+"tags": "",
+"keywords": "hudi, hive, spark, sql, presto",
+"url": "sql_queries.html",
+"summary": "In this page, we go over how to enable SQL queries on Hudi built tables."
+}
+,
+
+
+
+{
+"title": "Use Cases",
+"tags": "",
+"keywords": "hudi, data ingestion, etl, real time, use cases",
+"url": "use_cases.html",
+"summary": "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
+}
+,
+
+
+
+{
+"title": "",
+"tags": "",
+"keywords": "",
+"url": "feed.xslt.xml",
+"summary": ""
+}
+,
+
+
+
+
+
+{
+"title": "Hudi entered Apache Incubator",
+"tags": "news",
+"keywords": "",
+"url": "/strata-talk.html",
+"summary": ""
+}
+,
+
+
+{
+"title": "Connect with us at Strata San Jose March 2017",
+"tags": "news",
+"keywords": "",
+"url": "/strata-talk.html",
+"summary": ""
+}
+
+
+
+]

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title></title>
+        <description>Apache Hudi (pronounced “Hoodie”) provides upserts and incremental processing capaibilities on Big Data</description>
+        <link>http://0.0.0.0:4000/</link>
+        <atom:link href="http://0.0.0.0:4000/feed.xml" rel="self" type="application/rss+xml"/>
+        <pubDate>Sat, 09 Mar 2019 21:08:53 +0000</pubDate>
+        <lastBuildDate>Sat, 09 Mar 2019 21:08:53 +0000</lastBuildDate>
+        <generator>Jekyll v3.3.1</generator>
+        
+        <item>
+            <title>Hudi entered Apache Incubator</title>
+            <description>&lt;p&gt;In the coming weeks, we will be moving in our new home on the Apache Incubator.&lt;/p&gt;
+
+</description>
+            <pubDate>Fri, 18 Jan 2019 00:00:00 +0000</pubDate>
+            <link>http://0.0.0.0:4000/strata-talk.html</link>
+            <guid isPermaLink="true">http://0.0.0.0:4000/strata-talk.html</guid>
+            
+            <category>news</category>
+            
+            
+        </item>
+        
+        <item>
+            <title>Connect with us at Strata San Jose March 2017</title>
+            <description>&lt;p&gt;We will be presenting Hudi &amp;amp; general concepts around how incremental processing works at Uber.
+Catch our talk &lt;strong&gt;“Incremental Processing on Hadoop At Uber”&lt;/strong&gt;&lt;/p&gt;
+
+</description>
+            <pubDate>Fri, 30 Dec 2016 00:00:00 +0000</pubDate>
+            <link>http://0.0.0.0:4000/strata-talk.html</link>
+            <guid isPermaLink="true">http://0.0.0.0:4000/strata-talk.html</guid>
+            
+            <category>news</category>
+            
+            
+        </item>
+        
+    </channel>
+</rss>

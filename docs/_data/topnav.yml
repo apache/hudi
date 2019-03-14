@@ -1,0 +1,29 @@
+## Topnav single links
+## if you want to list an external url, use external_url instead of url. the theme will apply a different link base.
+topnav:
+- title: Topnav
+  items:
+    - title: News
+      url: /news
+    - title: Community
+      url: /community.html
+    - title: Code
+      external_url: https://github.com/uber/hoodie
+
+#Topnav dropdowns
+topnav_dropdowns:
+- title: Topnav dropdowns
+  folders:
+    - title: Developers
+      folderitems:
+          - title: Contributing
+            url: /contributing.html
+            output: web
+          - title: Wiki/Designs
+            external_url: https://cwiki.apache.org/confluence/display/HUDI
+          - title: Issues
+            external_url: https://issues.apache.org/jira/projects/HUDI/summary
+          - title: Blog
+            external_url: https://cwiki.apache.org/confluence/pages/viewrecentblogposts.action?key=HUDI
+          - title: Team
+            external_url: https://projects.apache.org/project.html?incubator-hudi

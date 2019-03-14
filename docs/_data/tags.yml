@@ -1,0 +1,10 @@
+allowed-tags:
+  - getting_started
+  - overview
+  - quickstart
+  - concepts
+  - sql_queries
+  - incremental_processing
+  - configurations
+  - news
+  - troubleshooting
