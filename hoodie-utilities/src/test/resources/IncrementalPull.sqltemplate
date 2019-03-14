@@ -1,8 +1,0 @@
-CREATE TABLE <tempDbTable>
-<storedAsClause>
-LOCATION '<tempDbTablePath>'
-AS
-<incrementalSQL>
-
-
-
