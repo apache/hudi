@@ -3,9 +3,9 @@
     <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="In this page, we go over how to configure hudi with Google Cloud Storage.">
-<meta name="keywords" content="hudi, hive, google cloud, storage, spark, presto">
-<title>GCS Filesystem | Hudi</title>
+<meta name="description" content="In this page, we go over how to enable SQL queries on Hudi built tables.">
+<meta name="keywords" content="hudi, hive, spark, sql, presto">
+<title>Querying Hudi Datasets | Hudi</title>
 <link rel="stylesheet" href="css/syntax.css">
 
 
@@ -162,7 +162,7 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the GCS Filesystem page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the Querying Hudi Datasets page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
@@ -180,7 +180,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: 'search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="GCS Filesystem">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="Querying Hudi Datasets">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -272,7 +272,7 @@
             
             
             
-            <li><a href="querying_data.html">Querying Data</a></li>
+            <li class="active"><a href="querying_data.html">Querying Data</a></li>
             
             
             
@@ -317,7 +317,7 @@
     <!-- Content Column -->
     <div class="col-md-9">
         <div class="post-header">
-   <h1 class="post-title-main">GCS Filesystem</h1>
+   <h1 class="post-title-main">Querying Hudi Datasets</h1>
 </div>
 
 
@@ -325,7 +325,7 @@
 <div class="post-content">
 
    
-    <div class="summary">In this page, we go over how to configure hudi with Google Cloud Storage.</div>
+    <div class="summary">In this page, we go over how to enable SQL queries on Hudi built tables.</div>
    
 
     
@@ -333,64 +333,56 @@
 
     
 
-  <p>For Hudi storage on GCS, <strong>regional</strong> buckets provide an DFS API with strong consistency.</p>
+  <p>Hudi registers the dataset into the Hive metastore backed by <code class="highlighter-rouge">HoodieInputFormat</code>. This makes the data accessible to
+Hive &amp; Spark &amp; Presto automatically. To be able to perform normal SQL queries on such a dataset, we need to get the individual query engines
+to call <code class="highlighter-rouge">HoodieInputFormat.getSplits()</code>, during query planning such that the right versions of files are exposed to it.</p>
 
-<h2 id="gcs-configs">GCS Configs</h2>
+<p>In the following sections, we cover the configs needed across different query engines to achieve this.</p>
 
-<p>There are two configurations required for Hudi GCS compatibility:</p>
+<div class="bs-callout bs-callout-info">Instructions are currently only for Copy-on-write storage</div>
 
-<ul>
-  <li>Adding GCS Credentials for Hudi</li>
-  <li>Adding required jars to classpath</li>
-</ul>
+<h2 id="hive">Hive</h2>
 
-<h3 id="gcs-credentials">GCS Credentials</h3>
+<p>For HiveServer2 access, <a href="https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr">install</a>
+the hoodie-hadoop-mr-bundle-x.y.z-SNAPSHOT.jar into the aux jars path and we should be able to recognize the Hudi tables and query them correctly.</p>
 
-<p>Add the required configs in your core-site.xml from where Hudi can fetch them. Replace the <code class="highlighter-rouge">fs.defaultFS</code> with your GCS bucket name and Hudi should be able to read/write from the bucket.</p>
+<p>For beeline access, the <code class="highlighter-rouge">hive.input.format</code> variable needs to be set to the fully qualified path name of the inputformat <code class="highlighter-rouge">com.uber.hoodie.hadoop.HoodieInputFormat</code>
+For Tez, additionally the <code class="highlighter-rouge">hive.tez.input.format</code> needs to be set to <code class="highlighter-rouge">org.apache.hadoop.hive.ql.io.HiveInputFormat</code></p>
 
-<div class="language-xml highlighter-rouge"><pre class="highlight"><code>  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>fs.defaultFS<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>gs://hoodie-bucket<span class="nt">&lt;/value&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
+<h2 id="spark">Spark</h2>
 
-  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>fs.gs.impl<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem<span class="nt">&lt;/value&gt;</span>
-    <span class="nt">&lt;description&gt;</span>The FileSystem for gs: (GCS) uris.<span class="nt">&lt;/description&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
+<p>There are two ways of running Spark SQL on Hudi datasets.</p>
 
-  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>fs.AbstractFileSystem.gs.impl<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS<span class="nt">&lt;/value&gt;</span>
-    <span class="nt">&lt;description&gt;</span>The AbstractFileSystem for gs: (GCS) uris.<span class="nt">&lt;/description&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
+<p>First method involves, setting <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code>, forcing Spark to fallback
+to using the Hive Serde to read the data (planning/executions is still Spark). This turns off optimizations in Spark
+towards Parquet reading, which we will address in the next method based on path filters.
+However benchmarks have not revealed any real performance degradation with Hudi &amp; SparkSQL, compared to native support.</p>
 
-  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>fs.gs.project.id<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>GCS_PROJECT_ID<span class="nt">&lt;/value&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
-  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>google.cloud.auth.service.account.enable<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>true<span class="nt">&lt;/value&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
-  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>google.cloud.auth.service.account.email<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>GCS_SERVICE_ACCOUNT_EMAIL<span class="nt">&lt;/value&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
-  <span class="nt">&lt;property&gt;</span>
-    <span class="nt">&lt;name&gt;</span>google.cloud.auth.service.account.keyfile<span class="nt">&lt;/name&gt;</span>
-    <span class="nt">&lt;value&gt;</span>GCS_SERVICE_ACCOUNT_KEYFILE<span class="nt">&lt;/value&gt;</span>
-  <span class="nt">&lt;/property&gt;</span>
+<p>Sample command is provided below to spin up Spark Shell</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ spark-shell --jars hoodie-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+
+scala&gt; sqlContext.sql("select count(*) from uber.trips where datestr = '2016-10-02'").show()
+
 </code></pre>
 </div>
 
-<h3 id="gcs-libs">GCS Libs</h3>
+<p>For scheduled Spark jobs, a dependency to <a href="https://mvnrepository.com/artifact/com.uber.hoodie/hoodie-hadoop-mr">hoodie-hadoop-mr</a> and <a href="https://mvnrepository.com/artifact/com.uber.hoodie/hoodie-client">hoodie-client</a> modules needs to be added
+and the same config needs to be set on <code class="highlighter-rouge">SparkConf</code> or conveniently via <code class="highlighter-rouge">HoodieReadClient.addHoodieSupport(conf)</code></p>
 
-<p>GCS hadoop libraries to add to our classpath</p>
+<div class="bs-callout bs-callout-warning">Don’t instantiate a HoodieWriteClient against a table you don’t own. Hudi is a single writer &amp; multiple reader system as of now. You may accidentally cause incidents otherwise.
+</div>
 
-<ul>
-  <li>com.google.cloud.bigdataoss:gcs-connector:1.6.0-hadoop2</li>
-</ul>
+<p>The second method uses a new feature in Spark 2.x, which allows for the work of HoodieInputFormat to be done via a path filter as below. This method uses Spark built-in optimizations for
+reading Parquet files, just like queries on non-Hudi tables.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[com.uber.hoodie.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
+</code></pre>
+</div>
+
+<h2 id="presto">Presto</h2>
+
+<p>Presto requires the <code class="highlighter-rouge">hoodie-presto-bundle</code> jar to be placed into <code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>, across the installation.</p>
 
 
     <div class="tags">

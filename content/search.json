@@ -4,7 +4,7 @@
 
 
 {
-"title": "Admin Guide",
+"title": "Administering Hudi Pipelines",
 "tags": "",
 "keywords": "hudi, administration, operation, devops",
 "url": "admin_guide.html",
@@ -83,28 +83,6 @@
 
 
 {
-"title": "Implementation",
-"tags": "",
-"keywords": "hudi, index, storage, compaction, cleaning, implementation",
-"url": "implementation.html",
-"summary": ""
-}
-,
-
-
-
-{
-"title": "Incremental Processing",
-"tags": "",
-"keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
-"url": "incremental_processing.html",
-"summary": "In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes."
-}
-,
-
-
-
-{
 "title": "What is Hudi?",
 "tags": "getting_started",
 "keywords": "big data, stream processing, cloud, hdfs, storage, upserts, change capture",
@@ -160,6 +138,17 @@
 
 
 {
+"title": "Implementation",
+"tags": "",
+"keywords": "hudi, index, storage, compaction, cleaning, implementation",
+"url": "performance.html",
+"summary": ""
+}
+,
+
+
+
+{
 "title": "Talks &amp; Powered By",
 "tags": "",
 "keywords": "hudi, talks, presentation",
@@ -176,6 +165,17 @@
 "keywords": "hudi, privacy",
 "url": "privacy.html",
 "summary": ""
+}
+,
+
+
+
+{
+"title": "Querying Hudi Datasets",
+"tags": "",
+"keywords": "hudi, hive, spark, sql, presto",
+"url": "querying_data.html",
+"summary": "In this page, we go over how to enable SQL queries on Hudi built tables."
 }
 ,
 
@@ -208,22 +208,22 @@
 
 
 {
-"title": "SQL Queries",
+"title": "Use Cases",
 "tags": "",
-"keywords": "hudi, hive, spark, sql, presto",
-"url": "sql_queries.html",
-"summary": "In this page, we go over how to enable SQL queries on Hudi built tables."
+"keywords": "hudi, data ingestion, etl, real time, use cases",
+"url": "use_cases.html",
+"summary": "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
 }
 ,
 
 
 
 {
-"title": "Use Cases",
+"title": "Writing Hudi Datasets",
 "tags": "",
-"keywords": "hudi, data ingestion, etl, real time, use cases",
-"url": "use_cases.html",
-"summary": "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
+"keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
+"url": "writing_data.html",
+"summary": "In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes."
 }
 ,
 

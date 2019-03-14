@@ -222,13 +222,6 @@
             
             
             
-            <li><a href="index.html">Overview</a></li>
-            
-            
-            
-            
-            
-            
             <li class="active"><a href="quickstart.html">Quickstart</a></li>
             
             
@@ -244,6 +237,13 @@
             
             
             <li><a href="powered_by.html">Talks & Powered By</a></li>
+            
+            
+            
+            
+            
+            
+            <li><a href="comparison.html">Comparison</a></li>
             
             
             
@@ -265,49 +265,35 @@
             
             
             
-            <li><a href="implementation.html">Implementation</a></li>
+            <li><a href="writing_data.html">Writing Data</a></li>
             
             
             
             
             
             
-            <li><a href="configurations.html">Configurations</a></li>
+            <li><a href="querying_data.html">Querying Data</a></li>
             
             
             
             
             
             
-            <li><a href="sql_queries.html">SQL Queries</a></li>
+            <li><a href="configurations.html">Configuration</a></li>
             
             
             
             
             
             
-            <li><a href="migration_guide.html">Migration Guide</a></li>
+            <li><a href="performance.html">Performance</a></li>
             
             
             
             
             
             
-            <li><a href="incremental_processing.html">Incremental Processing</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="admin_guide.html">Admin Guide</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="comparison.html">Comparison</a></li>
+            <li><a href="admin_guide.html">Administering</a></li>
             
             
             
@@ -347,9 +333,7 @@
 
   <h2 id="download-hudi">Download Hudi</h2>
 
-<p>Check out code and pull it into Intellij as a normal maven project.</p>
-
-<p>Normally build the maven project, from command line</p>
+<p>Check out code and pull it into Intellij as a normal maven project. Normally build the maven project, from command line</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>$ mvn clean install -DskipTests -DskipITs
 </code></pre>
@@ -360,9 +344,10 @@
 $ mvn clean install -DskipTests -DskipITs -Dhive11
 </code></p>
 
-<div class="bs-callout bs-callout-info">You might want to add your spark jars folder to project dependencies under ‘Module Setttings’, to be able to run Spark from IDE</div>
+<div class="bs-callout bs-callout-info">You might want to add your spark jars folder to project dependencies under ‘Module Setttings’, to be able to run Spark from IDE. 
+Setup your local hadoop/hive test environment, so you can play with entire ecosystem.</div>
 
-<div class="alert alert-info" role="alert"><i class="fa fa-info-circle"></i> <b>Note:</b> Setup your local hadoop/hive test environment, so you can play with entire ecosystem. See <a href="http://www.bytearray.io/2016/05/setting-up-hadoopyarnsparkhive-on-mac.html">this</a> for reference</div>
+<p><br />Please refer to <a href="migration_guide.html">migration guide</a>, for recommended ways to migrate your existing dataset to Hudi.</p>
 
 <h2 id="version-compatibility">Version Compatibility</h2>
 
@@ -619,7 +604,7 @@ scala&gt; sqlContext.sql("select count(*) from hoodie_test").show(10000)
 <p>Checkout the ‘master’ branch on OSS Presto, build it, and place your installation somewhere.</p>
 
 <ul>
-  <li>Copy the hoodie-hadoop-mr-* jar into $PRESTO_INSTALL/plugin/hive-hadoop2/</li>
+  <li>Copy the hudi/packaging/hoodie-presto-bundle/target/hoodie-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/</li>
   <li>Startup your server and you should be able to query the same Hive table via Presto</li>
 </ul>
 
@@ -1276,21 +1261,23 @@ beeline -u jdbc:hive2://hiveserver:10000 –hiveconf hive.input.format=org.apach
 No rows affected (0.009 seconds)
 0: jdbc:hive2://hiveserver:10000&gt;  set hoodie.stock_ticks_cow.consume.max.commits=3;
 No rows affected (0.009 seconds)
-0: jdbc:hive2://hiveserver:10000&gt; set hoodie.stock_ticks_cow.consume.start.timestamp=20180924064621;</p>
+0: jdbc:hive2://hiveserver:10000&gt; set hoodie.stock_ticks_cow.consume.start.timestamp=20180924064621;
+```</p>
 
-<h1 id="with-the-above-setting-file-ids-that-do-not-have-any-updates-from-the-commit-20180924065039-is-filtered-out-without-scanning">With the above setting, file-ids that do not have any updates from the commit 20180924065039 is filtered out without scanning.</h1>
-<p># Here is the incremental query :</p>
+<p>With the above setting, file-ids that do not have any updates from the commit 20180924065039 is filtered out without scanning.
+Here is the incremental query :</p>
 
-<p>0: jdbc:hive2://hiveserver:10000&gt;
-0: jdbc:hive2://hiveserver:10000&gt; select <code class="highlighter-rouge">_hoodie_commit_time</code>, symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = ‘GOOG’ and <code class="highlighter-rouge">_hoodie_commit_time</code> &gt; ‘20180924064621’;
-+———————-+———+———————-+———+————+———–+–+
+<div class="highlighter-rouge"><pre class="highlight"><code>0: jdbc:hive2://hiveserver:10000&gt;
+0: jdbc:hive2://hiveserver:10000&gt; select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG' and `_hoodie_commit_time` &gt; '20180924064621';
++----------------------+---------+----------------------+---------+------------+-----------+--+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
-+———————-+———+———————-+———+————+———–+–+
++----------------------+---------+----------------------+---------+------------+-----------+--+
 | 20180924065039       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
-+———————-+———+———————-+———+————+———–+–+
++----------------------+---------+----------------------+---------+------------+-----------+--+
 1 row selected (0.83 seconds)
 0: jdbc:hive2://hiveserver:10000&gt;
-```</p>
+</code></pre>
+</div>
 
 <h5 id="incremental-query-with-spark-sql">Incremental Query with Spark SQL:</h5>
 <div class="highlighter-rouge"><pre class="highlight"><code>docker exec -it adhoc-1 /bin/bash

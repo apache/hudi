@@ -64,18 +64,6 @@
   
   
   <url>
-    <loc>http://0.0.0.0:4000/implementation.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/incremental_processing.html</loc>
-  </url>
-  
-  
-  
-  <url>
     <loc>http://0.0.0.0:4000/index.html</loc>
   </url>
   
@@ -106,6 +94,12 @@
   
   
   <url>
+    <loc>http://0.0.0.0:4000/performance.html</loc>
+  </url>
+  
+  
+  
+  <url>
     <loc>http://0.0.0.0:4000/powered_by.html</loc>
   </url>
   
@@ -113,6 +107,12 @@
   
   <url>
     <loc>http://0.0.0.0:4000/privacy.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://0.0.0.0:4000/querying_data.html</loc>
   </url>
   
   
@@ -134,13 +134,13 @@
   
   
   <url>
-    <loc>http://0.0.0.0:4000/sql_queries.html</loc>
+    <loc>http://0.0.0.0:4000/use_cases.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/use_cases.html</loc>
+    <loc>http://0.0.0.0:4000/writing_data.html</loc>
   </url>
   
   

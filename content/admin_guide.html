@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="This section offers an overview of tools available to operate an ecosystem of Hudi datasets">
 <meta name="keywords" content="hudi, administration, operation, devops">
-<title>Admin Guide | Hudi</title>
+<title>Administering Hudi Pipelines | Hudi</title>
 <link rel="stylesheet" href="css/syntax.css">
 
 
@@ -162,7 +162,7 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the Admin Guide page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the Administering Hudi Pipelines page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
@@ -180,7 +180,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: 'search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="Admin Guide">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="Administering Hudi Pipelines">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -222,13 +222,6 @@
             
             
             
-            <li><a href="index.html">Overview</a></li>
-            
-            
-            
-            
-            
-            
             <li><a href="quickstart.html">Quickstart</a></li>
             
             
@@ -244,6 +237,13 @@
             
             
             <li><a href="powered_by.html">Talks & Powered By</a></li>
+            
+            
+            
+            
+            
+            
+            <li><a href="comparison.html">Comparison</a></li>
             
             
             
@@ -265,49 +265,35 @@
             
             
             
-            <li><a href="implementation.html">Implementation</a></li>
+            <li><a href="writing_data.html">Writing Data</a></li>
             
             
             
             
             
             
-            <li><a href="configurations.html">Configurations</a></li>
+            <li><a href="querying_data.html">Querying Data</a></li>
             
             
             
             
             
             
-            <li><a href="sql_queries.html">SQL Queries</a></li>
+            <li><a href="configurations.html">Configuration</a></li>
             
             
             
             
             
             
-            <li><a href="migration_guide.html">Migration Guide</a></li>
+            <li><a href="performance.html">Performance</a></li>
             
             
             
             
             
             
-            <li><a href="incremental_processing.html">Incremental Processing</a></li>
-            
-            
-            
-            
-            
-            
-            <li class="active"><a href="admin_guide.html">Admin Guide</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="comparison.html">Comparison</a></li>
+            <li class="active"><a href="admin_guide.html">Administering</a></li>
             
             
             
@@ -331,7 +317,7 @@
     <!-- Content Column -->
     <div class="col-md-9">
         <div class="post-header">
-   <h1 class="post-title-main">Admin Guide</h1>
+   <h1 class="post-title-main">Administering Hudi Pipelines</h1>
 </div>
 
 
@@ -350,12 +336,12 @@
   <p>Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways</p>
 
 <ul>
-  <li>Administering via the Admin CLI</li>
-  <li>Graphite metrics</li>
-  <li>Spark UI of the Hudi Application</li>
+  <li><a href="#admin-cli">Administering via the Admin CLI</a></li>
+  <li><a href="#metrics">Graphite metrics</a></li>
+  <li><a href="#spark-ui">Spark UI of the Hudi Application</a></li>
 </ul>
 
-<p>This section provides a glimpse into each of these, with some general guidance on troubleshooting</p>
+<p>This section provides a glimpse into each of these, with some general guidance on <a href="#troubleshooting">troubleshooting</a></p>
 
 <h2 id="admin-cli">Admin CLI</h2>
 
@@ -728,7 +714,7 @@ Compaction successfully repaired
 
 <figure><img class="docimage" src="images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 1000px" /></figure>
 
-<h2 id="troubleshooting-failures">Troubleshooting Failures</h2>
+<h2 id="troubleshooting">Troubleshooting Failures</h2>
 
 <p>Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage  issues easily using standard Hadoop SQL engines (Hive/Presto/Spark)</p>
 
@@ -756,7 +742,7 @@ If you do find errors, then the record was not actually written by Hudi, but han
   <li>if duplicates span multiple files within the same partitionpath, please engage with mailing list. This should not happen. You can use the <code class="highlighter-rouge">records deduplicate</code> command to fix your data.</li>
 </ul>
 
-<h4 id="spark-failures">Spark failures</h4>
+<h4 id="spark-ui">Spark failures</h4>
 
 <p>Typical upsert() DAG looks like below. Note that Hudi client also caches intermediate RDDs to intelligently profile workload and size files and spark parallelism.
 Also Spark UI shows sortByKey twice due to the probe job also being shown, nonetheless its just a single sort.</p>
