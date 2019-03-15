@@ -28,8 +28,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -46,8 +44,6 @@ import scala.Tuple2;
  * files - Not global.
  */
 public class BucketedIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
-
-  private static Logger logger = LogManager.getLogger(BucketedIndex.class);
 
   public BucketedIndex(HoodieWriteConfig config) {
     super(config);
