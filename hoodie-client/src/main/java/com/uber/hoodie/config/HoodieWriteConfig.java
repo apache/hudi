@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
 import javax.annotation.concurrent.Immutable;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.storage.StorageLevel;
 
 /**
@@ -353,6 +354,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public double getParquetCompressionRatio() {
     return Double.valueOf(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO));
+  }
+
+  public CompressionCodecName getParquetCompressionCodec() {
+    return CompressionCodecName.fromConf(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC));
   }
 
   public double getLogFileToParquetCompressionRatio() {
