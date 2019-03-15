@@ -58,7 +58,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       @Nonnull Map<HeaderMetadataType, String> footer) {
     super(header, footer, Optional.empty(), Optional.empty(), null, false);
     this.records = records;
-    this.schema = Schema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    this.schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
@@ -102,7 +102,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       createRecordsFromContentBytes();
     }
 
-    Schema schema = Schema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
@@ -115,26 +115,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
 
     // 3. Write the records
     Iterator<IndexedRecord> itr = records.iterator();
-    while (itr.hasNext()) {
-      IndexedRecord s = itr.next();
-      ByteArrayOutputStream temp = new ByteArrayOutputStream();
-      Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
-      try {
-        // Encode the record into bytes
-        writer.write(s, encoder);
-        encoder.flush();
-
-        // Get the size of the bytes
-        int size = temp.toByteArray().length;
-        // Write the record size
-        output.writeInt(size);
-        // Write the content
-        output.write(temp.toByteArray());
-        itr.remove();
-      } catch (IOException e) {
-        throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
-      }
-    }
+    writerIndexedRecord(writer, output, itr);
     output.close();
     return baos.toByteArray();
   }
@@ -283,6 +264,14 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
 
     // 4. Write the records
     Iterator<IndexedRecord> itr = records.iterator();
+    writerIndexedRecord(writer, output, itr);
+
+    output.close();
+    return baos.toByteArray();
+  }
+
+  private void writerIndexedRecord(GenericDatumWriter<IndexedRecord> writer, DataOutputStream output,
+                                   Iterator<IndexedRecord> itr) {
     while (itr.hasNext()) {
       IndexedRecord s = itr.next();
       ByteArrayOutputStream temp = new ByteArrayOutputStream();
@@ -303,9 +292,6 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
         throw new HoodieIOException("IOException converting HoodieAvroDataBlock to bytes", e);
       }
     }
-
-    output.close();
-    return baos.toByteArray();
   }
 
 }
