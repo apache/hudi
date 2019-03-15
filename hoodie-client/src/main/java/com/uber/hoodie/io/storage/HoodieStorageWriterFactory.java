@@ -26,7 +26,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 public class HoodieStorageWriterFactory {
 
@@ -47,7 +46,7 @@ public class HoodieStorageWriterFactory {
         new AvroSchemaConverter().convert(schema), schema, filter);
 
     HoodieParquetConfig parquetConfig =
-        new HoodieParquetConfig(writeSupport, CompressionCodecName.GZIP,
+        new HoodieParquetConfig(writeSupport, config.getParquetCompressionCodec(),
             config.getParquetBlockSize(), config.getParquetPageSize(),
             config.getParquetMaxFileSize(), hoodieTable.getHadoopConf(),
             config.getParquetCompressionRatio());
