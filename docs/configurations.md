@@ -233,6 +233,9 @@ Controls aspects around sizing parquet and log files.
     - [parquetCompressionRatio](#parquetCompressionRatio) (parquetCompressionRatio = 0.1) <br/>
     Property: `hoodie.parquet.compression.ratio` <br/>
     <span style="color:grey">Expected compression of parquet data used by Hudi, when it tries to size new parquet files. Increase this value, if bulk_insert is producing smaller than expected sized files</span>
+    - [parquetCompressionCodec](#parquetCompressionCodec) (parquetCompressionCodec = gzip) <br/>
+    Property: `hoodie.parquet.compression.codec` <br/>
+    <span style="color:grey">Parquet compression codec name. Default is gzip. Possible options are [gzip | snappy | uncompressed | lzo]</span>
     - [logFileMaxSize](#logFileMaxSize) (logFileSize = 1GB) <br/>
     Property: `hoodie.logfile.max.size` <br/>
     <span style="color:grey">LogFile max size. This is the maximum size allowed for a log file before it is rolled over to the next version. </span>
