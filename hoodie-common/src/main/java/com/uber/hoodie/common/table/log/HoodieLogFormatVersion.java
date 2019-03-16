@@ -80,15 +80,15 @@ final class HoodieLogFormatVersion extends HoodieLogFormat.LogFormatVersion {
 
   @Override
   public boolean hasFooter() {
-    return getResultByVersion();
+    return hasLogFooterAndBlockLength();
   }
 
   @Override
   public boolean hasLogBlockLength() {
-    return getResultByVersion();
+    return hasLogFooterAndBlockLength();
   }
 
-  private boolean getResultByVersion() {
+  private boolean hasLogFooterAndBlockLength() {
     switch (super.getVersion()) {
       case DEFAULT_VERSION:
         return false;
