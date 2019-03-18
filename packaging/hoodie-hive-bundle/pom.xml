@@ -199,6 +199,10 @@
                    <pattern>parquet.schema.</pattern>
                    <shadedPattern>com.uber.hoodie.parquet.schema.</shadedPattern>
                  </relocation>
+                 <relocation>
+                   <pattern>com.twitter.chill.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
+                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
