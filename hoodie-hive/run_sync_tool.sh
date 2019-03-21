@@ -23,13 +23,13 @@ if [ -z "$HADOOP_CONF_DIR" ]; then
 fi
 
 ## Include only specific packages from HIVE_HOME/lib to avoid version mismatches
-HIVE_EXEC=`ls ${HIVE_HOME}/lib/hive-exec-*.jar`
-HIVE_SERVICE=`ls ${HIVE_HOME}/lib/hive-service-*.jar | grep -v rpc`
-HIVE_METASTORE=`ls ${HIVE_HOME}/lib/hive-metastore-*.jar`
+HIVE_EXEC=`ls ${HIVE_HOME}/lib/hive-exec-*.jar | tr '\n' ':'`
+HIVE_SERVICE=`ls ${HIVE_HOME}/lib/hive-service-*.jar | grep -v rpc | tr '\n' ':'`
+HIVE_METASTORE=`ls ${HIVE_HOME}/lib/hive-metastore-*.jar | tr '\n' ':'`
 # Hive 1.x/CDH has standalone jdbc jar which is no longer available in 2.x
-HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*standalone*.jar`
+HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*standalone*.jar | tr '\n' ':'`
 if [ -z "${HIVE_JDBC}" ]; then
-  HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*.jar | grep -v handler`
+  HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*.jar | grep -v handler | tr '\n' ':'`
 fi
 HIVE_JARS=$HIVE_METASTORE:$HIVE_SERVICE:$HIVE_EXEC:$HIVE_SERVICE:$HIVE_JDBC
 
