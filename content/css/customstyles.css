@@ -610,6 +610,10 @@ a.fa.fa-envelope-o.mailto {
 h3 {color: #545253; font-weight:normal; font-size:130%;}
 h4 {color: #808080; font-weight:normal; font-size:120%; font-style:italic;}
 
+h5 {
+    font-weight: normal;
+}
+
 .alert, .callout {
     overflow: hidden;
 }

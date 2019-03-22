@@ -69,6 +69,17 @@
 
 
 
+{
+"title": "Docker Demo",
+"tags": "hudidemo",
+"keywords": "hudi, docker, demo",
+"url": "docker_demo.html",
+"summary": ""
+}
+,
+
+
+
 
 
 {
@@ -138,7 +149,7 @@
 
 
 {
-"title": "Implementation",
+"title": "Performance",
 "tags": "",
 "keywords": "hudi, index, storage, compaction, cleaning, implementation",
 "url": "performance.html",
@@ -223,7 +234,7 @@
 "tags": "",
 "keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
 "url": "writing_data.html",
-"summary": "In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes."
+"summary": "In this page, we will discuss some available tools for incrementally ingesting & storing data."
 }
 ,
 

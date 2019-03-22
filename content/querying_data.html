@@ -121,7 +121,7 @@
                 
                 
                 
-                <li><a href="https://github.com/uber/hoodie" target="_blank">Code</a></li>
+                <li><a href="https://github.com/apache/incubator-hudi" target="_blank">Code</a></li>
                 
                 
                 
@@ -333,56 +333,216 @@
 
     
 
-  <p>Hudi registers the dataset into the Hive metastore backed by <code class="highlighter-rouge">HoodieInputFormat</code>. This makes the data accessible to
-Hive &amp; Spark &amp; Presto automatically. To be able to perform normal SQL queries on such a dataset, we need to get the individual query engines
-to call <code class="highlighter-rouge">HoodieInputFormat.getSplits()</code>, during query planning such that the right versions of files are exposed to it.</p>
+  <p>Conceptually, Hudi stores data physically once on DFS, while providing 3 logical views on top, as explained <a href="concepts.html#views">before</a>. 
+Once the dataset is synced to the Hive metastore, it provides external Hive tables backed by Hudi’s custom inputformats. Once the proper hudi
+bundle has been provided, the dataset can be queried by popular query engines like Hive, Spark and Presto.</p>
 
-<p>In the following sections, we cover the configs needed across different query engines to achieve this.</p>
+<p>Specifically, there are two Hive tables named off <a href="configurations.html#TABLE_NAME_OPT_KEY">table name</a> passed during write. 
+For e.g, if <code class="highlighter-rouge">table name = hudi_tbl</code>, then we get</p>
 
-<div class="bs-callout bs-callout-info">Instructions are currently only for Copy-on-write storage</div>
+<ul>
+  <li><code class="highlighter-rouge">hudi_tbl</code> realizes the read optimized view of the dataset backed by <code class="highlighter-rouge">HoodieInputFormat</code>, exposing purely columnar data.</li>
+  <li><code class="highlighter-rouge">hudi_tbl_rt</code> realizes the real time view of the dataset  backed by <code class="highlighter-rouge">HoodieRealtimeInputFormat</code>, exposing merged view of base and log data.</li>
+</ul>
+
+<p>As discussed in the concepts section, the one key primitive needed for <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">incrementally processing</a>,
+is <code class="highlighter-rouge">incremental pulls</code> (to obtain a change stream/log from a dataset). Hudi datasets can be pulled incrementally, which means you can get ALL and ONLY the updated &amp; new rows 
+since a specified instant time. This, together with upserts, are particularly useful for building data pipelines where 1 or more source Hudi tables are incrementally pulled (streams/facts),
+joined with other tables (datasets/dimensions), to <a href="writing_data.html">write out deltas</a> to a target Hudi dataset. Incremental view is realized by querying one of the tables above, 
+with special configurations that indicates to query planning that only incremental data needs to be fetched out of the dataset.</p>
+
+<p>In sections, below we will discuss in detail how to access all the 3 views on each query engine.</p>
 
 <h2 id="hive">Hive</h2>
 
-<p>For HiveServer2 access, <a href="https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr">install</a>
-the hoodie-hadoop-mr-bundle-x.y.z-SNAPSHOT.jar into the aux jars path and we should be able to recognize the Hudi tables and query them correctly.</p>
+<p>In order for Hive to recognize Hudi datasets and query correctly, the HiveServer2 needs to be provided with the <code class="highlighter-rouge">hoodie-hadoop-hive-bundle-x.y.z-SNAPSHOT.jar</code> 
+in its <a href="https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr">aux jars path</a>. This will ensure the input format 
+classes with its dependencies are available for query planning &amp; execution.</p>
 
-<p>For beeline access, the <code class="highlighter-rouge">hive.input.format</code> variable needs to be set to the fully qualified path name of the inputformat <code class="highlighter-rouge">com.uber.hoodie.hadoop.HoodieInputFormat</code>
-For Tez, additionally the <code class="highlighter-rouge">hive.tez.input.format</code> needs to be set to <code class="highlighter-rouge">org.apache.hadoop.hive.ql.io.HiveInputFormat</code></p>
+<h3 id="hive-ro-view">Read Optimized table</h3>
+<p>In addition to setup above, for beeline cli access, the <code class="highlighter-rouge">hive.input.format</code> variable needs to be set to the  fully qualified path name of the 
+inputformat <code class="highlighter-rouge">com.uber.hoodie.hadoop.HoodieInputFormat</code>. For Tez, additionally the <code class="highlighter-rouge">hive.tez.input.format</code> needs to be set 
+to <code class="highlighter-rouge">org.apache.hadoop.hive.ql.io.HiveInputFormat</code></p>
+
+<h3 id="hive-rt-view">Real time table</h3>
+<p>In addition to installing the hive bundle jar on the HiveServer2, it needs to be put on the hadoop/hive installation across the cluster, so that
+queries can pick up the custom RecordReader as well.</p>
+
+<h3 id="hive-incr-pull">Incremental Pulling</h3>
+
+<p><code class="highlighter-rouge">HiveIncrementalPuller</code> allows incrementally extracting changes from large fact/dimension tables via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and 
+incremental primitives (speed up query by pulling tables incrementally instead of scanning fully). The tool uses Hive JDBC to run the hive query and saves its results in a temp table.
+that can later be upserted. Upsert utility (<code class="highlighter-rouge">HoodieDeltaStreamer</code>) has all the state it needs from the directory structure to know what should be the commit time on the target table.
+e.g: <code class="highlighter-rouge">/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_included}</code>.The Delta Hive table registered will be of the form <code class="highlighter-rouge"><span class="p">{</span><span class="err">tmpdb</span><span class="p">}</span><span class="err">.</span><span class="p">{</span><span class="err">source_table</span><span class="p">}</span><span class="err">_</span><span class="p">{</span><span class="err">last_commit_included</span><span class="p">}</span></code>.</p>
+
+<p>The following are the configuration options for HiveIncrementalPuller</p>
+
+<table>
+  <tbody>
+    <tr>
+      <td><strong>Config</strong></td>
+      <td><strong>Description</strong></td>
+      <td><strong>Default</strong></td>
+    </tr>
+    <tr>
+      <td>hiveUrl</td>
+      <td>Hive Server 2 URL to connect to</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>hiveUser</td>
+      <td>Hive Server 2 Username</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>hivePass</td>
+      <td>Hive Server 2 Password</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>queue</td>
+      <td>YARN Queue name</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>tmp</td>
+      <td>Directory where the temporary delta data is stored in DFS. The directory structure will follow conventions. Please see the below section.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>extractSQLFile</td>
+      <td>The SQL to execute on the source table to extract the data. The data extracted will be all the rows that changed since a particular point in time.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>sourceTable</td>
+      <td>Source Table Name. Needed to set hive environment properties.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>targetTable</td>
+      <td>Target Table Name. Needed for the intermediate storage directory structure.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>sourceDataPath</td>
+      <td>Source DFS Base Path. This is where the Hudi metadata will be read.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>targetDataPath</td>
+      <td>Target DFS Base path. This is needed to compute the fromCommitTime. This is not needed if fromCommitTime is specified explicitly.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>tmpdb</td>
+      <td>The database to which the intermediate temp delta table will be created</td>
+      <td>hoodie_temp</td>
+    </tr>
+    <tr>
+      <td>fromCommitTime</td>
+      <td>This is the most important parameter. This is the point in time from which the changed records are pulled from.</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>maxCommits</td>
+      <td>Number of commits to include in the pull. Setting this to -1 will include all the commits from fromCommitTime. Setting this to a value &gt; 0, will include records that ONLY changed in the specified number of commits after fromCommitTime. This may be needed if you need to catch up say 2 commits at a time.</td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td>help</td>
+      <td>Utility Help</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Setting fromCommitTime=0 and maxCommits=-1 will pull in the entire source dataset and can be used to initiate backfills. If the target dataset is a Hudi dataset,
+then the utility can determine if the target dataset has no commits or is behind more than 24 hour (this is configurable),
+it will automatically use the backfill configuration, since applying the last 24 hours incrementally could take more time than doing a backfill. The current limitation of the tool
+is the lack of support for self-joining the same table in mixed mode (normal and incremental modes).</p>
 
 <h2 id="spark">Spark</h2>
 
-<p>There are two ways of running Spark SQL on Hudi datasets.</p>
+<p>Spark provides much easier deployment &amp; management of Hudi jars and bundles into jobs/notebooks. At a high level, there are two ways to access Hudi datasets in Spark.</p>
 
-<p>First method involves, setting <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code>, forcing Spark to fallback
-to using the Hive Serde to read the data (planning/executions is still Spark). This turns off optimizations in Spark
-towards Parquet reading, which we will address in the next method based on path filters.
-However benchmarks have not revealed any real performance degradation with Hudi &amp; SparkSQL, compared to native support.</p>
+<ul>
+  <li><strong>Hudi DataSource</strong> : Supports Read Optimized, Incremental Pulls similar to how standard datasources (e.g: <code class="highlighter-rouge">spark.read.parquet</code>) work.</li>
+  <li><strong>Read as Hive tables</strong> : Supports all three views, including the real time view, relying on the custom Hudi input formats again like Hive.</li>
+</ul>
 
-<p>Sample command is provided below to spin up Spark Shell</p>
+<p>In general, your spark job needs a dependency to <code class="highlighter-rouge">hoodie-spark</code> or <code class="highlighter-rouge">hoodie-spark-bundle-x.y.z.jar</code> needs to be on the class path of driver &amp; executors (hint: use <code class="highlighter-rouge">--jars</code> argument)</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>$ spark-shell --jars hoodie-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+<h3 id="spark-ro-view">Read Optimized table</h3>
 
-scala&gt; sqlContext.sql("select count(*) from uber.trips where datestr = '2016-10-02'").show()
-
-</code></pre>
-</div>
-
-<p>For scheduled Spark jobs, a dependency to <a href="https://mvnrepository.com/artifact/com.uber.hoodie/hoodie-hadoop-mr">hoodie-hadoop-mr</a> and <a href="https://mvnrepository.com/artifact/com.uber.hoodie/hoodie-client">hoodie-client</a> modules needs to be added
-and the same config needs to be set on <code class="highlighter-rouge">SparkConf</code> or conveniently via <code class="highlighter-rouge">HoodieReadClient.addHoodieSupport(conf)</code></p>
-
-<div class="bs-callout bs-callout-warning">Don’t instantiate a HoodieWriteClient against a table you don’t own. Hudi is a single writer &amp; multiple reader system as of now. You may accidentally cause incidents otherwise.
-</div>
-
-<p>The second method uses a new feature in Spark 2.x, which allows for the work of HoodieInputFormat to be done via a path filter as below. This method uses Spark built-in optimizations for
-reading Parquet files, just like queries on non-Hudi tables.</p>
+<p>To read RO table as a Hive table using SparkSQL, simply push a path filter into sparkContext as follows. 
+This method retains Spark built-in optimizations for reading Parquet files like vectorized reading on Hudi tables.</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[com.uber.hoodie.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 </code></pre>
 </div>
 
+<p>If you prefer to glob paths on DFS via the datasource, you can simply do something like below to get a Spark dataframe to work with.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>Dataset&lt;Row&gt; hoodieROViewDF = spark.read().format("com.uber.hoodie")
+// pass any path glob, can include hudi &amp; non-hudi datasets
+.load("/glob/path/pattern");
+</code></pre>
+</div>
+
+<h3 id="spark-rt-view">Real time table</h3>
+<p>Currently, real time table can only be queried as a Hive table in Spark. In order to do this, set <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code>, forcing Spark to fallback 
+to using the Hive Serde to read the data (planning/executions is still Spark).</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>$ spark-shell --jars hoodie-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+
+scala&gt; sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'").show()
+</code></pre>
+</div>
+
+<h3 id="spark-incr-pull">Incremental Pulling</h3>
+<p>The <code class="highlighter-rouge">hoodie-spark</code> module offers the DataSource API, a more elegant way to pull data from Hudi dataset and process it via Spark.
+A sample incremental pull, that will obtain all records written since <code class="highlighter-rouge">beginInstantTime</code>, looks like below.</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code> Dataset&lt;Row&gt; hoodieIncViewDF = spark.read()
+     .format("com.uber.hoodie")
+     .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
+             DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
+     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
+            &lt;beginInstantTime&gt;)
+     .load(tablePath); // For incremental view, pass in the root/base path of dataset
+</code></pre>
+</div>
+
+<p>Please refer to <a href="configurations.html#spark-datasource">configurations</a> section, to view all datasource options.</p>
+
+<p>Additionally, <code class="highlighter-rouge">HoodieReadClient</code> offers the following functionality using Hudi’s implicit indexing.</p>
+
+<table>
+  <tbody>
+    <tr>
+      <td><strong>API</strong></td>
+      <td><strong>Description</strong></td>
+    </tr>
+    <tr>
+      <td>read(keys)</td>
+      <td>Read out the data corresponding to the keys as a DataFrame, using Hudi’s own index for faster lookup</td>
+    </tr>
+    <tr>
+      <td>filterExists()</td>
+      <td>Filter out already existing records from the provided RDD[HoodieRecord]. Useful for de-duplication</td>
+    </tr>
+    <tr>
+      <td>checkExists(keys)</td>
+      <td>Check if the provided keys exist in a Hudi dataset</td>
+    </tr>
+  </tbody>
+</table>
+
 <h2 id="presto">Presto</h2>
 
-<p>Presto requires the <code class="highlighter-rouge">hoodie-presto-bundle</code> jar to be placed into <code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>, across the installation.</p>
+<p>Presto is a popular query engine, providing interactive query performance. Hudi RO tables can be queries seamlessly in Presto. 
+This requires the <code class="highlighter-rouge">hoodie-presto-bundle</code> jar to be placed into <code class="highlighter-rouge">&lt;presto_install&gt;/plugin/hive-hadoop2/</code>, across the installation.</p>
 
 
     <div class="tags">
