@@ -95,7 +95,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload> extend
     BoundedInMemoryExecutor<HoodieRecord<T>,
         HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor = null;
     try {
-      final Schema schema = HoodieIOHandle.createHoodieWriteSchema(hoodieConfig);
+      final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
       bufferedIteratorExecutor =
           new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr,
               getInsertHandler(), getTransformFunction(schema));

@@ -482,6 +482,26 @@ public class TestCopyOnWriteTable {
     assertEquals("First insert bucket should have weight 0.5", 200.0 / 2400, insertBuckets.get(0).weight, 0.01);
   }
 
+  @Test
+  public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
+        HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    String commitTime = "000";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
+    List<HoodieRecord> inserts = dataGenerator.generateInsertsWithHoodieAvroPayload(commitTime, 100);
+    Iterator<List<WriteStatus>> ws = table.handleInsert(commitTime, inserts.iterator());
+    WriteStatus writeStatus = ws.next().get(0);
+    String fileId = writeStatus.getFileId();
+    metadata.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
+    table = new HoodieCopyOnWriteTable(config, jsc);
+    // Perform update of 100 records to test MergeHandle and BufferedExecutor
+    table.handleUpdate("001", fileId,
+        dataGenerator.generateUpdatesWithHoodieAvroPayload(commitTime, writeStatus.getWrittenRecords()).iterator());
+  }
+
   @After
   public void cleanup() {
     if (basePath != null) {

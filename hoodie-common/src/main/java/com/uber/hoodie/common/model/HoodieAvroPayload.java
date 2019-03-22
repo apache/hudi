@@ -62,7 +62,6 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
     if (recordBytes.length == 0) {
       return Optional.empty();
     }
-    Optional<GenericRecord> record = Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
-    return record.map(r -> HoodieAvroUtils.rewriteRecord(r, schema));
+    return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }
