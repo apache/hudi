@@ -17,6 +17,7 @@
 package com.uber.hoodie.common;
 
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
+import com.uber.hoodie.common.model.HoodieAvroPayload;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
@@ -103,6 +104,14 @@ public class HoodieTestDataGenerator {
   public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+  }
+
+  /**
+   * Generates a new avro record of the above schema format, retaining the key if optionally provided.
+   */
+  public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    return new HoodieAvroPayload(Optional.of(rec));
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
@@ -205,6 +214,33 @@ public class HoodieTestDataGenerator {
       copy.add(record);
     }
     return copy;
+  }
+
+  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String commitTime, int limit) throws
+      IOException {
+    List<HoodieRecord> inserts = new ArrayList<>();
+    for (int i = 0; i < limit; i++) {
+      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
+      HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
+      HoodieRecord record = new HoodieRecord(key, generateAvroPayload(key, commitTime));
+      inserts.add(record);
+
+      KeyPartition kp = new KeyPartition();
+      kp.key = key;
+      kp.partitionPath = partitionPath;
+      existingKeysList.add(kp);
+    }
+    return inserts;
+  }
+
+  public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String commitTime, List<HoodieRecord> baseRecords)
+      throws IOException {
+    List<HoodieRecord> updates = new ArrayList<>();
+    for (HoodieRecord baseRecord : baseRecords) {
+      HoodieRecord record = new HoodieRecord(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), commitTime));
+      updates.add(record);
+    }
+    return updates;
   }
 
   public List<HoodieRecord> generateDeletes(String commitTime, Integer n) throws IOException {
