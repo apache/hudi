@@ -1,14 +1,17 @@
 ---
-title: Implementation
+title: Performance
 keywords: hudi, index, storage, compaction, cleaning, implementation
 sidebar: mydoc_sidebar
 toc: false
 permalink: performance.html
 ---
-## Performance
 
 In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them against
-the conventional alternatives for achieving these tasks. Following shows the speed up obtained for NoSQL ingestion, 
+the conventional alternatives for achieving these tasks. 
+
+## Upserts
+
+Following shows the speed up obtained for NoSQL ingestion, 
 by switching from bulk loads off HBase to Parquet to incrementally upserting on a Hudi dataset, on 5 tables ranging from small to huge.
 
 {% include image.html file="hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" max-width="1000" %}
@@ -20,7 +23,7 @@ significant savings on the overall compute cost.
 
 Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table.
 
-### Tuning
+## Tuning
 
 Writing data via Hudi happens as a Spark job and thus general rules of spark debugging applies here too. Below is a list of things to keep in mind, if you are looking to improving performance or reliability.
 
@@ -76,7 +79,7 @@ Below is a full working production config
 ````
 
 
-#### Read Optimized Query Performance
+## Read Optimized Query Performance
 
 The major design goal for read optimized view is to achieve the latency reduction & efficiency gains in previous section,
 with no impact on queries. Following charts compare the Hudi vs non-Hudi datasets across Hive/Presto/Spark queries and demonstrate this.
