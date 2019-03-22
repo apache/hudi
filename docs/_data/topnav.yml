@@ -8,7 +8,7 @@ topnav:
     - title: Community
       url: /community.html
     - title: Code
-      external_url: https://github.com/uber/hoodie
+      external_url: https://github.com/apache/incubator-hudi
 
 #Topnav dropdowns
 topnav_dropdowns:

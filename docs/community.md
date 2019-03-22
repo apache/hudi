@@ -15,7 +15,8 @@ There are several ways to get in touch with the Hudi community.
 | For any general questions, user support, development discussions | Dev Mailing list ([Subscribe](mailto:dev-subscribe@hudi.apache.org), [Unsubscribe](mailto:dev-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?dev@hudi.apache.org)). Empty email works for subscribe/unsubscribe. Please use [gists](https://gist.github.com) to share code/stacktraces on the email. |
 | For reporting bugs or issues or discover known issues | Please use [ASF Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/summary). See [#here](#accounts) for access |
 | For quick pings & 1-1 chats | Join our [slack group](https://join.slack.com/t/apache-hudi/signup) |
-| For proposing large features, changes | Start a Hudi Improvement Process (HIP). Instructions coming soon. See [#here](#accounts) for access |
+| For proposing large features, changes | Start a Hudi Improvement Process (HIP). Instructions [here](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=103091449#ApacheHudi(Incubating)-Designdocuments/HIPs).
+ See [#here](#accounts) for wiki access |
 | For stream of commits, pull requests etc | Commits Mailing list ([Subscribe](mailto:commits-subscribe@hudi.apache.org), [Unsubscribe](mailto:commits-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?commits@hudi.apache.org)) |
 
 If you wish to report a security vulnerability, please contact [security@apache.org](mailto:security@apache.org).
