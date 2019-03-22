@@ -3,7 +3,7 @@
     <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes.">
+<meta name="description" content="In this page, we will discuss some available tools for incrementally ingesting & storing data.">
 <meta name="keywords" content="hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL">
 <title>Writing Hudi Datasets | Hudi</title>
 <link rel="stylesheet" href="css/syntax.css">
@@ -121,7 +121,7 @@
                 
                 
                 
-                <li><a href="https://github.com/uber/hoodie" target="_blank">Code</a></li>
+                <li><a href="https://github.com/apache/incubator-hudi" target="_blank">Code</a></li>
                 
                 
                 
@@ -325,7 +325,7 @@
 <div class="post-content">
 
    
-    <div class="summary">In this page, we will discuss some available tools for ingesting data incrementally & consuming the changes.</div>
+    <div class="summary">In this page, we will discuss some available tools for incrementally ingesting & storing data.</div>
    
 
     
@@ -333,30 +333,22 @@
 
     
 
-  <p>As discussed in the concepts section, the two basic primitives needed for <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">incrementally processing</a>,
-data using Hudi are <code class="highlighter-rouge">upserts</code> (to apply changes to a dataset) and <code class="highlighter-rouge">incremental pulls</code> (to obtain a change stream/log from a dataset). This section
-discusses a few tools that can be used to achieve these on different contexts.</p>
+  <p>In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the <a href="#deltastreamer">DeltaStreamer</a> tool, as well as 
+speeding up large Spark jobs via upserts using the <a href="#datasource-writer">Hudi datasource</a>. Such datasets can then be <a href="querying_data.html">queried</a> using various query engines.</p>
 
-<h2 id="incremental-ingestion">Incremental Ingestion</h2>
+<h2 id="deltastreamer">DeltaStreamer</h2>
 
-<p>Following means can be used to apply a delta or an incremental change to a Hudi dataset. For e.g, the incremental changes could be from a Kafka topic or files uploaded to DFS or
-even changes pulled from another Hudi dataset.</p>
-
-<h4 id="deltastreamer-tool">DeltaStreamer Tool</h4>
-
-<p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility provides the way to achieve all of these, by using the capabilities of <code class="highlighter-rouge">HoodieWriteClient</code>, and support simply row-row ingestion (no transformations)
-from different sources such as DFS or Kafka.</p>
-
-<p>The tool is a spark job (part of hoodie-utilities), that provides the following functionality</p>
+<p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility (part of hoodie-utilities) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.</p>
 
 <ul>
-  <li>Ability to consume new events from Kafka, incremental imports from Sqoop or output of <code class="highlighter-rouge">HiveIncrementalPuller</code> or files under a folder on DFS</li>
-  <li>Support json, avro or a custom payload types for the incoming data</li>
-  <li>Pick up avro schemas from DFS or Confluent <a href="https://github.com/confluentinc/schema-registry">schema registry</a>.</li>
-  <li>New data is written to a Hudi dataset, with support for checkpointing and registered onto Hive</li>
+  <li>Exactly once ingestion of new events from Kafka, <a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">incremental imports</a> from Sqoop or output of <code class="highlighter-rouge">HiveIncrementalPuller</code> or files under a DFS folder</li>
+  <li>Support json, avro or a custom record types for the incoming data</li>
+  <li>Manage checkpoints, rollback &amp; recovery</li>
+  <li>Leverage Avro schemas from DFS or Confluent <a href="https://github.com/confluentinc/schema-registry">schema registry</a>.</li>
+  <li>Support for plugging in transformations</li>
 </ul>
 
-<p>Command line options describe capabilities in more detail (first build hoodie-utilities using <code class="highlighter-rouge">mvn clean package</code>).</p>
+<p>Command line options describe capabilities in more detail</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` --help
 Usage: &lt;main class&gt; [options]
@@ -444,12 +436,12 @@ provided under <code class="highlighter-rouge">hoodie-utilities/src/test/resourc
 </code></pre>
 </div>
 
-<p>In some cases, you may want to convert your existing dataset into Hudi, before you can begin ingesting new data. This can be accomplished using the <code class="highlighter-rouge">hdfsparquetimport</code> command on the <code class="highlighter-rouge">hoodie-cli</code>.
-Currently, there is support for converting parquet datasets.</p>
+<p>In some cases, you may want to migrate your existing dataset into Hudi beforehand. Please refer to <a href="migration_guide.html">migration guide</a>.</p>
 
-<h4 id="via-custom-spark-job">Via Custom Spark Job</h4>
+<h2 id="datasource-writer">Datasource Writer</h2>
 
-<p>The <code class="highlighter-rouge">hoodie-spark</code> module offers the DataSource API to write any data frame into a Hudi dataset. Following is how we can upsert a dataframe, while specifying the field names that need to be used
+<p>The <code class="highlighter-rouge">hoodie-spark</code> module offers the DataSource API to write (and also read) any data frame into a Hudi dataset.
+Following is how we can upsert a dataframe, while specifying the field names that need to be used
 for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class="highlighter-rouge">partitionPath =&gt; partition</code> and <code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>inputDF.write()
@@ -464,14 +456,15 @@ for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class
 </code></pre>
 </div>
 
-<p>Please refer to <a href="configurations.html">configurations</a> section, to view all datasource options.</p>
+<h2 id="syncing-to-hive">Syncing to Hive</h2>
 
-<h4 id="syncing-to-hive">Syncing to Hive</h4>
+<p>Both tools above support syncing of the dataset’s latest schema to Hive metastore, such that queries can pick up new columns and partitions.
+In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a <code class="highlighter-rouge">HiveSyncTool</code>, which can be invoked as below, 
+once you have built the hoodie-hive module.</p>
 
-<p>Once new data is written to a Hudi dataset, via tools like above, we need the ability to sync with Hive and reflect the table schema such that queries can pick up new columns and partitions. To do this, Hudi provides a <code class="highlighter-rouge">HiveSyncTool</code>, which can be
-invoked as below, once you have built the hoodie-hive module.</p>
-
-<div class="highlighter-rouge"><pre class="highlight"><code> [hoodie-hive]$ java -cp target/hoodie-hive-0.3.6-SNAPSHOT-jar-with-dependencies.jar:target/jars/* com.uber.hoodie.hive.HiveSyncTool --help
+<div class="highlighter-rouge"><pre class="highlight"><code>cd hoodie-hive
+./run_sync_tool.sh
+ [hoodie-hive]$ ./run_sync_tool.sh --help
 Usage: &lt;main class&gt; [options]
   Options:
   * --base-path
@@ -479,7 +472,6 @@ Usage: &lt;main class&gt; [options]
   * --database
        name of the target database in Hive
     --help, -h
-
        Default: false
   * --jdbc-url
        Hive jdbc connect url
@@ -489,151 +481,28 @@ Usage: &lt;main class&gt; [options]
        name of the target table in Hive
   * --user
        Hive username
-
-
 </code></pre>
 </div>
 
-<h2 id="incrementally-pulling">Incrementally Pulling</h2>
+<h2 id="storage-management">Storage Management</h2>
 
-<p>Hudi datasets can be pulled incrementally, which means you can get ALL and ONLY the updated &amp; new rows since a specified commit timestamp.
-This, together with upserts, are particularly useful for building data pipelines where 1 or more source Hudi tables are incrementally pulled (streams/facts),
-joined with other tables (datasets/dimensions), to produce deltas to a target Hudi dataset. Then, using the delta streamer tool these deltas can be upserted into the
-target Hudi dataset to complete the pipeline.</p>
+<p>Hudi also performs several key storage management functions on the data stored in a Hudi dataset. A key aspect of storing data on DFS is managing file sizes and counts
+and reclaiming storage space. For e.g HDFS is infamous for its handling of small files, which exerts memory/RPC pressure on the Name Node and can potentially destabilize
+the entire cluster. In general, query engines provide much better performance on adequately sized columnar files, since they can effectively amortize cost of obtaining 
+column statistics etc. Even on some cloud data stores, there is often cost to listing directories with large number of small files.</p>
 
-<h4 id="via-spark-job">Via Spark Job</h4>
-<p>The <code class="highlighter-rouge">hoodie-spark</code> module offers the DataSource API, offers a more elegant way to pull data from Hudi dataset (plus more) and process it via Spark.
-This class can be used within existing Spark jobs and offers the following functionality.</p>
+<p>Here are some ways to efficiently manage the storage of your Hudi datasets.</p>
 
-<p>A sample incremental pull, that will obtain all records written since <code class="highlighter-rouge">beginInstantTime</code>, looks like below.</p>
-
-<div class="highlighter-rouge"><pre class="highlight"><code> Dataset&lt;Row&gt; hoodieIncViewDF = spark.read()
-     .format("com.uber.hoodie")
-     .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
-             DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
-     .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
-            &lt;beginInstantTime&gt;)
-     .load(tablePath); // For incremental view, pass in the root/base path of dataset
-</code></pre>
-</div>
-
-<p>Please refer to <a href="configurations.html">configurations</a> section, to view all datasource options.</p>
-
-<p>Additionally, <code class="highlighter-rouge">HoodieReadClient</code> offers the following functionality using Hudi’s implicit indexing.</p>
-
-<table>
-  <tbody>
-    <tr>
-      <td><strong>API</strong></td>
-      <td><strong>Description</strong></td>
-    </tr>
-    <tr>
-      <td>read(keys)</td>
-      <td>Read out the data corresponding to the keys as a DataFrame, using Hudi’s own index for faster lookup</td>
-    </tr>
-    <tr>
-      <td>filterExists()</td>
-      <td>Filter out already existing records from the provided RDD[HoodieRecord]. Useful for de-duplication</td>
-    </tr>
-    <tr>
-      <td>checkExists(keys)</td>
-      <td>Check if the provided keys exist in a Hudi dataset</td>
-    </tr>
-  </tbody>
-</table>
-
-<h4 id="hiveincrementalpuller-tool">HiveIncrementalPuller Tool</h4>
-<p><code class="highlighter-rouge">HiveIncrementalPuller</code> allows the above to be done via HiveQL, combining the benefits of Hive (reliably process complex SQL queries) and incremental primitives
-(speed up query by pulling tables incrementally instead of scanning fully). The tool uses Hive JDBC to run the Hive query saving its results in a temp table.
-that can later be upserted. Upsert utility (<code class="highlighter-rouge">HoodieDeltaStreamer</code>) has all the state it needs from the directory structure to know what should be the commit time on the target table.
-e.g: <code class="highlighter-rouge">/app/incremental-hql/intermediate/{source_table_name}_temp/{last_commit_included}</code>.The Delta Hive table registered will be of the form <code class="highlighter-rouge"><span class="p">{</span><span class="err">tmpdb</span><span class="p">}</span><span class="err">.</span><span class="p">{</span><span class="err">source_table</span><span class="p">}</span><span class="err">_</span><span class="p">{</span><span class="err">last_commit_included</span><span class="p">}</span></code>.</p>
-
-<p>The following are the configuration options for HiveIncrementalPuller</p>
-
-<table>
-  <tbody>
-    <tr>
-      <td><strong>Config</strong></td>
-      <td><strong>Description</strong></td>
-      <td><strong>Default</strong></td>
-    </tr>
-    <tr>
-      <td>hiveUrl</td>
-      <td>Hive Server 2 URL to connect to</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>hiveUser</td>
-      <td>Hive Server 2 Username</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>hivePass</td>
-      <td>Hive Server 2 Password</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>queue</td>
-      <td>YARN Queue name</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>tmp</td>
-      <td>Directory where the temporary delta data is stored in DFS. The directory structure will follow conventions. Please see the below section.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>extractSQLFile</td>
-      <td>The SQL to execute on the source table to extract the data. The data extracted will be all the rows that changed since a particular point in time.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>sourceTable</td>
-      <td>Source Table Name. Needed to set hive environment properties.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>targetTable</td>
-      <td>Target Table Name. Needed for the intermediate storage directory structure.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>sourceDataPath</td>
-      <td>Source DFS Base Path. This is where the Hudi metadata will be read.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>targetDataPath</td>
-      <td>Target DFS Base path. This is needed to compute the fromCommitTime. This is not needed if fromCommitTime is specified explicitly.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>tmpdb</td>
-      <td>The database to which the intermediate temp delta table will be created</td>
-      <td>hoodie_temp</td>
-    </tr>
-    <tr>
-      <td>fromCommitTime</td>
-      <td>This is the most important parameter. This is the point in time from which the changed records are pulled from.</td>
-      <td> </td>
-    </tr>
-    <tr>
-      <td>maxCommits</td>
-      <td>Number of commits to include in the pull. Setting this to -1 will include all the commits from fromCommitTime. Setting this to a value &gt; 0, will include records that ONLY changed in the specified number of commits after fromCommitTime. This may be needed if you need to catch up say 2 commits at a time.</td>
-      <td>3</td>
-    </tr>
-    <tr>
-      <td>help</td>
-      <td>Utility Help</td>
-      <td> </td>
-    </tr>
-  </tbody>
-</table>
-
-<p>Setting the fromCommitTime=0 and maxCommits=-1 will pull in the entire source dataset and can be used to initiate backfills. If the target dataset is a Hudi dataset,
-then the utility can determine if the target dataset has no commits or is behind more than 24 hour (this is configurable),
-it will automatically use the backfill configuration, since applying the last 24 hours incrementally could take more time than doing a backfill. The current limitation of the tool
-is the lack of support for self-joining the same table in mixed mode (normal and incremental modes).</p>
+<ul>
+  <li>The <a href="configurations.html#compactionSmallFileSize">small file handling feature</a> in Hudi, profiles incoming workload 
+and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.</li>
+  <li>Cleaner can be <a href="configurations.html#retainCommits">configured</a> to clean up older file slices, more or less aggressively depending on maximum time for queries to run &amp; lookback needed for incremental pull</li>
+  <li>User can also tune the size of the <a href="configurations.html#limitFileSize">base/parquet file</a>, <a href="configurations.html#logFileMaxSize">log files</a> &amp; expected <a href="configurations.html#parquetCompressionRatio">compression ratio</a>, 
+such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.</li>
+  <li>Intelligently tuning the <a href="configurations.html#withBulkInsertParallelism">bulk insert parallelism</a>, can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
+once created cannot be deleted, but simply expanded as explained before.</li>
+  <li>For workloads with heavy updates, the <a href="concepts.html#merge-on-read-storage">merge-on-read storage</a> provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.</li>
+</ul>
 
 
     <div class="tags">
