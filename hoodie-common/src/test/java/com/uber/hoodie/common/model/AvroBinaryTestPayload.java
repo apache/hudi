@@ -24,10 +24,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-public class AvroBinaryTestPayload implements HoodieRecordPayload {
+public class AvroBinaryTestPayload implements HoodieRecordPayload<AvroBinaryTestPayload> {
 
-  private final byte[] recordBytes;
+  private static final long serialVersionUID = -8165368650526698179L;
+  private byte[] recordBytes;
 
+  // To be used only for serialization
+  public AvroBinaryTestPayload() {}
+  
   public AvroBinaryTestPayload(Optional<GenericRecord> record) {
 
     try {
@@ -42,7 +46,7 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   }
 
   @Override
-  public HoodieRecordPayload preCombine(HoodieRecordPayload another) {
+  public AvroBinaryTestPayload preCombine(AvroBinaryTestPayload another) {
     return this;
   }
 
@@ -55,5 +59,16 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   @Override
   public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  }
+
+  @Override
+  public AvroBinaryTestPayload fromBytes(byte[] bytes) {
+    this.recordBytes = bytes;
+    return this;
+  }
+
+  @Override
+  public byte[] getBytes() {
+    return this.recordBytes;
   }
 }

@@ -35,9 +35,13 @@ import org.apache.commons.io.IOUtils;
 
 public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload> {
 
+  private static final long serialVersionUID = 4150623342458636396L;
   private byte[] jsonDataCompressed;
   private int dataSize;
 
+  // To be used only for serialization
+  public HoodieJsonPayload() {}
+  
   public HoodieJsonPayload(String json) throws IOException {
     this.jsonDataCompressed = compressData(json);
     this.dataSize = json.length();
@@ -107,5 +111,16 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
 
   public String getPartitionPath(String partitionPathField) throws IOException {
     return getFieldFromJsonOrFail(partitionPathField);
+  }
+
+  @Override
+  public byte[] getBytes() {
+    return jsonDataCompressed;
+  }
+
+  @Override
+  public HoodieJsonPayload fromBytes(byte[] bytes) {
+    this.jsonDataCompressed = bytes;
+    return this;
   }
 }

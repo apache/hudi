@@ -30,9 +30,18 @@ import org.apache.avro.generic.IndexedRecord;
  */
 public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload> {
 
-  // Store the GenericRecord converted to bytes - 1) Doesn't store schema hence memory efficient 2) Makes the payload
-  // java serializable
-  private final byte [] recordBytes;
+  private static final long serialVersionUID = -505257251712222212L;
+  /**
+   * Store the GenericRecord converted to bytes
+   * <ol>
+   * <li>Doesn't store schema hence memory efficient</li>
+   * <li>Makes the payload java serializable</li>
+   * </ol>
+   */
+  private byte[] recordBytes;
+
+  // To be used only for serialization
+  public HoodieAvroPayload() {}
 
   public HoodieAvroPayload(Optional<GenericRecord> record) {
     try {
@@ -63,5 +72,16 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
       return Optional.empty();
     }
     return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  }
+
+  @Override
+  public HoodieAvroPayload fromBytes(byte[] bytes) {
+    this.recordBytes = bytes;
+    return this;
+  }
+
+  @Override
+  public byte[] getBytes() {
+    return this.recordBytes;
   }
 }

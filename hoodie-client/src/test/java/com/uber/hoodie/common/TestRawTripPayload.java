@@ -43,13 +43,17 @@ import org.apache.commons.io.IOUtils;
  */
 public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayload> {
 
+  private static final long serialVersionUID = 3741429564025630707L;
   private static final transient ObjectMapper mapper = new ObjectMapper();
   private String partitionPath;
   private String rowKey;
   private byte[] jsonDataCompressed;
   private int dataSize;
   private boolean isDeleted;
-
+  
+  // To be used only for serialization
+  public TestRawTripPayload() {}
+  
   public TestRawTripPayload(Optional<String> jsonData, String rowKey, String partitionPath, String schemaStr,
       Boolean isDeleted) throws IOException {
     if (jsonData.isPresent()) {
@@ -190,5 +194,15 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     private Map<String, String> getMergedMetadataMap() {
       return mergedMetadataMap;
     }
+  }
+
+  @Override
+  public byte[] getBytes() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public TestRawTripPayload fromBytes(byte[] bytes) {
+    throw new UnsupportedOperationException();
   }
 }

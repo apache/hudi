@@ -51,17 +51,22 @@ public class ReflectionUtils {
     }
   }
 
+
   /**
-   * Instantiate a given class with a generic record payload
+   * Method to instantiate the payload class
+   * 
+   * @param recordPayloadClass The class to be instantiated
+   * @param recordBytes The serialized byte array of the class
+   * @return The object of instance recordPayloadClass
    */
-  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass,
-      Object[] payloadArgs,
-      Class<?>... constructorArgTypes) {
+  public static <T extends HoodieRecordPayload<T>> T loadPayload(String recordPayloadClass,
+      byte[] recordBytes) {
     try {
-      return (T) getClass(recordPayloadClass).getConstructor(constructorArgTypes)
-          .newInstance(payloadArgs);
-    } catch (InstantiationException | IllegalAccessException
-        | InvocationTargetException | NoSuchMethodException e) {
+      Class<?> clazz = getClass(recordPayloadClass);
+      T newInstance = (T) clazz.newInstance();
+      newInstance.fromBytes(recordBytes);
+      return newInstance;
+    } catch (InstantiationException | IllegalAccessException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     }
   }

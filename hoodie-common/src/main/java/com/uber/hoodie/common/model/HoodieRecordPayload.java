@@ -24,10 +24,12 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 /**
- * Every Hoodie dataset has an implementation of the <code>HoodieRecordPayload</code> This abstracts
- * out callbacks which depend on record specific logic
+ * Every Hoodie dataset has an implementation of the <code>HoodieRecordPayload</code>.
+ * <p>
+ * This abstracts out callbacks which depend on record specific logic
+ * </p>
  */
-public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {
+public interface HoodieRecordPayload<T extends HoodieRecordPayload<T>> extends Serializable {
 
   /**
    * When more than one HoodieRecord have the same HoodieKey, this function combines them before
@@ -67,4 +69,20 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   default Optional<Map<String, String>> getMetadata() {
     return Optional.empty();
   }
+  
+  /**
+   * This method is used to serialize the {@link HoodieRecordPayload} into byte array
+   * 
+   * @return The serialized data in the form of byte array
+   */
+  byte[] getBytes();
+  
+  /**
+   * This method is used to construct the {@link HoodieRecordPayload} back from the serialized byte
+   * array
+   * 
+   * @param bytes The serialized data in the form of byte array
+   * @return The instance of {@link HoodieRecordPayload} from the serialized data
+   */
+  T fromBytes(byte[] bytes);
 }

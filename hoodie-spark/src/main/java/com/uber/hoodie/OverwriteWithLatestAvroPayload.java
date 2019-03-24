@@ -35,6 +35,8 @@ import org.apache.avro.generic.IndexedRecord;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
     HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  private static final long serialVersionUID = 1441789303785114865L;
+
   /**
    * @param record
    * @param orderingVal
@@ -67,5 +69,15 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
   @Override
   public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  }
+
+  @Override
+  public byte[] getBytes() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public OverwriteWithLatestAvroPayload fromBytes(byte[] bytes) {
+    throw new UnsupportedOperationException();
   }
 }

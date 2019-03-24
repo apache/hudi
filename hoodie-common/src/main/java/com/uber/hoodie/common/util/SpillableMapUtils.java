@@ -24,7 +24,6 @@ import com.uber.hoodie.common.util.collection.io.storage.SizeAwareDataOutputStre
 import com.uber.hoodie.exception.HoodieCorruptedDataException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.Optional;
 import java.util.zip.CRC32;
 import org.apache.avro.generic.GenericRecord;
 
@@ -105,7 +104,7 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class
    */
-  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) throws IOException {
     String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .toString();
     String partitionPath =
@@ -114,7 +113,7 @@ public class SpillableMapUtils {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
         new HoodieKey(recKey, partitionPath),
         ReflectionUtils
-            .loadPayload(payloadClazz, new Object[]{Optional.of(rec)}, Optional.class));
+            .loadPayload(payloadClazz, HoodieAvroUtils.avroToBytes(rec)));
     return (R) hoodieRecord;
   }
 
@@ -125,7 +124,7 @@ public class SpillableMapUtils {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
         new HoodieKey(recKey, partitionPath),
         ReflectionUtils
-            .loadPayload(payloadClazz, new Object[]{Optional.empty()}, Optional.class));
+            .loadPayload(payloadClazz, new byte[0]));
     return (R) hoodieRecord;
   }
 }
