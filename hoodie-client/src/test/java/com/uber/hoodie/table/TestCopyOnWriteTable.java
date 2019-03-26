@@ -342,10 +342,10 @@ public class TestCopyOnWriteTable {
     assertEquals(2, returnedStatuses.size());
     assertEquals("2016/01/31", returnedStatuses.get(0).getPartitionPath());
     assertEquals(0, returnedStatuses.get(0).getFailedRecords().size());
-    assertEquals(10, returnedStatuses.get(0).getWrittenRecords().size());
+    assertEquals(10, returnedStatuses.get(0).getTotalRecords());
     assertEquals("2016/02/01", returnedStatuses.get(1).getPartitionPath());
     assertEquals(0, returnedStatuses.get(0).getFailedRecords().size());
-    assertEquals(1, returnedStatuses.get(1).getWrittenRecords().size());
+    assertEquals(1, returnedStatuses.get(1).getTotalRecords());
 
     // Case 2:
     // 1 record for partition 1, 5 record for partition 2, 1 records for partition 3.
@@ -358,13 +358,13 @@ public class TestCopyOnWriteTable {
 
     assertEquals(3, returnedStatuses.size());
     assertEquals("2016/01/31", returnedStatuses.get(0).getPartitionPath());
-    assertEquals(1, returnedStatuses.get(0).getWrittenRecords().size());
+    assertEquals(1, returnedStatuses.get(0).getTotalRecords());
 
     assertEquals("2016/02/01", returnedStatuses.get(1).getPartitionPath());
-    assertEquals(5, returnedStatuses.get(1).getWrittenRecords().size());
+    assertEquals(5, returnedStatuses.get(1).getTotalRecords());
 
     assertEquals("2016/02/02", returnedStatuses.get(2).getPartitionPath());
-    assertEquals(1, returnedStatuses.get(2).getWrittenRecords().size());
+    assertEquals(1, returnedStatuses.get(2).getTotalRecords());
 
   }
 

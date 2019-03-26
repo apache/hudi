@@ -58,7 +58,9 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
     this.hoodieTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.schema = createHoodieWriteSchema(config);
     this.timer = new HoodieTimer().startTimer();
-    this.writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
+    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
+        !hoodieTable.getIndex().isImplicitWithStorage(),
+        config.getWriteStatusFailureFraction());
   }
 
   /**
