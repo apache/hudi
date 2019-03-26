@@ -337,7 +337,7 @@ public class TestHbaseIndex {
   }
 
   private WriteStatus getSampleWriteStatus(final int numInserts, final int numUpdateWrites) {
-    final WriteStatus writeStatus = new WriteStatus();
+    final WriteStatus writeStatus = new WriteStatus(false, 0.1);
     HoodieWriteStat hoodieWriteStat = new HoodieWriteStat();
     hoodieWriteStat.setNumInserts(numInserts);
     hoodieWriteStat.setNumUpdateWrites(numUpdateWrites);

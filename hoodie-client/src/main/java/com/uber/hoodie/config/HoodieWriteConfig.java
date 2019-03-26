@@ -406,19 +406,19 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public Long getMaxMemoryPerCompaction() {
-    return Long
-        .valueOf(
-            props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP));
+    return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_COMPACTION_PROP));
   }
 
   public int getMaxDFSStreamBufferSize() {
-    return Integer
-        .valueOf(
-            props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
+    return Integer.valueOf(props.getProperty(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP));
   }
 
   public String getSpillableMapBasePath() {
     return props.getProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP);
+  }
+
+  public double getWriteStatusFailureFraction() {
+    return Double.valueOf(props.getProperty(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION_PROP));
   }
 
   public static class Builder {
@@ -428,7 +428,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
     private boolean isMetricsConfigSet = false;
-    private boolean isAutoCommit = true;
     private boolean isMemoryConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
