@@ -25,11 +25,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 
 /**
  * Status of a write operation.
  */
 public class WriteStatus implements Serializable {
+
+  private static final long RANDOM_SEED = 9038412832L;
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
@@ -48,6 +51,16 @@ public class WriteStatus implements Serializable {
   private long totalRecords = 0;
   private long totalErrorRecords = 0;
 
+  private final double failureFraction;
+  private final boolean trackSuccessRecords;
+  private final transient Random random;
+
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+    this.trackSuccessRecords = trackSuccessRecords;
+    this.failureFraction = failureFraction;
+    this.random = new Random(RANDOM_SEED);
+  }
+
   /**
    * Mark write as success, optionally using given parameters for the purpose of calculating some
    * aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
@@ -58,9 +71,10 @@ public class WriteStatus implements Serializable {
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
    * HoodieRecord} before deflation.
    */
-  public void markSuccess(HoodieRecord record,
-      Optional<Map<String, String>> optionalRecordMetadata) {
-    writtenRecords.add(record);
+  public void markSuccess(HoodieRecord record, Optional<Map<String, String>> optionalRecordMetadata) {
+    if (trackSuccessRecords) {
+      writtenRecords.add(record);
+    }
     totalRecords++;
   }
 
@@ -74,10 +88,11 @@ public class WriteStatus implements Serializable {
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
    * HoodieRecord} before deflation.
    */
-  public void markFailure(HoodieRecord record, Throwable t,
-      Optional<Map<String, String>> optionalRecordMetadata) {
-    failedRecords.add(record);
-    errors.put(record.getKey(), t);
+  public void markFailure(HoodieRecord record, Throwable t, Optional<Map<String, String>> optionalRecordMetadata) {
+    if (random.nextDouble() <= failureFraction) {
+      failedRecords.add(record);
+      errors.put(record.getKey(), t);
+    }
     totalRecords++;
     totalErrorRecords++;
   }

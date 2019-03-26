@@ -52,6 +52,12 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   // Default file path prefix for spillable file
   public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
 
+  // Property to control how what fraction of the failed record, exceptions we report back to driver.
+  public static final String WRITESTATUS_FAILURE_FRACTION_PROP = "hoodie.memory.writestatus.failure.fraction";
+  // Default is 10%. If set to 100%, with lot of failures, this can cause memory pressure, cause OOMs and
+  // mask actual data errors.
+  public static final double DEFAULT_WRITESTATUS_FAILURE_FRACTION = 0.1;
+
   private HoodieMemoryConfig(Properties props) {
     super(props);
   }
@@ -97,6 +103,11 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withWriteStatusFailureFraction(double failureFraction) {
+      props.setProperty(WRITESTATUS_FAILURE_FRACTION_PROP, String.valueOf(failureFraction));
+      return this;
+    }
+
     /**
      * Dynamic calculation of max memory to use for for spillable map. user.available.memory = spark.executor.memory *
      * (1 - spark.memory.fraction) spillable.available.memory = user.available.memory * hoodie.memory.fraction. Anytime
@@ -118,8 +129,8 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       if (SparkEnv.get() != null) {
         // 1 GB is the default conf used by Spark, look at SparkContext.scala
         long executorMemoryInBytes = Utils.memoryStringToMb(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_PROP,
-                DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024
-                * 1024L;
+            DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024
+            * 1024L;
         // 0.6 is the default value used by Spark,
         // look at {@link
         // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}
@@ -159,6 +170,9 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props,
           !props.containsKey(SPILLABLE_MAP_BASE_PATH_PROP),
           SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH);
+      setDefaultOnCondition(props,
+          !props.containsKey(WRITESTATUS_FAILURE_FRACTION_PROP),
+          WRITESTATUS_FAILURE_FRACTION_PROP, String.valueOf(DEFAULT_WRITESTATUS_FAILURE_FRACTION));
       return config;
     }
   }
