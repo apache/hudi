@@ -176,11 +176,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getMaxCommitsToKeep() {
-    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP));
   }
 
   public int getMinCommitsToKeep() {
-    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP));
   }
 
   public int getParquetSmallFileLimit() {
