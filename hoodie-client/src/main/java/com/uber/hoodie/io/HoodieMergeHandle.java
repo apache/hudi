@@ -76,6 +76,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
             .filter(dataFile -> dataFile.getFileId().equals(fileId)).findFirst());
   }
 
+  /**
+   * Called by compactor code path
+   */
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, Optional<HoodieDataFile> dataFileToBeMerged) {
     super(config, commitTime, hoodieTable);
