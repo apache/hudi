@@ -50,7 +50,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private long insertRecordsWritten = 0;
   private long recordsDeleted = 0;
   private Iterator<HoodieRecord<T>> recordIterator;
-  private boolean useWriterSchema;
+  private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId) {
@@ -78,6 +78,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     logger.info("New InsertHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
+  /**
+   * Called by the compactor code path
+   */
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator) {
     this(config, commitTime, hoodieTable, partitionPath, fileId);
