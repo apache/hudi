@@ -144,6 +144,10 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
 
     private Map<String, String> mergedMetadataMap = new HashMap<>();
 
+    public MetadataMergeWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+      super(trackSuccessRecords, failureFraction);
+    }
+
     public static Map<String, String> mergeMetadataForWriteStatuses(List<WriteStatus> writeStatuses) {
       Map<String, String> allWriteStatusMergedMetadataMap = new HashMap<>();
       for (WriteStatus writeStatus : writeStatuses) {

@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
@@ -144,6 +145,7 @@ public class TestHoodieClientBase implements Serializable {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
+        .withWriteStatusClass(TestRawTripPayload.MetadataMergeWriteStatus.class)
         .withConsistencyCheckEnabled(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())

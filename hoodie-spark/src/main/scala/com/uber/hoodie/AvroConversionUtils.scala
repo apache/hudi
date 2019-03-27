@@ -58,12 +58,12 @@ object AvroConversionUtils {
       ss.createDataFrame(rdd.mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {
-          val schema = Schema.parse(schemaStr)
+          val schema = new Schema.Parser().parse(schemaStr)
           val dataType = convertAvroSchemaToStructType(schema)
           val convertor = createConverterToRow(schema, dataType)
           records.map { x => convertor(x).asInstanceOf[Row] }
         }
-      }, convertAvroSchemaToStructType(Schema.parse(schemaStr))).asInstanceOf[Dataset[Row]]
+      }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr))).asInstanceOf[Dataset[Row]]
     }
   }
 

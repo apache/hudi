@@ -32,6 +32,7 @@ import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Optional;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -49,6 +50,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private long insertRecordsWritten = 0;
   private long recordsDeleted = 0;
   private Iterator<HoodieRecord<T>> recordIterator;
+  private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId) {
@@ -68,7 +70,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
       this.storageWriter = HoodieStorageWriterFactory
-          .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, schema);
+          .getStorageWriter(commitTime, getStorageWriterPath(), hoodieTable, config, writerSchema);
     } catch (IOException e) {
       throw new HoodieInsertException(
           "Failed to initialize HoodieStorageWriter for path " + getStorageWriterPath(), e);
@@ -76,10 +78,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     logger.info("New InsertHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
+  /**
+   * Called by the compactor code path
+   */
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator) {
     this(config, commitTime, hoodieTable, partitionPath, fileId);
     this.recordIterator = recordIterator;
+    this.useWriterSchema = true;
   }
 
   @Override
@@ -94,7 +100,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     Optional recordMetadata = record.getData().getMetadata();
     try {
       if (avroRecord.isPresent()) {
-        storageWriter.writeAvroWithMetadata(avroRecord.get(), record);
+        // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
+        IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
+        storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
         // update the new location of record, so we know where to find it next
         record.setNewLocation(new HoodieRecordLocation(commitTime, writeStatus.getFileId()));
         recordsWritten++;
@@ -122,7 +130,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
     try {
       while (recordIterator.hasNext()) {
         HoodieRecord<T> record = recordIterator.next();
-        write(record, record.getData().getInsertValue(schema));
+        if (useWriterSchema) {
+          write(record, record.getData().getInsertValue(writerSchema));
+        } else {
+          write(record, record.getData().getInsertValue(originalSchema));
+        }
       }
     } catch (IOException io) {
       throw new HoodieInsertException(

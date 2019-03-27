@@ -149,9 +149,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private Optional<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
     Optional recordMetadata = hoodieRecord.getData().getMetadata();
     try {
-      Optional<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(schema);
-
+      Optional<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(originalSchema);
       if (avroRecord.isPresent()) {
+        // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
+        avroRecord = Optional.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId = HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(),
             recordIndex.getAndIncrement());
         HoodieAvroUtils
@@ -183,8 +184,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     return Optional.empty();
   }
 
-  // TODO (NA) - Perform a schema check of current input record with the last schema on log file
-  // to make sure we don't append records with older (shorter) schema than already appended
+  // TODO (NA) - Perform a writerSchema check of current input record with the last writerSchema on log file
+  // to make sure we don't append records with older (shorter) writerSchema than already appended
   public void doAppend() {
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
@@ -199,7 +200,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private void doAppend(Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchema.toString());
       if (recordList.size() > 0) {
         writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, header));
         recordList.clear();

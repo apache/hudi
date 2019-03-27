@@ -30,16 +30,10 @@ import org.apache.avro.generic.GenericRecord;
  */
 public abstract class BaseAvroPayload implements Serializable {
 
-
   /**
    * Avro data extracted from the source converted to bytes
    */
   protected final byte [] recordBytes;
-
-  /**
-   * The schema of the Avro data
-   */
-  protected final String schemaStr;
 
   /**
    * For purposes of preCombining
@@ -53,7 +47,6 @@ public abstract class BaseAvroPayload implements Serializable {
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     try {
       this.recordBytes = HoodieAvroUtils.avroToBytes(record);
-      this.schemaStr = record.getSchema().toString();
     } catch (IOException io) {
       throw new HoodieIOException("Cannot convert GenericRecord to bytes", io);
     }

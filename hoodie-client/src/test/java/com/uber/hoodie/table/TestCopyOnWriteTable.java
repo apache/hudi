@@ -342,10 +342,10 @@ public class TestCopyOnWriteTable {
     assertEquals(2, returnedStatuses.size());
     assertEquals("2016/01/31", returnedStatuses.get(0).getPartitionPath());
     assertEquals(0, returnedStatuses.get(0).getFailedRecords().size());
-    assertEquals(10, returnedStatuses.get(0).getWrittenRecords().size());
+    assertEquals(10, returnedStatuses.get(0).getTotalRecords());
     assertEquals("2016/02/01", returnedStatuses.get(1).getPartitionPath());
     assertEquals(0, returnedStatuses.get(0).getFailedRecords().size());
-    assertEquals(1, returnedStatuses.get(1).getWrittenRecords().size());
+    assertEquals(1, returnedStatuses.get(1).getTotalRecords());
 
     // Case 2:
     // 1 record for partition 1, 5 record for partition 2, 1 records for partition 3.
@@ -358,13 +358,13 @@ public class TestCopyOnWriteTable {
 
     assertEquals(3, returnedStatuses.size());
     assertEquals("2016/01/31", returnedStatuses.get(0).getPartitionPath());
-    assertEquals(1, returnedStatuses.get(0).getWrittenRecords().size());
+    assertEquals(1, returnedStatuses.get(0).getTotalRecords());
 
     assertEquals("2016/02/01", returnedStatuses.get(1).getPartitionPath());
-    assertEquals(5, returnedStatuses.get(1).getWrittenRecords().size());
+    assertEquals(5, returnedStatuses.get(1).getTotalRecords());
 
     assertEquals("2016/02/02", returnedStatuses.get(2).getPartitionPath());
-    assertEquals(1, returnedStatuses.get(2).getWrittenRecords().size());
+    assertEquals(1, returnedStatuses.get(2).getTotalRecords());
 
   }
 
@@ -480,6 +480,26 @@ public class TestCopyOnWriteTable {
     assertEquals("Total of 4 insert buckets", 4, insertBuckets.size());
     assertEquals("First insert bucket must be same as update bucket", 0, insertBuckets.get(0).bucketNumber);
     assertEquals("First insert bucket should have weight 0.5", 200.0 / 2400, insertBuckets.get(0).weight, 0.01);
+  }
+
+  @Test
+  public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
+        HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    String commitTime = "000";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
+    List<HoodieRecord> inserts = dataGenerator.generateInsertsWithHoodieAvroPayload(commitTime, 100);
+    Iterator<List<WriteStatus>> ws = table.handleInsert(commitTime, inserts.iterator());
+    WriteStatus writeStatus = ws.next().get(0);
+    String fileId = writeStatus.getFileId();
+    metadata.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
+    table = new HoodieCopyOnWriteTable(config, jsc);
+    // Perform update of 100 records to test MergeHandle and BufferedExecutor
+    table.handleUpdate("001", fileId,
+        dataGenerator.generateUpdatesWithHoodieAvroPayload(commitTime, writeStatus.getWrittenRecords()).iterator());
   }
 
   @After

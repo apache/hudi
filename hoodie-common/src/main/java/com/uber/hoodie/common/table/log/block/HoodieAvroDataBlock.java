@@ -58,7 +58,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       @Nonnull Map<HeaderMetadataType, String> footer) {
     super(header, footer, Optional.empty(), Optional.empty(), null, false);
     this.records = records;
-    this.schema = Schema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    this.schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
   }
 
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
@@ -102,7 +102,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       createRecordsFromContentBytes();
     }
 
-    Schema schema = Schema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+    Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
