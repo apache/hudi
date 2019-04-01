@@ -120,34 +120,6 @@
                   <pattern>parquet.schema</pattern>
                   <shadedPattern>com.uber.hoodie.parquet.schema</shadedPattern>
                 </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hive.jdbc.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.metastore.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.conf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hive.service.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.service.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
-                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
@@ -243,21 +215,25 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
