@@ -185,6 +185,10 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // filter the partition paths if needed to reduce list status
     partitionPaths = config.getCompactionStrategy().filterPartitionPaths(config, partitionPaths);
 
+    if (partitionPaths.isEmpty()) {
+      // In case no partitions could be picked, return no compaction plan
+      return null;
+    }
     TableFileSystemView.RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<HoodieCompactionOperation> operations =
