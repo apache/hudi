@@ -29,6 +29,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
   public static final String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
   public static final String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
   public static final String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
+  public static final String HBASE_ZK_ZNODEPARENT = "hoodie.index.hbase.zknode.path";
   /**
    * Note that if HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP is set to true, this batch size will not
    * be honored for HBase Puts
@@ -130,6 +131,11 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
     public HoodieHBaseIndexConfig.Builder hbaseIndexQPSFraction(float qpsFraction) {
       props.setProperty(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION_PROP,
           String.valueOf(qpsFraction));
+      return this;
+    }
+
+    public Builder hbaseZkZnodeParent(String zkZnodeParent) {
+      props.setProperty(HBASE_ZK_ZNODEPARENT, zkZnodeParent);
       return this;
     }
 

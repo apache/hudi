@@ -29,15 +29,20 @@ import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.BoundedIOCompactionStrategy;
+import com.uber.hoodie.io.compact.strategy.BoundedPartitionAwareCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.DayBasedCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
+import com.uber.hoodie.io.compact.strategy.UnBoundedPartitionAwareCompactionStrategy;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
+import org.apache.commons.lang3.time.DateUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -109,7 +114,7 @@ public class TestHoodieCompactionStrategy {
   }
 
   @Test
-  public void testPartitionAwareCompactionSimple() {
+  public void testDayBasedCompactionSimple() {
     Map<Long, List<Long>> sizesMap = Maps.newHashMap();
     sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
     sizesMap.put(110 * MB, Lists.newArrayList());
@@ -139,6 +144,96 @@ public class TestHoodieCompactionStrategy {
         .get(0).getPartitionPath());
     // Either the partition paths are sorted in descending order or they are equal
     assertTrue("DayBasedCompactionStrategy should sort partitions in descending order", comparision >= 0);
+  }
+
+  @Test
+  public void testBoundedPartitionAwareCompactionSimple() {
+    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
+    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, Lists.newArrayList());
+    sizesMap.put(100 * MB, Lists.newArrayList(MB));
+    sizesMap.put(70 * MB, Lists.newArrayList(MB));
+    sizesMap.put(80 * MB, Lists.newArrayList(MB));
+    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+
+    SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd");
+    Date today = new Date();
+    String currentDay = format.format(today);
+    String currentDayMinus1 = format.format(DateUtils.addDays(today, -1));
+    String currentDayMinus2 = format.format(DateUtils.addDays(today, -2));
+    String currentDayMinus3 = format.format(DateUtils.addDays(today, -3));
+    String currentDayPlus1 = format.format(DateUtils.addDays(today, 1));
+    String currentDayPlus5 = format.format(DateUtils.addDays(today, 5));
+
+    Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder()
+        .put(120 * MB, currentDay)
+        .put(110 * MB, currentDayMinus1)
+        .put(100 * MB, currentDayMinus2)
+        .put(80 * MB, currentDayMinus3)
+        .put(90 * MB, currentDayPlus1)
+        .put(70 * MB, currentDayPlus5)
+        .build();
+
+    BoundedPartitionAwareCompactionStrategy strategy = new BoundedPartitionAwareCompactionStrategy();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
+            .withTargetPartitionsPerDayBasedCompaction(2)
+            .build()).build();
+    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
+    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
+
+    assertTrue("BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions",
+        returned.size() < operations.size());
+    Assert.assertEquals("BoundedPartitionAwareCompactionStrategy should have resulted in fewer compactions",
+        returned.size(), 5);
+
+    int comparision = strategy.getComparator().compare(returned.get(returned.size() - 1).getPartitionPath(), returned
+        .get(0).getPartitionPath());
+    // Either the partition paths are sorted in descending order or they are equal
+    assertTrue("BoundedPartitionAwareCompactionStrategy should sort partitions in descending order", comparision >= 0);
+  }
+
+  @Test
+  public void testUnboundedPartitionAwareCompactionSimple() {
+    Map<Long, List<Long>> sizesMap = Maps.newHashMap();
+    sizesMap.put(120 * MB, Lists.newArrayList(60 * MB, 10 * MB, 80 * MB));
+    sizesMap.put(110 * MB, Lists.newArrayList());
+    sizesMap.put(100 * MB, Lists.newArrayList(MB));
+    sizesMap.put(80 * MB, Lists.newArrayList(MB));
+    sizesMap.put(70 * MB, Lists.newArrayList(MB));
+    sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
+
+    SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd");
+    Date today = new Date();
+    String currentDay = format.format(today);
+    String currentDayMinus1 = format.format(DateUtils.addDays(today, -1));
+    String currentDayMinus2 = format.format(DateUtils.addDays(today, -2));
+    String currentDayMinus3 = format.format(DateUtils.addDays(today, -3));
+    String currentDayPlus1 = format.format(DateUtils.addDays(today, 1));
+    String currentDayPlus5 = format.format(DateUtils.addDays(today, 5));
+
+    Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder()
+        .put(120 * MB, currentDay)
+        .put(110 * MB, currentDayMinus1)
+        .put(100 * MB, currentDayMinus2)
+        .put(80 * MB, currentDayMinus3)
+        .put(90 * MB, currentDayPlus1)
+        .put(70 * MB, currentDayPlus5)
+        .build();
+
+    UnBoundedPartitionAwareCompactionStrategy strategy = new UnBoundedPartitionAwareCompactionStrategy();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
+            .withTargetPartitionsPerDayBasedCompaction(2)
+            .build()).build();
+    List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap, keyToPartitionMap);
+    List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
+
+    assertTrue("UnBoundedPartitionAwareCompactionStrategy should not include last " + writeConfig
+            .getTargetPartitionsPerDayBasedCompaction() + " partitions or later partitions from today",
+        returned.size() < operations.size());
+    Assert.assertEquals("BoundedPartitionAwareCompactionStrategy should have resulted in 1 compaction",
+        returned.size(), 1);
   }
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,

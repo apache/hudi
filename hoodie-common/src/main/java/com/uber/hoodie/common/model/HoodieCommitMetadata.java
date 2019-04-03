@@ -136,7 +136,7 @@ public class HoodieCommitMetadata implements Serializable {
     long totalFilesInsert = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
       for (HoodieWriteStat stat : stats) {
-        if (stat.getPrevCommit() != null && stat.getPrevCommit().equals("null")) {
+        if (stat.getPrevCommit() != null && stat.getPrevCommit().equalsIgnoreCase("null")) {
           totalFilesInsert++;
         }
       }
@@ -148,7 +148,7 @@ public class HoodieCommitMetadata implements Serializable {
     long totalFilesUpdated = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
       for (HoodieWriteStat stat : stats) {
-        if (stat.getPrevCommit() != null && !stat.getPrevCommit().equals("null")) {
+        if (stat.getPrevCommit() != null && !stat.getPrevCommit().equalsIgnoreCase("null")) {
           totalFilesUpdated++;
         }
       }
@@ -170,8 +170,8 @@ public class HoodieCommitMetadata implements Serializable {
     long totalInsertRecordsWritten = 0;
     for (List<HoodieWriteStat> stats : partitionToWriteStats.values()) {
       for (HoodieWriteStat stat : stats) {
-        if (stat.getPrevCommit() != null && stat.getPrevCommit().equals("null")) {
-          totalInsertRecordsWritten += stat.getNumWrites();
+        if (stat.getPrevCommit() != null && stat.getPrevCommit().equalsIgnoreCase("null")) {
+          totalInsertRecordsWritten += stat.getNumInserts();
         }
       }
     }
