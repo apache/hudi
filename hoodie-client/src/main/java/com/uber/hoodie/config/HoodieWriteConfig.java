@@ -249,6 +249,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         .parseInt(props.getProperty(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP));
   }
 
+  public int getCommitArchivalBatchSize() {
+    return Integer
+        .parseInt(props.getProperty(HoodieCompactionConfig.COMMITS_ARCHIVAL_BATCH_SIZE_PROP));
+  }
+
   /**
    * index properties
    **/
