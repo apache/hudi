@@ -153,9 +153,17 @@ public class FSUtils {
     return datePartitions;
   }
 
+  /**
+   * Given a base partition and a partition path, return
+   * relative path of partition path to the base path
+   */
   public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
+    basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
+    partitionPath = Path.getPathWithoutSchemeAndAuthority(partitionPath);
     String partitionFullPath = partitionPath.toString();
-    int partitionStartIndex = partitionFullPath.lastIndexOf(basePath.getName());
+    int partitionStartIndex = partitionFullPath.indexOf(
+        basePath.getName(),
+        basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
     return partitionStartIndex + basePath.getName().length() == partitionFullPath.length() ? "" :
         partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);

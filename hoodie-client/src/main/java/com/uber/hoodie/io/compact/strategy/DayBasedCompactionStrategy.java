@@ -38,9 +38,9 @@ import java.util.stream.Collectors;
 public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
-  private static String datePartitionFormat = "yyyy/MM/dd";
+  protected static String datePartitionFormat = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
-  private static Comparator<String> comparator = (String leftPartition,
+  protected static Comparator<String> comparator = (String leftPartition,
       String rightPartition) -> {
     try {
       Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)

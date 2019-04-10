@@ -24,6 +24,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
@@ -91,5 +92,33 @@ public class TestFSUtils {
     conf.set("fs.key2", "value2");
     assertEquals("value11", conf.get("fs.key1"));
     assertEquals("value2", conf.get("fs.key2"));
+  }
+
+  @Test
+  public void testGetRelativePartitionPath() {
+    Path basePath = new Path("/test/apache");
+    Path partitionPath = new Path("/test/apache/hudi/sub");
+    assertEquals("hudi/sub",FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  }
+
+  @Test
+  public void testGetRelativePartitionPathSameFolder() {
+    Path basePath = new Path("/test");
+    Path partitionPath = new Path("/test");
+    assertEquals("", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  }
+
+  @Test
+  public void testGetRelativePartitionPathRepeatedFolderNameBasePath() {
+    Path basePath = new Path("/test/apache/apache");
+    Path partitionPath = new Path("/test/apache/apache/hudi");
+    assertEquals("hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  }
+
+  @Test
+  public void testGetRelativePartitionPathRepeatedFolderNamePartitionPath() {
+    Path basePath = new Path("/test/apache");
+    Path partitionPath = new Path("/test/apache/apache/hudi");
+    assertEquals("apache/hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
   }
 }
