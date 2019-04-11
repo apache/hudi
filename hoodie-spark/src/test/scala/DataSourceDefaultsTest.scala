@@ -16,9 +16,11 @@
  *
  */
 
+import java.util.Optional
+
 import com.uber.hoodie.common.util.{SchemaTestUtil, TypedProperties}
 import com.uber.hoodie.exception.HoodieException
-import com.uber.hoodie.{DataSourceWriteOptions, OverwriteWithLatestAvroPayload, SimpleKeyGenerator}
+import com.uber.hoodie.{DataSourceWriteOptions, EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload, SimpleKeyGenerator}
 import org.apache.avro.generic.GenericRecord
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -113,5 +115,17 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
     val combinedPayload21 = overWritePayload2.preCombine(overWritePayload1)
     val combinedGR21 = combinedPayload21.getInsertValue(schema).get().asInstanceOf[GenericRecord]
     assertEquals("field2", combinedGR21.get("field1").toString)
+  }
+
+  @Test def testEmptyHoodieRecordPayload() = {
+    val emptyPayload1 = new EmptyHoodieRecordPayload(baseRecord, 1)
+    val laterRecord = SchemaTestUtil
+      .generateAvroRecordFromJson(schema, 2, "001", "f1")
+    val emptyPayload2 = new EmptyHoodieRecordPayload(laterRecord, 2)
+
+    // it will provide an empty record
+    val combinedPayload12 = emptyPayload1.preCombine(emptyPayload2)
+    val combined12 = combinedPayload12.getInsertValue(schema)
+    assertEquals(Optional.empty(), combined12)
   }
 }
