@@ -1,4 +1,4 @@
-FROM frolvlad/alpine-oraclejdk8
+FROM frolvlad/alpine-java
 MAINTAINER Hoodie
 USER root
 
