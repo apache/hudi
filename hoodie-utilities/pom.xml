@@ -83,6 +83,7 @@
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
                   <include>com.twitter:chill_2.11</include>
+                  <include>com.twitter:chill-java</include>
                 </includes>
               </artifactSet>
               <relocations>
