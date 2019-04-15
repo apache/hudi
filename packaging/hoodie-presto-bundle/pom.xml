@@ -28,46 +28,16 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- Hoodie -->
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-common</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.thrift</groupId>
-      <artifactId>libthrift</artifactId>
-      <version>${thrift.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-    </dependency>
-
-    <!-- Apache commons -->
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
     <!-- Logging -->
@@ -81,29 +51,62 @@
     </dependency>
 
     <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${thrift.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+
+    <!-- Apache commons -->
+    <dependency>
+      <groupId>commons-dbcp</groupId>
+      <artifactId>commons-dbcp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>com.beust</groupId>
       <artifactId>jcommander</artifactId>
     </dependency>
 
+    <!-- Httpcomponents-->
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
     </dependency>
 
+    <!-- Hadoop -->
     <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
     </dependency>
-
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-auth</artifactId>
     </dependency>
   </dependencies>
 
@@ -116,7 +119,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4</version>
+        <version>${maven-shade-plugin.version}</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -124,49 +127,8 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <relocations>
-                 <relocation>
-                  <pattern>com.beust.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.beust.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                  <pattern>org.joda.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.joda.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                  <pattern>com.google.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.google.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.slf4j.</pattern>
-                   <shadedPattern>com.uber.hoodie.org.slf4j.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.apache.commons.</pattern>
-                   <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.column</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.column</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.format.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.format.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.hadoop.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.hadoop.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.schema.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.schema.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>com.twitter.chill.</pattern>
-                   <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
-                 </relocation>
-              </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
+              <finalName>${project.artifactId}-${project.version}</finalName>
               <artifactSet>
                 <excludes>
                   <exclude>log4j:log4j</exclude>
@@ -179,7 +141,32 @@
                   <exclude>org.apache.httpcomponents:*</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${project.artifactId}-${project.version}</finalName>
+              <relocations>
+                <relocation>
+                  <pattern>com.beust.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.beust.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.joda.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.joda.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.google.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.google.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.slf4j.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.slf4j.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.twitter.chill.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
+                </relocation>
+              </relocations>
             </configuration>
           </execution>
         </executions>

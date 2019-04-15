@@ -8,7 +8,7 @@ public class RowBasedSchemaProvider extends SchemaProvider {
 
   // Used in GenericRecord conversions
   public static final String HOODIE_RECORD_NAMESPACE = "hoodie.source";
-  public static final String HOODIE_RECORD_STRUCT_NAME = "hoodie_source";
+  public static final String HOODIE_RECORD_NAME = "hoodie_source";
 
   private StructType rowStruct;
 
@@ -19,7 +19,7 @@ public class RowBasedSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME,
+    return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_NAME,
         HOODIE_RECORD_NAMESPACE);
   }
 }

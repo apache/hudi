@@ -74,12 +74,12 @@ private[hoodie] object HoodieSparkSqlWriter {
       }
 
     // register classes & schemas
-    val structName = s"${tblName.get}_record"
+    val recordName = s"${tblName.get}_record"
     val nameSpace = s"hoodie.${tblName.get}"
     sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
-    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, recordName, nameSpace)
     sparkContext.getConf.registerAvroSchemas(schema)
     log.info(s"Registered avro schema : ${schema.toString(true)}")
 
@@ -88,7 +88,7 @@ private[hoodie] object HoodieSparkSqlWriter {
       parameters(KEYGENERATOR_CLASS_OPT_KEY),
       toProperties(parameters)
     )
-    val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
+    val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, recordName, nameSpace)
     val hoodieAllIncomingRecords = genericRecords.map(gr => {
       val orderingVal = DataSourceUtils.getNestedFieldValAsString(
         gr, parameters(PRECOMBINE_FIELD_OPT_KEY)).asInstanceOf[Comparable[_]]

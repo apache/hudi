@@ -25,6 +25,7 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -43,7 +44,6 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
@@ -57,9 +57,9 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import parquet.avro.AvroSchemaConverter;
-import parquet.hadoop.ParquetFileReader;
-import parquet.schema.MessageType;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.MessageType;
+
 
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real
@@ -101,23 +101,11 @@ public abstract class AbstractRealtimeRecordReader {
 
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
     try {
-      baseFileSchema = readSchema(jobConf, split.getPath());
+      baseFileSchema = ParquetUtils.readSchema(jobConf, split.getPath());
       init();
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
-    }
-  }
-
-  /**
-   * Reads the schema from the parquet file. This is different from ParquetUtils as it uses the
-   * twitter parquet to support hive 1.1.0
-   */
-  private static MessageType readSchema(Configuration conf, Path parquetFilePath) {
-    try {
-      return ParquetFileReader.readFooter(conf, parquetFilePath).getFileMetaData().getSchema();
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
     }
   }
 
@@ -285,6 +273,9 @@ public abstract class AbstractRealtimeRecordReader {
     }
   }
 
+  /**
+   * Read the schema from the log file on path
+   */
   public static Schema readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
     Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(path), null);
     HoodieAvroDataBlock lastBlock = null;
@@ -306,6 +297,7 @@ public abstract class AbstractRealtimeRecordReader {
    * to also be part of the projected schema. Hive expects the record reader implementation to return the row in its
    * entirety (with un-projected column having null values). As we use writerSchema for this, make sure writer schema
    * also includes partition columns
+   *
    * @param schema Schema to be changed
    * @return
    */

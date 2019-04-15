@@ -22,35 +22,43 @@
     <version>0.4.6-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
-  <artifactId>hoodie-integ-test</artifactId>
   <modelVersion>4.0.0</modelVersion>
+
+  <artifactId>hoodie-integ-test</artifactId>
+
   <dependencies>
-    <dependency>
-      <groupId>org.glassfish.jersey.connectors</groupId>
-      <artifactId>jersey-apache-connector</artifactId>
-      <version>2.17</version>
-    </dependency>
-    <dependency>
-      <groupId>org.glassfish.jersey.core</groupId>
-      <artifactId>jersey-server</artifactId>
-      <version>2.17</version>
-    </dependency>
-    <dependency>
-      <groupId>org.glassfish.jersey.containers</groupId>
-      <artifactId>jersey-container-servlet-core</artifactId>
-      <version>2.17</version>
-    </dependency>
+    <!-- Hoodie -->
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-spark</artifactId>
       <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.glassfish.**</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-log4j12</artifactId>
+    </dependency>
+
+    <!-- Glassfish -->
+    <dependency>
+      <groupId>org.glassfish.jersey.core</groupId>
+      <artifactId>jersey-server</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.jersey.connectors</groupId>
+      <artifactId>jersey-apache-connector</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.jersey.containers</groupId>
+      <artifactId>jersey-container-servlet-core</artifactId>
+    </dependency>
+
+    <!-- Hoodie - Test -->
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-common</artifactId>
@@ -60,60 +68,12 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.awaitility</groupId>
-      <artifactId>awaitility</artifactId>
-      <version>3.1.2</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-spark</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.glassfish.**</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>20.0</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
-      <version>2.6.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>2.6.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-guava</artifactId>
-      <version>2.9.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.github.docker-java</groupId>
-      <artifactId>docker-java</artifactId>
-      <version>3.1.0-rc-3</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.glassfish.**</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.uber.hoodie</groupId>
@@ -122,17 +82,59 @@
       <type>pom</type>
       <scope>import</scope>
     </dependency>
+
+    <!-- Fasterxml - Test-->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+      <version>${fasterxml.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${fasterxml.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-guava</artifactId>
+      <version>${fasterxml.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <version>3.1.2</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>20.0</version>
+      <scope>test</scope>
+    </dependency>
+
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
+
+    <dependency>
+      <groupId>com.github.docker-java</groupId>
+      <artifactId>docker-java</artifactId>
+      <version>3.1.2</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
-    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark231.yml</dockerCompose.file>
+    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark240.yml</dockerCompose.file>
     <skipITs>false</skipITs>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <checkstyle.skip>true</checkstyle.skip>
@@ -142,6 +144,7 @@
     <plugins>
       <plugin>
         <artifactId>exec-maven-plugin</artifactId>
+        <version>1.6.0</version>
         <groupId>org.codehaus.mojo</groupId>
         <executions>
           <execution><!-- setup HUDI_WS variable in docker compose env file -->
@@ -176,7 +179,7 @@
       <plugin>
         <groupId>com.dkanejs.maven.plugins</groupId>
         <artifactId>docker-compose-maven-plugin</artifactId>
-        <version>2.0.1</version>
+        <version>2.4.0</version>
         <executions>
           <execution>
             <id>up</id>
@@ -187,7 +190,7 @@
             <configuration>
               <skip>${docker.compose.skip}</skip>
               <host>unix:///var/run/docker.sock</host>
-              <composeFile>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark231.yml</composeFile>
+              <composeFile>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark240.yml</composeFile>
               <detachedMode>true</detachedMode>
               <envFile>${dockerCompose.envFile}</envFile>
             </configuration>
@@ -200,7 +203,7 @@
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
-              <composeFile>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark231.yml</composeFile>
+              <composeFile>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark240.yml</composeFile>
               <removeVolumes>true</removeVolumes>
             </configuration>
           </execution>

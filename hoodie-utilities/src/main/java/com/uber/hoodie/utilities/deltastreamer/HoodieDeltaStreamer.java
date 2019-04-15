@@ -18,8 +18,8 @@
 
 package com.uber.hoodie.utilities.deltastreamer;
 
+import static com.uber.hoodie.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAME;
 import static com.uber.hoodie.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
-import static com.uber.hoodie.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.JCommander;
@@ -218,7 +218,7 @@ public class HoodieDeltaStreamer implements Serializable {
           dataAndCheckpoint.getBatch().map(data -> transformer.apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       avroRDDOptional = transformed.map(t ->
-         AvroConversionUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
+         AvroConversionUtils.createRdd(t, HOODIE_RECORD_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
       );
       // Use Transformed Row's schema if not overridden
       schemaProvider =

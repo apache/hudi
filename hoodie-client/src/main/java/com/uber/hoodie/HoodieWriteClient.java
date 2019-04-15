@@ -31,6 +31,7 @@ import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieRollingStat;
 import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
@@ -466,11 +467,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     return statuses;
   }
 
-  private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords,
-      Partitioner partitioner) {
-    return dedupedRecords.mapToPair(record -> new Tuple2<>(
-        new Tuple2<>(record.getKey(), Option.apply(record.getCurrentLocation())), record))
-        .partitionBy(partitioner).map(Tuple2::_2);
+  private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+    return dedupedRecords.mapToPair(
+        (PairFunction<HoodieRecord<T>, Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>) record ->
+            new Tuple2<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>>(
+                new Tuple2<>(record.getKey(), Option.apply(record.getCurrentLocation())),
+                record)
+    ).partitionBy(partitioner).map(Tuple2::_2);
   }
 
   /**
@@ -651,7 +654,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
             TableFileSystemView.ReadOptimizedView view = table.getROFileSystemView();
             List<String> latestFiles = view.getLatestDataFilesBeforeOrOn(partitionPath, commitTime)
                 .map(HoodieDataFile::getFileName).collect(Collectors.toList());
-            return new Tuple2<>(partitionPath, latestFiles);
+            return new Tuple2<String, List<String>>(partitionPath, latestFiles);
           }).collectAsMap();
 
       HoodieSavepointMetadata metadata = AvroUtils
@@ -1154,24 +1157,20 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   /**
    * Deduplicate Hoodie records, using the given deduplication funciton.
    */
-  JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
-      int parallelism) {
+  JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
-    return records
-        .mapToPair(record -> {
-          HoodieKey hoodieKey = record.getKey();
-          // If index used is global, then records are expected to differ in their partitionPath
-          Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-          return new Tuple2<>(key, record);
-        })
-        .reduceByKey((rec1, rec2) -> {
-          @SuppressWarnings("unchecked") T reducedData = (T) rec1.getData()
-              .preCombine(rec2.getData());
-          // we cannot allow the user to change the key or partitionPath, since that will affect
-          // everything
-          // so pick it from one of the records.
-          return new HoodieRecord<T>(rec1.getKey(), reducedData);
-        }, parallelism).map(Tuple2::_2);
+    return records.mapToPair((PairFunction<HoodieRecord<T>, Object, HoodieRecord<T>>) record -> {
+      HoodieKey hoodieKey = record.getKey();
+      // If index used is global, then records are expected to differ in their partitionPath
+      Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
+      return new Tuple2<Object, HoodieRecord<T>>(key, record);
+    }).reduceByKey((rec1, rec2) -> {
+      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+      // we cannot allow the user to change the key or partitionPath, since that will affect
+      // everything
+      // so pick it from one of the records.
+      return new HoodieRecord<T>(rec1.getKey(), reducedData);
+    }, parallelism).map(Tuple2::_2);
   }
 
   /**

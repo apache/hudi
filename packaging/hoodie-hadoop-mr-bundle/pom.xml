@@ -27,12 +27,12 @@
   <artifactId>hoodie-hadoop-mr-bundle</artifactId>
 
   <dependencies>
+    <!-- Hoodie -->
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-common</artifactId>
       <version>${project.version}</version>
     </dependency>
-
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-hadoop-mr</artifactId>
@@ -46,36 +46,57 @@
       </exclusions>
     </dependency>
 
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+    </dependency>
+
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+    </dependency>
+
+    <!-- Apache Commons -->
+    <dependency>
+      <groupId>commons-logging</groupId>
+      <artifactId>commons-logging</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.twitter.common</groupId>
+      <artifactId>objectsize</artifactId>
+      <version>0.0.12</version>
+    </dependency>
+
+    <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-mapreduce-client-core</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-mapreduce-client-common</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-auth</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+    </dependency>
 
+    <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>commons-logging</groupId>
-          <artifactId>commons-logging</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
@@ -109,42 +130,6 @@
     </dependency>
 
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>commons-logging</groupId>
-      <artifactId>commons-logging</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-hadoop-bundle</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter.common</groupId>
-      <artifactId>objectsize</artifactId>
-      <version>0.0.12</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>com.esotericsoftware</groupId>
       <artifactId>kryo</artifactId>
       <scope>test</scope>
@@ -166,7 +151,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4</version>
+        <version>${maven-shade-plugin.version}</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -177,26 +162,6 @@
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <relocations>
-                 <relocation>
-                   <pattern>parquet.avro</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.avro</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.column</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.column</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.format.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.format.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.hadoop.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.hadoop.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.schema</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.schema</shadedPattern>
-                 </relocation>
                  <relocation>
                    <pattern>org.apache.commons</pattern>
                    <shadedPattern>com.uber.hoodie.org.apache.commons</shadedPattern>
@@ -211,8 +176,6 @@
                 <includes>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.uber.hoodie:hoodie-hadoop-mr</include>
-                  <include>com.twitter:parquet-avro</include>
-                  <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
                   <include>com.twitter:chill_2.11</include>

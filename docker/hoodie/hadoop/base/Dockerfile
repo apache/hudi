@@ -1,4 +1,4 @@
-FROM frolvlad/alpine-oraclejdk8
+FROM frolvlad/alpine-java
 MAINTAINER Hoodie
 USER root
 
@@ -6,7 +6,8 @@ USER root
 ENV LANG C.UTF-8
 
 # Updating & Installing packages
-RUN apk add net-tools curl bash perl procps
+RUN apk --no-cache upgrade && \
+    apk --no-cache add bash curl net-tools libstdc++ perl procps
 
 ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_URL=https://www.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz

@@ -18,8 +18,8 @@
 
 package com.uber.hoodie.utilities.deltastreamer;
 
+import static com.uber.hoodie.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAME;
 import static com.uber.hoodie.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
-import static com.uber.hoodie.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 import com.uber.hoodie.AvroConversionUtils;
 import com.uber.hoodie.utilities.sources.AvroSource;
@@ -70,7 +70,7 @@ public final class SourceFormatAdapter {
       case ROW: {
         InputBatch<Dataset<Row>> r = ((RowSource)source).fetchNext(lastCkptStr, sourceLimit);
         return new InputBatch<>(Optional.ofNullable(r.getBatch().map(
-            rdd -> (AvroConversionUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()))
+            rdd -> (AvroConversionUtils.createRdd(rdd, HOODIE_RECORD_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()))
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       default:
