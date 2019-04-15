@@ -127,20 +127,6 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-              <finalName>${project.artifactId}-${project.version}</finalName>
-              <artifactSet>
-                <excludes>
-                  <exclude>log4j:log4j</exclude>
-                  <exclude>org.apache.hadoop:*</exclude>
-                  <exclude>org.apache.hive:*</exclude>
-                  <exclude>org.apache.derby:derby</exclude>
-                  <!--Already a dependency in presto-hive connector-->
-                  <exclude>org.apache.thrift:*</exclude>
-                  <!--Provided by aws-java-sdk-core dependency in presto-hive connector-->
-                  <exclude>org.apache.httpcomponents:*</exclude>
-                </excludes>
-              </artifactSet>
               <relocations>
                 <relocation>
                   <pattern>com.beust.</pattern>
@@ -163,6 +149,20 @@
                   <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
                 </relocation>
               </relocations>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <artifactSet>
+                <excludes>
+                  <exclude>log4j:log4j</exclude>
+                  <exclude>org.apache.hadoop:*</exclude>
+                  <exclude>org.apache.hive:*</exclude>
+                  <exclude>org.apache.derby:derby</exclude>
+                  <!--Already a dependency in presto-hive connector-->
+                  <exclude>org.apache.thrift:*</exclude>
+                  <!--Provided by aws-java-sdk-core dependency in presto-hive connector-->
+                  <exclude>org.apache.httpcomponents:*</exclude>
+                </excludes>
+              </artifactSet>
+              <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>
         </executions>
