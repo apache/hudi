@@ -105,6 +105,13 @@
       <artifactId>hoodie-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>
     </dependency>
+
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+    </dependency>
+
   </dependencies>
 
   <build>

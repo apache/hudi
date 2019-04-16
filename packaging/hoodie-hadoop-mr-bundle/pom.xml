@@ -119,6 +119,11 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
@@ -148,6 +153,30 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <!-- Needs to be bundled as this is not available in sys classpath for HiveServer !-->
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>${kryo.version}</version>
+    </dependency>
+
+    <dependency>
+      <!-- Needs to be bundled as this is not available in sys classpath for HiveServer !-->
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>minlog</artifactId>
+      <version>1.3.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.objenesis</groupId>
+      <artifactId>objenesis</artifactId>
+      <version>2.5.1</version>
     </dependency>
   </dependencies>
 
@@ -208,10 +237,14 @@
                   <include>com.twitter:parquet-avro</include>
                   <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
+                  <include>commons-io:commons-io</include>
                   <include>commons-logging:commons-logging</include>
                   <include>com.twitter:chill_2.11</include>
                   <include>com.twitter:chill-java</include>
+                  <include>org.scala-lang:scala-library</include>
+                  <include>com.esotericsoftware:minlog</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
                 </includes>
               </artifactSet>
               <finalName>${project.artifactId}-${project.version}</finalName>
