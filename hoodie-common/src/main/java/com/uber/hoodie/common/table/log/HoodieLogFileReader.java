@@ -197,12 +197,17 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     switch (blockType) {
       // based on type read the block
       case AVRO_DATA_BLOCK:
+        Schema readerSchemaForBlock = readerSchema;
+        if (header != null) {
+          String schema = header.get(HeaderMetadataType.SCHEMA);
+          readerSchemaForBlock = schema != null ? new Schema.Parser().parse(schema) : readerSchema;
+        }
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
-          return HoodieAvroDataBlock.getBlock(content, readerSchema);
+          return HoodieAvroDataBlock.getBlock(content, readerSchemaForBlock);
         } else {
           return HoodieAvroDataBlock
               .getBlock(logFile, inputStream, Optional.ofNullable(content), readBlockLazily,
-                  contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
+                  contentPosition, contentLength, blockEndPos, readerSchemaForBlock, header, footer);
         }
       case DELETE_BLOCK:
         return HoodieDeleteBlock
