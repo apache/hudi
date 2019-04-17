@@ -188,10 +188,6 @@
                    <pattern>org.apache.commons.</pattern>
                    <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
                  </relocation>
-                 <relocation>
-                   <pattern>com.twitter.chill.</pattern>
-                   <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
-                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>

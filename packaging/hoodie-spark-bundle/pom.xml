@@ -131,10 +131,6 @@
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
                 </relocation>
-                <relocation>
-                  <pattern>com.twitter.chill.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
-                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>

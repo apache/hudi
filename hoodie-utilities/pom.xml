@@ -82,8 +82,6 @@
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
-                  <include>com.twitter:chill_2.11</include>
-                  <include>com.twitter:chill-java</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -122,10 +120,6 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.twitter.chill.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
                 </relocation>
               </relocations>
             </configuration>

@@ -102,11 +102,6 @@
       <artifactId>objectsize</artifactId>
       <version>0.0.12</version>
     </dependency>
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>chill_2.11</artifactId>
-      <version>0.8.0</version>
-    </dependency>
 
     <!-- Hadoop -->
     <dependency>
