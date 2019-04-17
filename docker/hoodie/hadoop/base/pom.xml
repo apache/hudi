@@ -62,7 +62,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>varadarb/hudi-hadoop_${docker.hadoop.version}-base</repository>
+              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-base</repository>
               <forceTags>true</forceTags>
               <tag>latest</tag>
             </configuration>
@@ -78,7 +78,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>varadarb/hudi-hadoop_${docker.hadoop.version}-base</repository>
+              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-base</repository>
               <forceTags>true</forceTags>
               <tag>${project.version}</tag>
             </configuration>
