@@ -1,5 +1,5 @@
 ARG HADOOP_VERSION=2.8.4 
-FROM varadarb/hudi-hadoop_${HADOOP_VERSION}-base:latest
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HIVE_HOME /opt/hive
 ENV PATH $HIVE_HOME/bin:$PATH
