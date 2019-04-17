@@ -156,8 +156,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
       return null;
     }
     try {
-      return SerializationUtils.<R>deserialize(SpillableMapUtils
-          .readBytesFromDisk(readOnlyFileHandle, entry.getOffsetOfValue(), entry.getSizeOfValue()));
+      return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
+          entry.getOffsetOfValue(), entry.getSizeOfValue()));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to readFromDisk Hoodie Record from disk", e);
     }

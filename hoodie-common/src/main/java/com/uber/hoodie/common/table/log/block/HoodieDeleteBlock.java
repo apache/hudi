@@ -85,7 +85,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
         int dataLength = dis.readInt();
         byte[] data = new byte[dataLength];
         dis.readFully(data);
-        this.keysToDelete = SerializationUtils.<HoodieKey[]>deserialize(data);
+        this.keysToDelete = SerializationUtils.deserialize(data);
         deflate();
       }
       return keysToDelete;
