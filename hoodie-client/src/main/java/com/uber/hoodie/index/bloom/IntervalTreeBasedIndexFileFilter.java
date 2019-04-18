@@ -32,7 +32,7 @@ import java.util.Set;
 class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
 
   private final Map<String, KeyRangeLookupTree> partitionToFileIndexLookUpTree = new HashMap<>();
-  private final Map<String, Set<String>> filesWithNoRanges = new HashMap<>();
+  private final Map<String, Set<String>> partitionToFilesWithNoRanges = new HashMap<>();
 
   /**
    * Instantiates {@link IntervalTreeBasedIndexFileFilter}
@@ -51,10 +51,10 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
           lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(),
               indexFileInfo.getMaxRecordKey(), indexFileInfo.getFileName()));
         } else {
-          if (!filesWithNoRanges.containsKey(partition)) {
-            filesWithNoRanges.put(partition, new HashSet<>());
+          if (!partitionToFilesWithNoRanges.containsKey(partition)) {
+            partitionToFilesWithNoRanges.put(partition, new HashSet<>());
           }
-          filesWithNoRanges.get(partition).add(indexFileInfo.getFileName());
+          partitionToFilesWithNoRanges.get(partition).add(indexFileInfo.getFileName());
         }
       });
       partitionToFileIndexLookUpTree.put(partition, lookUpTree);
@@ -64,18 +64,12 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
   @Override
   public Set<String> getMatchingFiles(String partitionPath, String recordKey) {
     Set<String> toReturn = new HashSet<>();
-    if (partitionToFileIndexLookUpTree
-        .containsKey(partitionPath)) { // could be null, if there are no files in a given partition yet or if all
-      // index files has no ranges
-      partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey)
-          .forEach(matchingFileName -> {
-            toReturn.add(matchingFileName);
-          });
+    // could be null, if there are no files in a given partition yet or if all index files have no ranges
+    if (partitionToFileIndexLookUpTree.containsKey(partitionPath)) {
+      toReturn.addAll(partitionToFileIndexLookUpTree.get(partitionPath).getMatchingIndexFiles(recordKey));
     }
-    if (filesWithNoRanges.containsKey(partitionPath)) {
-      filesWithNoRanges.get(partitionPath).forEach(fileName -> {
-        toReturn.add(fileName);
-      });
+    if (partitionToFilesWithNoRanges.containsKey(partitionPath)) {
+      toReturn.addAll(partitionToFilesWithNoRanges.get(partitionPath));
     }
     return toReturn;
   }

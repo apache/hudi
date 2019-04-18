@@ -45,12 +45,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = "true";
   public static final String BLOOM_INDEX_USE_CACHING_PROP = "hoodie.bloom.index.use.caching";
   public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
+  public static final String BLOOM_INDEX_TREE_BASED_FILTER_PROP = "hoodie.bloom.index.use.treebased.filter";
+  public static final String DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER = "true";
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL =
       "hoodie.bloom.index.input.storage" + ".level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
-
-  // ***** Bucketed Index Configs *****
-  public static final String BUCKETED_INDEX_NUM_BUCKETS_PROP = "hoodie.index.bucketed.numbuckets";
 
   private HoodieIndexConfig(Properties props) {
     super(props);
@@ -114,11 +113,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder numBucketsPerPartition(int numBuckets) {
-      props.setProperty(BUCKETED_INDEX_NUM_BUCKETS_PROP, String.valueOf(numBuckets));
+    public Builder bloomIndexTreebasedFilter(boolean useTreeFilter) {
+      props.setProperty(BLOOM_INDEX_TREE_BASED_FILTER_PROP, String.valueOf(useTreeFilter));
       return this;
     }
-
 
     public Builder withBloomIndexInputStorageLevel(String level) {
       props.setProperty(BLOOM_INDEX_INPUT_STORAGE_LEVEL, level);
@@ -141,6 +139,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_USE_CACHING_PROP, DEFAULT_BLOOM_INDEX_USE_CACHING);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_INPUT_STORAGE_LEVEL),
           BLOOM_INDEX_INPUT_STORAGE_LEVEL, DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_TREE_BASED_FILTER_PROP),
+          BLOOM_INDEX_TREE_BASED_FILTER_PROP, DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;
