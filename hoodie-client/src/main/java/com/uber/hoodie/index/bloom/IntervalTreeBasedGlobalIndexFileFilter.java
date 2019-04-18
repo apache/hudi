@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.index.bloom;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -40,8 +41,8 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
   IntervalTreeBasedGlobalIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
-    List<BloomIndexFileInfo> allIndexFiles = partitionToFileIndexInfo.values().stream().flatMap(
-        indexFiles -> indexFiles.stream()).collect(Collectors.toList());
+    List<BloomIndexFileInfo> allIndexFiles = partitionToFileIndexInfo.values().stream().flatMap(Collection::stream)
+        .collect(Collectors.toList());
     // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
     // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be skewed
     // which could result in N search time instead of NlogN.
@@ -60,9 +61,7 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
   public Set<String> getMatchingFiles(String partitionPath, String recordKey) {
     Set<String> toReturn = new HashSet<>();
     toReturn.addAll(indexLookUpTree.getMatchingIndexFiles(recordKey));
-    filesWithNoRanges.forEach(indexFile -> {
-      toReturn.add(indexFile);
-    });
+    toReturn.addAll(filesWithNoRanges);
     return toReturn;
   }
 }

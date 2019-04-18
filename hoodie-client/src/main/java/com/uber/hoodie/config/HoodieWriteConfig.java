@@ -324,8 +324,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_USE_CACHING_PROP));
   }
 
-  public int getNumBucketsPerPartition() {
-    return Integer.parseInt(props.getProperty(HoodieIndexConfig.BUCKETED_INDEX_NUM_BUCKETS_PROP));
+  public boolean useBloomIndexTreebasedFilter() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_TREE_BASED_FILTER_PROP));
   }
 
   public StorageLevel getBloomIndexInputStorageLevel() {
