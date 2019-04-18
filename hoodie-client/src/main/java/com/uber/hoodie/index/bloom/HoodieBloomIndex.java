@@ -38,7 +38,6 @@ import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.MetadataNotFoundException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -304,9 +303,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
-    IndexFileFilter indexFileFilter = config.getBloomIndexPruneByRanges()
+    IndexFileFilter indexFileFilter = config.useBloomIndexTreebasedFilter()
         ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
-        : new SimpleIndexFileFilter(partitionToFileIndexInfo);
+        : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
       String recordKey = partitionRecordKeyPair._2();
       String partitionPath = partitionRecordKeyPair._1();

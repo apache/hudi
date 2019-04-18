@@ -26,11 +26,12 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
-
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
@@ -85,7 +86,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
 
     IndexFileFilter indexFileFilter = config.getBloomIndexPruneByRanges()
         ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
-        : new SimpleGlobalIndexFileFilter(partitionToFileIndexInfo);
+        : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
       String recordKey = partitionRecordKeyPair._2();
       String partitionPath = partitionRecordKeyPair._1();

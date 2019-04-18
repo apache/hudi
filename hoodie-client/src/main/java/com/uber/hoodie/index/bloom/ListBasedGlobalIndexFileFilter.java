@@ -23,14 +23,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-class SimpleGlobalIndexFileFilter extends SimpleIndexFileFilter {
+class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
 
   /**
-   * Instantiates {@link SimpleGlobalIndexFileFilter}
+   * Instantiates {@link ListBasedGlobalIndexFileFilter}
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */
-  SimpleGlobalIndexFileFilter(
+  ListBasedGlobalIndexFileFilter(
       Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     super(partitionToFileIndexInfo);
   }

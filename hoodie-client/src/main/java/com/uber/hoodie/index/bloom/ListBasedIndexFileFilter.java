@@ -27,16 +27,16 @@ import java.util.Set;
  * Simple implementation of {@link IndexFileFilter}. Sequentially goes through every index file in a given partition to
  * search for potential index files to be searched for a given record key.
  */
-class SimpleIndexFileFilter implements IndexFileFilter {
+class ListBasedIndexFileFilter implements IndexFileFilter {
 
   final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo;
 
   /**
-   * Instantiates {@link SimpleIndexFileFilter}
+   * Instantiates {@link ListBasedIndexFileFilter}
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */
-  SimpleIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
+  ListBasedIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     this.partitionToFileIndexInfo = partitionToFileIndexInfo;
   }
 
