@@ -168,8 +168,11 @@ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer
 ....
 2018-09-24 22:20:00 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
 2018-09-24 22:20:00 INFO  SparkContext:54 - Successfully stopped SparkContext
+
+
+
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
 ....
 2018-09-24 22:22:01 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
 2018-09-24 22:22:01 INFO  SparkContext:54 - Successfully stopped SparkContext
@@ -437,13 +440,15 @@ cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
 
 exit
 ```
+
 With Copy-On-Write table, the second ingestion by DeltaStreamer resulted in a new version of Parquet file getting created.
 See `http://namenode:50070/explorer.html#/user/hive/warehouse/stock_ticks_cow/2018/08/31`
 
@@ -600,6 +605,7 @@ exit
 With 2 batches of data ingested, lets showcase the support for incremental queries in Hudi Copy-On-Write datasets
 
 Lets take the same projection query example
+
 ```
 docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
@@ -611,7 +617,6 @@ beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache
 | 20180924064621       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924065039       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
 +----------------------+---------+----------------------+---------+------------+-----------+--+
-
 ```
 
 As you notice from the above queries, there are 2 commits - 20180924064621 and 20180924065039 in timeline order.
@@ -622,7 +627,7 @@ To show the effects of incremental-query, let us assume that a reader has alread
 ingesting first batch. Now, for the reader to see effect of the second batch, he/she has to keep the start timestamp to
 the commit time of the first batch (20180924064621) and run incremental query
 
-`Hudi incremental mode` provides efficient scanning for incremental queries by filtering out files that do not have any
+Hudi incremental mode provides efficient scanning for incremental queries by filtering out files that do not have any
 candidate rows using hudi-managed metadata.
 
 ```
