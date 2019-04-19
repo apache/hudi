@@ -1057,83 +1057,6 @@ public class HoodieLogFormatTest {
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
-  @Test
-  public void testMagicAndLogVersionsBackwardsCompatibility()
-      throws IOException, InterruptedException, URISyntaxException {
-    // Create the log file
-    Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    List<IndexedRecord> records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
-    writer.close();
-
-    // Write 1 with OLD_MAGIC and no log format version
-    // Append a log block to end of the log (mimics a log block with old format
-    // fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
-    FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
-    // create a block with
-    outputStream.write(HoodieLogFormat.OLD_MAGIC);
-    outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    // Write out a length that does not confirm with the content
-    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, new String(HoodieAvroUtils.compress(schema.toString())));
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
-    byte[] content = dataBlock.getBytes(schema);
-    outputStream.writeInt(content.length);
-    // Write out some content
-    outputStream.write(content);
-    outputStream.flush();
-    outputStream.hflush();
-    outputStream.close();
-
-    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
-        .withFs(fs).build();
-
-    // Write 2 with MAGIC and latest log format version
-    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = new HoodieAvroDataBlock(records, header);
-    writer = writer.appendBlock(dataBlock);
-
-    // Write 3 with MAGIC and latest log format version
-    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
-        .withFs(fs).build();
-    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = new HoodieAvroDataBlock(records, header);
-    writer = writer.appendBlock(dataBlock);
-    writer.close();
-
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), schema);
-
-    // Read the first block written with latest version and magic
-    reader.hasNext();
-    HoodieLogBlock block = reader.next();
-    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    HoodieAvroDataBlock dBlock = (HoodieAvroDataBlock) block;
-    assertEquals(dBlock.getRecords().size(), 100);
-
-    // Read second block written with old magic and no version
-    reader.hasNext();
-    block = reader.next();
-    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    dBlock = (HoodieAvroDataBlock) block;
-    assertEquals(dBlock.getRecords().size(), 100);
-
-    //Read third block written with latest version and magic
-    reader.hasNext();
-    block = reader.next();
-    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    dBlock = (HoodieAvroDataBlock) block;
-    assertEquals(dBlock.getRecords().size(), 100);
-    reader.close();
-  }
-
   @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndReadInReverse() throws IOException, URISyntaxException, InterruptedException {
@@ -1222,7 +1145,7 @@ public class HoodieLogFormatTest {
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
-    outputStream.write(HoodieLogFormat.OLD_MAGIC);
+    outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
     // Write out a length that does not confirm with the content
     outputStream.writeInt(1000);

@@ -29,25 +29,16 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * File Format for Hoodie Log Files. The File Format consists of blocks each seperated with a
- * OLD_MAGIC sync marker. A Block can either be a Data block, Command block or Delete Block. Data
+ * File Format for Hoodie Log Files. The File Format consists of blocks each separated with a
+ * MAGIC sync marker. A Block can either be a Data block, Command block or Delete Block. Data
  * Block - Contains log records serialized as Avro Binary Format Command Block - Specific commands
- * like RoLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block Delete Block - List of
+ * like ROLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block Delete Block - List of
  * keys to delete - tombstone for keys
  */
 public interface HoodieLogFormat {
 
   /**
-   * Magic 4 bytes we put at the start of every block in the log file. Sync marker. We could make
-   * this file specific (generate a random 4 byte magic and stick it in the file header), but this I
-   * think is suffice for now - PR
-   */
-  byte[] OLD_MAGIC = new byte[] {'H', 'U', 'D', 'I'};
-
-  /**
-   * Magic 6 bytes we put at the start of every block in the log file. This is added to maintain
-   * backwards compatiblity due to lack of log format/block version in older log files. All new log
-   * block will now write this OLD_MAGIC value
+   * Magic 6 bytes we put at the start of every block in the log file.
    */
   byte[] MAGIC = new byte[] {'#', 'H', 'U', 'D', 'I', '#'};
 
