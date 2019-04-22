@@ -3,7 +3,7 @@ version: "3.3"
 services:
 
   namenode:
-    image: varadarb/hudi-hadoop_2.8.4-namenode:latest
+    image: apachehudi/hudi-hadoop_2.8.4-namenode:latest
     hostname: namenode
     container_name: namenode
     volumes:
@@ -22,7 +22,7 @@ services:
       retries: 3
  
   datanode1:
-    image: varadarb/hudi-hadoop_2.8.4-datanode:latest
+    image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
     container_name: datanode1
     hostname: datanode1
     environment:
@@ -46,7 +46,7 @@ services:
       - /tmp/hadoop_data:/hadoop/dfs/data
 
   historyserver:
-    image: varadarb/hudi-hadoop_2.8.4-history:latest
+    image: apachehudi/hudi-hadoop_2.8.4-history:latest
     hostname: historyserver
     container_name: historyserver
     environment:
@@ -75,7 +75,7 @@ services:
     container_name: hive-metastore-postgresql
  
   hivemetastore:
-    image: varadarb/hudi-hadoop_2.8.4-hive_2.3.3:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hivemetastore
     container_name: hivemetastore
     links:
@@ -98,7 +98,7 @@ services:
       - "namenode"
 
   hiveserver:
-    image: varadarb/hudi-hadoop_2.8.4-hive_2.3.3:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     hostname: hiveserver
     container_name: hiveserver
     env_file:
@@ -117,7 +117,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   sparkmaster:
-    image: varadarb/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.3.1:latest
     hostname: sparkmaster
     container_name: sparkmaster
     env_file:
@@ -134,7 +134,7 @@ services:
       - "namenode"
 
   spark-worker-1:
-    image: varadarb/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.3.1:latest
     hostname: spark-worker-1
     container_name: spark-worker-1
     env_file:
@@ -171,7 +171,7 @@ services:
       - ALLOW_PLAINTEXT_LISTENER=yes
 
   adhoc-1:
-    image: varadarb/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.3.1:latest
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -191,7 +191,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   adhoc-2:
-    image: varadarb/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.3.1:latest
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:

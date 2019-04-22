@@ -119,6 +119,11 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
@@ -142,12 +147,6 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo</artifactId>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -201,10 +200,6 @@
                    <pattern>org.apache.commons</pattern>
                    <shadedPattern>com.uber.hoodie.org.apache.commons</shadedPattern>
                  </relocation>
-                 <relocation>
-                   <pattern>com.twitter.chill.</pattern>
-                   <shadedPattern>com.uber.hoodie.com.twitter.chill.</shadedPattern>
-                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
@@ -215,7 +210,7 @@
                   <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
-                  <include>com.twitter:chill_2.11</include>
+                  <include>commons-io:commons-io</include>
                 </includes>
               </artifactSet>
               <finalName>${project.artifactId}-${project.version}</finalName>

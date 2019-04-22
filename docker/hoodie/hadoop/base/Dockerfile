@@ -1,12 +1,9 @@
-FROM frolvlad/alpine-oraclejdk8
+FROM openjdk:8u212-jdk-slim-stretch
 MAINTAINER Hoodie
 USER root
 
 # Default to UTF-8 file.encoding
 ENV LANG C.UTF-8
-
-# Updating & Installing packages
-RUN apk add net-tools curl bash perl procps
 
 ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_URL=https://www.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
@@ -14,6 +11,7 @@ ENV HADOOP_VERSION ${HADOOP_VERSION}
 ENV HADOOP_URL ${HADOOP_URL}
 
 RUN set -x \
+    && DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat procps \
     && echo "Fetch URL2 is : ${HADOOP_URL}" \
     && curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz \
     && curl -fSL "${HADOOP_URL}.asc" -o /tmp/hadoop.tar.gz.asc \
