@@ -87,8 +87,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
     if (optParams.contains(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY)) {
       val filterStr = optParams.get(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY).getOrElse("")
       filterStr.split(",").filter(!_.isEmpty)
+    } else {
+      Array[String]()
     }
-    Array[String]()
   }
 
   override def schema: StructType = latestSchema
