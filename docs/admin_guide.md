@@ -45,7 +45,6 @@ hoodie->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --t
 To see the description of hudi table, use the command:
 
 ```
-
 hoodie:hoodie_table_1->desc
 18/09/06 15:57:19 INFO timeline.HoodieActiveTimeline: Loaded instants []
     _________________________________________________________
@@ -57,7 +56,6 @@ hoodie:hoodie_table_1->desc
     | hoodie.table.name       | hoodie_table_1               |
     | hoodie.table.type       | COPY_ON_WRITE                |
     | hoodie.archivelog.folder|                              |
-
 ```
 
 Following is a sample command to connect to a Hudi dataset contains uber trips.
@@ -126,7 +124,6 @@ hoodie:trips->commits show --sortBy "Total Bytes Written" --desc true --limit 10
     ....
     ....
 hoodie:trips->
-
 ```
 
 At the start of each write, Hudi also writes a .inflight commit to the .hoodie folder. You can use the timestamp there to estimate how long the commit has been inflight
@@ -237,7 +234,6 @@ hoodie:trips->compactions show all
     |==================================================================|
     | <INSTANT_1>            | REQUESTED| 35                           |
     | <INSTANT_2>            | INFLIGHT | 27                           |
-
 ```
 
 To inspect a specific compaction plan, use
@@ -335,8 +331,6 @@ hoodie:stock_ticks_mor->compaction validate --instant 20181005222601
     | File Id                             | Base Instant Time| Base Data File                                                                                                                   | Num Delta Files| Valid| Error                                                                           |
     |=====================================================================================================================================================================================================================================================================================================|
     | 05320e98-9a57-4c38-b809-a6beaaeb36bd| 20181005222445   | hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | false| All log files specified in compaction operation is not present. Missing ....    |
-
-
 ```
 
 ##### NOTE
@@ -351,20 +345,17 @@ so that are preserved. Hudi provides the following CLI to support it
 ##### UnScheduling Compaction
 
 ```
-
 hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
 ....
 No File renames needed to unschedule file from pending compaction. Operation successful.
-
 ```
 
 In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
-```
 
+```
 hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
-
 ```
 
 ##### Repair Compaction
@@ -376,12 +367,10 @@ command comes to the rescue, it will rearrange the file-slices so that there is 
 consistent with the compaction plan
 
 ```
-
 hoodie:stock_ticks_mor->compaction repair --instant 20181005222611
 ......
 Compaction successfully repaired
 .....
-
 ```
 
 
