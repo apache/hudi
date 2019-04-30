@@ -206,8 +206,7 @@ public class KafkaOffsetGen {
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> fromOffsets;
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets;
     if (lastCheckpointStr.isPresent()) {
-      checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-      fromOffsets = checkupValidOffsets(cluster, checkpointOffsets, topicPartitions);
+      fromOffsets = checkupValidOffsets(cluster, lastCheckpointStr, topicPartitions);
     } else {
       KafkaResetOffsetStrategies autoResetValue =  KafkaResetOffsetStrategies.valueOf(
               props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
@@ -237,22 +236,18 @@ public class KafkaOffsetGen {
     return offsetRanges;
   }
 
-  /***
-   * check up checkpoint offsets is valid or not, if true,  return checkpoint offsets, else return earliest offsets
-   * @param cluster,
-   * @param checkpointOffsets
-   * @param topicPartitions
-   * @return fromOffset
-   */
+  // check up checkpoint offsets is valid or not, if true,  return checkpoint offsets, else return earliest offsets
   private HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkupValidOffsets(KafkaCluster cluster,
-                                                                                    HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets,
-                                                                                    Set<TopicAndPartition> topicPartitions ) {
+                                                                                    Optional<String> lastCheckpointStr,
+                                                                                    Set<TopicAndPartition> topicPartitions) {
+    HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets =
+            CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     java.util.Set<TopicAndPartition> partitions = checkpointOffsets.keySet();
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> fromOffsets;
     fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
             cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
     for (TopicAndPartition partition: partitions) {
-      if (checkpointOffsets.get(partition).offset() < fromOffsets.get(partition).offset() ) {
+      if (checkpointOffsets.get(partition).offset() < fromOffsets.get(partition).offset()) {
         log.info("Checkpoint offset is invalid, return earliest offsets.");
         return fromOffsets;
       }
