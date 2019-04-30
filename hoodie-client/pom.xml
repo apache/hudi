@@ -175,7 +175,6 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
-      <scope>test</scope>
     </dependency>
 
     <dependency>

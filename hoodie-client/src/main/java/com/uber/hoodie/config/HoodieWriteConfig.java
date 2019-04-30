@@ -72,6 +72,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String CONSISTENCY_CHECK_ENABLED = "hoodie.consistency.check.enabled";
   private static final String DEFAULT_CONSISTENCY_CHECK_ENABLED = "false";
 
+  //orc config
+  public static final String ORC_STRIPE_SIZE = "hoodie.hive.exec.orc.default.stripe.size";
+  public static final String DEFAULT_ORC_STRIPE_SIZE = String.valueOf(67108864);
+  public static final String ORC_BLOCK_SIZE = "hoodie.hive.exec.orc.default.block.size";
+  public static final String DEFAULT_ORC_BLOCK_SIZE = String.valueOf(268435456);
+  public static final String ORC_COLUMNS = "hoodie.orc.columns";
+  public static final String ORC_COLUMNS_TYPES = "hoodie.orc.columns.types";
+  public static final String ORC_BLOOM_FILTER_COLUMNS = "hoodie.orc.bloom.filter.columns";
+  public static final String ORC_BLOOM_FILTER_FPP = "hoodie.orc.bloom.filter.fpp";
+  public static final String DEFAULT_ORC_BLOOM_FILTER_FPP = String.valueOf(0.05);
+
   private HoodieWriteConfig(Properties props) {
     super(props);
   }
@@ -369,6 +380,31 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.valueOf(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
   }
 
+  // orc
+  public long getOrcStripeSize() {
+    return Long.valueOf(props.getProperty(ORC_STRIPE_SIZE));
+  }
+
+  public long getOrcBlockSize() {
+    return Long.valueOf(props.getProperty(ORC_BLOCK_SIZE));
+  }
+
+  public String getOrcColumns() {
+    return props.getProperty(ORC_COLUMNS);
+  }
+
+  public String getOrcColumnsTypes() {
+    return props.getProperty(ORC_COLUMNS_TYPES);
+  }
+
+  public String getOrcBloomFilterColumns() {
+    return props.getProperty(ORC_BLOOM_FILTER_COLUMNS);
+  }
+
+  public String getOrcBloomFilterFpp() {
+    return props.getProperty(ORC_BLOOM_FILTER_FPP);
+  }
+
   /**
    * metrics properties
    **/
@@ -571,6 +607,37 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    // orc config
+    public Builder orcStripeSize(long stripeSize) {
+      props.setProperty(ORC_STRIPE_SIZE, String.valueOf(stripeSize));
+      return this;
+    }
+
+    public Builder orcBlockSize(long blockSize) {
+      props.setProperty(ORC_BLOCK_SIZE, String.valueOf(blockSize));
+      return this;
+    }
+
+    public Builder orcColumns(String columns) {
+      props.setProperty(ORC_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder orcColumnsTypes(String columnsTypes) {
+      props.setProperty(ORC_COLUMNS_TYPES, columnsTypes);
+      return this;
+    }
+
+    public Builder orcBloomFilterColumns(String bloomFilterColumns) {
+      props.setProperty(ORC_BLOOM_FILTER_COLUMNS, bloomFilterColumns);
+      return this;
+    }
+
+    public Builder orcBloomFilterFpp(String bloomFilterFpp) {
+      props.setProperty(ORC_BLOOM_FILTER_FPP, bloomFilterFpp);
+      return this;
+    }
+
     public HoodieWriteConfig build() {
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       // Check for mandatory properties
@@ -603,6 +670,13 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(CONSISTENCY_CHECK_ENABLED),
           CONSISTENCY_CHECK_ENABLED, DEFAULT_CONSISTENCY_CHECK_ENABLED);
+      // orc config
+      setDefaultOnCondition(props, !props.containsKey(ORC_STRIPE_SIZE),
+          ORC_STRIPE_SIZE, DEFAULT_ORC_STRIPE_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(ORC_BLOCK_SIZE),
+          ORC_BLOCK_SIZE, DEFAULT_ORC_BLOCK_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(ORC_BLOOM_FILTER_FPP),
+          ORC_BLOOM_FILTER_FPP, DEFAULT_ORC_BLOOM_FILTER_FPP);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,
