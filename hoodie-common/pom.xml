@@ -146,5 +146,10 @@
         <artifactId>objectsize</artifactId>
         <version>0.0.12</version>
     </dependency>
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>4.0.2</version>
+    </dependency>
   </dependencies>
 </project>
