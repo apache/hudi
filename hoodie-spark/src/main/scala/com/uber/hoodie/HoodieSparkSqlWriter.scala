@@ -138,10 +138,7 @@ private[hoodie] object HoodieSparkSqlWriter {
     }
 
     // Create a HoodieWriteClient & issue the write.
-    val client = DataSourceUtils.createHoodieClient(jsc,
-      schema.toString,
-      path.get,
-      tblName.get,
+    val client = DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get, tblName.get,
       mapAsJavaMap(parameters)
     )
     val commitTime = client.startCommit()
