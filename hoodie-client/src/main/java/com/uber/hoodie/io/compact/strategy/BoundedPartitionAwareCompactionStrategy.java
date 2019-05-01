@@ -18,7 +18,7 @@ package com.uber.hoodie.io.compact.strategy;
 
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import java.text.SimpleDateFormat;
 import java.util.Comparator;
 import java.util.Date;
@@ -40,7 +40,7 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
   SimpleDateFormat dateFormat = new SimpleDateFormat(datePartitionFormat);
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieClientConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact = dateFormat.format(DateUtils.addDays(new Date(), -1 * writeConfig
@@ -57,7 +57,7 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
   }
 
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
+  public List<String> filterPartitionPaths(HoodieClientConfig writeConfig, List<String> partitionPaths) {
     // The earliest partition to compact - current day minus the target partitions limit
     String earliestPartitionPathToCompact = dateFormat.format(DateUtils.addDays(new Date(), -1 * writeConfig
         .getTargetPartitionsPerDayBasedCompaction()));

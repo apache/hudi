@@ -21,7 +21,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.HoodieCreateHandle;
 import com.uber.hoodie.io.HoodieIOHandle;
@@ -45,12 +45,12 @@ import org.apache.spark.TaskContext;
 public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload> extends
     LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
-  protected final HoodieWriteConfig hoodieConfig;
+  protected final HoodieClientConfig hoodieConfig;
   protected final String commitTime;
   protected final HoodieTable<T> hoodieTable;
   protected Set<String> partitionsCleaned;
 
-  public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
+  public CopyOnWriteLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieClientConfig config,
       String commitTime, HoodieTable<T> hoodieTable) {
     super(sortedRecordItr);
     this.partitionsCleaned = new HashSet<>();

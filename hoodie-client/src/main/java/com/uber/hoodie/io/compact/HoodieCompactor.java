@@ -19,7 +19,7 @@ package com.uber.hoodie.io.compact;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieFileGroupId;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.io.Serializable;
@@ -44,7 +44,7 @@ public interface HoodieCompactor extends Serializable {
    * @throws IOException when encountering errors
    */
   HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc,
-      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime,
+      HoodieTable hoodieTable, HoodieClientConfig config, String compactionCommitTime,
       Set<HoodieFileGroupId> fgIdsInPendingCompactions)
       throws IOException;
 
@@ -52,6 +52,6 @@ public interface HoodieCompactor extends Serializable {
    * Execute compaction operations and report back status
    */
   JavaRDD<WriteStatus> compact(JavaSparkContext jsc,
-      HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieWriteConfig config,
+      HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieClientConfig config,
       String compactionInstantTime) throws IOException;
 }

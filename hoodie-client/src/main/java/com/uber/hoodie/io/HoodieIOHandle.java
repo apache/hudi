@@ -25,7 +25,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieTimer;
 import com.uber.hoodie.common.util.ReflectionUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -43,7 +43,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
 
   private static Logger logger = LogManager.getLogger(HoodieIOHandle.class);
   protected final String commitTime;
-  protected final HoodieWriteConfig config;
+  protected final HoodieClientConfig config;
   protected final FileSystem fs;
   protected final HoodieTable<T> hoodieTable;
   protected final Schema originalSchema;
@@ -52,7 +52,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   protected HoodieTimer timer;
   protected final WriteStatus writeStatus;
 
-  public HoodieIOHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable) {
+  public HoodieIOHandle(HoodieClientConfig config, String commitTime, HoodieTable<T> hoodieTable) {
     this.commitTime = commitTime;
     this.config = config;
     this.fs = hoodieTable.getMetaClient().getFs();
@@ -69,7 +69,7 @@ public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
   /**
    * Deletes any new tmp files written during the current commit, into the partition
    */
-  public static void cleanupTmpFilesFromCurrentCommit(HoodieWriteConfig config, String commitTime,
+  public static void cleanupTmpFilesFromCurrentCommit(HoodieClientConfig config, String commitTime,
       String partitionPath, int taskPartitionId, HoodieTable hoodieTable) {
     FileSystem fs = hoodieTable.getMetaClient().getFs();
     try {

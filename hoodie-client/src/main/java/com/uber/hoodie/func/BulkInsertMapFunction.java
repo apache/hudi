@@ -19,7 +19,7 @@ package com.uber.hoodie.func;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.Iterator;
 import java.util.List;
@@ -33,10 +33,10 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload> implements
     Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
   private String commitTime;
-  private HoodieWriteConfig config;
+  private HoodieClientConfig config;
   private HoodieTable<T> hoodieTable;
 
-  public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config,
+  public BulkInsertMapFunction(String commitTime, HoodieClientConfig config,
       HoodieTable<T> hoodieTable) {
     this.commitTime = commitTime;
     this.config = config;

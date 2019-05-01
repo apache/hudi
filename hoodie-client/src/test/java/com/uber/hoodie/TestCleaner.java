@@ -48,8 +48,8 @@ import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -100,7 +100,7 @@ public class TestCleaner extends TestHoodieClientBase {
    * @throws Exception in case of error
    */
   private String insertFirstBigBatchForClientCleanerTest(
-      HoodieWriteConfig cfg,
+      HoodieClientConfig cfg,
       HoodieWriteClient client,
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> insertFn) throws Exception {
@@ -188,7 +188,7 @@ public class TestCleaner extends TestHoodieClientBase {
       boolean isPreppedAPI
   ) throws Exception {
     int maxVersions = 2; // keep upto 2 versions for each file
-    HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
+    HoodieClientConfig cfg = getConfigBuilder().withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(maxVersions).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1)
@@ -350,7 +350,7 @@ public class TestCleaner extends TestHoodieClientBase {
       boolean isPreppedAPI
   ) throws Exception {
     int maxCommits = 3; // keep upto 3 commits from the past
-    HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
+    HoodieClientConfig cfg = getConfigBuilder().withCompactionConfig(
         HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainCommits(maxCommits).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1)
@@ -413,7 +413,7 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testKeepLatestFileVersions() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
         .build();
@@ -485,7 +485,7 @@ public class TestCleaner extends TestHoodieClientBase {
   @Test
   public void testKeepLatestFileVersionsMOR() throws IOException {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
         .build();
@@ -529,7 +529,7 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testKeepLatestCommits() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build()).build();
 
@@ -626,7 +626,7 @@ public class TestCleaner extends TestHoodieClientBase {
     assertEquals("Some temp files are created.", 10, tempFiles.size());
     assertEquals("Some temp files are created.", tempFiles.size(), getTotalTempFiles());
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath)
         .withUseTempFolderCopyOnWriteForCreate(true)
         .withUseTempFolderCopyOnWriteForMerge(false).build();
     HoodieTable table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), config
@@ -641,7 +641,7 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testCleaningWithZeroPartitonPaths() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build()).build();
 
@@ -663,7 +663,7 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testCleaningSkewedPartitons() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build()).build();
     Map<Long, Long> stageOneShuffleReadTaskRecordsCountMap = new HashMap<>();
@@ -737,7 +737,7 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testKeepLatestCommitsWithPendingCompactions() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build()).build();
     // Deletions:
@@ -757,7 +757,7 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testKeepLatestVersionsWithPendingCompactions() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCleanerPolicy(
             HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build()).build();
     // Deletions:
@@ -778,7 +778,7 @@ public class TestCleaner extends TestHoodieClientBase {
    * @param config             Hoodie Write Config
    * @param expNumFilesDeleted Number of files deleted
    */
-  public void testPendingCompactions(HoodieWriteConfig config, int expNumFilesDeleted,
+  public void testPendingCompactions(HoodieClientConfig config, int expNumFilesDeleted,
       int expNumFilesUnderCompactionDeleted) throws IOException {
     HoodieTableMetaClient metaClient = HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath,
         HoodieTableType.MERGE_ON_READ);

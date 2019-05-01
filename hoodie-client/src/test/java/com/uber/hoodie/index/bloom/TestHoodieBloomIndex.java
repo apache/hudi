@@ -36,11 +36,16 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.commons.io.IOUtils;
@@ -130,7 +135,7 @@ public class TestHoodieBloomIndex {
 
   @Test
   public void testLoadInvolvedFiles() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieBloomIndex index = new HoodieBloomIndex(config);
 
     // Create some partitions, and put some files
@@ -211,7 +216,7 @@ public class TestHoodieBloomIndex {
     for (Boolean rangePruning : new boolean[]{false, true}) {
       Map<String, String> props = new HashMap<>();
       props.put("hoodie.bloom.index.prune.by" + ".ranges", rangePruning.toString());
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
+      HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withProps(props).build();
       HoodieBloomIndex index = new HoodieBloomIndex(config);
 
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
@@ -299,7 +304,7 @@ public class TestHoodieBloomIndex {
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
@@ -348,7 +353,7 @@ public class TestHoodieBloomIndex {
 
       // Also create the metadata and config
       HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
+      HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withProps(props).build();
       HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
       // Let's tag
@@ -417,7 +422,7 @@ public class TestHoodieBloomIndex {
 
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
@@ -490,7 +495,7 @@ public class TestHoodieBloomIndex {
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);

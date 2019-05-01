@@ -41,7 +41,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -70,10 +70,10 @@ public class HoodieCommitArchiveLog {
 
   private final Path archiveFilePath;
   private final HoodieTableMetaClient metaClient;
-  private final HoodieWriteConfig config;
+  private final HoodieClientConfig config;
   private HoodieLogFormat.Writer writer;
 
-  public HoodieCommitArchiveLog(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+  public HoodieCommitArchiveLog(HoodieClientConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.metaClient = metaClient;
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());

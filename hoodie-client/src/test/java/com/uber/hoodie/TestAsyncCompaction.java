@@ -39,10 +39,10 @@ import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -62,12 +62,12 @@ import org.junit.Test;
  */
 public class TestAsyncCompaction extends TestHoodieClientBase {
 
-  private HoodieWriteConfig getConfig(Boolean autoCommit) {
+  private HoodieClientConfig getConfig(Boolean autoCommit) {
     return getConfigBuilder(autoCommit).build();
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+  private HoodieClientConfig.Builder getConfigBuilder(Boolean autoCommit) {
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true).withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024).withInlineCompaction(false)
                 .withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -84,7 +84,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Test
   public void testRollbackForInflightCompaction() throws Exception {
     // Rollback inflight compaction
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieClientConfig cfg = getConfig(false);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -142,7 +142,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Test
   public void testRollbackInflightIngestionWithPendingCompaction() throws Exception {
     // Rollback inflight ingestion when there is pending compaction
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieClientConfig cfg = getConfig(false);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -194,7 +194,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Test
   public void testInflightCompaction() throws Exception {
     // There is inflight compaction. Subsequent compaction run must work correctly
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieClientConfig cfg = getConfig(true);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -226,7 +226,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Test
   public void testScheduleIngestionBeforePendingCompaction() throws Exception {
     // Case: Failure case. Latest pending compaction instant time must be earlier than this instant time
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieClientConfig cfg = getConfig(false);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -263,7 +263,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testScheduleCompactionAfterPendingIngestion() throws Exception {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieClientConfig cfg = getConfig(false);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -300,7 +300,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testScheduleCompactionWithOlderOrSameTimestamp() throws Exception {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
-    HoodieWriteConfig cfg = getConfig(false);
+    HoodieClientConfig cfg = getConfig(false);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -350,7 +350,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Test
   public void testCompactionAfterTwoDeltaCommits() throws Exception {
     // No Delta Commits after compaction request
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieClientConfig cfg = getConfig(true);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -370,7 +370,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   @Test
   public void testInterleavedCompaction() throws Exception {
     //Case: Two delta commits before and after compaction schedule
-    HoodieWriteConfig cfg = getConfig(true);
+    HoodieClientConfig cfg = getConfig(true);
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
 
     String firstInstantTime = "001";
@@ -400,7 +400,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
   private void validateDeltaCommit(String latestDeltaCommit,
       final Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> fgIdToCompactionOperation,
-      HoodieWriteConfig cfg) throws IOException {
+      HoodieClientConfig cfg) throws IOException {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
     List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table, cfg);
@@ -421,7 +421,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   }
 
   private List<HoodieRecord> runNextDeltaCommits(HoodieWriteClient client, List<String> deltaInstants,
-      List<HoodieRecord> records, HoodieWriteConfig cfg, boolean insertFirst,
+      List<HoodieRecord> records, HoodieClientConfig cfg, boolean insertFirst,
       List<String> expPendingCompactionInstants) throws Exception {
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
@@ -466,7 +466,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   }
 
   private void moveCompactionFromRequestedToInflight(String compactionInstantTime, HoodieWriteClient client,
-      HoodieWriteConfig cfg) throws IOException {
+      HoodieClientConfig cfg) throws IOException {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant compactionInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
     HoodieCompactionPlan workload = AvroUtils.deserializeCompactionPlan(
@@ -477,7 +477,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     assertTrue("Instant must be marked inflight", instant.isInflight());
   }
 
-  private void scheduleCompaction(String compactionInstantTime, HoodieWriteClient client, HoodieWriteConfig cfg)
+  private void scheduleCompaction(String compactionInstantTime, HoodieWriteClient client, HoodieClientConfig cfg)
       throws IOException {
     client.scheduleCompactionAtInstant(compactionInstantTime, Optional.empty());
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
@@ -487,14 +487,14 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   }
 
   private void scheduleAndExecuteCompaction(String compactionInstantTime,
-      HoodieWriteClient client, HoodieTable table, HoodieWriteConfig cfg, int expectedNumRecs,
+      HoodieWriteClient client, HoodieTable table, HoodieClientConfig cfg, int expectedNumRecs,
       boolean hasDeltaCommitAfterPendingCompaction) throws IOException {
     scheduleCompaction(compactionInstantTime, client, cfg);
     executeCompaction(compactionInstantTime, client, table, cfg, expectedNumRecs, hasDeltaCommitAfterPendingCompaction);
   }
 
   private void executeCompaction(String compactionInstantTime,
-      HoodieWriteClient client, HoodieTable table, HoodieWriteConfig cfg, int expectedNumRecs,
+      HoodieWriteClient client, HoodieTable table, HoodieClientConfig cfg, int expectedNumRecs,
       boolean hasDeltaCommitAfterPendingCompaction) throws IOException {
 
     client.compact(compactionInstantTime);
@@ -527,7 +527,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   }
 
   private List<WriteStatus> createNextDeltaCommit(String instantTime, List<HoodieRecord> records,
-      HoodieWriteClient client, HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, boolean skipCommit) {
+      HoodieWriteClient client, HoodieTableMetaClient metaClient, HoodieClientConfig cfg, boolean skipCommit) {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     client.startCommitWithTime(instantTime);
@@ -551,7 +551,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     return statusList;
   }
 
-  private List<HoodieDataFile> getCurrentLatestDataFiles(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
+  private List<HoodieDataFile> getCurrentLatestDataFiles(HoodieTable table, HoodieClientConfig cfg) throws IOException {
     FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(table.getMetaClient().getFs(), cfg.getBasePath());
     HoodieTableFileSystemView
         view = new HoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allFiles);
@@ -559,7 +559,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
     return dataFilesToRead;
   }
 
-  private List<FileSlice> getCurrentLatestFileSlices(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
+  private List<FileSlice> getCurrentLatestFileSlices(HoodieTable table, HoodieClientConfig cfg) throws IOException {
     HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
         table.getMetaClient().getActiveTimeline().reload().getCommitsAndCompactionTimeline());
     List<FileSlice> fileSliceList =

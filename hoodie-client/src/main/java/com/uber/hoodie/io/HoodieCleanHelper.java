@@ -29,7 +29,7 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.collection.Pair;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -55,9 +55,9 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
   private HoodieTable<T> hoodieTable;
-  private HoodieWriteConfig config;
+  private HoodieClientConfig config;
 
-  public HoodieCleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
+  public HoodieCleanHelper(HoodieTable<T> hoodieTable, HoodieClientConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getCompletedFileSystemView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();

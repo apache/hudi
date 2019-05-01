@@ -21,7 +21,7 @@ package com.uber.hoodie
 import com.uber.hoodie.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import com.uber.hoodie.common.table.HoodieTableMetaClient
 import com.uber.hoodie.common.util.ParquetUtils
-import com.uber.hoodie.config.HoodieWriteConfig
+import com.uber.hoodie.config.HoodieClientConfig
 import com.uber.hoodie.exception.HoodieException
 import com.uber.hoodie.table.HoodieTable
 import org.apache.hadoop.fs.Path
@@ -54,7 +54,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read datasets")
   }
   // TODO : Figure out a valid HoodieWriteConfig
-  val hoodieTable = HoodieTable.getHoodieTable(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
+  val hoodieTable = HoodieTable.getHoodieTable(metaClient, HoodieClientConfig.newBuilder().withPath(basePath).build(),
     sqlContext.sparkContext)
   val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {

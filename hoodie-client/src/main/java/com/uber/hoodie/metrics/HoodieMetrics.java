@@ -22,7 +22,7 @@ import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -39,7 +39,7 @@ public class HoodieMetrics {
   public String deltaCommitTimerName = null;
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
-  private HoodieWriteConfig config = null;
+  private HoodieClientConfig config = null;
   private String tableName = null;
   private Timer rollbackTimer = null;
   private Timer cleanTimer = null;
@@ -48,7 +48,7 @@ public class HoodieMetrics {
   private Timer finalizeTimer = null;
   private Timer compactionTimer = null;
 
-  public HoodieMetrics(HoodieWriteConfig config, String tableName) {
+  public HoodieMetrics(HoodieClientConfig config, String tableName) {
     this.config = config;
     this.tableName = tableName;
     if (config.isMetricsOn()) {

@@ -30,11 +30,11 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieMemoryConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
@@ -90,14 +90,14 @@ public class TestHoodieCompactor {
     }
   }
 
-  private HoodieWriteConfig getConfig() {
+  private HoodieClientConfig getConfig() {
     return getConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .build();
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+  private HoodieClientConfig.Builder getConfigBuilder() {
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withInlineCompaction(false)
                 .build()).withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
@@ -119,7 +119,7 @@ public class TestHoodieCompactor {
   @Test
   public void testCompactionEmpty() throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
 
@@ -137,7 +137,7 @@ public class TestHoodieCompactor {
   @Test
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);

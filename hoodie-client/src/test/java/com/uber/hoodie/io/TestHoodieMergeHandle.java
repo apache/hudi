@@ -31,10 +31,10 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
@@ -96,7 +96,7 @@ public class TestHoodieMergeHandle {
     dataGen = new HoodieTestDataGenerator(new String[]{partitionPath});
 
     // Build a write config with bulkinsertparallelism set
-    HoodieWriteConfig cfg = getConfigBuilder().build();
+    HoodieClientConfig cfg = getConfigBuilder().build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
 
@@ -247,7 +247,7 @@ public class TestHoodieMergeHandle {
   @Test
   public void testHoodieMergeHandleWriteStatMetrics() throws Exception {
     // insert 100 records
-    HoodieWriteConfig config = getConfigBuilder().build();
+    HoodieClientConfig config = getConfigBuilder().build();
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
@@ -343,8 +343,8 @@ public class TestHoodieMergeHandle {
     }
   }
 
-  HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+  HoodieClientConfig.Builder getConfigBuilder() {
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())

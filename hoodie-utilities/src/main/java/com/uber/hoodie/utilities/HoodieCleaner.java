@@ -21,7 +21,7 @@ import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer;
 import java.io.IOException;
 import java.io.Serializable;
@@ -67,13 +67,13 @@ public class HoodieCleaner {
   }
 
   public void run() throws Exception {
-    HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
+    HoodieClientConfig hoodieCfg = getHoodieClientConfig();
     HoodieWriteClient client = new HoodieWriteClient<>(jssc, hoodieCfg, false);
     client.clean();
   }
 
-  private HoodieWriteConfig getHoodieClientConfig() throws Exception {
-    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath)
+  private HoodieClientConfig getHoodieClientConfig() throws Exception {
+    return HoodieClientConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath)
         .withAutoCommit(false)
         .withProps(props).build();
   }

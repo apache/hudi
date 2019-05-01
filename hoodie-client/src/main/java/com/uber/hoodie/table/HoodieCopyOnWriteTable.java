@@ -37,7 +37,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
@@ -93,7 +93,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   private static Logger logger = LogManager.getLogger(HoodieCopyOnWriteTable.class);
 
-  public HoodieCopyOnWriteTable(HoodieWriteConfig config, JavaSparkContext jsc) {
+  public HoodieCopyOnWriteTable(HoodieClientConfig config, JavaSparkContext jsc) {
     super(config, jsc);
   }
 
@@ -125,7 +125,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   private static PairFlatMapFunction<String, String, String> getFilesToDeleteFunc(HoodieTable table,
-      HoodieWriteConfig config) {
+      HoodieClientConfig config) {
     return (PairFlatMapFunction<String, String, String>) partitionPathToClean -> {
       HoodieCleanHelper cleaner = new HoodieCleanHelper(table, config);
       return cleaner.getDeletePaths(partitionPathToClean).stream()

@@ -29,8 +29,8 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import java.io.Serializable;
 import java.util.List;
@@ -108,7 +108,7 @@ public class TestMultiFS implements Serializable {
             HoodieAvroPayload.class.getName());
 
     //Create write client to write some records in
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(dfsBasePath)
+    HoodieClientConfig cfg = HoodieClientConfig.newBuilder().withPath(dfsBasePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable(tableName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
@@ -132,7 +132,7 @@ public class TestMultiFS implements Serializable {
     HoodieTableMetaClient
         .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
             HoodieAvroPayload.class.getName());
-    HoodieWriteConfig localConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
+    HoodieClientConfig localConfig = HoodieClientConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable(tableName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();

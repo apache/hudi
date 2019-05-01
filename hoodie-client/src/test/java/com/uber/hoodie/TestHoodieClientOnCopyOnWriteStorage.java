@@ -38,9 +38,9 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.index.HoodieIndex;
@@ -132,7 +132,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       boolean isPrepped) throws Exception {
     // Set autoCommit false
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieClientConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
     String prevCommitTime = "000";
@@ -249,11 +249,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    */
   @Test
   public void testUpsertsWithFinalizeWrite() throws Exception {
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+    HoodieClientConfig hoodieClientConfig = getConfigBuilder()
         .withUseTempFolderCopyOnWriteForCreate(true)
         .withUseTempFolderCopyOnWriteForMerge(true)
         .build();
-    testUpsertsInternal(hoodieWriteConfig,
+    testUpsertsInternal(hoodieClientConfig,
         HoodieWriteClient::upsert, false);
   }
 
@@ -271,31 +271,31 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    */
   @Test
   public void testUpsertsPreppedWithFinalizeWrite() throws Exception {
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+    HoodieClientConfig hoodieClientConfig = getConfigBuilder()
         .withUseTempFolderCopyOnWriteForCreate(true)
         .withUseTempFolderCopyOnWriteForMerge(true)
         .build();
-    testUpsertsInternal(hoodieWriteConfig,
+    testUpsertsInternal(hoodieClientConfig,
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
   /**
    * Test one of HoodieWriteClient upsert(Prepped) APIs
    *
-   * @param hoodieWriteConfig Write Config
+   * @param hoodieClientConfig Write Config
    * @param writeFn One of Hoodie Write Function API
    * @throws Exception in case of error
    */
-  private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig,
+  private void testUpsertsInternal(HoodieClientConfig hoodieClientConfig,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       boolean isPrepped) throws Exception {
-    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieWriteConfig);
+    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieClientConfig);
 
     //Write 1 (only inserts)
     String newCommitTime = "001";
     String initCommitTime = "000";
     int numRecords = 200;
-    insertFirstBatch(hoodieWriteConfig,
+    insertFirstBatch(hoodieClientConfig,
         client, newCommitTime, initCommitTime, numRecords, HoodieWriteClient::insert, isPrepped, true, numRecords);
 
     // Write 2 (updates)
@@ -303,7 +303,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     newCommitTime = "004";
     numRecords = 100;
     String commitTimeBetweenPrevAndNew = "002";
-    updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+    updateBatch(hoodieClientConfig, client, newCommitTime, prevCommitTime,
         Optional.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
         initCommitTime, numRecords, writeFn, isPrepped, true, numRecords, 200, 2);
   }
@@ -366,7 +366,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
     // setup the small file handling params
-    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
+    HoodieClientConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
 
     HoodieWriteClient client = new HoodieWriteClient(jsc, config);
@@ -476,7 +476,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
     // setup the small file handling params
-    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
+    HoodieClientConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
     HoodieWriteClient client = new HoodieWriteClient(jsc, config);
 
@@ -554,7 +554,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   @Test
   public void testCommitWritesRelativePaths() throws Exception {
 
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieClientConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -601,7 +601,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   @Test
   public void testRollingStatsInMetadata() throws Exception {
 
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieClientConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
@@ -673,7 +673,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    */
   @Test
   public void testConsistencyCheckDuringFinalize() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
+    HoodieClientConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         basePath);
@@ -707,8 +707,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   /**
    * Build Hoodie Write Config for small data file sizes
    */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder();
+  private HoodieClientConfig getSmallInsertWriteConfig(int insertSplitSize) {
+    HoodieClientConfig.Builder builder = getConfigBuilder();
     return builder.withCompactionConfig(
         HoodieCompactionConfig.newBuilder().compactionSmallFileSize(HoodieTestDataGenerator.SIZE_PER_RECORD * 15)
             .insertSplitSize(insertSplitSize).build()) // tolerate upto 15 records

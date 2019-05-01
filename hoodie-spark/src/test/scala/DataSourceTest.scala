@@ -18,7 +18,7 @@
 
 import com.uber.hoodie.common.HoodieTestDataGenerator
 import com.uber.hoodie.common.util.FSUtils
-import com.uber.hoodie.config.HoodieWriteConfig
+import com.uber.hoodie.config.HoodieClientConfig
 import com.uber.hoodie.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql._
@@ -46,7 +46,7 @@ class DataSourceTest extends AssertionsForJUnit {
     DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
+    HoodieClientConfig.TABLE_NAME -> "hoodie_test"
   )
   var basePath: String = null
   var fs: FileSystem = null

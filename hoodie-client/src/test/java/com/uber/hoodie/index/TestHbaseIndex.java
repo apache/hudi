@@ -30,11 +30,11 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieHBaseIndexConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.hbase.HBaseIndex;
 import com.uber.hoodie.index.hbase.HBaseIndex.HbasePutBatchSizeCalculator;
 import com.uber.hoodie.table.HoodieTable;
@@ -131,7 +131,7 @@ public class TestHbaseIndex {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
     writeClient.startCommit();
@@ -170,7 +170,7 @@ public class TestHbaseIndex {
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     // Load to memory
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
 
@@ -213,7 +213,7 @@ public class TestHbaseIndex {
   public void testTotalGetsBatching() throws Exception {
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
 
     // Mock hbaseConnection and related entities
@@ -250,7 +250,7 @@ public class TestHbaseIndex {
   public void testTotalPutsBatching() throws Exception {
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
 
@@ -323,7 +323,7 @@ public class TestHbaseIndex {
 
   @Test
   public void testsHBasePutAccessParallelism() {
-    HoodieWriteConfig config = getConfig();
+    HoodieClientConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     final JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(
         Arrays.asList(
@@ -352,12 +352,12 @@ public class TestHbaseIndex {
     }
   }
 
-  private HoodieWriteConfig getConfig() {
+  private HoodieClientConfig getConfig() {
     return getConfigBuilder().build();
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+  private HoodieClientConfig.Builder getConfigBuilder() {
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(1, 1).withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withInlineCompaction(false)
                 .build()).withAutoCommit(false)

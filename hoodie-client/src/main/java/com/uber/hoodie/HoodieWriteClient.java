@@ -44,8 +44,8 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -97,7 +97,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   private static Logger logger = LogManager.getLogger(HoodieWriteClient.class);
   private final transient FileSystem fs;
   private final transient JavaSparkContext jsc;
-  private final HoodieWriteConfig config;
+  private final HoodieClientConfig config;
   private final boolean rollbackInFlight;
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
@@ -109,7 +109,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * @param clientConfig
    * @throws Exception
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) throws Exception {
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieClientConfig clientConfig) throws Exception {
     this(jsc, clientConfig, false);
   }
 
@@ -118,13 +118,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * @param clientConfig
    * @param rollbackInFlight
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieClientConfig clientConfig,
       boolean rollbackInFlight) {
     this(jsc, clientConfig, rollbackInFlight, HoodieIndex.createIndex(clientConfig, jsc));
   }
 
   @VisibleForTesting
-  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
+  HoodieWriteClient(JavaSparkContext jsc, HoodieClientConfig clientConfig,
       boolean rollbackInFlight, HoodieIndex index) {
     this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
     this.jsc = jsc;
@@ -136,7 +136,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
 
   public static SparkConf registerClasses(SparkConf conf) {
     conf.registerKryoClasses(
-        new Class[]{HoodieWriteConfig.class, HoodieRecord.class, HoodieKey.class});
+        new Class[]{HoodieClientConfig.class, HoodieRecord.class, HoodieKey.class});
     return conf;
   }
 

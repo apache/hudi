@@ -17,7 +17,7 @@
 package com.uber.hoodie.metrics;
 
 import com.codahale.metrics.MetricRegistry;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -28,7 +28,7 @@ public class MetricsReporterFactory {
 
   private static Logger logger = LogManager.getLogger(MetricsReporterFactory.class);
 
-  public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public static MetricsReporter createReporter(HoodieClientConfig config, MetricRegistry registry) {
     MetricsReporterType type = config.getMetricsReporterType();
     MetricsReporter reporter = null;
     switch (type) {

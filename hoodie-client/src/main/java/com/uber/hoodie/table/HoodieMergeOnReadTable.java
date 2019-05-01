@@ -40,7 +40,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -89,7 +89,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   // UpsertPartitioner for MergeOnRead table type
   private MergeOnReadUpsertPartitioner mergeOnReadUpsertPartitioner;
 
-  public HoodieMergeOnReadTable(HoodieWriteConfig config, JavaSparkContext jsc) {
+  public HoodieMergeOnReadTable(HoodieClientConfig config, JavaSparkContext jsc) {
     super(config, jsc);
   }
 

@@ -33,10 +33,10 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
@@ -132,7 +132,7 @@ public class TestHoodieClientBase implements Serializable {
    *
    * @return Default Hoodie Write Config for tests
    */
-  protected HoodieWriteConfig getConfig() {
+  protected HoodieClientConfig getConfig() {
     return getConfigBuilder().build();
   }
 
@@ -141,8 +141,8 @@ public class TestHoodieClientBase implements Serializable {
    *
    * @return Config Builder
    */
-  HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+  HoodieClientConfig.Builder getConfigBuilder() {
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
         .withWriteStatusClass(TestRawTripPayload.MetadataMergeWriteStatus.class)
@@ -224,7 +224,7 @@ public class TestHoodieClientBase implements Serializable {
    * @return Wrapped function
    */
   private Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
-      final HoodieWriteConfig writeConfig,
+      final HoodieClientConfig writeConfig,
       final Function2<List<HoodieRecord>, String, Integer> recordGenFunction) {
     return (commit, numRecords) -> {
       final HoodieIndex index = HoodieIndex.createIndex(writeConfig, jsc);
@@ -247,7 +247,7 @@ public class TestHoodieClientBase implements Serializable {
    */
   Function2<List<HoodieRecord>, String, Integer> generateWrapRecordsFn(
       boolean isPreppedAPI,
-      HoodieWriteConfig writeConfig,
+      HoodieClientConfig writeConfig,
       Function2<List<HoodieRecord>, String, Integer> wrapped) {
     if (isPreppedAPI) {
       return wrapRecordsGenFunctionForPreppedCalls(writeConfig, wrapped);
@@ -272,7 +272,7 @@ public class TestHoodieClientBase implements Serializable {
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> insertFirstBatch(
-      HoodieWriteConfig writeConfig,
+      HoodieClientConfig writeConfig,
       HoodieWriteClient client,
       String newCommitTime,
       String initCommitTime,
@@ -309,7 +309,7 @@ public class TestHoodieClientBase implements Serializable {
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> updateBatch(
-      HoodieWriteConfig writeConfig,
+      HoodieClientConfig writeConfig,
       HoodieWriteClient client,
       String newCommitTime,
       String prevCommitTime,

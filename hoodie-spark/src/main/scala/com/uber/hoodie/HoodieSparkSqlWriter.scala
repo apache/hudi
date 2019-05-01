@@ -23,7 +23,7 @@ import java.util.Optional
 import com.uber.hoodie.DataSourceWriteOptions._
 import com.uber.hoodie.common.table.HoodieTableMetaClient
 import com.uber.hoodie.common.util.{FSUtils, TypedProperties}
-import com.uber.hoodie.config.HoodieWriteConfig
+import com.uber.hoodie.config.HoodieClientConfig
 import com.uber.hoodie.exception.HoodieException
 import com.uber.hoodie.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.avro.generic.GenericRecord
@@ -32,7 +32,7 @@ import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
@@ -48,9 +48,9 @@ private[hoodie] object HoodieSparkSqlWriter {
 
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
-    val tblName = parameters.get(HoodieWriteConfig.TABLE_NAME)
+    val tblName = parameters.get(HoodieClientConfig.TABLE_NAME)
     if (path.isEmpty || tblName.isEmpty) {
-      throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}', 'path' must be set.")
+      throw new HoodieException(s"'${HoodieClientConfig.TABLE_NAME}', 'path' must be set.")
     }
     sparkContext.getConf.getOption("spark.serializer") match {
       case Some(ser) if ser.equals("org.apache.spark.serializer.KryoSerializer") =>

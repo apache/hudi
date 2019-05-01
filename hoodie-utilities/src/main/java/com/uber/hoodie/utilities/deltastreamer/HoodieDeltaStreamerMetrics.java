@@ -3,12 +3,12 @@ package com.uber.hoodie.utilities.deltastreamer;
 import static com.uber.hoodie.metrics.Metrics.registerGauge;
 
 import com.codahale.metrics.Timer;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.metrics.Metrics;
 
 public class HoodieDeltaStreamerMetrics {
 
-  private HoodieWriteConfig config = null;
+  private HoodieClientConfig config = null;
   private String tableName = null;
 
   public String overallTimerName = null;
@@ -16,7 +16,7 @@ public class HoodieDeltaStreamerMetrics {
   private Timer overallTimer = null;
   public Timer hiveSyncTimer = null;
 
-  public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
+  public HoodieDeltaStreamerMetrics(HoodieClientConfig config) {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {

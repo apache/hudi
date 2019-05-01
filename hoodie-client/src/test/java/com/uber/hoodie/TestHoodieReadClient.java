@@ -19,7 +19,7 @@ package com.uber.hoodie;
 import static org.junit.Assert.assertTrue;
 
 import com.uber.hoodie.common.model.HoodieRecord;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -84,7 +84,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    * @param writeFn Write Function for writing records
    * @throws Exception in case of error
    */
-  private void testReadFilterExist(HoodieWriteConfig config,
+  private void testReadFilterExist(HoodieClientConfig config,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn) throws Exception {
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
     String newCommitTime = writeClient.startCommit();
@@ -151,25 +151,25 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   /**
    * Helper method to test tagLocation after using different HoodieWriteClient write APIS
    *
-   * @param hoodieWriteConfig Write Config
+   * @param hoodieClientConfig Write Config
    * @param insertFn Hoodie Write Client first Insert API
    * @param updateFn Hoodie Write Client upsert API
    * @param isPrepped isPrepped flag.
    * @throws Exception in case of error
    */
   private void testTagLocation(
-      HoodieWriteConfig hoodieWriteConfig,
+      HoodieClientConfig hoodieClientConfig,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> updateFn,
       boolean isPrepped)
       throws Exception {
-    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieWriteConfig);
+    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieClientConfig);
     //Write 1 (only inserts)
     String newCommitTime = "001";
     String initCommitTime = "000";
     int numRecords = 200;
     JavaRDD<WriteStatus> result =
-        insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, insertFn, isPrepped,
+        insertFirstBatch(hoodieClientConfig, client, newCommitTime, initCommitTime, numRecords, insertFn, isPrepped,
             true, numRecords);
     // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
     // since they have been modified in the DAG
@@ -179,7 +179,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
                 .map(record -> new HoodieRecord(record.getKey(), null))
                 .collect(Collectors.toList()));
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieReadClient readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
+    HoodieReadClient readClient = new HoodieReadClient(jsc, hoodieClientConfig.getBasePath());
     List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
 
@@ -188,7 +188,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
     newCommitTime = "004";
     numRecords = 100;
     String commitTimeBetweenPrevAndNew = "002";
-    result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+    result = updateBatch(hoodieClientConfig, client, newCommitTime, prevCommitTime,
         Optional.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
         initCommitTime, numRecords, updateFn, isPrepped,
         true, numRecords, 200, 2);
@@ -198,7 +198,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
                 .map(record -> new HoodieRecord(record.getKey(), null))
                 .collect(Collectors.toList()));
     // Index should be able to locate all updates in correct locations.
-    readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
+    readClient = new HoodieReadClient(jsc, hoodieClientConfig.getBasePath());
     taggedRecords = readClient.tagLocation(recordRDD).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
   }

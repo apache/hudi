@@ -24,7 +24,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieInsertException;
 import com.uber.hoodie.io.storage.HoodieStorageWriter;
 import com.uber.hoodie.io.storage.HoodieStorageWriterFactory;
@@ -52,7 +52,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private Iterator<HoodieRecord<T>> recordIterator;
   private boolean useWriterSchema = false;
 
-  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+  public HoodieCreateHandle(HoodieClientConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId) {
     super(config, commitTime, hoodieTable);
     writeStatus.setFileId(fileId);
@@ -81,7 +81,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   /**
    * Called by the compactor code path
    */
-  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+  public HoodieCreateHandle(HoodieClientConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator) {
     this(config, commitTime, hoodieTable, partitionPath, fileId);
     this.recordIterator = recordIterator;

@@ -18,7 +18,7 @@ package com.uber.hoodie.io.compact.strategy;
 
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrategy {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig config,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieClientConfig config,
       final List<HoodieCompactionOperation> operations, final List<HoodieCompactionPlan> pendingCompactionWorkloads) {
     BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy
         = new BoundedPartitionAwareCompactionStrategy();
@@ -49,7 +49,7 @@ public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrateg
   }
 
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
+  public List<String> filterPartitionPaths(HoodieClientConfig writeConfig, List<String> partitionPaths) {
     List<String> allPartitionPaths = partitionPaths.stream().map(partition -> partition.replace("/", "-"))
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
         .collect(Collectors.toList());

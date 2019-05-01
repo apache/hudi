@@ -36,9 +36,9 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.HoodieCreateHandle;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable.UpsertPartitioner;
 import java.io.File;
@@ -90,7 +90,7 @@ public class TestCopyOnWriteTable {
     when(record.getPartitionPath()).thenReturn(partitionPath);
 
     String commitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieWriteConfig config = makeHoodieClientConfig();
+    HoodieClientConfig config = makeHoodieClientConfig();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
@@ -101,21 +101,21 @@ public class TestCopyOnWriteTable {
         this.basePath + "/" + partitionPath + "/" + FSUtils.makeDataFileName(commitTime, unitNumber, fileName)));
   }
 
-  private HoodieWriteConfig makeHoodieClientConfig() throws Exception {
+  private HoodieClientConfig makeHoodieClientConfig() throws Exception {
     return makeHoodieClientConfigBuilder().build();
   }
 
-  private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() throws Exception {
+  private HoodieClientConfig.Builder makeHoodieClientConfigBuilder() throws Exception {
     // Prepare the AvroParquetIO
     String schemaStr = IOUtils.toString(getClass().getResourceAsStream("/exampleSchema.txt"), "UTF-8");
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr);
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(schemaStr);
   }
 
   // TODO (weiy): Add testcases for crossing file writing.
   @Test
   public void testUpdateRecords() throws Exception {
     // Prepare the AvroParquetIO
-    HoodieWriteConfig config = makeHoodieClientConfig();
+    HoodieClientConfig config = makeHoodieClientConfig();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
 
@@ -253,7 +253,7 @@ public class TestCopyOnWriteTable {
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
     // Prepare the AvroParquetIO
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class)
+    HoodieClientConfig config = makeHoodieClientConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class)
         .build();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
@@ -289,7 +289,7 @@ public class TestCopyOnWriteTable {
 
   @Test
   public void testInsertWithPartialFailures() throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfig();
+    HoodieClientConfig config = makeHoodieClientConfig();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
@@ -324,7 +324,7 @@ public class TestCopyOnWriteTable {
 
   @Test
   public void testInsertRecords() throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfig();
+    HoodieClientConfig config = makeHoodieClientConfig();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
@@ -370,7 +370,7 @@ public class TestCopyOnWriteTable {
 
   @Test
   public void testFileSizeUpsertRecords() throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
+    HoodieClientConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
         HoodieStorageConfig.newBuilder().limitFileSize(64 * 1024).parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024)
             .build()).build();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
@@ -404,7 +404,7 @@ public class TestCopyOnWriteTable {
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts,
       int numUpdates, int fileSize, String testPartitionPath, boolean autoSplitInserts) throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withCompactionConfig(
+    HoodieClientConfig config = makeHoodieClientConfigBuilder().withCompactionConfig(
         HoodieCompactionConfig.newBuilder().compactionSmallFileSize(smallFileSize).insertSplitSize(100)
             .autoTuneInsertSplits(autoSplitInserts).build()).withStorageConfig(
         HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
@@ -484,7 +484,7 @@ public class TestCopyOnWriteTable {
 
   @Test
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
+    HoodieClientConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
         HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);

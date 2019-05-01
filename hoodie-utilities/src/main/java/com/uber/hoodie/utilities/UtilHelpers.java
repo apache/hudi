@@ -23,9 +23,9 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
@@ -168,7 +168,7 @@ public class UtilHelpers {
         compactionStrategyClass.map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy))
             .build()).orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath)
         .withParallelism(parallelism, parallelism).withSchema(schemaStr)
         .combineInput(true, true)
         .withCompactionConfig(compactionConfig)

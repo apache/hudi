@@ -28,8 +28,8 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieDependentSystemUnavailableException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
@@ -91,14 +91,14 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   private final String tableName;
   private HbasePutBatchSizeCalculator putBatchSizeCalculator;
 
-  public HBaseIndex(HoodieWriteConfig config) {
+  public HBaseIndex(HoodieClientConfig config) {
     super(config);
     this.tableName = config.getHbaseTableName();
     addShutDownHook();
     init(config);
   }
 
-  private void init(HoodieWriteConfig config) {
+  private void init(HoodieClientConfig config) {
     multiPutBatchSize = config.getHbaseIndexGetBatchSize();
     qpsFraction = config.getHbaseIndexQPSFraction();
     maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();

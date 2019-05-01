@@ -26,8 +26,8 @@ import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.BoundedIOCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.BoundedPartitionAwareCompactionStrategy;
 import com.uber.hoodie.io.compact.strategy.DayBasedCompactionStrategy;
@@ -59,7 +59,7 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     UnBoundedCompactionStrategy strategy = new UnBoundedCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).build()).build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
     List<HoodieCompactionOperation> returned = strategy.orderAndFilter(writeConfig, operations, new ArrayList<>());
@@ -74,7 +74,7 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     BoundedIOCompactionStrategy strategy = new BoundedIOCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
@@ -97,7 +97,7 @@ public class TestHoodieCompactionStrategy {
     sizesMap.put(100 * MB, Lists.newArrayList(MB));
     sizesMap.put(90 * MB, Lists.newArrayList(1024 * MB));
     LogFileSizeBasedCompactionStrategy strategy = new LogFileSizeBasedCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy).withTargetIOPerCompactionInMB(400).build())
         .build();
     List<HoodieCompactionOperation> operations = createCompactionOperations(writeConfig, sizesMap);
@@ -128,7 +128,7 @@ public class TestHoodieCompactionStrategy {
         .build();
 
     DayBasedCompactionStrategy strategy = new DayBasedCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
             .withTargetPartitionsPerDayBasedCompaction(1)
             .build()).build();
@@ -175,7 +175,7 @@ public class TestHoodieCompactionStrategy {
         .build();
 
     BoundedPartitionAwareCompactionStrategy strategy = new BoundedPartitionAwareCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
             .withTargetPartitionsPerDayBasedCompaction(2)
             .build()).build();
@@ -222,7 +222,7 @@ public class TestHoodieCompactionStrategy {
         .build();
 
     UnBoundedPartitionAwareCompactionStrategy strategy = new UnBoundedPartitionAwareCompactionStrategy();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().withPath("/tmp").withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCompactionStrategy(strategy)
             .withTargetPartitionsPerDayBasedCompaction(2)
             .build()).build();
@@ -236,7 +236,7 @@ public class TestHoodieCompactionStrategy {
         returned.size(), 1);
   }
 
-  private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
+  private List<HoodieCompactionOperation> createCompactionOperations(HoodieClientConfig config,
       Map<Long, List<Long>> sizesMap) {
     Map<Long, String> keyToPartitionMap = sizesMap.entrySet().stream().map(e ->
         Pair.of(e.getKey(), partitionPaths[new Random().nextInt(partitionPaths.length - 1)]))
@@ -244,7 +244,7 @@ public class TestHoodieCompactionStrategy {
     return createCompactionOperations(config, sizesMap, keyToPartitionMap);
   }
 
-  private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
+  private List<HoodieCompactionOperation> createCompactionOperations(HoodieClientConfig config,
       Map<Long, List<Long>> sizesMap, Map<Long, String> keyToPartitionMap) {
     List<HoodieCompactionOperation> operations = Lists.newArrayList(sizesMap.size());
 

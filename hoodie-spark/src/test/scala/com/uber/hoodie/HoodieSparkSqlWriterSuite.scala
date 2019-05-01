@@ -17,11 +17,11 @@
  */
 package com.uber.hoodie
 
-import org.scalatest.{FunSuite, Matchers}
-import DataSourceWriteOptions._
-import com.uber.hoodie.config.HoodieWriteConfig
+import com.uber.hoodie.DataSourceWriteOptions._
+import com.uber.hoodie.config.HoodieClientConfig
 import com.uber.hoodie.exception.HoodieException
 import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.scalatest.{FunSuite, Matchers}
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
@@ -44,7 +44,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
   test("throw hoodie exception when invalid serializer") {
     val session = SparkSession.builder().appName("hoodie_test").master("local").getOrCreate()
     val sqlContext = session.sqlContext
-    val options = Map("path" -> "hoodie/test/path", HoodieWriteConfig.TABLE_NAME -> "hoodie_test_tbl")
+    val options = Map("path" -> "hoodie/test/path", HoodieClientConfig.TABLE_NAME -> "hoodie_test_tbl")
     val e = intercept[HoodieException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.ErrorIfExists, options, session.emptyDataFrame))
     assert(e.getMessage.contains("spark.serializer"))
   }

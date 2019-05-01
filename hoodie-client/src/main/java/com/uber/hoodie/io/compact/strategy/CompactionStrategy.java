@@ -22,7 +22,7 @@ import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
@@ -54,7 +54,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @param logFiles - List of log files to compact with the base file
    * @return Map[String, Object] - metrics captured
    */
-  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Optional<HoodieDataFile> dataFile,
+  public Map<String, Double> captureMetrics(HoodieClientConfig writeConfig, Optional<HoodieDataFile> dataFile,
         String partitionPath, List<HoodieLogFile> logFiles) {
     Map<String, Double> metrics = Maps.newHashMap();
     Long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();
@@ -88,7 +88,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @param pendingCompactionPlans Pending Compaction Plans for strategy to schedule next compaction plan
    * @return Compaction plan to be scheduled.
    */
-  public HoodieCompactionPlan generateCompactionPlan(HoodieWriteConfig writeConfig,
+  public HoodieCompactionPlan generateCompactionPlan(HoodieClientConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Strategy implementation can overload this method to set specific compactor-id
     return HoodieCompactionPlan.newBuilder()
@@ -105,7 +105,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @param pendingCompactionPlans Pending Compaction Plans for strategy to schedule next compaction plan
    * @return list of compactions to perform in this run
    */
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieClientConfig writeConfig,
       List<HoodieCompactionOperation> operations,
       List<HoodieCompactionPlan> pendingCompactionPlans) {
     return operations;
@@ -117,7 +117,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @param allPartitionPaths
    * @return
    */
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+  public List<String> filterPartitionPaths(HoodieClientConfig writeConfig, List<String> allPartitionPaths) {
     return allPartitionPaths;
   }
 }

@@ -19,7 +19,7 @@ package com.uber.hoodie.io.storage;
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import org.apache.avro.Schema;
@@ -31,7 +31,7 @@ public class HoodieStorageWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
       String commitTime, Path path, HoodieTable<T> hoodieTable,
-      HoodieWriteConfig config, Schema schema) throws IOException {
+      HoodieClientConfig config, Schema schema) throws IOException {
     //TODO - based on the metadata choose the implementation of HoodieStorageWriter
     // Currently only parquet is supported
     return newParquetStorageWriter(commitTime, path, config, schema, hoodieTable);
@@ -39,7 +39,7 @@ public class HoodieStorageWriterFactory {
 
   private static <T extends HoodieRecordPayload,
       R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(String commitTime, Path path,
-      HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable) throws IOException {
+      HoodieClientConfig config, Schema schema, HoodieTable hoodieTable) throws IOException {
     BloomFilter filter = new BloomFilter(config.getBloomFilterNumEntries(),
         config.getBloomFilterFPP());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(

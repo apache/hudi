@@ -19,7 +19,7 @@ package com.uber.hoodie.metrics;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.io.Closeables;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.Closeable;
 import org.apache.commons.configuration.ConfigurationException;
@@ -37,7 +37,7 @@ public class Metrics {
   private final MetricRegistry registry;
   private MetricsReporter reporter = null;
 
-  private Metrics(HoodieWriteConfig metricConfig) throws ConfigurationException {
+  private Metrics(HoodieClientConfig metricConfig) throws ConfigurationException {
     registry = new MetricRegistry();
 
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
@@ -64,7 +64,7 @@ public class Metrics {
     return metrics;
   }
 
-  public static synchronized void init(HoodieWriteConfig metricConfig) {
+  public static synchronized void init(HoodieClientConfig metricConfig) {
     if (initialized) {
       return;
     }

@@ -25,7 +25,7 @@ import com.uber.hoodie.NonpartitionedKeyGenerator;
 import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import com.uber.hoodie.hive.NonPartitionedExtractor;
 import java.util.List;
@@ -135,7 +135,7 @@ public class HoodieJavaApp {
             "partition") // this is the partition to place it into
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(),
             "timestamp") // use to combine duplicate records in input/with disk val
-        .option(HoodieWriteConfig.TABLE_NAME, tableName) // Used by hive sync and queries
+        .option(HoodieClientConfig.TABLE_NAME, tableName) // Used by hive sync and queries
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
                 SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
@@ -163,7 +163,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
                 SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
+        .option(HoodieClientConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
     writer.save(tablePath);

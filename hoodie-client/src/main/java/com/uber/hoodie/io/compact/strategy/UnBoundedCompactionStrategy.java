@@ -18,7 +18,7 @@ package com.uber.hoodie.io.compact.strategy;
 
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import java.util.List;
 
 /**
@@ -31,7 +31,7 @@ import java.util.List;
 public class UnBoundedCompactionStrategy extends CompactionStrategy {
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig config,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieClientConfig config,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionWorkloads) {
     return operations;
   }

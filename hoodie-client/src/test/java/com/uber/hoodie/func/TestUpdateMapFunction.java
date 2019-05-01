@@ -28,7 +28,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import java.io.File;
 import java.util.ArrayList;
@@ -71,7 +71,7 @@ public class TestUpdateMapFunction {
   @Test
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
-    HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
+    HoodieClientConfig config = makeHoodieClientConfig("/exampleSchema.txt");
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
@@ -118,10 +118,10 @@ public class TestUpdateMapFunction {
     }
   }
 
-  private HoodieWriteConfig makeHoodieClientConfig(String schema) throws Exception {
+  private HoodieClientConfig makeHoodieClientConfig(String schema) throws Exception {
     // Prepare the AvroParquetIO
     String schemaStr = IOUtils.toString(getClass().getResourceAsStream(schema), "UTF-8");
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr).build();
+    return HoodieClientConfig.newBuilder().withPath(basePath).withSchema(schemaStr).build();
   }
 
 }

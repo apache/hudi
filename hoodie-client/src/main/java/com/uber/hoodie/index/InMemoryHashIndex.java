@@ -22,7 +22,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -43,7 +43,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
 
   private static ConcurrentMap<HoodieKey, HoodieRecordLocation> recordLocationMap;
 
-  public InMemoryHashIndex(HoodieWriteConfig config) {
+  public InMemoryHashIndex(HoodieClientConfig config) {
     super(config);
     synchronized (InMemoryHashIndex.class) {
       if (recordLocationMap == null) {

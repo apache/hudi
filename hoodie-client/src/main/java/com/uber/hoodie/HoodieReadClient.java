@@ -26,8 +26,8 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
@@ -73,7 +73,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * @param basePath path to Hoodie dataset
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath) {
-    this(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
+    this(jsc, HoodieClientConfig.newBuilder().withPath(basePath)
         // by default we use HoodieBloomIndex
         .withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
@@ -93,7 +93,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
   /**
    * @param clientConfig instance of HoodieWriteConfig
    */
-  public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
+  public HoodieReadClient(JavaSparkContext jsc, HoodieClientConfig clientConfig) {
     final String basePath = clientConfig.getBasePath();
     this.jsc = jsc;
     this.fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());

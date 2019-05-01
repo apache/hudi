@@ -20,7 +20,7 @@ package com.uber.hoodie.io.compact.strategy;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -59,7 +59,7 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   }
 
   @Override
-  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieClientConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Iterate through the operations and accept operations as long as we are within the configured target partitions
     // limit
@@ -72,7 +72,7 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   }
 
   @Override
-  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+  public List<String> filterPartitionPaths(HoodieClientConfig writeConfig, List<String> allPartitionPaths) {
     List<String> filteredPartitionPaths = allPartitionPaths.stream().map(partition -> partition.replace("/", "-"))
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
         .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());

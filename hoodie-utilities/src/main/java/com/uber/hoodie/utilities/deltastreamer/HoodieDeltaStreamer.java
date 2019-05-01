@@ -42,9 +42,9 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HiveSyncTool;
 import com.uber.hoodie.index.HoodieIndex;
@@ -248,7 +248,7 @@ public class HoodieDeltaStreamer implements Serializable {
     });
 
     // filter dupes if needed
-    HoodieWriteConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
+    HoodieClientConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
     if (cfg.filterDupes) {
       // turn upserts to insert
       cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
@@ -324,9 +324,9 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
-    HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
+  private HoodieClientConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
+    HoodieClientConfig.Builder builder =
+        HoodieClientConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
             .withAutoCommit(false)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withPayloadClass(cfg.payloadClassName)

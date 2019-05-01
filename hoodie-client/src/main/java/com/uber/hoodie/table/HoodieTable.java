@@ -31,7 +31,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieSavepointException;
@@ -58,18 +58,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   // maximum number of checks, for consistency of written data. Will wait upto 256 Secs
   private static int MAX_CONSISTENCY_CHECKS = 7;
 
-  protected final HoodieWriteConfig config;
+  protected final HoodieClientConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<T> index;
 
-  protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
+  protected HoodieTable(HoodieClientConfig config, JavaSparkContext jsc) {
     this.config = config;
     this.metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
     this.index = HoodieIndex.createIndex(config, jsc);
   }
 
   public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config, JavaSparkContext jsc) {
+      HoodieTableMetaClient metaClient, HoodieClientConfig config, JavaSparkContext jsc) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         return new HoodieCopyOnWriteTable<>(config, jsc);
@@ -95,7 +95,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   public abstract boolean isWorkloadProfileNeeded();
 
-  public HoodieWriteConfig getConfig() {
+  public HoodieClientConfig getConfig() {
     return config;
   }
 

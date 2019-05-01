@@ -20,7 +20,7 @@ import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
@@ -36,11 +36,11 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private static Logger logger = LogManager.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
-  private final HoodieWriteConfig config;
+  private final HoodieClientConfig config;
   private String serverHost;
   private int serverPort;
 
-  public MetricsGraphiteReporter(HoodieWriteConfig config, MetricRegistry registry) {
+  public MetricsGraphiteReporter(HoodieClientConfig config, MetricRegistry registry) {
     this.registry = registry;
     this.config = config;
 

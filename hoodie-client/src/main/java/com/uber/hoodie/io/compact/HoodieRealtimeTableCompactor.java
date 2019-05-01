@@ -38,7 +38,7 @@ import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.collection.Pair;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.table.HoodieCopyOnWriteTable;
 import com.uber.hoodie.table.HoodieTable;
@@ -77,7 +77,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
   @Override
   public JavaRDD<WriteStatus> compact(JavaSparkContext jsc,
-      HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieWriteConfig config,
+      HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieClientConfig config,
       String compactionInstantTime) throws IOException {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
@@ -95,7 +95,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
   }
 
   private List<WriteStatus> compact(HoodieCopyOnWriteTable hoodieCopyOnWriteTable, HoodieTableMetaClient metaClient,
-      HoodieWriteConfig config,
+      HoodieClientConfig config,
       CompactionOperation operation, String commitTime) throws IOException {
     FileSystem fs = metaClient.getFs();
     Schema readerSchema = HoodieAvroUtils
@@ -160,7 +160,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
   @Override
   public HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc,
-      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime,
+      HoodieTable hoodieTable, HoodieClientConfig config, String compactionCommitTime,
       Set<HoodieFileGroupId> fgIdsInPendingCompactions) throws IOException {
 
     totalLogFiles = new LongAccumulator();

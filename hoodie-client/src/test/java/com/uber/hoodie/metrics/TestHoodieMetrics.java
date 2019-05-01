@@ -21,7 +21,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import org.apache.commons.configuration.ConfigurationException;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,7 +32,7 @@ public class TestHoodieMetrics {
 
   @Before
   public void start() throws ConfigurationException {
-    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+    HoodieClientConfig config = mock(HoodieClientConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
     metrics = new HoodieMetrics(config, "raw_table");

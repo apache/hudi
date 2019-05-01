@@ -23,7 +23,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
@@ -42,7 +42,7 @@ import scala.Tuple2;
  */
 public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends HoodieBloomIndex<T> {
 
-  public HoodieGlobalBloomIndex(HoodieWriteConfig config) {
+  public HoodieGlobalBloomIndex(HoodieClientConfig config) {
     super(config);
   }
 

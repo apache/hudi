@@ -24,7 +24,7 @@ import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.func.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
 import java.util.List;
 import java.util.Optional;
@@ -54,8 +54,8 @@ public class TestBoundedInMemoryExecutor {
 
     final List<HoodieRecord> hoodieRecords = hoodieTestDataGenerator.generateInserts(commitTime, 100);
 
-    HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
-    when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
+    HoodieClientConfig hoodieClientConfig = mock(HoodieClientConfig.class);
+    when(hoodieClientConfig.getWriteBufferLimitBytes()).thenReturn(1024);
     BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
@@ -76,7 +76,7 @@ public class TestBoundedInMemoryExecutor {
           }
         };
 
-    executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig,
+    executor = new SparkBoundedInMemoryExecutor(hoodieClientConfig,
         hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.avroSchema));
     int result = executor.execute();
     // It should buffer and write 100 records

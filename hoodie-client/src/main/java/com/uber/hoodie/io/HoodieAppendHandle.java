@@ -33,7 +33,7 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieAppendException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.table.HoodieTable;
@@ -93,7 +93,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   // Total number of new records inserted into the delta file
   private long insertRecordsWritten = 0;
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+  public HoodieAppendHandle(HoodieClientConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String fileId, Iterator<HoodieRecord<T>> recordItr) {
     super(config, commitTime, hoodieTable);
     writeStatus.setStat(new HoodieDeltaWriteStat());
@@ -102,7 +102,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     this.recordItr = recordItr;
   }
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable) {
+  public HoodieAppendHandle(HoodieClientConfig config, String commitTime, HoodieTable<T> hoodieTable) {
     this(config, commitTime, hoodieTable, UUID.randomUUID().toString(), null);
   }
 

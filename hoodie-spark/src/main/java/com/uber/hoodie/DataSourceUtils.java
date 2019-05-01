@@ -23,9 +23,9 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
@@ -132,7 +132,7 @@ public class DataSourceUtils {
         && parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY()).equals(DataSourceWriteOptions
         .MOR_STORAGE_TYPE_OPT_VAL());
 
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().combineInput(true, true)
+    HoodieClientConfig writeConfig = HoodieClientConfig.newBuilder().combineInput(true, true)
         .withPath(basePath).withAutoCommit(false)
         .withSchema(schemaStr).forTable(tblName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
@@ -170,7 +170,7 @@ public class DataSourceUtils {
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
       JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig) throws Exception {
+      HoodieClientConfig writeConfig) throws Exception {
     try {
       HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
@@ -186,7 +186,7 @@ public class DataSourceUtils {
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
                                                      JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      Map<String, String> parameters) throws Exception {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig
+    HoodieClientConfig writeConfig = HoodieClientConfig
         .newBuilder()
         .withPath(parameters.get("path"))
         .withProps(parameters).build();

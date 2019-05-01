@@ -20,8 +20,8 @@ import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.cli.DedupeSparkJob;
 import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
 import com.uber.hoodie.utilities.HDFSParquetImporter;
@@ -241,7 +241,7 @@ public class SparkMain {
   }
 
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withIndexConfig(
         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config);
   }

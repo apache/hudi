@@ -37,7 +37,7 @@ import org.apache.spark.storage.StorageLevel;
  * Class storing configs for the {@link com.uber.hoodie.HoodieWriteClient}
  */
 @Immutable
-public class HoodieWriteConfig extends DefaultHoodieConfig {
+public class HoodieClientConfig extends DefaultHoodieConfig {
 
   public static final String TABLE_NAME = "hoodie.table.name";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
@@ -72,11 +72,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String CONSISTENCY_CHECK_ENABLED = "hoodie.consistency.check.enabled";
   private static final String DEFAULT_CONSISTENCY_CHECK_ENABLED = "false";
 
-  private HoodieWriteConfig(Properties props) {
+  private HoodieClientConfig(Properties props) {
     super(props);
   }
 
-  public static HoodieWriteConfig.Builder newBuilder() {
+  public static HoodieClientConfig.Builder newBuilder() {
     return new Builder();
   }
 
@@ -571,8 +571,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public HoodieWriteConfig build() {
-      HoodieWriteConfig config = new HoodieWriteConfig(props);
+    public HoodieClientConfig build() {
+      HoodieClientConfig config = new HoodieClientConfig(props);
       // Check for mandatory properties
       Preconditions.checkArgument(config.getBasePath() != null);
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM,

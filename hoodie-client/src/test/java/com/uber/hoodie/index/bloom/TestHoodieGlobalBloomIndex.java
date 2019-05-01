@@ -18,7 +18,11 @@
 
 package com.uber.hoodie.index.bloom;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
 import com.uber.hoodie.common.HoodieClientTestUtils;
@@ -30,18 +34,19 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.table.HoodieTable;
-
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
 import org.apache.avro.Schema;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -89,7 +94,7 @@ public class TestHoodieGlobalBloomIndex {
 
   @Test
   public void testLoadInvolvedFiles() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     // Create some partitions, and put some files, along with the meta file
@@ -175,7 +180,7 @@ public class TestHoodieGlobalBloomIndex {
   @Test
   public void testExplodeRecordRDDWithFileComparisons() {
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
@@ -220,7 +225,7 @@ public class TestHoodieGlobalBloomIndex {
 
   @Test
   public void testTagLocation() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config);
 
     // Create some partitions, and put some files, along with the meta file

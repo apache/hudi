@@ -30,9 +30,9 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieRollbackException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
@@ -58,7 +58,7 @@ public class TestClientRollback extends TestHoodieClientBase {
    */
   @Test
   public void testSavepointAndRollback() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
+    HoodieClientConfig cfg = getConfigBuilder().withCompactionConfig(
         HoodieCompactionConfig.newBuilder().withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
             .build()).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
@@ -199,7 +199,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     String file32 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime3, "id32");
     String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withIndexConfig(
         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     HoodieWriteClient client = new HoodieWriteClient(jsc, config, false);
@@ -289,7 +289,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
 
     // Turn auto rollback off
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
+    HoodieClientConfig config = HoodieClientConfig.newBuilder().withPath(basePath).withIndexConfig(
         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     new HoodieWriteClient(jsc, config, false);

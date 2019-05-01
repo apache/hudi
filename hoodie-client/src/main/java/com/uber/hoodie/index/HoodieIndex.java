@@ -21,7 +21,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
 import com.uber.hoodie.index.bloom.HoodieGlobalBloomIndex;
@@ -37,14 +37,14 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
 
-  protected final HoodieWriteConfig config;
+  protected final HoodieClientConfig config;
 
-  protected HoodieIndex(HoodieWriteConfig config) {
+  protected HoodieIndex(HoodieClientConfig config) {
     this.config = config;
   }
 
 
-  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
+  public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieClientConfig config,
       JavaSparkContext jsc) throws HoodieIndexException {
     switch (config.getIndexType()) {
       case HBASE:

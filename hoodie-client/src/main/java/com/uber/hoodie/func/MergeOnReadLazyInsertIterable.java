@@ -19,7 +19,7 @@ package com.uber.hoodie.func;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.config.HoodieClientConfig;
 import com.uber.hoodie.io.HoodieAppendHandle;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
@@ -33,7 +33,7 @@ import java.util.List;
 public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extends
     CopyOnWriteLazyInsertIterable<T> {
 
-  public MergeOnReadLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
+  public MergeOnReadLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieClientConfig config,
       String commitTime, HoodieTable<T> hoodieTable) {
     super(sortedRecordItr, config, commitTime, hoodieTable);
   }
