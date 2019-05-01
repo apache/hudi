@@ -326,8 +326,8 @@ public class HoodieDeltaStreamer implements Serializable {
 
   private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
     HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
-            .withAutoCommit(false)
+        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
+            .withAutoCommit(false).combineInput(cfg.filterDupes, true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withPayloadClass(cfg.payloadClassName)
                 // turn on inline compaction by default, for MOR tables
