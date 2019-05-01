@@ -200,6 +200,18 @@
                    <pattern>org.apache.commons</pattern>
                    <shadedPattern>com.uber.hoodie.org.apache.commons</shadedPattern>
                  </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.kryo.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.objenesis.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.minlog.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
+                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
@@ -211,6 +223,9 @@
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
                   <include>commons-io:commons-io</include>
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.esotericsoftware:minlog</include>
                 </includes>
               </artifactSet>
               <finalName>${project.artifactId}-${project.version}</finalName>

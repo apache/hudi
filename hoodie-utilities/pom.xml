@@ -81,6 +81,9 @@
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.esotericsoftware:minlog</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -119,6 +122,18 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
                 </relocation>
               </relocations>
             </configuration>

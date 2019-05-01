@@ -161,6 +161,18 @@
                    <pattern>parquet.schema.</pattern>
                    <shadedPattern>com.uber.hoodie.parquet.schema.</shadedPattern>
                  </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.kryo.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.objenesis.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.minlog.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
+                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
