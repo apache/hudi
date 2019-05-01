@@ -128,12 +128,16 @@ public class DataSourceUtils {
       String basePath, String tblName, Map<String, String> parameters) throws Exception {
 
     // inline compaction is on by default for MOR
-    boolean inlineCompact = parameters.containsKey(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
-        && parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY()).equals(DataSourceWriteOptions
-        .MOR_STORAGE_TYPE_OPT_VAL());
+    boolean inlineCompact = parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
+        .equals(DataSourceWriteOptions.MOR_STORAGE_TYPE_OPT_VAL());
 
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().combineInput(true, true)
+    // insert/bulk-insert combining to be true, if filtering for duplicates
+    boolean combineInserts = Boolean.parseBoolean(parameters.get(
+        DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withAutoCommit(false)
+        .combineInput(combineInserts, true)
         .withSchema(schemaStr).forTable(tblName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
