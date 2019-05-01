@@ -236,10 +236,12 @@ public class KafkaOffsetGen {
     return offsetRanges;
   }
 
-  // check up checkpoint offsets is valid or not, if true,  return checkpoint offsets, else return earliest offsets
-  private HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkupValidOffsets(KafkaCluster cluster,
-                                                                                    Optional<String> lastCheckpointStr,
-                                                                                    Set<TopicAndPartition> topicPartitions) {
+  // check up checkpoint offsets is valid or not, if true,  return checkpoint offsets,
+  // else return earliest offsets
+  private HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkupValidOffsets(
+          KafkaCluster cluster,
+          Optional<String> lastCheckpointStr,
+          Set<TopicAndPartition> topicPartitions) {
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets =
             CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     java.util.Set<TopicAndPartition> partitions = checkpointOffsets.keySet();
