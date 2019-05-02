@@ -14,6 +14,11 @@ Hudi was originally developed at [Uber](https://uber.com), to achieve [low laten
 It has been in production since Aug 2016, powering ~100 highly business critical tables on Hadoop, worth 100s of TBs(including top 10 including trips,riders,partners).
 It also powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
 
+#### EMIS Health
+
+[EMIS Health][https://www.emishealth.com/] is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
+
+
 ## Talks & Presentations
 
 1. ["Hoodie: Incremental processing on Hadoop at Uber"](https://conferences.oreilly.com/strata/strata-ca/public/schedule/detail/56511) -  By Vinoth Chandar & Prasanna Rajaperumal
