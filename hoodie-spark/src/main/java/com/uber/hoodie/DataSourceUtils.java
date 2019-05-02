@@ -149,7 +149,7 @@ public class DataSourceUtils {
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
 
-    return new HoodieWriteClient<>(jssc, writeConfig);
+    return new HoodieWriteClient<>(jssc, writeConfig, true);
   }
 
 
