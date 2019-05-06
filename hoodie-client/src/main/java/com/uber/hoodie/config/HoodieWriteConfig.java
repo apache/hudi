@@ -333,6 +333,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
         .fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
   }
 
+  public boolean getEnableDynamicBloomIndex() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_ENABLE_DYNAMIC_PROP));
+  }
+
   /**
    * storage properties
    **/

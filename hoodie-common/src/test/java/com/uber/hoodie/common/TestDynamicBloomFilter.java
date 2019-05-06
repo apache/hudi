@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ *  Copyright (c) 2019 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,21 +19,22 @@ package com.uber.hoodie.common;
 import java.io.IOException;
 import org.junit.Test;
 
-public class TestBloomFilter extends AbstractBloomFilter {
+public class TestDynamicBloomFilter extends AbstractBloomFilter {
 
   @Test
   public void testAddKey() {
-    testAddKey(false);
+    testAddKey(true);
   }
 
   @Test
   public void testOverloadBloom() {
-    int falsePositives = testOverloadBloom(false);
-    assert (falsePositives > 0);
+    int falsePositives = testOverloadBloom(true);
+    assert (falsePositives == 0);
   }
 
   @Test
   public void testSerialize() throws IOException, ClassNotFoundException {
-    testSerialize(false);
+    testSerialize(true);
   }
+
 }

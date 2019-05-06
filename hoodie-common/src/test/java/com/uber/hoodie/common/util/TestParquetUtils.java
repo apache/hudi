@@ -72,7 +72,7 @@ public class TestParquetUtils {
 
     assertEquals("Did not read back the expected list of keys", rowKeys, rowKeysInFile);
     BloomFilter filterInFile = ParquetUtils.readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(),
-        new Path(filePath));
+        new Path(filePath), false);
     for (String rowKey : rowKeys) {
       assertTrue("key should be found in bloom filter", filterInFile.mightContain(rowKey));
     }
@@ -109,7 +109,7 @@ public class TestParquetUtils {
       List<String> rowKeys) throws Exception {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    BloomFilter filter = new BloomFilter(1000, 0.0001);
+    BloomFilter filter = new BloomFilter(1000, 0.0001, false);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema,
         filter);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,

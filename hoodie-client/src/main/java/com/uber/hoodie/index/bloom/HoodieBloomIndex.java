@@ -342,7 +342,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
             .sortByKey(true, joinParallelism);
 
     return fileSortedTripletRDD.mapPartitionsWithIndex(
-        new HoodieBloomIndexCheckFunction(metaClient, config.getBasePath()), true)
+        new HoodieBloomIndexCheckFunction(metaClient, config), true)
         .flatMap(List::iterator)
         .filter(lookupResult -> lookupResult.getMatchingRecordKeys().size() > 0)
         .flatMapToPair(lookupResult -> {

@@ -28,7 +28,8 @@ import org.apache.hadoop.util.bloom.Key;
 import org.apache.hadoop.util.hash.Hash;
 
 /**
- * A Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
+ * A Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter} or
+ * {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}.
  */
 public class BloomFilter {
 
@@ -37,33 +38,49 @@ public class BloomFilter {
    */
   public static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
 
-  private org.apache.hadoop.util.bloom.BloomFilter filter = null;
+  private org.apache.hadoop.util.bloom.BloomFilter bloomFilter = null;
 
-  public BloomFilter(int numEntries, double errorRate) {
-    this(numEntries, errorRate, Hash.MURMUR_HASH);
+  private org.apache.hadoop.util.bloom.DynamicBloomFilter dynamicBloomFilter = null;
+
+  private boolean isDynamic;
+
+  public BloomFilter(int numEntries, double errorRate, boolean isDynamic) {
+    this(numEntries, errorRate, Hash.MURMUR_HASH, isDynamic);
   }
 
   /**
    * Create a new Bloom filter with the given configurations.
    */
-  public BloomFilter(int numEntries, double errorRate, int hashType) {
+  public BloomFilter(int numEntries, double errorRate, int hashType, boolean isDynamic) {
     // Bit size
     int bitSize = (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
     // Number of the hash functions
     int numHashs = (int) Math.ceil(Math.log(2) * bitSize / numEntries);
     // The filter
-    this.filter = new org.apache.hadoop.util.bloom.BloomFilter(bitSize, numHashs, hashType);
+    if (isDynamic) {
+      this.dynamicBloomFilter = new org.apache.hadoop.util.bloom.DynamicBloomFilter(bitSize, numHashs, hashType,
+          numEntries);
+    } else {
+      this.bloomFilter = new org.apache.hadoop.util.bloom.BloomFilter(bitSize, numHashs, hashType);
+    }
+    this.isDynamic = isDynamic;
   }
 
   /**
    * Create the bloom filter from serialized string.
    */
-  public BloomFilter(String filterStr) {
-    this.filter = new org.apache.hadoop.util.bloom.BloomFilter();
+  public BloomFilter(String filterStr, boolean isDynamic) {
+    this.isDynamic = isDynamic;
     byte[] bytes = DatatypeConverter.parseBase64Binary(filterStr);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
-      this.filter.readFields(dis);
+      if (isDynamic) {
+        this.dynamicBloomFilter = new org.apache.hadoop.util.bloom.DynamicBloomFilter();
+        this.dynamicBloomFilter.readFields(dis);
+      } else {
+        this.bloomFilter = new org.apache.hadoop.util.bloom.BloomFilter();
+        this.bloomFilter.readFields(dis);
+      }
       dis.close();
     } catch (IOException e) {
       throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
@@ -74,14 +91,22 @@ public class BloomFilter {
     if (key == null) {
       throw new NullPointerException("Key cannot by null");
     }
-    filter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    if (isDynamic) {
+      this.dynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    } else {
+      this.bloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    }
   }
 
   public boolean mightContain(String key) {
     if (key == null) {
       throw new NullPointerException("Key cannot by null");
     }
-    return filter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    if (isDynamic) {
+      return this.dynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    } else {
+      return this.bloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    }
   }
 
   /**
@@ -91,7 +116,11 @@ public class BloomFilter {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     try {
-      filter.write(dos);
+      if (isDynamic) {
+        dynamicBloomFilter.write(dos);
+      } else {
+        bloomFilter.write(dos);
+      }
       byte[] bytes = baos.toByteArray();
       dos.close();
       return DatatypeConverter.printBase64Binary(bytes);

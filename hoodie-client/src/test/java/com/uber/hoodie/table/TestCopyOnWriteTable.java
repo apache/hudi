@@ -155,7 +155,8 @@ public class TestCopyOnWriteTable {
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path parquetFilePath = new Path(parquetFile.getAbsolutePath());
-    BloomFilter filter = ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), parquetFilePath);
+    BloomFilter filter = ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(), parquetFilePath,
+        false);
     for (HoodieRecord record : records) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
@@ -211,7 +212,7 @@ public class TestCopyOnWriteTable {
     // Check whether the record has been updated
     Path updatedParquetFilePath = new Path(updatedParquetFile.getAbsolutePath());
     BloomFilter updatedFilter = ParquetUtils.readBloomFilterFromParquetMetadata(jsc.hadoopConfiguration(),
-        updatedParquetFilePath);
+        updatedParquetFilePath, false);
     for (HoodieRecord record : records) {
       // No change to the _row_key
       assertTrue(updatedFilter.mightContain(record.getRecordKey()));

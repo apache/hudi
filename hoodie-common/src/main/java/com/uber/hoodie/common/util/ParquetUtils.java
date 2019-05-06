@@ -146,10 +146,10 @@ public class ParquetUtils {
    * Read out the bloom filter from the parquet file meta data.
    */
   public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration,
-      Path parquetFilePath) {
+      Path parquetFilePath, boolean enableDynamicBloomFilter) {
     String footerVal = readParquetFooter(configuration, parquetFilePath,
         HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY).get(0);
-    return new BloomFilter(footerVal);
+    return new BloomFilter(footerVal, enableDynamicBloomFilter);
   }
 
   public static String[] readMinMaxRecordKeys(Configuration configuration, Path parquetFilePath) {

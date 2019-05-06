@@ -50,6 +50,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL =
       "hoodie.bloom.index.input.storage" + ".level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
+  public static final String BLOOM_INDEX_ENABLE_DYNAMIC_PROP =
+      "hoodie.bloom.index.dynamic";
+  public static final String DEFAULT_BLOOM_INDEX_ENABLE_DYNAMIC = "false";
 
   private HoodieIndexConfig(Properties props) {
     super(props);

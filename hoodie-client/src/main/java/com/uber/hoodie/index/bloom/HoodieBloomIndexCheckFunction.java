@@ -23,6 +23,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.HoodieTimer;
 import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.func.LazyIterableIterator;
@@ -48,13 +49,13 @@ public class HoodieBloomIndexCheckFunction implements
 
   private static Logger logger = LogManager.getLogger(HoodieBloomIndexCheckFunction.class);
 
-  private final String basePath;
+  private final HoodieWriteConfig config;
 
   private final HoodieTableMetaClient metaClient;
 
-  public HoodieBloomIndexCheckFunction(HoodieTableMetaClient metaClient, String basePath) {
+  public HoodieBloomIndexCheckFunction(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     this.metaClient = metaClient;
-    this.basePath = basePath;
+    this.config = config;
   }
 
   /**
@@ -118,9 +119,10 @@ public class HoodieBloomIndexCheckFunction implements
 
     private void initState(String fileName, String partitionPath) throws HoodieIndexException {
       try {
-        Path filePath = new Path(basePath + "/" + partitionPath + "/" + fileName);
+        Path filePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + fileName);
         HoodieTimer timer = new HoodieTimer().startTimer();
-        bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(metaClient.getHadoopConf(), filePath);
+        bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(metaClient.getHadoopConf(), filePath, config
+            .getEnableDynamicBloomIndex());
         logger.info(String.format("Read bloom filter from %s/%s in %d ms", partitionPath, fileName, timer.endTimer()));
         candidateRecordKeys = new ArrayList<>();
         currentFile = fileName;
@@ -144,7 +146,7 @@ public class HoodieBloomIndexCheckFunction implements
     }
 
     private List<String> checkAgainstCurrentFile() {
-      Path filePath = new Path(basePath + "/" + currentPartitionPath + "/" + currentFile);
+      Path filePath = new Path(config.getBasePath() + "/" + currentPartitionPath + "/" + currentFile);
       if (logger.isDebugEnabled()) {
         logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
       }
