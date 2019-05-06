@@ -122,7 +122,6 @@
   <properties>
     <maven-dependency-plugin.version>2.10</maven-dependency-plugin.version>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
-    <maven-shade-plugin>2.4.1</maven-shade-plugin>
     <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
     <fasterxml.version>2.8.11</fasterxml.version>
     <parquet.version>1.8.1</parquet.version>
@@ -257,35 +256,6 @@
             <exclude>**/IT*.java</exclude>
           </excludes>
         </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>${maven-shade-plugin}</version>
-        <executions>
-          <!-- Run shade goal on package phase -->
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <filters>
-                <filter>
-                  <!-- Do not copy the signatures in the META-INF folder.
-                  Otherwise, this might cause SecurityExceptions when using the JAR. -->
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
 
