@@ -20,7 +20,7 @@ import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.commands.SparkMain.SparkCommand;
 import com.uber.hoodie.cli.utils.InputStreamConsumer;
 import com.uber.hoodie.cli.utils.SparkUtil;
-import com.uber.hoodie.utilities.HDFSParquetImporter;
+import com.uber.hoodie.configs.HDFSParquetImporterJobConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -56,7 +56,7 @@ public class HDFSParquetImportCommand implements CommandMarker {
       @CliOption(key = "sparkMemory", mandatory = true, help = "Spark executor memory") final String sparkMemory,
       @CliOption(key = "retry", mandatory = true, help = "Number of retries") final String retry) throws Exception {
 
-    (new HDFSParquetImporter.FormatValidator()).validate("format", format);
+    (new HDFSParquetImporterJobConfig.FormatValidator()).validate("format", format);
 
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);

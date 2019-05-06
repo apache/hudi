@@ -16,7 +16,6 @@
  *
  */
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.DataSourceReadOptions;
 import com.uber.hoodie.DataSourceWriteOptions;
@@ -24,20 +23,22 @@ import com.uber.hoodie.HoodieDataSourceHelpers;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.configs.AbstractJobConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
-
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.*;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.streaming.DataStreamWriter;
 import org.apache.spark.sql.streaming.OutputMode;
 import org.apache.spark.sql.streaming.ProcessingTime;
@@ -45,7 +46,7 @@ import org.apache.spark.sql.streaming.ProcessingTime;
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource streaming
  */
-public class HoodieJavaStreamingApp {
+public class HoodieJavaStreamingApp extends AbstractJobConfig {
 
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
   private String tablePath = "file:///tmp/hoodie/streaming/sample-table";
@@ -88,26 +89,17 @@ public class HoodieJavaStreamingApp {
   @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
   private Boolean useMultiPartitionKeys = false;
 
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public Boolean help = false;
-
 
   private static Logger logger = LogManager.getLogger(HoodieJavaStreamingApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
-    JCommander cmd = new JCommander(cli, args);
-
-    if (cli.help) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cli.parseJobConfig(args);
     cli.run();
   }
 
   /**
    *
-   * @throws Exception
    */
   public void run() throws Exception {
     // Spark session setup..
@@ -139,7 +131,6 @@ public class HoodieJavaStreamingApp {
     // setup the input for streaming
     Dataset<Row> streamingInput = spark.readStream().schema(inputDF1.schema())
         .json(streamingSourcePath);
-
 
     // start streaming and showing
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -173,16 +164,11 @@ public class HoodieJavaStreamingApp {
 
   /**
    * Adding data to the streaming source and showing results over time
-   * @param spark
-   * @param fs
-   * @param inputDF1
-   * @param inputDF2
-   * @throws Exception
    */
   public void show(SparkSession spark,
-                   FileSystem fs,
-                   Dataset<Row> inputDF1,
-                   Dataset<Row> inputDF2) throws Exception {
+      FileSystem fs,
+      Dataset<Row> inputDF1,
+      Dataset<Row> inputDF2) throws Exception {
     inputDF1.write().mode(SaveMode.Append).json(streamingSourcePath);
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
@@ -227,8 +213,6 @@ public class HoodieJavaStreamingApp {
 
   /**
    * Hoodie spark streaming job
-   * @param streamingInput
-   * @throws Exception
    */
   public void stream(Dataset<Row> streamingInput) throws Exception {
 
@@ -245,7 +229,7 @@ public class HoodieJavaStreamingApp {
         .option("checkpointLocation", streamingCheckpointingPath)
         .outputMode(OutputMode.Append());
 
-    updateHiveSyncConfig(writer);
+    updateHiveSyncJobConfig(writer);
     writer
         .trigger(new ProcessingTime(500))
         .start(tablePath)
@@ -254,10 +238,8 @@ public class HoodieJavaStreamingApp {
 
   /**
    * Setup configs for syncing to hive
-   * @param writer
-   * @return
    */
-  private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
+  private DataStreamWriter<Row> updateHiveSyncJobConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
       logger.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
@@ -269,7 +251,7 @@ public class HoodieJavaStreamingApp {
       if (useMultiPartitionKeys) {
         writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "year,month,day")
             .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
-            MultiPartKeysValueExtractor.class.getCanonicalName());
+                MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
         writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "dateStr");
       }

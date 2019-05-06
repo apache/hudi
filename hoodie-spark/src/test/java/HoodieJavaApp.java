@@ -16,7 +16,6 @@
  *
  */
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.DataSourceReadOptions;
 import com.uber.hoodie.DataSourceWriteOptions;
@@ -26,6 +25,7 @@ import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.configs.AbstractJobConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import com.uber.hoodie.hive.NonPartitionedExtractor;
 import java.util.List;
@@ -42,7 +42,7 @@ import org.apache.spark.sql.SparkSession;
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource
  */
-public class HoodieJavaApp {
+public class HoodieJavaApp extends AbstractJobConfig {
 
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
   private String tablePath = "file:///tmp/hoodie/sample-table";
@@ -77,19 +77,11 @@ public class HoodieJavaApp {
   @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
   private Boolean useMultiPartitionKeys = false;
 
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public Boolean help = false;
-
   private static Logger logger = LogManager.getLogger(HoodieJavaApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
-    JCommander cmd = new JCommander(cli, args);
-
-    if (cli.help) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cli.parseJobConfig(args);
     cli.run();
   }
 
@@ -142,7 +134,7 @@ public class HoodieJavaApp {
         .mode(
             SaveMode.Overwrite); // This will remove any existing data at path below, and create a
 
-    updateHiveSyncConfig(writer);
+    updateHiveSyncJobConfig(writer);
     // new dataset if needed
     writer.save(tablePath); // ultimately where the dataset will be placed
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
@@ -165,7 +157,7 @@ public class HoodieJavaApp {
                 SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
-    updateHiveSyncConfig(writer);
+    updateHiveSyncJobConfig(writer);
     writer.save(tablePath);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     logger.info("Second commit at instant time :" + commitInstantTime1);
@@ -205,7 +197,7 @@ public class HoodieJavaApp {
    * @param writer
    * @return
    */
-  private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
+  private DataFrameWriter<Row> updateHiveSyncJobConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
       logger.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)

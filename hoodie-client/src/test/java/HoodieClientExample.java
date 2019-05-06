@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
@@ -27,6 +26,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.configs.AbstractJobConfig;
 import com.uber.hoodie.index.HoodieIndex.IndexType;
 import java.util.List;
 import java.util.Optional;
@@ -41,11 +41,10 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic operations. <p>
  */
-public class HoodieClientExample {
+public class HoodieClientExample extends AbstractJobConfig {
 
   private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public Boolean help = false;
+
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
   private String tablePath = "file:///tmp/hoodie/sample-table";
   @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
@@ -55,12 +54,7 @@ public class HoodieClientExample {
 
   public static void main(String[] args) throws Exception {
     HoodieClientExample cli = new HoodieClientExample();
-    JCommander cmd = new JCommander(cli, args);
-
-    if (cli.help) {
-      cmd.usage();
-      System.exit(1);
-    }
+    cli.parseJobConfig(args);
     cli.run();
   }
 

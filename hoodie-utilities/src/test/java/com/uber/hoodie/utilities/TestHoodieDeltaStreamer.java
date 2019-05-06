@@ -29,12 +29,12 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.configs.HiveSyncJobConfig;
+import com.uber.hoodie.configs.HoodieDeltaStreamerJobConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
-import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HoodieHiveClient;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer;
-import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
 import com.uber.hoodie.utilities.sources.HoodieIncrSource;
 import com.uber.hoodie.utilities.sources.TestDataSource;
@@ -128,17 +128,20 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   static class TestHelpers {
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op) {
+
+    static HoodieDeltaStreamerJobConfig makeConfig(String basePath, HoodieDeltaStreamerJobConfig.Operation op) {
       return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName());
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName) {
+    static HoodieDeltaStreamerJobConfig makeConfig(String basePath, HoodieDeltaStreamerJobConfig.Operation op,
+        String transformerClassName) {
       return makeConfig(basePath, op, transformerClassName, false);
     }
 
-    static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op, String transformerClassName,
+    static HoodieDeltaStreamerJobConfig makeConfig(String basePath, HoodieDeltaStreamerJobConfig.Operation op,
+        String transformerClassName,
         boolean enableHiveSync) {
-      HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+      HoodieDeltaStreamerJobConfig cfg = new HoodieDeltaStreamerJobConfig();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips";
       cfg.storageType = "COPY_ON_WRITE";
@@ -153,9 +156,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       return cfg;
     }
 
-    static HoodieDeltaStreamer.Config makeConfigForHudiIncrSrc(String srcBasePath, String basePath, Operation op,
+    static HoodieDeltaStreamerJobConfig makeConfigForHudiIncrSrc(String srcBasePath, String basePath,
+        HoodieDeltaStreamerJobConfig.Operation op,
         boolean addReadLatestOnMissingCkpt) {
-      HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
+      HoodieDeltaStreamerJobConfig cfg = new HoodieDeltaStreamerJobConfig();
       cfg.targetBasePath = basePath;
       cfg.targetTableName = "hoodie_trips_copy";
       cfg.storageType = "COPY_ON_WRITE";
@@ -223,7 +227,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     try {
       dfs.mkdirs(new Path(dfsBasePath + "/not_a_dataset"));
       HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-          TestHelpers.makeConfig(dfsBasePath + "/not_a_dataset", Operation.BULK_INSERT), jsc);
+          TestHelpers.makeConfig(dfsBasePath + "/not_a_dataset", HoodieDeltaStreamerJobConfig.Operation.BULK_INSERT),
+          jsc);
       deltaStreamer.sync();
       fail("Should error out when pointed out at a dir thats not a dataset");
     } catch (DatasetNotFoundException e) {
@@ -237,7 +242,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String datasetBasePath = dfsBasePath + "/test_dataset";
 
     // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(datasetBasePath, Operation.BULK_INSERT);
+    HoodieDeltaStreamerJobConfig cfg = TestHelpers
+        .makeConfig(datasetBasePath, HoodieDeltaStreamerJobConfig.Operation.BULK_INSERT);
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(1000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(1000, datasetBasePath + "/*/*.parquet", sqlContext);
@@ -252,7 +258,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // upsert() #1
     cfg.sourceLimit = 2000;
-    cfg.operation = Operation.UPSERT;
+    cfg.operation = HoodieDeltaStreamerJobConfig.Operation.UPSERT;
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
@@ -262,23 +268,22 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   /**
-   * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline
-   * The first step involves using a SQL template to transform a source
-   * TEST-DATA-SOURCE  ============================> HUDI TABLE 1   ===============>  HUDI TABLE 2
-   *                   (incr-pull with transform)                     (incr-pull)
-   * Hudi Table 1 is synced with Hive.
-   * @throws Exception
+   * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline The first
+   * step involves using a SQL template to transform a source TEST-DATA-SOURCE  ============================> HUDI TABLE
+   * 1   ===============>  HUDI TABLE 2 (incr-pull with transform)                     (incr-pull) Hudi Table 1 is
+   * synced with Hive.
    */
   @Test
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline() throws Exception {
     String datasetBasePath = dfsBasePath + "/test_dataset2";
     String downstreamDatasetBasePath = dfsBasePath + "/test_downstream_dataset2";
 
-    HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(datasetBasePath, "hive_trips");
+    HiveSyncJobConfig hiveSyncJobConfig = getHiveSyncJobConfig(datasetBasePath, "hive_trips");
 
     // Initial bulk insert to ingest to first hudi table
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(datasetBasePath, Operation.BULK_INSERT,
-        SqlQueryBasedTransformer.class.getName(), true);
+    HoodieDeltaStreamerJobConfig cfg = TestHelpers
+        .makeConfig(datasetBasePath, HoodieDeltaStreamerJobConfig.Operation.BULK_INSERT,
+            SqlQueryBasedTransformer.class.getName(), true);
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(1000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(1000, datasetBasePath + "/*/*.parquet", sqlContext);
@@ -286,8 +291,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String lastInstantForUpstreamTable = TestHelpers.assertCommitMetadata("00000", datasetBasePath, dfs, 1);
 
     // Now incrementally pull from the above hudi table and ingest to second table
-    HoodieDeltaStreamer.Config downstreamCfg =
-        TestHelpers.makeConfigForHudiIncrSrc(datasetBasePath, downstreamDatasetBasePath, Operation.BULK_INSERT, true);
+    HoodieDeltaStreamerJobConfig downstreamCfg =
+        TestHelpers.makeConfigForHudiIncrSrc(datasetBasePath, downstreamDatasetBasePath,
+            HoodieDeltaStreamerJobConfig.Operation.BULK_INSERT, true);
     new HoodieDeltaStreamer(downstreamCfg, jsc, dfs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(1000, downstreamDatasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(1000, downstreamDatasetBasePath + "/*/*.parquet", sqlContext);
@@ -311,7 +317,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // upsert() #1 on upstream hudi table
     cfg.sourceLimit = 2000;
-    cfg.operation = Operation.UPSERT;
+    cfg.operation = HoodieDeltaStreamerJobConfig.Operation.UPSERT;
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
     TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
@@ -322,7 +328,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // Incrementally pull changes in upstream hudi table and apply to downstream table
     downstreamCfg =
-        TestHelpers.makeConfigForHudiIncrSrc(datasetBasePath, downstreamDatasetBasePath, Operation.UPSERT, false);
+        TestHelpers.makeConfigForHudiIncrSrc(datasetBasePath, downstreamDatasetBasePath,
+            HoodieDeltaStreamerJobConfig.Operation.UPSERT, false);
     downstreamCfg.sourceLimit = 2000;
     new HoodieDeltaStreamer(downstreamCfg, jsc).sync();
     TestHelpers.assertRecordCount(2000, downstreamDatasetBasePath + "/*/*.parquet", sqlContext);
@@ -334,8 +341,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals(2000, counts.get(0).getLong(1));
 
     // Test Hive integration
-    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
-    assertTrue("Table " + hiveSyncConfig.tableName + " should exist",
+    HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncJobConfig, hiveServer.getHiveConf(), dfs);
+    assertTrue("Table " + hiveSyncJobConfig.tableName + " should exist",
         hiveClient.doesTableExist());
     assertEquals("Table partitions should match the number of partitions we wrote", 1,
         hiveClient.scanTablePartitions().size());
@@ -348,7 +355,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String datasetBasePath = dfsBasePath + "/test_dupes_dataset";
 
     // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(datasetBasePath, Operation.BULK_INSERT);
+    HoodieDeltaStreamerJobConfig cfg = TestHelpers
+        .makeConfig(datasetBasePath, HoodieDeltaStreamerJobConfig.Operation.BULK_INSERT);
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(1000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00000", datasetBasePath, dfs, 1);
@@ -356,7 +364,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Generate the same 1000 records + 1000 new ones for upsert
     cfg.filterDupes = true;
     cfg.sourceLimit = 2000;
-    cfg.operation = Operation.UPSERT;
+    cfg.operation = HoodieDeltaStreamerJobConfig.Operation.UPSERT;
     new HoodieDeltaStreamer(cfg, jsc).sync();
     TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
@@ -372,15 +380,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static class DistanceUDF implements UDF4<Double, Double, Double, Double, Double> {
 
     /**
-     *
      * Taken from https://stackoverflow.com/questions/3694380/calculating-distance-between-two-points-using-latitude-
-     * longitude-what-am-i-doi
-     * Calculate distance between two points in latitude and longitude taking
-     * into account height difference. If you are not interested in height
-     * difference pass 0.0. Uses Haversine method as its base.
+     * longitude-what-am-i-doi Calculate distance between two points in latitude and longitude taking into account
+     * height difference. If you are not interested in height difference pass 0.0. Uses Haversine method as its base.
      *
-     * lat1, lon1 Start point lat2, lon2 End point el1 Start altitude in meters
-     * el2 End altitude in meters
+     * lat1, lon1 Start point lat2, lon2 End point el1 Start altitude in meters el2 End altitude in meters
+     *
      * @returns Distance in Meters
      */
     @Override

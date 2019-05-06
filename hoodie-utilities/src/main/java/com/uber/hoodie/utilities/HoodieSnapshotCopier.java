@@ -18,8 +18,6 @@
 
 package com.uber.hoodie.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 import com.uber.hoodie.common.SerializableConfiguration;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
@@ -30,6 +28,7 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.configs.HoodieSnapshotCopierJobConfig;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -47,27 +46,11 @@ import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
 /**
- * Hoodie snapshot copy job which copies latest files from all partitions to another place, for
- * snapshot backup.
+ * Hoodie snapshot copy job which copies latest files from all partitions to another place, for snapshot backup.
  */
 public class HoodieSnapshotCopier implements Serializable {
 
   private static Logger logger = LogManager.getLogger(HoodieSnapshotCopier.class);
-
-  static class Config implements Serializable {
-
-    @Parameter(names = {"--base-path",
-        "-bp"}, description = "Hoodie table base path", required = true)
-    String basePath = null;
-
-    @Parameter(names = {"--output-path",
-        "-op"}, description = "The snapshot output path", required = true)
-    String outputPath = null;
-
-    @Parameter(names = {"--date-partitioned",
-        "-dp"}, description = "Can we assume date partitioning?")
-    boolean shouldAssumeDatePartitioning = false;
-  }
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
       final boolean shouldAssumeDatePartitioning) throws IOException {
@@ -167,15 +150,15 @@ public class HoodieSnapshotCopier implements Serializable {
     Path successTagPath = new Path(outputDir + "/_SUCCESS");
     if (!fs.exists(successTagPath)) {
       logger.info(String.format(
-              "Creating _SUCCESS under targetBasePath: $s", outputDir));
+          "Creating _SUCCESS under targetBasePath: $s", outputDir));
       fs.createNewFile(successTagPath);
     }
   }
 
   public static void main(String[] args) throws IOException {
     // Take input configs
-    final Config cfg = new Config();
-    new JCommander(cfg, args);
+    final HoodieSnapshotCopierJobConfig cfg = new HoodieSnapshotCopierJobConfig();
+    cfg.parseJobConfig(args);
     logger.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath",
         cfg.basePath, cfg.outputPath));
 

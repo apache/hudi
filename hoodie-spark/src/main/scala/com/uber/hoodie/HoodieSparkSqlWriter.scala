@@ -24,15 +24,16 @@ import com.uber.hoodie.DataSourceWriteOptions._
 import com.uber.hoodie.common.table.HoodieTableMetaClient
 import com.uber.hoodie.common.util.{FSUtils, TypedProperties}
 import com.uber.hoodie.config.HoodieWriteConfig
+import com.uber.hoodie.configs.HiveSyncJobConfig
 import com.uber.hoodie.exception.HoodieException
-import com.uber.hoodie.hive.{HiveSyncConfig, HiveSyncTool}
+import com.uber.hoodie.hive.HiveSyncTool
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
@@ -232,26 +233,26 @@ private[hoodie] object HoodieSparkSqlWriter {
   }
 
   private def syncHive(basePath: Path, fs: FileSystem, parameters: Map[String, String]): Boolean = {
-    val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, parameters)
+    val hiveSyncJobConfig: HiveSyncJobConfig = buildSyncConfig(basePath, parameters)
     val hiveConf: HiveConf = new HiveConf()
     hiveConf.addResource(fs.getConf)
-    new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
+    new HiveSyncTool(hiveSyncJobConfig, hiveConf, fs).syncHoodieTable()
     true
   }
 
-  private def buildSyncConfig(basePath: Path, parameters: Map[String, String]): HiveSyncConfig = {
-    val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig()
-    hiveSyncConfig.basePath = basePath.toString
-    hiveSyncConfig.assumeDatePartitioning =
+  private def buildSyncConfig(basePath: Path, parameters: Map[String, String]): HiveSyncJobConfig = {
+    val hiveSyncJobConfig: HiveSyncJobConfig = new HiveSyncJobConfig()
+    hiveSyncJobConfig.basePath = basePath.toString
+    hiveSyncJobConfig.assumeDatePartitioning =
       parameters.get(HIVE_ASSUME_DATE_PARTITION_OPT_KEY).exists(r => r.toBoolean)
-    hiveSyncConfig.databaseName = parameters(HIVE_DATABASE_OPT_KEY)
-    hiveSyncConfig.tableName = parameters(HIVE_TABLE_OPT_KEY)
-    hiveSyncConfig.hiveUser = parameters(HIVE_USER_OPT_KEY)
-    hiveSyncConfig.hivePass = parameters(HIVE_PASS_OPT_KEY)
-    hiveSyncConfig.jdbcUrl = parameters(HIVE_URL_OPT_KEY)
-    hiveSyncConfig.partitionFields =
+    hiveSyncJobConfig.databaseName = parameters(HIVE_DATABASE_OPT_KEY)
+    hiveSyncJobConfig.tableName = parameters(HIVE_TABLE_OPT_KEY)
+    hiveSyncJobConfig.hiveUser = parameters(HIVE_USER_OPT_KEY)
+    hiveSyncJobConfig.hivePass = parameters(HIVE_PASS_OPT_KEY)
+    hiveSyncJobConfig.jdbcUrl = parameters(HIVE_URL_OPT_KEY)
+    hiveSyncJobConfig.partitionFields =
       ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
-    hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
-    hiveSyncConfig
+    hiveSyncJobConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
+    hiveSyncJobConfig
   }
 }

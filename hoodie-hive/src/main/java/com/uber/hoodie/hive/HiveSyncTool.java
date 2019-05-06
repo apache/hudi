@@ -18,8 +18,8 @@
 
 package com.uber.hoodie.hive;
 
-import com.beust.jcommander.JCommander;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hadoop.HoodieInputFormat;
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
@@ -43,11 +43,10 @@ import parquet.schema.MessageType;
 
 /**
  * Tool to sync a hoodie HDFS dataset with a hive metastore table. Either use it as a api
- * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar
- * HiveSyncTool [args]
+ * HiveSyncTool.syncHoodieTable(HiveSyncJobConfig) or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
  * <p>
- * This utility will get the schema from the latest commit and will sync hive table schema Also this
- * will sync the partitions incrementally (all the partitions modified since the last commit)
+ * This utility will get the schema from the latest commit and will sync hive table schema Also this will sync the
+ * partitions incrementally (all the partitions modified since the last commit)
  */
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
@@ -55,9 +54,9 @@ public class HiveSyncTool {
   private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
   public static final String SUFFIX_REALTIME_TABLE = "_rt";
-  private final HiveSyncConfig cfg;
+  private final HiveSyncJobConfig cfg;
 
-  public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
+  public HiveSyncTool(HiveSyncJobConfig cfg, HiveConf configuration, FileSystem fs) {
     this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     this.cfg = cfg;
   }
@@ -113,11 +112,11 @@ public class HiveSyncTool {
   }
 
   /**
-   * Get the latest schema from the last commit and check if its in sync with the hive table schema.
-   * If not, evolves the table schema.
+   * Get the latest schema from the last commit and check if its in sync with the hive table schema. If not, evolves the
+   * table schema.
    *
    * @param tableExists - does table exist
-   * @param schema      - extracted schema
+   * @param schema - extracted schema
    */
   private void syncSchema(boolean tableExists, boolean isRealTime, MessageType schema) {
     // Check and sync schema
@@ -151,8 +150,8 @@ public class HiveSyncTool {
 
 
   /**
-   * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not
-   * adds it or if the partition path does not match, it updates the partition path)
+   * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not adds it or if the
+   * partition path does not match, it updates the partition path)
    */
   private void syncPartitions(List<String> writtenPartitionsSince) {
     try {
@@ -177,12 +176,9 @@ public class HiveSyncTool {
 
   public static void main(String[] args) throws Exception {
     // parse the params
-    final HiveSyncConfig cfg = new HiveSyncConfig();
-    JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    final HiveSyncJobConfig cfg = new HiveSyncJobConfig();
+    cfg.parseJobConfig(args, true);
+
     FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(fs.getConf());

@@ -30,6 +30,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
+import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hive.util.SchemaUtil;
@@ -85,12 +86,12 @@ public class HoodieHiveClient {
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;
   private HiveMetaStoreClient client;
-  private HiveSyncConfig syncConfig;
+  private HiveSyncJobConfig syncConfig;
   private FileSystem fs;
   private Connection connection;
   private HoodieTimeline activeTimeline;
 
-  public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
+  public HoodieHiveClient(HiveSyncJobConfig cfg, HiveConf configuration, FileSystem fs) {
     this.syncConfig = cfg;
     this.fs = fs;
     this.metaClient = new HoodieTableMetaClient(fs.getConf(), cfg.basePath, true);
@@ -163,8 +164,8 @@ public class HoodieHiveClient {
 
   /**
    * Generate Hive Partition from partition values
+   *
    * @param partition Partition path
-   * @return
    */
   private String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor
@@ -194,8 +195,8 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Iterate over the storage partitions and find if there are any new partitions that need to be
-   * added or updated. Generate a list of PartitionEvent based on the changes required.
+   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
+   * Generate a list of PartitionEvent based on the changes required.
    */
   List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions,
       List<String> partitionStoragePartitions) {
@@ -294,9 +295,8 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Gets the schema for a hoodie dataset. Depending on the type of table, read from any file
-   * written in the latest commit. We will assume that the schema has not changed within a single
-   * atomic write.
+   * Gets the schema for a hoodie dataset. Depending on the type of table, read from any file written in the latest
+   * commit. We will assume that the schema has not changed within a single atomic write.
    *
    * @return Parquet schema for this dataset
    */

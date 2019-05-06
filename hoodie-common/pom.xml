@@ -168,5 +168,9 @@
       <artifactId>kryo-shaded</artifactId>
       <version>4.0.2</version>
     </dependency>
+    <dependency>
+      <groupId>com.beust</groupId>
+      <artifactId>jcommander</artifactId>
+    </dependency>
   </dependencies>
 </project>

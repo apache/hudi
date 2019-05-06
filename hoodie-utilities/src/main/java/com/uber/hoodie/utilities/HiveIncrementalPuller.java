@@ -18,17 +18,15 @@
 
 package com.uber.hoodie.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.configs.HiveIncrementalPullerJobConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullSQLException;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -50,50 +48,18 @@ import org.apache.log4j.Logger;
 import org.stringtemplate.v4.ST;
 
 /**
- * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as
- * another hive temporary table.
+ * Utility to pull data after a given commit, based on the supplied HiveQL and save the delta as another hive temporary
+ * table.
  * <p>
  * Current Limitations:
  * <p>
- * - Only the source table can be incrementally pulled (usually the largest table) - The
- * incrementally pulled table can't be referenced more than once.
+ * - Only the source table can be incrementally pulled (usually the largest table) - The incrementally pulled table
+ * can't be referenced more than once.
  */
 public class HiveIncrementalPuller {
 
   private static Logger log = LogManager.getLogger(HiveIncrementalPuller.class);
   private static String driverName = "org.apache.hive.jdbc.HiveDriver";
-
-  public static class Config implements Serializable {
-
-    @Parameter(names = {"--hiveUrl"})
-    public String hiveJDBCUrl = "jdbc:hive2://localhost:10014/;transportMode=http;httpPath=hs2";
-    @Parameter(names = {"--hiveUser"})
-    public String hiveUsername = "hive";
-    @Parameter(names = {"--hivePass"})
-    public String hivePassword = "";
-    @Parameter(names = {"--queue"})
-    public String yarnQueueName = "hadoop-queue";
-    @Parameter(names = {"--tmp"})
-    public String hoodieTmpDir = "/app/hoodie/intermediate";
-    @Parameter(names = {"--extractSQLFile"}, required = true)
-    public String incrementalSQLFile;
-    @Parameter(names = {"--sourceDb"}, required = true)
-    public String sourceDb;
-    @Parameter(names = {"--sourceTable"}, required = true)
-    public String sourceTable;
-    @Parameter(names = {"--targetDb"})
-    public String targetDb;
-    @Parameter(names = {"--targetTable"}, required = true)
-    public String targetTable;
-    @Parameter(names = {"--tmpdb"})
-    public String tmpDb = "tmp";
-    @Parameter(names = {"--fromCommitTime"})
-    public String fromCommitTime;
-    @Parameter(names = {"--maxCommits"})
-    public int maxCommits = 3;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
-  }
 
   static {
     try {
@@ -104,10 +70,10 @@ public class HiveIncrementalPuller {
   }
 
   private Connection connection;
-  protected final Config config;
+  protected final HiveIncrementalPullerJobConfig config;
   private final ST incrementalPullSQLtemplate;
 
-  public HiveIncrementalPuller(Config config) throws IOException {
+  public HiveIncrementalPuller(HiveIncrementalPullerJobConfig config) throws IOException {
     this.config = config;
     validateConfig(config);
     String templateContent = IOUtils.toString(
@@ -115,7 +81,7 @@ public class HiveIncrementalPuller {
     incrementalPullSQLtemplate = new ST(templateContent);
   }
 
-  private void validateConfig(Config config) {
+  private void validateConfig(HiveIncrementalPullerJobConfig config) {
     if (config.maxCommits == -1) {
       config.maxCommits = Integer.MAX_VALUE;
     }
@@ -361,12 +327,9 @@ public class HiveIncrementalPuller {
   }
 
   public static void main(String[] args) throws IOException {
-    final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    final HiveIncrementalPullerJobConfig cfg = new HiveIncrementalPullerJobConfig();
+    cfg.parseJobConfig(args, true);
+
     new HiveIncrementalPuller(cfg).saveDelta();
   }
 }

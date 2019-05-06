@@ -23,7 +23,7 @@ import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Reader;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
-import com.uber.hoodie.hive.HiveSyncConfig;
+import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.hive.HoodieHiveSyncException;
 import com.uber.hoodie.hive.SchemaDifference;
 import java.io.IOException;
@@ -399,7 +399,7 @@ public class SchemaUtil {
     return columns.toString();
   }
 
-  public static String generateCreateDDL(MessageType storageSchema, HiveSyncConfig config,
+  public static String generateCreateDDL(MessageType storageSchema, HiveSyncJobConfig config,
       String inputFormatClass, String outputFormatClass, String serdeClass) throws IOException {
     Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema);
     String columns = generateSchemaString(storageSchema, config.partitionFields);

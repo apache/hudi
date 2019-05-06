@@ -22,12 +22,20 @@ import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.configs.AbstractJobConfig;
+import com.uber.hoodie.configs.HDFSParquetImporterJobConfig;
+import com.uber.hoodie.configs.HoodieCommitRollbackJobConfig;
+import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig;
+import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig.Operation;
+import com.uber.hoodie.configs.HoodieCompactorJobConfig;
+import com.uber.hoodie.configs.HoodieDeduplicatePartitionJobConfig;
+import com.uber.hoodie.configs.HoodieRollbackToSavePointJobConfig;
 import com.uber.hoodie.index.HoodieIndex;
-import com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy;
 import com.uber.hoodie.utilities.HDFSParquetImporter;
 import com.uber.hoodie.utilities.HoodieCompactionAdminTool;
-import com.uber.hoodie.utilities.HoodieCompactionAdminTool.Operation;
 import com.uber.hoodie.utilities.HoodieCompactor;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
@@ -41,7 +49,41 @@ public class SparkMain {
    */
   enum SparkCommand {
     ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
-    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR
+    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR;
+
+    static Map<String, AbstractJobConfig> getCommandConfigMap() {
+      Map<String, AbstractJobConfig> commandConfigMap = new HashMap<>();
+      commandConfigMap.put(ROLLBACK.name(), new HoodieCommitRollbackJobConfig());
+      commandConfigMap.put(DEDUPLICATE.name(), new HoodieDeduplicatePartitionJobConfig());
+      commandConfigMap.put(ROLLBACK_TO_SAVEPOINT.name(), new HoodieRollbackToSavePointJobConfig());
+
+      commandConfigMap.put(IMPORT.name(), getHdfsParquetImportConfig(IMPORT.name()));
+      commandConfigMap.put(UPSERT.name(), getHdfsParquetImportConfig(UPSERT.name()));
+
+      commandConfigMap.put(COMPACT_RUN.name(), new HoodieCompactorJobConfig());
+      commandConfigMap.put(COMPACT_SCHEDULE.name(), new HoodieCompactorJobConfig());
+
+      commandConfigMap.put(COMPACT_REPAIR.name(), getCompactionConfig(Operation.REPAIR));
+      commandConfigMap.put(COMPACT_VALIDATE.name(), getCompactionConfig(Operation.VALIDATE));
+      commandConfigMap.put(COMPACT_UNSCHEDULE_FILE.name(), getCompactionConfig(Operation.UNSCHEDULE_FILE));
+      commandConfigMap.put(COMPACT_UNSCHEDULE_PLAN.name(), getCompactionConfig(Operation.UNSCHEDULE_PLAN));
+
+      return commandConfigMap;
+    }
+
+    private static HDFSParquetImporterJobConfig getHdfsParquetImportConfig(String command) {
+      HDFSParquetImporterJobConfig cfg = new HDFSParquetImporterJobConfig();
+      cfg.command = command;
+      cfg.sparkMaster = SparkUtil.DEFUALT_SPARK_MASTER;
+      return cfg;
+    }
+
+    private static HoodieCompactionAdminToolJobConfig getCompactionConfig(
+        HoodieCompactionAdminToolJobConfig.Operation operation) {
+      HoodieCompactionAdminToolJobConfig cfg = new HoodieCompactionAdminToolJobConfig();
+      cfg.operation = operation;
+      return cfg;
+    }
   }
 
   public static void main(String[] args) throws Exception {
@@ -49,59 +91,32 @@ public class SparkMain {
     LOG.info("Invoking SparkMain:" + command);
 
     SparkCommand cmd = SparkCommand.valueOf(command);
+    AbstractJobConfig config = AbstractJobConfig.parseJobConfig(args, SparkCommand.getCommandConfigMap());
 
     JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
     int returnCode = 0;
     switch (cmd) {
       case ROLLBACK:
-        assert (args.length == 3);
-        returnCode = rollback(jsc, args[1], args[2]);
+        returnCode = rollback(jsc, (HoodieCommitRollbackJobConfig) config);
         break;
       case DEDUPLICATE:
-        assert (args.length == 4);
-        returnCode = deduplicatePartitionPath(jsc, args[1], args[2], args[3]);
+        returnCode = deduplicatePartitionPath(jsc, (HoodieDeduplicatePartitionJobConfig) config);
         break;
       case ROLLBACK_TO_SAVEPOINT:
-        assert (args.length == 3);
-        returnCode = rollbackToSavepoint(jsc, args[1], args[2]);
+        returnCode = rollbackToSavepoint(jsc, (HoodieRollbackToSavePointJobConfig) config);
         break;
       case IMPORT:
       case UPSERT:
-        assert (args.length == 11);
-        returnCode = dataLoad(jsc, command, args[1], args[2], args[3], args[4], args[5], args[6],
-            Integer.parseInt(args[7]), args[8], SparkUtil.DEFUALT_SPARK_MASTER, args[9], Integer.parseInt(args[10]));
+        returnCode = dataLoad(jsc, (HDFSParquetImporterJobConfig) config);
         break;
       case COMPACT_RUN:
-        assert (args.length == 8);
-        returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]),
-            args[5], args[6], Integer.parseInt(args[7]), false);
-        break;
-      case COMPACT_SCHEDULE:
-        assert (args.length == 5);
-        returnCode = compact(jsc, args[1], args[2], args[3], 1,
-            "", args[4], 0, true);
+        returnCode = compact(jsc, (HoodieCompactorJobConfig) config);
         break;
       case COMPACT_VALIDATE:
-        assert (args.length == 7);
-        doCompactValidate(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6]);
-        returnCode = 0;
-        break;
       case COMPACT_REPAIR:
-        assert (args.length == 8);
-        doCompactRepair(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]));
-        returnCode = 0;
-        break;
       case COMPACT_UNSCHEDULE_FILE:
-        assert (args.length == 9);
-        doCompactUnscheduleFile(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]), Boolean.valueOf(args[8]));
-        returnCode = 0;
-        break;
       case COMPACT_UNSCHEDULE_PLAN:
-        assert (args.length == 9);
-        doCompactUnschedule(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]), Boolean.valueOf(args[8]));
+        doCompactOperation(jsc, (HoodieCompactionAdminToolJobConfig) config);
         returnCode = 0;
         break;
       default:
@@ -110,132 +125,55 @@ public class SparkMain {
     System.exit(returnCode);
   }
 
-  private static int dataLoad(JavaSparkContext jsc, String command,
-      String srcPath, String targetPath, String tableName,
-      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMaster,
-      String sparkMemory, int retry) throws Exception {
-    HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
-    cfg.command = command;
-    cfg.srcPath = srcPath;
-    cfg.targetPath = targetPath;
-    cfg.tableName = tableName;
-    cfg.tableType = tableType;
-    cfg.rowKey = rowKey;
-    cfg.partitionKey = partitionKey;
-    cfg.parallelism = parallelism;
-    cfg.schemaFile = schemaFile;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
-    return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
+  private static int dataLoad(JavaSparkContext jsc, HDFSParquetImporterJobConfig config) throws Exception {
+    HDFSParquetImporterJobConfig cfg = new HDFSParquetImporterJobConfig();
+    return new HDFSParquetImporter(cfg).dataImport(jsc, config.retry);
   }
 
-  private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory) throws Exception {
-    HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
-    cfg.basePath = basePath;
-    cfg.operation = Operation.VALIDATE;
-    cfg.outputPath = outputPath;
-    cfg.compactionInstantTime = compactionInstant;
-    cfg.parallelism = parallelism;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
+  private static void doCompactOperation(JavaSparkContext jsc, HoodieCompactionAdminToolJobConfig config)
+      throws Exception {
+    HoodieCompactionAdminToolJobConfig cfg = new HoodieCompactionAdminToolJobConfig();
+    if ((null != config.sparkMaster) && (!config.sparkMaster.isEmpty())) {
+      jsc.getConf().setMaster(config.sparkMaster);
     }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
+    jsc.getConf().set("spark.executor.memory", config.sparkMemory);
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory, boolean dryRun) throws Exception {
-    HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
-    cfg.basePath = basePath;
-    cfg.operation = Operation.REPAIR;
-    cfg.outputPath = outputPath;
-    cfg.compactionInstantTime = compactionInstant;
-    cfg.parallelism = parallelism;
-    cfg.dryRun = dryRun;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
-    new HoodieCompactionAdminTool(cfg).run(jsc);
+  private static int compact(JavaSparkContext jsc, HoodieCompactorJobConfig config) throws Exception {
+    HoodieCompactorJobConfig cfg = new HoodieCompactorJobConfig();
+    jsc.getConf().set("spark.executor.memory", config.sparkMemory);
+    return new HoodieCompactor(cfg).compact(jsc, config.retry);
   }
 
-  private static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory, boolean skipValidation,
-      boolean dryRun) throws Exception {
-    HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
-    cfg.basePath = basePath;
-    cfg.operation = Operation.UNSCHEDULE_PLAN;
-    cfg.outputPath = outputPath;
-    cfg.compactionInstantTime = compactionInstant;
-    cfg.parallelism = parallelism;
-    cfg.dryRun = dryRun;
-    cfg.skipValidation = skipValidation;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
-    new HoodieCompactionAdminTool(cfg).run(jsc);
-  }
-
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory, boolean skipValidation,
-      boolean dryRun) throws Exception {
-    HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
-    cfg.basePath = basePath;
-    cfg.operation = Operation.UNSCHEDULE_FILE;
-    cfg.outputPath = outputPath;
-    cfg.fileId = fileId;
-    cfg.parallelism = parallelism;
-    cfg.dryRun = dryRun;
-    cfg.skipValidation = skipValidation;
-    if ((null != sparkMaster) && (!sparkMaster.isEmpty())) {
-      jsc.getConf().setMaster(sparkMaster);
-    }
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
-    new HoodieCompactionAdminTool(cfg).run(jsc);
-  }
-
-  private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule) throws Exception {
-    HoodieCompactor.Config cfg = new HoodieCompactor.Config();
-    cfg.basePath = basePath;
-    cfg.tableName = tableName;
-    cfg.compactionInstantTime = compactionInstant;
-    // TODO: Make this configurable along with strategy specific config - For now, this is a generic enough strategy
-    cfg.strategyClassName = UnBoundedCompactionStrategy.class.getCanonicalName();
-    cfg.parallelism = parallelism;
-    cfg.schemaFile = schemaFile;
-    cfg.runSchedule = schedule;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
-    return new HoodieCompactor(cfg).compact(jsc, retry);
-  }
-
-  private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath) throws Exception {
-    DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
-        FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
+  private static int deduplicatePartitionPath(JavaSparkContext jsc,
+      HoodieDeduplicatePartitionJobConfig config) throws Exception {
+    DedupeSparkJob job = new DedupeSparkJob(config.basePath, config.duplicatedPartitionPath, config.repairedOutputPath,
+        new SQLContext(jsc),
+        FSUtils.getFs(config.basePath, jsc.hadoopConfiguration()));
     job.fixDuplicates(true);
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String commitTime, String basePath) throws Exception {
-    HoodieWriteClient client = createHoodieClient(jsc, basePath);
-    if (client.rollback(commitTime)) {
-      LOG.info(String.format("The commit \"%s\" rolled back.", commitTime));
+  private static int rollback(JavaSparkContext jsc, HoodieCommitRollbackJobConfig config) throws Exception {
+    HoodieWriteClient client = createHoodieClient(jsc, config.basePath);
+    if (client.rollback(config.commitTime)) {
+      LOG.info(String.format("The commit \"%s\" rolled back.", config.commitTime));
       return 0;
     } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", commitTime));
+      LOG.info(String.format("The commit \"%s\" failed to roll back.", config.commitTime));
       return -1;
     }
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    HoodieWriteClient client = createHoodieClient(jsc, basePath);
-    if (client.rollbackToSavepoint(savepointTime)) {
-      LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
+  private static int rollbackToSavepoint(JavaSparkContext jsc, HoodieRollbackToSavePointJobConfig config)
+      throws Exception {
+    HoodieWriteClient client = createHoodieClient(jsc, config.basePath);
+    if (client.rollbackToSavepoint(config.savepointTime)) {
+      LOG.info(String.format("The commit \"%s\" rolled back.", config.savepointTime));
       return 0;
     } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", savepointTime));
+      LOG.info(String.format("The commit \"%s\" failed to roll back.", config.savepointTime));
       return -1;
     }
   }

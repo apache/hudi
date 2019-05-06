@@ -1,15 +1,13 @@
 package com.uber.hoodie.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 import com.uber.hoodie.CompactionAdminClient;
 import com.uber.hoodie.CompactionAdminClient.RenameOpResult;
 import com.uber.hoodie.CompactionAdminClient.ValidationOpResult;
 import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.util.List;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -18,24 +16,19 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class HoodieCompactionAdminTool {
 
-  private final Config cfg;
+  private final HoodieCompactionAdminToolJobConfig cfg;
 
-  public HoodieCompactionAdminTool(Config cfg) {
+  public HoodieCompactionAdminTool(HoodieCompactionAdminToolJobConfig cfg) {
     this.cfg = cfg;
   }
 
   /**
    *
-   * @param args
-   * @throws Exception
    */
   public static void main(String[] args) throws Exception {
-    final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    final HoodieCompactionAdminToolJobConfig cfg = new HoodieCompactionAdminToolJobConfig();
+    cfg.parseJobConfig(args, true);
+
     HoodieCompactionAdminTool admin = new HoodieCompactionAdminTool(cfg);
     admin.run(UtilHelpers.buildSparkContext("admin-compactor", cfg.sparkMaster, cfg.sparkMemory));
   }
@@ -104,55 +97,12 @@ public class HoodieCompactionAdminTool {
    * Print Operation Result
    *
    * @param initialLine Initial Line
-   * @param result      Result
+   * @param result Result
    */
   private <T> void printOperationResult(String initialLine, List<T> result) {
     System.out.println(initialLine);
     for (T r : result) {
       System.out.print(r);
     }
-  }
-
-  /**
-   * Operation Types
-   */
-  public enum Operation {
-    VALIDATE,
-    UNSCHEDULE_PLAN,
-    UNSCHEDULE_FILE,
-    REPAIR
-  }
-
-  /**
-   * Admin Configuration Options
-   */
-  public static class Config implements Serializable {
-
-    @Parameter(names = {"--operation", "-op"}, description = "Operation", required = true)
-    public Operation operation = Operation.VALIDATE;
-    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the dataset", required = true)
-    public String basePath = null;
-    @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time", required = false)
-    public String compactionInstantTime = null;
-    @Parameter(names = {"--partition-path", "-pp"}, description = "Partition Path", required = false)
-    public String partitionPath = null;
-    @Parameter(names = {"--file-id", "-id"}, description = "File Id", required = false)
-    public String fileId = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
-    public int parallelism = 3;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = true)
-    public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
-    public String sparkMemory = null;
-    @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode", required = false)
-    public boolean dryRun = false;
-    @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation", required = false)
-    public boolean skipValidation = false;
-    @Parameter(names = {"--output-path", "-ot"}, description = "Output Path", required = false)
-    public String outputPath = null;
-    @Parameter(names = {"--print-output", "-pt"}, description = "Print Output", required = false)
-    public boolean printOutput = true;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
   }
 }

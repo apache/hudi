@@ -26,10 +26,10 @@ import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
-import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.PartitionValueExtractor;
 import com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor;
 import com.uber.hoodie.index.HoodieIndex;
@@ -64,7 +64,7 @@ public class DataSourceUtils {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
-    for (;i < parts.length; i++) {
+    for (; i < parts.length; i++) {
       String part = parts[i];
       Object val = valueNode.get(part);
       if (val == null) {
@@ -102,7 +102,7 @@ public class DataSourceUtils {
   /**
    * Create a partition value extractor class via reflection, passing in any configs needed
    */
-  public static PartitionValueExtractor createPartitionExtractor(String partitionExtractorClass)  {
+  public static PartitionValueExtractor createPartitionExtractor(String partitionExtractorClass) {
     try {
       return (PartitionValueExtractor) ReflectionUtils.loadClass(partitionExtractorClass);
     } catch (Throwable e) {
@@ -196,8 +196,8 @@ public class DataSourceUtils {
 
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
-                                                     JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     Map<String, String> parameters) throws Exception {
+      JavaRDD<HoodieRecord> incomingHoodieRecords,
+      Map<String, String> parameters) throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig
         .newBuilder()
         .withPath(parameters.get("path"))
@@ -205,27 +205,27 @@ public class DataSourceUtils {
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
   }
 
-  public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath) {
+  public static HiveSyncJobConfig buildHiveSyncJobConfig(TypedProperties props, String basePath) {
     checkRequiredProperties(props, Arrays.asList(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY()));
-    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.basePath = basePath;
-    hiveSyncConfig.assumeDatePartitioning =
+    HiveSyncJobConfig hiveSyncJobConfig = new HiveSyncJobConfig();
+    hiveSyncJobConfig.basePath = basePath;
+    hiveSyncJobConfig.assumeDatePartitioning =
         props.getBoolean(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(),
             Boolean.valueOf(DataSourceWriteOptions.DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL()));
-    hiveSyncConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(),
+    hiveSyncJobConfig.databaseName = props.getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_DATABASE_OPT_VAL());
-    hiveSyncConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
-    hiveSyncConfig.hiveUser = props.getString(DataSourceWriteOptions.HIVE_USER_OPT_KEY(),
+    hiveSyncJobConfig.tableName = props.getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
+    hiveSyncJobConfig.hiveUser = props.getString(DataSourceWriteOptions.HIVE_USER_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_USER_OPT_VAL());
-    hiveSyncConfig.hivePass = props.getString(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(),
+    hiveSyncJobConfig.hivePass = props.getString(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_PASS_OPT_VAL());
-    hiveSyncConfig.jdbcUrl = props.getString(DataSourceWriteOptions.HIVE_URL_OPT_KEY(),
+    hiveSyncJobConfig.jdbcUrl = props.getString(DataSourceWriteOptions.HIVE_URL_OPT_KEY(),
         DataSourceWriteOptions.DEFAULT_HIVE_URL_OPT_VAL());
-    hiveSyncConfig.partitionFields =
-        props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), ",",  new ArrayList<>());
-    hiveSyncConfig.partitionValueExtractorClass =
-          props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
-              SlashEncodedDayPartitionValueExtractor.class.getName());
-    return hiveSyncConfig;
+    hiveSyncJobConfig.partitionFields =
+        props.getStringList(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), ",", new ArrayList<>());
+    hiveSyncJobConfig.partitionValueExtractorClass =
+        props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+            SlashEncodedDayPartitionValueExtractor.class.getName());
+    return hiveSyncJobConfig;
   }
 }

@@ -16,17 +16,13 @@
 
 package com.uber.hoodie.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.configs.HoodieCleanerJobConfig;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer;
 import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -40,7 +36,7 @@ public class HoodieCleaner {
   /**
    * Config for Cleaner
    */
-  private final Config cfg;
+  private final HoodieCleanerJobConfig cfg;
 
   /**
    * Filesystem used
@@ -57,7 +53,7 @@ public class HoodieCleaner {
    */
   TypedProperties props;
 
-  public HoodieCleaner(Config cfg, JavaSparkContext jssc) throws IOException {
+  public HoodieCleaner(HoodieCleanerJobConfig cfg, JavaSparkContext jssc) throws IOException {
     this.cfg = cfg;
     this.jssc = jssc;
     this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
@@ -78,35 +74,9 @@ public class HoodieCleaner {
         .withProps(props).build();
   }
 
-  public static class Config implements Serializable {
-
-    @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie dataset to be cleaner.",
-        required = true)
-    public String basePath;
-
-    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "hoodie client for cleaning")
-    public String propsFilePath =
-        "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
-
-    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
-    public List<String> configs = new ArrayList<>();
-
-    @Parameter(names = {"--spark-master"}, description = "spark master to use.")
-    public String sparkMaster = "local[2]";
-
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
-  }
-
   public static void main(String[] args) throws Exception {
-    final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    final HoodieCleanerJobConfig cfg = new HoodieCleanerJobConfig();
+    cfg.parseJobConfig(args, true);
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);

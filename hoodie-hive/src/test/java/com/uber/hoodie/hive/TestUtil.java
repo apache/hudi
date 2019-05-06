@@ -40,6 +40,7 @@ import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
+import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.hive.util.HiveTestService;
 import java.io.File;
 import java.io.IOException;
@@ -76,7 +77,7 @@ public class TestUtil {
   private static ZooKeeperServer zkServer;
   private static HiveServer2 hiveServer;
   private static Configuration configuration;
-  static HiveSyncConfig hiveSyncConfig;
+  static HiveSyncJobConfig hiveSyncJobConfig;
   private static DateTimeFormatter dtfOut;
   static FileSystem fileSystem;
   private static Set<String> createdTablesSet = Sets.newHashSet();
@@ -97,16 +98,16 @@ public class TestUtil {
     }
     fileSystem = FileSystem.get(configuration);
 
-    hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncConfig.databaseName = "hdrone_test";
-    hiveSyncConfig.hiveUser = "";
-    hiveSyncConfig.hivePass = "";
-    hiveSyncConfig.databaseName = "testdb";
-    hiveSyncConfig.tableName = "test1";
-    hiveSyncConfig.basePath = "/tmp/hdfs/HiveSyncToolTest/";
-    hiveSyncConfig.assumeDatePartitioning = true;
-    hiveSyncConfig.partitionFields = Lists.newArrayList("datestr");
+    hiveSyncJobConfig = new HiveSyncJobConfig();
+    hiveSyncJobConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
+    hiveSyncJobConfig.databaseName = "hdrone_test";
+    hiveSyncJobConfig.hiveUser = "";
+    hiveSyncJobConfig.hivePass = "";
+    hiveSyncJobConfig.databaseName = "testdb";
+    hiveSyncJobConfig.tableName = "test1";
+    hiveSyncJobConfig.basePath = "/tmp/hdfs/HiveSyncToolTest/";
+    hiveSyncJobConfig.assumeDatePartitioning = true;
+    hiveSyncJobConfig.partitionFields = Lists.newArrayList("datestr");
 
     dtfOut = DateTimeFormat.forPattern("yyyy/MM/dd");
 
@@ -114,19 +115,19 @@ public class TestUtil {
   }
 
   static void clear() throws IOException {
-    fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
+    fileSystem.delete(new Path(hiveSyncJobConfig.basePath), true);
     HoodieTableMetaClient
-        .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-            hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+        .initTableType(configuration, hiveSyncJobConfig.basePath, HoodieTableType.COPY_ON_WRITE,
+            hiveSyncJobConfig.tableName, HoodieAvroPayload.class.getName());
 
-    HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(),
+    HoodieHiveClient client = new HoodieHiveClient(hiveSyncJobConfig, hiveServer.getHiveConf(),
         fileSystem);
     for (String tableName : createdTablesSet) {
       client.updateHiveSQL("drop table if exists " + tableName);
     }
     createdTablesSet.clear();
-    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
+    client.updateHiveSQL("drop database if exists " + hiveSyncJobConfig.databaseName);
+    client.updateHiveSQL("create database " + hiveSyncJobConfig.databaseName);
   }
 
   static HiveConf getHiveConf() {
@@ -148,35 +149,35 @@ public class TestUtil {
 
   static void createCOWDataset(String commitTime, int numberOfPartitions)
       throws IOException, InitializationError, URISyntaxException, InterruptedException {
-    Path path = new Path(hiveSyncConfig.basePath);
-    FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
+    Path path = new Path(hiveSyncJobConfig.basePath);
+    FileUtils.deleteDirectory(new File(hiveSyncJobConfig.basePath));
     HoodieTableMetaClient
-        .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-            hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+        .initTableType(configuration, hiveSyncJobConfig.basePath, HoodieTableType.COPY_ON_WRITE,
+            hiveSyncJobConfig.tableName, HoodieAvroPayload.class.getName());
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
     DateTime dateTime = DateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true, dateTime,
         commitTime);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createdTablesSet.add(hiveSyncJobConfig.databaseName + "." + hiveSyncJobConfig.tableName);
     createCommitFile(commitMetadata, commitTime);
   }
 
   static void createMORDataset(String commitTime, String deltaCommitTime, int numberOfPartitions)
       throws IOException, InitializationError, URISyntaxException, InterruptedException {
-    Path path = new Path(hiveSyncConfig.basePath);
-    FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
+    Path path = new Path(hiveSyncJobConfig.basePath);
+    FileUtils.deleteDirectory(new File(hiveSyncJobConfig.basePath));
     HoodieTableMetaClient
-        .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
-            hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+        .initTableType(configuration, hiveSyncJobConfig.basePath, HoodieTableType.MERGE_ON_READ,
+            hiveSyncJobConfig.tableName, HoodieAvroPayload.class.getName());
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
     DateTime dateTime = DateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true, dateTime,
         commitTime);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName
+    createdTablesSet.add(hiveSyncJobConfig.databaseName + "." + hiveSyncJobConfig.tableName);
+    createdTablesSet.add(hiveSyncJobConfig.databaseName + "." + hiveSyncJobConfig.tableName
         + HiveSyncTool.SUFFIX_REALTIME_TABLE);
     HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
     commitMetadata.getPartitionToWriteStats().forEach(
@@ -193,7 +194,7 @@ public class TestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions,
         isParquetSchemaSimple, startFrom, commitTime);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createdTablesSet.add(hiveSyncJobConfig.databaseName + "." + hiveSyncJobConfig.tableName);
     createCommitFile(commitMetadata, commitTime);
   }
 
@@ -202,8 +203,8 @@ public class TestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions,
         isParquetSchemaSimple, startFrom, commitTime);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName
+    createdTablesSet.add(hiveSyncJobConfig.databaseName + "." + hiveSyncJobConfig.tableName);
+    createdTablesSet.add(hiveSyncJobConfig.databaseName + "." + hiveSyncJobConfig.tableName
         + HiveSyncTool.SUFFIX_REALTIME_TABLE);
     HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
     commitMetadata.getPartitionToWriteStats().forEach(
@@ -241,7 +242,7 @@ public class TestUtil {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     for (int i = 0; i < numberOfPartitions; i++) {
       String partitionPath = dtfOut.print(startFrom);
-      Path partPath = new Path(hiveSyncConfig.basePath + "/" + partitionPath);
+      Path partPath = new Path(hiveSyncJobConfig.basePath + "/" + partitionPath);
       fileSystem.makeQualified(partPath);
       fileSystem.mkdirs(partPath);
       List<HoodieWriteStat> writeStats = createTestData(partPath, isParquetSchemaSimple,
@@ -326,7 +327,7 @@ public class TestUtil {
       throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
-        hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
+        hiveSyncJobConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeCommitFileName(
                 commitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
@@ -338,7 +339,7 @@ public class TestUtil {
       String commitTime) throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
-        hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
+        hiveSyncJobConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeCommitFileName(
                 commitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
@@ -350,7 +351,7 @@ public class TestUtil {
       String deltaCommitTime) throws IOException {
     byte[] bytes = deltaCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);
     Path fullPath = new Path(
-        hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
+        hiveSyncJobConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline
             .makeDeltaFileName(
                 deltaCommitTime));
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);

@@ -128,11 +128,6 @@
       <groupId>io.dropwizard.metrics</groupId>
       <artifactId>metrics-core</artifactId>
     </dependency>
-    <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-      <version>1.48</version>
-    </dependency>
 
     <!-- Parent dependencies -->
     <dependency>

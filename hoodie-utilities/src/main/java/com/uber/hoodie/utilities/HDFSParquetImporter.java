@@ -16,10 +16,6 @@
 
 package com.uber.hoodie.utilities;
 
-import com.beust.jcommander.IValueValidator;
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import com.beust.jcommander.ParameterException;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
@@ -30,13 +26,12 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.configs.HDFSParquetImporterJobConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import org.apache.avro.Schema;
@@ -60,20 +55,17 @@ public class HDFSParquetImporter implements Serializable {
 
   public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
   private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
-  private final Config cfg;
+  private final HDFSParquetImporterJobConfig cfg;
   private transient FileSystem fs;
 
-  public HDFSParquetImporter(Config cfg) throws IOException {
+  public HDFSParquetImporter(HDFSParquetImporterJobConfig cfg) throws IOException {
     this.cfg = cfg;
   }
 
   public static void main(String[] args) throws Exception {
-    final Config cfg = new Config();
-    JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
-      cmd.usage();
-      System.exit(1);
-    }
+    final HDFSParquetImporterJobConfig cfg = new HDFSParquetImporterJobConfig();
+    cfg.parseJobConfig(args, true);
+
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
     dataImporter
         .dataImport(UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),
@@ -182,10 +174,10 @@ public class HDFSParquetImporter implements Serializable {
   /**
    * Imports records to Hoodie dataset
    *
-   * @param client        Hoodie Client
-   * @param instantTime   Instant Time
+   * @param client Hoodie Client
+   * @param instantTime Instant Time
    * @param hoodieRecords Hoodie Records
-   * @param <T>           Type
+   * @param <T> Type
    */
   protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client,
       String instantTime, JavaRDD<HoodieRecord<T>> hoodieRecords) {
@@ -193,61 +185,5 @@ public class HDFSParquetImporter implements Serializable {
       return client.insert(hoodieRecords, instantTime);
     }
     return client.upsert(hoodieRecords, instantTime);
-  }
-
-  public static class FormatValidator implements IValueValidator<String> {
-
-    List<String> validFormats = Arrays.asList("parquet");
-
-    @Override
-    public void validate(String name, String value) throws ParameterException {
-      if (value == null || !validFormats.contains(value)) {
-        throw new ParameterException(String.format(
-            "Invalid format type: value:%s: supported formats:%s", value, validFormats));
-      }
-    }
-  }
-
-  public static class Config implements Serializable {
-
-    @Parameter(names = {"--command", "-c"},
-        description = "Write command Valid values are insert(default)/upsert",
-        required = false)
-    public String command = "INSERT";
-    @Parameter(names = {"--src-path",
-        "-sp"}, description = "Base path for the input dataset", required = true)
-    public String srcPath = null;
-    @Parameter(names = {"--target-path",
-        "-tp"}, description = "Base path for the target hoodie dataset", required = true)
-    public String targetPath = null;
-    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
-    public String tableName = null;
-    @Parameter(names = {"--table-type", "-tt"}, description = "Table type", required = true)
-    public String tableType = null;
-    @Parameter(names = {"--row-key-field",
-        "-rk"}, description = "Row key field name", required = true)
-    public String rowKey = null;
-    @Parameter(names = {"--partition-key-field",
-        "-pk"}, description = "Partition key field name", required = true)
-    public String partitionKey = null;
-    @Parameter(names = {"--parallelism",
-        "-pl"}, description = "Parallelism for hoodie insert", required = true)
-    public int parallelism = 1;
-    @Parameter(names = {"--schema-file",
-        "-sf"}, description = "path for Avro schema file", required = true)
-    public String schemaFile = null;
-    @Parameter(names = {"--format",
-        "-f"}, description = "Format for the input data.", required = false, validateValueWith =
-        FormatValidator.class)
-    public String format = null;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
-    public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory",
-        "-sm"}, description = "spark memory to use", required = true)
-    public String sparkMemory = null;
-    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
-    public int retry = 0;
-    @Parameter(names = {"--help", "-h"}, help = true)
-    public Boolean help = false;
   }
 }

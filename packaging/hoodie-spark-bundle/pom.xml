@@ -195,10 +195,6 @@
   </build>
 
   <dependencies>
-   <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-   </dependency>
     <dependency>
       <groupId>commons-dbcp</groupId>
       <artifactId>commons-dbcp</artifactId>

@@ -64,7 +64,6 @@
                   <include>com.uber.hoodie:hoodie-hive</include>
                   <include>com.uber.hoodie:hoodie-hadoop-mr</include>
                   <include>com.uber.hoodie:hoodie-timeline-service</include>
-                  <include>com.beust:jcommander</include>
                   <include>com.twitter:bijection-avro_2.11</include>
                   <include>com.twitter:bijection-core_2.11</include>
                   <include>org.apache.parquet:parquet-avro</include>
@@ -384,11 +383,6 @@
       <groupId>org.antlr</groupId>
       <artifactId>stringtemplate</artifactId>
       <version>4.0.2</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
     </dependency>
 
     <dependency>
