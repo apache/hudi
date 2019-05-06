@@ -372,8 +372,7 @@ hoodie-&gt;create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 
 
 <p>To see the description of hudi table, use the command:</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>
-hoodie:hoodie_table_1-&gt;desc
+<div class="highlighter-rouge"><pre class="highlight"><code>hoodie:hoodie_table_1-&gt;desc
 18/09/06 15:57:19 INFO timeline.HoodieActiveTimeline: Loaded instants []
     _________________________________________________________
     | Property                | Value                        |
@@ -384,7 +383,6 @@ hoodie:hoodie_table_1-&gt;desc
     | hoodie.table.name       | hoodie_table_1               |
     | hoodie.table.type       | COPY_ON_WRITE                |
     | hoodie.archivelog.folder|                              |
-
 </code></pre>
 </div>
 
@@ -450,7 +448,6 @@ Each commit has a monotonically increasing string/number called the <strong>comm
     ....
     ....
 hoodie:trips-&gt;
-
 </code></pre>
 </div>
 
@@ -551,7 +548,6 @@ pending compactions.</p>
     |==================================================================|
     | &lt;INSTANT_1&gt;            | REQUESTED| 35                           |
     | &lt;INSTANT_2&gt;            | INFLIGHT | 27                           |
-
 </code></pre>
 </div>
 
@@ -649,8 +645,6 @@ hoodie:stock_ticks_mor-&gt;compaction validate --instant 20181005222601
     | File Id                             | Base Instant Time| Base Data File                                                                                                                   | Num Delta Files| Valid| Error                                                                           |
     |=====================================================================================================================================================================================================================================================================================================|
     | 05320e98-9a57-4c38-b809-a6beaaeb36bd| 20181005222445   | hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | false| All log files specified in compaction operation is not present. Missing ....    |
-
-
 </code></pre>
 </div>
 
@@ -664,39 +658,34 @@ so that are preserved. Hudi provides the following CLI to support it</p>
 
 <h5 id="unscheduling-compaction">UnScheduling Compaction</h5>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>
-hoodie:trips-&gt;compaction unscheduleFileId --fileId &lt;FileUUID&gt;
+<div class="highlighter-rouge"><pre class="highlight"><code>hoodie:trips-&gt;compaction unscheduleFileId --fileId &lt;FileUUID&gt;
 ....
 No File renames needed to unschedule file from pending compaction. Operation successful.
-
 </code></pre>
 </div>
 
-<p>In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
-```</p>
+<p>In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI</p>
 
-<p>hoodie:trips-&gt;compaction unschedule –compactionInstant <compactionInstant>
+<div class="highlighter-rouge"><pre class="highlight"><code>hoodie:trips-&gt;compaction unschedule --compactionInstant &lt;compactionInstant&gt;
 .....
-No File renames needed to unschedule pending compaction. Operation successful.</compactionInstant></p>
-
-<div class="highlighter-rouge"><pre class="highlight"><code>
-##### Repair Compaction
-
-The above compaction unscheduling operations could sometimes fail partially (e:g -&gt; DFS temporarily unavailable). With
-partial failures, the compaction operation could become inconsistent with the state of file-slices. When you run
-`compaction validate`, you can notice invalid compaction operations if there is one.  In these cases, the repair
-command comes to the rescue, it will rearrange the file-slices so that there is no loss and the file-slices are
-consistent with the compaction plan
-
+No File renames needed to unschedule pending compaction. Operation successful.
 </code></pre>
 </div>
 
-<p>hoodie:stock_ticks_mor-&gt;compaction repair –instant 20181005222611
-……
-Compaction successfully repaired
-…..</p>
+<h5 id="repair-compaction">Repair Compaction</h5>
 
-<p>```</p>
+<p>The above compaction unscheduling operations could sometimes fail partially (e:g -&gt; DFS temporarily unavailable). With
+partial failures, the compaction operation could become inconsistent with the state of file-slices. When you run
+<code class="highlighter-rouge">compaction validate</code>, you can notice invalid compaction operations if there is one.  In these cases, the repair
+command comes to the rescue, it will rearrange the file-slices so that there is no loss and the file-slices are
+consistent with the compaction plan</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>hoodie:stock_ticks_mor-&gt;compaction repair --instant 20181005222611
+......
+Compaction successfully repaired
+.....
+</code></pre>
+</div>
 
 <h2 id="metrics">Metrics</h2>
 
