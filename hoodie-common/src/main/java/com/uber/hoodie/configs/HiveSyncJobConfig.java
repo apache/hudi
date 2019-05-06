@@ -16,17 +16,16 @@
  *
  */
 
-package com.uber.hoodie.hive;
+package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Configs needed to sync data into Hive.
  */
-public class HiveSyncConfig implements Serializable {
+public class HiveSyncJobConfig extends AbstractJobConfig {
 
   @Parameter(names = {
       "--database"}, description = "name of the target database in Hive", required = true)
@@ -56,8 +55,7 @@ public class HiveSyncConfig implements Serializable {
       + "PartitionValueExtractor "
       + "to extract the partition "
       + "values from HDFS path")
-  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class
-      .getName();
+  public String partitionValueExtractorClass = "com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor";
 
   @Parameter(names = {
       "--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
@@ -67,12 +65,9 @@ public class HiveSyncConfig implements Serializable {
       + "not set this parameter")
   public Boolean assumeDatePartitioning = false;
 
-  @Parameter(names = {"--help", "-h"}, help = true)
-  public Boolean help = false;
-
   @Override
   public String toString() {
-    return "HiveSyncConfig{"
+    return "HiveSyncJobConfig{"
         + "databaseName='" + databaseName + '\''
         + ", tableName='" + tableName + '\''
         + ", hiveUser='" + hiveUser + '\''
@@ -86,8 +81,8 @@ public class HiveSyncConfig implements Serializable {
         + '}';
   }
 
-  public static HiveSyncConfig copy(HiveSyncConfig cfg) {
-    HiveSyncConfig newConfig = new HiveSyncConfig();
+  public static HiveSyncJobConfig copy(HiveSyncJobConfig cfg) {
+    HiveSyncJobConfig newConfig = new HiveSyncJobConfig();
     newConfig.basePath = cfg.basePath;
     newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
     newConfig.databaseName = cfg.databaseName;
