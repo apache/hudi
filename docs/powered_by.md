@@ -18,6 +18,10 @@ It also powers several incremental Hive ETL pipelines and being currently integr
 
 [EMIS Health][https://www.emishealth.com/] is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
 
+#### Yields.io
+
+Yields.io is the first FinTech platform that uses AI for automated model validation and real-time monitoring on an enterprise-wide scale. Their data lake is managed by Hudi. They are also actively building their infrastructure for incremental, cross language/platform machine learning using Hudi.
+ 
 
 ## Talks & Presentations
 
