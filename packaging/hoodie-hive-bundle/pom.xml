@@ -209,6 +209,15 @@
                   <exclude>org.apache.derby:derby</exclude>
                 </excludes>
               </artifactSet>
+              <filters>
+                <filter>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>
