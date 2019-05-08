@@ -244,17 +244,16 @@ public class KafkaOffsetGen {
           Set<TopicAndPartition> topicPartitions) {
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets =
             CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-    java.util.Set<TopicAndPartition> partitions = checkpointOffsets.keySet();
-    HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> fromOffsets;
-    fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
+    HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> earliestOffsets =
+            new HashMap(ScalaHelpers.toJavaMap(
             cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
-    for (TopicAndPartition partition: partitions) {
-      if (checkpointOffsets.get(partition).offset() < fromOffsets.get(partition).offset()) {
-        log.info("Checkpoint offset is invalid, return earliest offsets.");
-        return fromOffsets;
-      }
-    }
-    return checkpointOffsets;
+
+    boolean checkpointOffsetReseter = checkpointOffsets.entrySet()
+            .stream()
+            .anyMatch(
+                    offset -> offset.getValue().offset() < earliestOffsets.get(offset.getKey()).offset()
+            );
+    return checkpointOffsetReseter? earliestOffsets:checkpointOffsets;
   }
 
 
