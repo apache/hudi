@@ -250,10 +250,9 @@ public class KafkaOffsetGen {
 
     boolean checkpointOffsetReseter = checkpointOffsets.entrySet()
             .stream()
-            .anyMatch(
-                    offset -> offset.getValue().offset() < earliestOffsets.get(offset.getKey()).offset()
-            );
-    return checkpointOffsetReseter? earliestOffsets:checkpointOffsets;
+            .anyMatch(offset -> offset.getValue().offset()
+                    < earliestOffsets.get(offset.getKey()).offset());
+    return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
   }
 
 
