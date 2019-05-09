@@ -39,9 +39,9 @@ import com.uber.hoodie.exception.MetadataNotFoundException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -151,53 +151,53 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
     // Step 3: Obtain a RDD, for each incoming record, that already exists, with the file id,
     // that contains it.
-    int parallelism = autoComputeParallelism(recordsPerPartition, partitionToFileInfo,
+    Map<String, Long> comparisonsPerFileGroup = computeComparisonsPerFileGroup(recordsPerPartition, partitionToFileInfo,
         partitionRecordKeyPairRDD);
-    return findMatchingFilesForRecordKeys(partitionToFileInfo,
-        partitionRecordKeyPairRDD, parallelism, hoodieTable.getMetaClient());
+    int safeParallelism = computeSafeParallelism(recordsPerPartition, comparisonsPerFileGroup);
+    int joinParallelism = determineParallelism(partitionRecordKeyPairRDD.partitions().size(), safeParallelism);
+    return findMatchingFilesForRecordKeys(partitionToFileInfo, partitionRecordKeyPairRDD, joinParallelism,
+        hoodieTable.getMetaClient(), comparisonsPerFileGroup);
   }
 
   /**
-   * The index lookup can be skewed in three dimensions : #files, #partitions, #records <p> To be able to smoothly
-   * handle skews, we need to compute how to split each partitions into subpartitions. We do it here, in a way that
-   * keeps the amount of each Spark join partition to < 2GB. <p> If
-   * {@link com.uber.hoodie.config.HoodieIndexConfig#BLOOM_INDEX_PARALLELISM_PROP}
-   * is specified as a NON-zero number, then that is used explicitly.
+   * Compute the estimated number of bloom filter comparisons to be performed on each file group
    */
-  private int autoComputeParallelism(final Map<String, Long> recordsPerPartition,
+  private Map<String, Long> computeComparisonsPerFileGroup(final Map<String, Long> recordsPerPartition,
       final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
 
-    long totalComparisons = 0;
+    Map<String, Long> fileToComparisons;
     if (config.getBloomIndexPruneByRanges()) {
       // we will just try exploding the input and then count to determine comparisons
-      totalComparisons = explodeRecordRDDWithFileComparisons(partitionToFileInfo,
-          partitionRecordKeyPairRDD).count();
+      // FIX(vc): Only do sampling here and extrapolate?
+      fileToComparisons = explodeRecordRDDWithFileComparisons(partitionToFileInfo,
+          partitionRecordKeyPairRDD).mapToPair(t -> t._2()).countByKey();
     } else {
-      // if not pruning by ranges, then each file in a partition needs to compared against all
-      // records for a partition.
-      Map<String, Long> filesPerPartition = partitionToFileInfo.entrySet().stream()
-          .collect(Collectors.toMap(Map.Entry::getKey, e -> Long.valueOf(e.getValue().size())));
-      long totalFiles = 0;
-      long totalRecords = 0;
-      for (String partitionPath : recordsPerPartition.keySet()) {
-        long numRecords = recordsPerPartition.get(partitionPath);
-        long numFiles =
-                filesPerPartition.getOrDefault(partitionPath, 1L);
-
-        totalComparisons += numFiles * numRecords;
-        totalFiles +=
-                filesPerPartition.getOrDefault(partitionPath, 0L);
-        totalRecords += numRecords;
-      }
-      logger.info("TotalRecords: " + totalRecords + ", TotalFiles: " + totalFiles
-          + ", TotalAffectedPartitions:" + recordsPerPartition.size());
+      fileToComparisons = new HashMap<>();
+      partitionToFileInfo.entrySet().stream().forEach(e -> {
+        for (BloomIndexFileInfo fileInfo : e.getValue()) {
+          //each file needs to be compared against all the records coming into the partition
+          fileToComparisons.put(fileInfo.getFileName(), recordsPerPartition.get(e.getKey()));
+        }
+      });
     }
+    return fileToComparisons;
+  }
 
-    // each partition will have an item per comparison.
+  /**
+   * Compute the minimum parallelism needed to play well with the spark 2GB limitation.. The index lookup can be skewed
+   * in three dimensions : #files, #partitions, #records <p> To be able to smoothly handle skews, we need to compute how
+   * to split each partitions into subpartitions. We do it here, in a way that keeps the amount of each Spark join
+   * partition to < 2GB. <p> If {@link com.uber.hoodie.config.HoodieIndexConfig#BLOOM_INDEX_PARALLELISM_PROP} is
+   * specified as a NON-zero number, then that is used explicitly.
+   */
+  int computeSafeParallelism(Map<String, Long> recordsPerPartition, Map<String, Long> comparisonsPerFileGroup) {
+    long totalComparisons = comparisonsPerFileGroup.values().stream().mapToLong(Long::longValue).sum();
+    long totalFiles = comparisonsPerFileGroup.size();
+    long totalRecords = recordsPerPartition.values().stream().mapToLong(Long::longValue).sum();
     int parallelism = (int) (totalComparisons / MAX_ITEMS_PER_SHUFFLE_PARTITION + 1);
-    logger.info(
-        "Auto computed parallelism :" + parallelism + ", totalComparisons: " + totalComparisons);
+    logger.info(String.format("TotalRecords %d, TotalFiles %d, TotalAffectedPartitions %d, TotalComparisons %d, "
+        + "SafeParallelism %d", totalRecords, totalFiles, recordsPerPartition.size(), totalComparisons, parallelism));
     return parallelism;
   }
 
@@ -329,18 +329,19 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   @VisibleForTesting
   JavaPairRDD<String, String> findMatchingFilesForRecordKeys(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      JavaPairRDD<String, String> partitionRecordKeyPairRDD, int totalSubpartitions, HoodieTableMetaClient metaClient) {
-
-    int joinParallelism = determineParallelism(partitionRecordKeyPairRDD.partitions().size(),
-        totalSubpartitions);
-
+      JavaPairRDD<String, String> partitionRecordKeyPairRDD, int shuffleParallelism, HoodieTableMetaClient metaClient,
+      Map<String, Long> fileGroupToComparisons) {
     JavaPairRDD<String, Tuple2<String, HoodieKey>> fileSortedTripletRDD =
-        explodeRecordRDDWithFileComparisons(
-            partitionToFileIndexInfo, partitionRecordKeyPairRDD)
-            // sort further based on filename, such that all checking for the file can happen within
-            // a single partition, on-the-fly
-            .sortByKey(true, joinParallelism);
-
+        explodeRecordRDDWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyPairRDD);
+    if (config.useBloomIndexBucketizedChecking()) {
+      BucketizedBloomCheckPartitioner partitioner = new BucketizedBloomCheckPartitioner(shuffleParallelism,
+          fileGroupToComparisons, config.getBloomIndexKeysPerBucket());
+      fileSortedTripletRDD = fileSortedTripletRDD.repartitionAndSortWithinPartitions(partitioner);
+    } else {
+      // sort further based on filename, such that all checking for the file can happen within
+      // a single partition, on-the-fly
+      fileSortedTripletRDD = fileSortedTripletRDD.sortByKey(true, shuffleParallelism);
+    }
     return fileSortedTripletRDD.mapPartitionsWithIndex(
         new HoodieBloomIndexCheckFunction(metaClient, config.getBasePath()), true)
         .flatMap(List::iterator)
