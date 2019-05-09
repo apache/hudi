@@ -47,6 +47,15 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
   public static final String BLOOM_INDEX_TREE_BASED_FILTER_PROP = "hoodie.bloom.index.use.treebased.filter";
   public static final String DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER = "true";
+  // TODO: On by default. Once stable, we will remove the other mode.
+  public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = "hoodie.bloom.index.bucketized.checking";
+  public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
+  // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
+  // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
+  public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";
+  public static final String DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET = "10000000";
+
+
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL =
       "hoodie.bloom.index.input.storage" + ".level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
@@ -118,6 +127,16 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder bloomIndexBucketizedChecking(boolean bucketizedChecking) {
+      props.setProperty(BLOOM_INDEX_BUCKETIZED_CHECKING_PROP, String.valueOf(bucketizedChecking));
+      return this;
+    }
+
+    public Builder bloomIndexKeysPerBucket(int keysPerBucket) {
+      props.setProperty(BLOOM_INDEX_KEYS_PER_BUCKET_PROP, String.valueOf(keysPerBucket));
+      return this;
+    }
+
     public Builder withBloomIndexInputStorageLevel(String level) {
       props.setProperty(BLOOM_INDEX_INPUT_STORAGE_LEVEL, level);
       return this;
@@ -141,6 +160,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_INPUT_STORAGE_LEVEL, DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_TREE_BASED_FILTER_PROP),
           BLOOM_INDEX_TREE_BASED_FILTER_PROP, DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_BUCKETIZED_CHECKING_PROP),
+          BLOOM_INDEX_BUCKETIZED_CHECKING_PROP, DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_KEYS_PER_BUCKET_PROP),
+          BLOOM_INDEX_KEYS_PER_BUCKET_PROP, DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;
