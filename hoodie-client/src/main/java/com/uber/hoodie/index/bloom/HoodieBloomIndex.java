@@ -34,6 +34,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.MetadataNotFoundException;
 import com.uber.hoodie.index.HoodieIndex;
@@ -42,9 +43,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -171,7 +175,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       // we will just try exploding the input and then count to determine comparisons
       // FIX(vc): Only do sampling here and extrapolate?
       fileToComparisons = explodeRecordRDDWithFileComparisons(partitionToFileInfo,
-          partitionRecordKeyPairRDD).mapToPair(t -> t._2()).countByKey();
+          partitionRecordKeyPairRDD).mapToPair(t -> t).countByKey();
     } else {
       fileToComparisons = new HashMap<>();
       partitionToFileInfo.entrySet().stream().forEach(e -> {
@@ -290,8 +294,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     return true;
   }
 
-
-
   /**
    * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
    * checked. For datasets, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
@@ -301,24 +303,21 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * recordKey ranges in the index info.
    */
   @VisibleForTesting
-  JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
+  JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
     IndexFileFilter indexFileFilter = config.useBloomIndexTreebasedFilter()
         ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
         : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
+
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
       String recordKey = partitionRecordKeyPair._2();
       String partitionPath = partitionRecordKeyPair._1();
-      List<Tuple2<String, Tuple2<String, HoodieKey>>> recordComparisons = new ArrayList<>();
-      indexFileFilter.getMatchingFiles(partitionPath, recordKey).forEach(matchingFile -> {
-        recordComparisons.add(
-            new Tuple2<>(String.format("%s#%s", matchingFile, recordKey),
-                new Tuple2<>(matchingFile,
-                    new HoodieKey(recordKey, partitionPath))));
-      });
-      return recordComparisons;
-    }).flatMapToPair(List::iterator);
+
+      return indexFileFilter.getMatchingFiles(partitionPath, recordKey).stream()
+          .map(matchingFile -> new Tuple2<>(matchingFile, new HoodieKey(recordKey, partitionPath)))
+          .collect(Collectors.toList());
+    }).flatMap(List::iterator);
   }
 
   /**
@@ -332,28 +331,32 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD, int shuffleParallelism, HoodieTableMetaClient metaClient,
       Map<String, Long> fileGroupToComparisons) {
-    JavaPairRDD<String, Tuple2<String, HoodieKey>> fileSortedTripletRDD =
+    JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD =
         explodeRecordRDDWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyPairRDD);
+
     if (config.useBloomIndexBucketizedChecking()) {
-      BucketizedBloomCheckPartitioner partitioner = new BucketizedBloomCheckPartitioner(shuffleParallelism,
-          fileGroupToComparisons, config.getBloomIndexKeysPerBucket());
-      fileSortedTripletRDD = fileSortedTripletRDD.repartitionAndSortWithinPartitions(partitioner);
+      Partitioner partitioner = new BucketizedBloomCheckPartitioner(
+          shuffleParallelism,
+          fileGroupToComparisons,
+          config.getBloomIndexKeysPerBucket()
+      );
+
+      fileComparisonsRDD = fileComparisonsRDD
+          .mapToPair(t -> new Tuple2<>(Pair.of(t._1, t._2.getRecordKey()), t))
+          .repartitionAndSortWithinPartitions(partitioner)
+          .map(Tuple2::_2);
     } else {
-      // sort further based on filename, such that all checking for the file can happen within
-      // a single partition, on-the-fly
-      fileSortedTripletRDD = fileSortedTripletRDD.sortByKey(true, shuffleParallelism);
+      fileComparisonsRDD = fileComparisonsRDD.sortBy(Tuple2::_1, true, shuffleParallelism);
     }
-    return fileSortedTripletRDD.mapPartitionsWithIndex(
-        new HoodieBloomIndexCheckFunction(metaClient, config.getBasePath()), true)
+
+    return fileComparisonsRDD
+        .mapPartitionsWithIndex(new HoodieBloomIndexCheckFunction(metaClient, config.getBasePath()), true)
         .flatMap(List::iterator)
-        .filter(lookupResult -> lookupResult.getMatchingRecordKeys().size() > 0)
-        .flatMapToPair(lookupResult -> {
-          List<Tuple2<String, String>> vals = new ArrayList<>();
-          for (String recordKey : lookupResult.getMatchingRecordKeys()) {
-            vals.add(new Tuple2<>(recordKey, lookupResult.getFileName()));
-          }
-          return vals.iterator();
-        });
+        .filter(lr -> lr.getMatchingRecordKeys().size() > 0)
+        .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeys().stream()
+            .map(recordKey -> new Tuple2<>(recordKey, lookupResult.getFileName()))
+            .collect(Collectors.toList())
+            .iterator());
   }
 
   /**
