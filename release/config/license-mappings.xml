@@ -25,16 +25,31 @@
         <artifactId>servlet-api</artifactId>
         <license>CDDL</license>
     </artifact>
-    <artifact>
-        <groupId>javax.servlet.jsp</groupId>
-        <artifactId>jsp-api</artifactId>
-        <license>CDDL</license>
-    </artifact>
-    <artifact>
-        <groupId>javax.transaction</groupId>
-        <artifactId>jta</artifactId>
-        <license>OWN LICENSE (See http://download.oracle.com/otndocs/jcp/jta-1.1-classes-oth-JSpec/jta-1.1-classes-oth-JSpec-license.html)</license>
-    </artifact>
+  <artifact>
+    <groupId>javax.servlet</groupId>
+    <artifactId>jsp-api</artifactId>
+    <license>CDDL</license>
+  </artifact>
+  <artifact>
+    <groupId>javax.xml.stream</groupId>
+    <artifactId>stax-api</artifactId>
+    <license>CDDL</license>
+  </artifact>
+  <artifact>
+      <groupId>javax.servlet.jsp</groupId>
+      <artifactId>jsp-api</artifactId>
+      <license>CDDL</license>
+  </artifact>
+  <artifact>
+      <groupId>javax.transaction</groupId>
+      <artifactId>jta</artifactId>
+      <license>OWN LICENSE (See http://download.oracle.com/otndocs/jcp/jta-1.1-classes-oth-JSpec/jta-1.1-classes-oth-JSpec-license.html)</license>
+  </artifact>
+  <artifact>
+    <groupId>javax.transaction</groupId>
+    <artifactId>transaction-api</artifactId>
+    <license>OWN LICENSE (See http://download.oracle.com/otndocs/jcp/jta-1.1-classes-oth-JSpec/jta-1.1-classes-oth-JSpec-license.html)</license>
+  </artifact>
     <artifact>
         <groupId>jdk.tools</groupId>
         <artifactId>jdk.tools</artifactId>
@@ -90,4 +105,9 @@
         <artifactId>antlr-runtime</artifactId>
         <license>BSD</license>
     </artifact>
+  <artifact>
+    <groupId>xerces</groupId>
+    <artifactId>xercesImpl</artifactId>
+    <license>Apache License, Version 1.1</license>
+  </artifact>
 </license-lookup>
