@@ -48,11 +48,11 @@ public class HoodieCompactionAdminToolJobConfig extends AbstractJobConfig {
   public String sparkMaster = null;
   @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
   public String sparkMemory = null;
-  @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode", required = false)
+  @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode", required = false, arity = 1)
   public boolean dryRun = false;
-  @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation", required = false)
+  @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation", required = false, arity = 1)
   public boolean skipValidation = false;
-  @Parameter(names = {"--output-path", "-ot"}, description = "Output Path", required = false)
+  @Parameter(names = {"--output-path", "-ot"}, description = "Output Path", required = false, arity = 1)
   public String outputPath = null;
   @Parameter(names = {"--print-output", "-pt"}, description = "Print Output", required = false)
   public boolean printOutput = true;

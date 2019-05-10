@@ -34,6 +34,9 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
+import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig;
+import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig.Operation;
+import com.uber.hoodie.configs.HoodieCompactorJobConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -63,9 +66,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class CompactionCommand implements CommandMarker {
 
+  private static final String TMP_DIR = "/tmp/";
   private static Logger log = LogManager.getLogger(CompactionCommand.class);
 
-  private static final String TMP_DIR = "/tmp/";
+  private static String getTmpSerializerFile() {
+    return TMP_DIR + UUID.randomUUID().toString() + ".ser";
+  }
 
   @CliAvailabilityIndicator({"compactions show all", "compaction show", "compaction run", "compaction schedule"})
   public boolean isAvailable() {
@@ -193,8 +199,18 @@ public class CompactionCommand implements CommandMarker {
       String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
           scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE.toString(), HoodieCLI.tableMetadata.getBasePath(),
-          HoodieCLI.tableMetadata.getTableConfig().getTableName(), compactionInstantTime, sparkMemory);
+
+      HoodieCompactorJobConfig config = new HoodieCompactorJobConfig();
+      config.basePath = HoodieCLI.tableMetadata.getBasePath();
+      config.tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
+      config.compactionInstantTime = compactionInstantTime;
+      //should be either from cli option or default value will be ""
+      config.schemaFile = "";
+      config.sparkMemory = sparkMemory;
+      config.runSchedule = true;
+      String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.COMPACT_SCHEDULE.toString());
+
+      sparkLauncher.addAppArgs(jobConfig);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
@@ -209,16 +225,18 @@ public class CompactionCommand implements CommandMarker {
 
   @CliCommand(value = "compaction run", help = "Run Compaction for given instant time")
   public String compact(
-      @CliOption(key = {"parallelism"}, mandatory = true, help = "Parallelism for hoodie compaction")
-      final String parallelism,
-      @CliOption(key = "schemaFilePath", mandatory = true, help = "Path for Avro schema file")
-      final String schemaFilePath,
-      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G", help = "Spark executor memory")
-      final String sparkMemory,
-      @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries")
-      final String retry,
-      @CliOption(key = "compactionInstant", mandatory = true, help = "Base path for the target hoodie dataset")
-      final String compactionInstantTime) throws Exception {
+      @CliOption(key = {
+          "parallelism"}, mandatory = true, help = "Parallelism for hoodie compaction") final String parallelism,
+      @CliOption(key =
+          "schemaFilePath", mandatory = true, help = "Path for Avro schema file") final String schemaFilePath,
+      @CliOption(key =
+          "sparkMemory", unspecifiedDefaultValue = "4G", help = "Spark executor memory") final String sparkMemory,
+      @CliOption(key =
+          "retry", unspecifiedDefaultValue = "1", help = "Number of retries") final String retry,
+      @CliOption(key =
+          "compactionInstant", mandatory = true, help = "Base path for the target hoodie dataset")
+          final String compactionInstantTime)
+      throws Exception {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -226,9 +244,18 @@ public class CompactionCommand implements CommandMarker {
       String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
           scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), HoodieCLI.tableMetadata.getBasePath(),
-          HoodieCLI.tableMetadata.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
-          sparkMemory, retry);
+
+      HoodieCompactorJobConfig config = new HoodieCompactorJobConfig();
+      config.basePath = HoodieCLI.tableMetadata.getBasePath();
+      config.tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
+      config.compactionInstantTime = compactionInstantTime;
+      config.parallelism = Integer.parseInt(parallelism);
+      config.schemaFile = schemaFilePath;
+      config.sparkMemory = sparkMemory;
+      config.retry = Integer.parseInt(retry);
+      String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.COMPACT_RUN.toString());
+
+      sparkLauncher.addAppArgs(jobConfig);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
       int exitCode = process.waitFor();
@@ -239,10 +266,6 @@ public class CompactionCommand implements CommandMarker {
     } else {
       throw new Exception("Compactions can only be run for table type : MERGE_ON_READ");
     }
-  }
-
-  private static String getTmpSerializerFile() {
-    return TMP_DIR + UUID.randomUUID().toString() + ".ser";
   }
 
   private <T> T deSerializeOperationResult(String inputP, FileSystem fs) throws Exception {
@@ -282,9 +305,18 @@ public class CompactionCommand implements CommandMarker {
         String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
             scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-        sparkLauncher.addAppArgs(SparkCommand.COMPACT_VALIDATE.toString(),
-            HoodieCLI.tableMetadata.getBasePath(), compactionInstant, outputPathStr, parallelism, master,
-            sparkMemory);
+
+        HoodieCompactionAdminToolJobConfig config = new HoodieCompactionAdminToolJobConfig();
+        config.basePath = HoodieCLI.tableMetadata.getBasePath();
+        config.operation = Operation.VALIDATE;
+        config.compactionInstantTime = compactionInstant;
+        config.outputPath = outputPathStr;
+        config.parallelism = Integer.parseInt(parallelism);
+        config.sparkMaster = master;
+        config.sparkMemory = sparkMemory;
+        String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.COMPACT_VALIDATE.toString());
+
+        sparkLauncher.addAppArgs(jobConfig);
         Process process = sparkLauncher.launch();
         InputStreamConsumer.captureOutput(process);
         int exitCode = process.waitFor();
@@ -352,9 +384,20 @@ public class CompactionCommand implements CommandMarker {
         String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
             scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-        sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_PLAN.toString(),
-            HoodieCLI.tableMetadata.getBasePath(), compactionInstant, outputPathStr, parallelism, master,
-            sparkMemory, Boolean.valueOf(skipV).toString(), Boolean.valueOf(dryRun).toString());
+
+        HoodieCompactionAdminToolJobConfig config = new HoodieCompactionAdminToolJobConfig();
+        config.basePath = HoodieCLI.tableMetadata.getBasePath();
+        config.operation = Operation.UNSCHEDULE_PLAN;
+        config.compactionInstantTime = compactionInstant;
+        config.outputPath = outputPathStr;
+        config.parallelism = Integer.parseInt(parallelism);
+        config.sparkMaster = master;
+        config.sparkMemory = sparkMemory;
+        config.skipValidation = skipV;
+        config.dryRun = dryRun;
+        String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.COMPACT_UNSCHEDULE_PLAN.toString());
+
+        sparkLauncher.addAppArgs(jobConfig);
         Process process = sparkLauncher.launch();
         InputStreamConsumer.captureOutput(process);
         int exitCode = process.waitFor();
@@ -399,9 +442,20 @@ public class CompactionCommand implements CommandMarker {
         String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
             scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-        sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_FILE.toString(),
-            HoodieCLI.tableMetadata.getBasePath(), fileId, outputPathStr, "1", master,
-            sparkMemory, Boolean.valueOf(skipV).toString(), Boolean.valueOf(dryRun).toString());
+
+        HoodieCompactionAdminToolJobConfig config = new HoodieCompactionAdminToolJobConfig();
+        config.basePath = HoodieCLI.tableMetadata.getBasePath();
+        config.operation = Operation.UNSCHEDULE_FILE;
+        config.outputPath = outputPathStr;
+        config.fileId = fileId;
+        config.parallelism = 1;
+        config.sparkMaster = master;
+        config.sparkMemory = sparkMemory;
+        config.skipValidation = skipV;
+        config.dryRun = dryRun;
+        String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.COMPACT_UNSCHEDULE_FILE.toString());
+
+        sparkLauncher.addAppArgs(jobConfig);
         Process process = sparkLauncher.launch();
         InputStreamConsumer.captureOutput(process);
         int exitCode = process.waitFor();
@@ -447,9 +501,19 @@ public class CompactionCommand implements CommandMarker {
         String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
             scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
         SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-        sparkLauncher.addAppArgs(SparkCommand.COMPACT_REPAIR.toString(),
-            HoodieCLI.tableMetadata.getBasePath(), compactionInstant, outputPathStr, parallelism, master,
-            sparkMemory, Boolean.valueOf(dryRun).toString());
+
+        HoodieCompactionAdminToolJobConfig config = new HoodieCompactionAdminToolJobConfig();
+        config.basePath = HoodieCLI.tableMetadata.getBasePath();
+        config.operation = Operation.REPAIR;
+        config.outputPath = outputPathStr;
+        config.compactionInstantTime = compactionInstant;
+        config.parallelism = Integer.parseInt(parallelism);
+        config.sparkMaster = master;
+        config.sparkMemory = sparkMemory;
+        config.dryRun = dryRun;
+        String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.COMPACT_REPAIR.toString());
+
+        sparkLauncher.addAppArgs(jobConfig);
         Process process = sparkLauncher.launch();
         InputStreamConsumer.captureOutput(process);
         int exitCode = process.waitFor();

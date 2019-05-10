@@ -43,7 +43,7 @@ public class HoodieCompactorJobConfig extends AbstractJobConfig {
   public String sparkMemory = null;
   @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
   public int retry = 0;
-  @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
+  @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false, arity = 1)
   public Boolean runSchedule = false;
   @Parameter(names = {"--strategy", "-st"}, description = "Stratgey Class", required = false)
   public String strategyClassName = "com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy";

@@ -70,8 +70,21 @@ public class HDFSParquetImportCommand implements CommandMarker {
       cmd = SparkCommand.UPSERT.toString();
     }
 
-    sparkLauncher.addAppArgs(cmd, srcPath, targetPath, tableName, tableType, rowKeyField,
-        partitionPathField, parallelism, schemaFilePath, sparkMemory, retry);
+    HDFSParquetImporterJobConfig config = new HDFSParquetImporterJobConfig();
+    config.command = cmd;
+    config.srcPath = srcPath;
+    config.targetPath = targetPath;
+    config.tableName = tableName;
+    config.tableType = tableType;
+    config.rowKey = rowKeyField;
+    config.partitionKey = partitionPathField;
+    config.parallelism = Integer.parseInt(parallelism);
+    config.schemaFile = schemaFilePath;
+    config.sparkMemory = sparkMemory;
+    config.retry = Integer.parseInt(retry);
+    String[] jobConfig = config.getJobConfigsAsCommandOption(cmd);
+
+    sparkLauncher.addAppArgs(jobConfig);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

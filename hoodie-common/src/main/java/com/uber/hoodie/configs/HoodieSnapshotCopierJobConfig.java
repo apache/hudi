@@ -31,6 +31,6 @@ public class HoodieSnapshotCopierJobConfig extends AbstractJobConfig {
   public String outputPath = null;
 
   @Parameter(names = {"--date-partitioned",
-      "-dp"}, description = "Can we assume date partitioning?")
+      "-dp"}, description = "Can we assume date partitioning?", arity = 1)
   public boolean shouldAssumeDatePartitioning = false;
 }

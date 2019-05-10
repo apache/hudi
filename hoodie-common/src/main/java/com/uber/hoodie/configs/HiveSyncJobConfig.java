@@ -62,24 +62,8 @@ public class HiveSyncJobConfig extends AbstractJobConfig {
       + " exists to support "
       + "backward compatibility. If"
       + " you use hoodie 0.3.x, do "
-      + "not set this parameter")
+      + "not set this parameter", arity = 1)
   public Boolean assumeDatePartitioning = false;
-
-  @Override
-  public String toString() {
-    return "HiveSyncJobConfig{"
-        + "databaseName='" + databaseName + '\''
-        + ", tableName='" + tableName + '\''
-        + ", hiveUser='" + hiveUser + '\''
-        + ", hivePass='" + hivePass + '\''
-        + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", basePath='" + basePath + '\''
-        + ", partitionFields=" + partitionFields
-        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-        + ", assumeDatePartitioning=" + assumeDatePartitioning
-        + ", help=" + help
-        + '}';
-  }
 
   public static HiveSyncJobConfig copy(HiveSyncJobConfig cfg) {
     HiveSyncJobConfig newConfig = new HiveSyncJobConfig();
