@@ -20,6 +20,7 @@ package com.uber.hoodie.hadoop;
 
 import java.io.IOException;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.RecordReader;
 
@@ -31,10 +32,10 @@ import org.apache.hadoop.mapred.RecordReader;
  * another thread, we need to ensure new instance of ArrayWritable is buffered. ParquetReader createKey/Value is unsafe
  * as it gets reused for subsequent fetch. This wrapper makes ParquetReader safe for this use-case.
  */
-public class SafeParquetRecordReaderWrapper implements RecordReader<Void, ArrayWritable> {
+public class SafeParquetRecordReaderWrapper implements RecordReader<NullWritable, ArrayWritable> {
 
   // real Parquet reader to be wrapped
-  private final RecordReader<Void, ArrayWritable> parquetReader;
+  private final RecordReader<NullWritable, ArrayWritable> parquetReader;
 
   // Value Class
   private final Class valueClass;
@@ -43,7 +44,7 @@ public class SafeParquetRecordReaderWrapper implements RecordReader<Void, ArrayW
   private final int numValueFields;
 
 
-  public SafeParquetRecordReaderWrapper(RecordReader<Void, ArrayWritable> parquetReader) {
+  public SafeParquetRecordReaderWrapper(RecordReader<NullWritable, ArrayWritable> parquetReader) {
     this.parquetReader = parquetReader;
     ArrayWritable arrayWritable = parquetReader.createValue();
     this.valueClass = arrayWritable.getValueClass();
@@ -51,12 +52,12 @@ public class SafeParquetRecordReaderWrapper implements RecordReader<Void, ArrayW
   }
 
   @Override
-  public boolean next(Void key, ArrayWritable value) throws IOException {
+  public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     return parquetReader.next(key, value);
   }
 
   @Override
-  public Void createKey() {
+  public NullWritable createKey() {
     return parquetReader.createKey();
   }
 

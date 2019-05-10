@@ -119,4 +119,14 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   public void remove() {
   }
 
+  @Override
+  public boolean hasPrev() {
+    return this.currentReader.hasPrev();
+  }
+
+  @Override
+  public HoodieLogBlock prev() throws IOException {
+    return this.currentReader.prev();
+  }
+
 }

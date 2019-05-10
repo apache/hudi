@@ -310,8 +310,6 @@ public abstract class AbstractHoodieLogRecordScanner {
           processAvroDataBlock((HoodieAvroDataBlock) lastBlock);
           break;
         case DELETE_BLOCK:
-          // TODO : If delete is the only block written and/or records are present in parquet file
-          // TODO : Mark as tombstone (optional.empty()) for data instead of deleting the entry
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);
           break;
         case CORRUPT_BLOCK:

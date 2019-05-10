@@ -81,6 +81,19 @@ public interface HoodieLogFormat {
      * @return the path to this {@link HoodieLogFormat}
      */
     HoodieLogFile getLogFile();
+
+    /**
+     * Read log file in reverse order and check if prev block is present
+     * @return
+     */
+    public boolean hasPrev();
+
+    /**
+     * Read log file in reverse order and return prev block if present
+     * @return
+     * @throws IOException
+     */
+    public HoodieLogBlock prev() throws IOException;
   }
 
 
@@ -244,6 +257,13 @@ public interface HoodieLogFormat {
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
     return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, false);
+  }
+
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean
+      readBlockLazily, boolean reverseReader)
+      throws IOException {
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE,
+        readBlockLazily, reverseReader);
   }
 
   /**
