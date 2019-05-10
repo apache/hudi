@@ -19,12 +19,14 @@ package com.uber.hoodie.index.bloom;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.Hashing;
+import com.uber.hoodie.common.util.collection.Pair;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -139,11 +141,10 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
   @Override
   public int getPartition(Object key) {
-    String[] parts = ((String) key).split("#");
-    String fileName = parts[0];
-    final long hashOfKey = Hashing.md5().hashString(parts[1], StandardCharsets.UTF_8).asLong();
-    List<Integer> candidatePartitions = fileGroupToPartitions.get(fileName);
-    int idx = (int) Math.floorMod(hashOfKey, candidatePartitions.size());
+    final Pair<String, String> parts = (Pair<String, String>) key;
+    final long hashOfKey = Hashing.md5().hashString(parts.getRight(), StandardCharsets.UTF_8).asLong();
+    final List<Integer> candidatePartitions = fileGroupToPartitions.get(parts.getLeft());
+    final int idx = (int) Math.floorMod(hashOfKey, candidatePartitions.size());
     assert idx >= 0;
     return candidatePartitions.get(idx);
   }

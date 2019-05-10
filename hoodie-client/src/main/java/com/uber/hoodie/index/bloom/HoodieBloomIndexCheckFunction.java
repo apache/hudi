@@ -43,7 +43,7 @@ import scala.Tuple2;
  * actual files
  */
 public class HoodieBloomIndexCheckFunction implements
-    Function2<Integer, Iterator<Tuple2<String, Tuple2<String, HoodieKey>>>,
+    Function2<Integer, Iterator<Tuple2<String, HoodieKey>>,
         Iterator<List<KeyLookupResult>>> {
 
   private static Logger logger = LogManager.getLogger(HoodieBloomIndexCheckFunction.class);
@@ -84,13 +84,13 @@ public class HoodieBloomIndexCheckFunction implements
 
   @Override
   public Iterator<List<KeyLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> fileParitionRecordKeyTripletItr)
+      Iterator<Tuple2<String, HoodieKey>> fileParitionRecordKeyTripletItr)
       throws Exception {
     return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends
-      LazyIterableIterator<Tuple2<String, Tuple2<String, HoodieKey>>, List<KeyLookupResult>> {
+      LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {
 
     private List<String> candidateRecordKeys;
 
@@ -103,7 +103,7 @@ public class HoodieBloomIndexCheckFunction implements
     private long totalKeysChecked;
 
     LazyKeyCheckIterator(
-        Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> filePartitionRecordKeyTripletItr) {
+        Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
       currentFile = null;
       candidateRecordKeys = new ArrayList<>();
@@ -162,10 +162,10 @@ public class HoodieBloomIndexCheckFunction implements
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-          Tuple2<String, Tuple2<String, HoodieKey>> currentTuple = inputItr.next();
-          String fileName = currentTuple._2._1;
-          String partitionPath = currentTuple._2._2.getPartitionPath();
-          String recordKey = currentTuple._2._2.getRecordKey();
+          Tuple2<String, HoodieKey> currentTuple = inputItr.next();
+          String fileName = currentTuple._1;
+          String partitionPath = currentTuple._2.getPartitionPath();
+          String recordKey = currentTuple._2.getRecordKey();
 
           // lazily init state
           if (currentFile == null) {
