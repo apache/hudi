@@ -47,6 +47,9 @@ public abstract class AbstractJobConfig implements Serializable {
 
     for (Field field : fields) {
       try {
+        if (field.isSynthetic()) {
+          continue;
+        }
         Object value = field.get(this);
         if (value != null) {
           result.append(field.getAnnotation(com.beust.jcommander.Parameter.class).names()[0]);
@@ -74,6 +77,9 @@ public abstract class AbstractJobConfig implements Serializable {
     result.append(this.getClass().getSimpleName());
     result.append('{');
     for (Field field : fields) {
+      if (field.isSynthetic()) {
+        continue;
+      }
       try {
         Object value = field.get(this);
         result.append(field.getName());
@@ -81,7 +87,7 @@ public abstract class AbstractJobConfig implements Serializable {
         result.append(value);
         result.append("', ");
       }  catch (Throwable e) {
-        throw new InvalidJobConfigException("Failed in execution of 'toString()' ", e);
+        throw new InvalidJobConfigException("Failed in execution of 'toString()' " + e.getMessage());
       }
     }
     result.append("help=");
