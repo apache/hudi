@@ -331,6 +331,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   /**
    * hasPrev is not idempotent
    */
+  @Override
   public boolean hasPrev() {
     try {
       if (!this.reverseReader) {
@@ -352,6 +353,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * iterate reverse (prev) or forward (next). Doing both in the same instance is not supported
    * WARNING : Every call to prev() should be preceded with hasPrev()
    */
+  @Override
   public HoodieLogBlock prev() throws IOException {
 
     if (!this.reverseReader) {

@@ -182,7 +182,10 @@ public class HoodieHiveClient {
 
   private List<String> constructChangePartitions(List<String> partitions) {
     List<String> changePartitions = Lists.newArrayList();
-    String alterTable = "ALTER TABLE " + syncConfig.databaseName + "." + syncConfig.tableName;
+    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
+    String useDatabase = "USE " + syncConfig.databaseName;
+    changePartitions.add(useDatabase);
+    String alterTable = "ALTER TABLE " + syncConfig.tableName;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
@@ -494,7 +497,7 @@ public class HoodieHiveClient {
     if (!hiveJdbcUrl.endsWith("/")) {
       hiveJdbcUrl = hiveJdbcUrl + "/";
     }
-    return hiveJdbcUrl + syncConfig.databaseName + (urlAppend == null ? "" : urlAppend);
+    return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
   }
 
   private static void closeQuietly(ResultSet resultSet, Statement stmt) {
@@ -585,7 +588,7 @@ public class HoodieHiveClient {
     try {
       Table table = client.getTable(syncConfig.databaseName, syncConfig.tableName);
       table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
-      client.alter_table(syncConfig.databaseName, syncConfig.tableName, table, true);
+      client.alter_table(syncConfig.databaseName, syncConfig.tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to get update last commit time synced to " + lastCommitSynced, e);

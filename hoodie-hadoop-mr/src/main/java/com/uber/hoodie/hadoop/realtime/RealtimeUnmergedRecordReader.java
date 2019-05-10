@@ -34,20 +34,21 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 
 class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader implements
-    RecordReader<Void, ArrayWritable> {
+    RecordReader<NullWritable, ArrayWritable> {
 
   // Log Record unmerged scanner
   private final HoodieUnMergedLogRecordScanner logRecordScanner;
 
   // Parquet record reader
-  private final RecordReader<Void, ArrayWritable> parquetReader;
+  private final RecordReader<NullWritable, ArrayWritable> parquetReader;
 
   // Parquet record iterator wrapper for the above reader
-  private final RecordReaderValueIterator<Void, ArrayWritable> parquetRecordsIterator;
+  private final RecordReaderValueIterator<NullWritable, ArrayWritable> parquetRecordsIterator;
 
   // Executor that runs the above producers in parallel
   private final BoundedInMemoryExecutor<ArrayWritable, ArrayWritable, ?> executor;
@@ -64,7 +65,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader implemen
    * @param realReader Parquet Reader
    */
   public RealtimeUnmergedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
-      RecordReader<Void, ArrayWritable> realReader) {
+      RecordReader<NullWritable, ArrayWritable> realReader) {
     super(split, job);
     this.parquetReader = new SafeParquetRecordReaderWrapper(realReader);
     // Iterator for consuming records from parquet file
@@ -103,7 +104,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader implemen
   }
 
   @Override
-  public boolean next(Void key, ArrayWritable value) throws IOException {
+  public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     if (!iterator.hasNext()) {
       return false;
     }
@@ -113,7 +114,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader implemen
   }
 
   @Override
-  public Void createKey() {
+  public NullWritable createKey() {
     return parquetReader.createKey();
   }
 
