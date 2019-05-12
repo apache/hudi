@@ -93,7 +93,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
           preExecute();
           producer.produce(queue);
         } catch (Exception e) {
-          logger.error("error consuming records", e);
+          logger.error("error producing records", e);
           queue.markAsFailed(e);
           throw e;
         } finally {

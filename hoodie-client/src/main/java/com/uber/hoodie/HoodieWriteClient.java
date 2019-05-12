@@ -1348,7 +1348,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     Optional<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
     compactionInstantTimeOpt.ifPresent(compactionInstantTime -> {
       try {
-        compact(compactionInstantTime);
+        // inline compaction should auto commit as the user is never given control
+        compact(compactionInstantTime, true);
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }
