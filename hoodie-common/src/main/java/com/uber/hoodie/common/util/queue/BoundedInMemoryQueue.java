@@ -207,6 +207,9 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
         throw new HoodieException(e);
       }
     }
+    // Check one more time here as it is possible producer errored out and closed immediately
+    throwExceptionIfFailed();
+
     if (newRecord != null && newRecord.isPresent()) {
       return newRecord;
     } else {
