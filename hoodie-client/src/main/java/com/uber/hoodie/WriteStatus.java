@@ -89,7 +89,8 @@ public class WriteStatus implements Serializable {
    * HoodieRecord} before deflation.
    */
   public void markFailure(HoodieRecord record, Throwable t, Optional<Map<String, String>> optionalRecordMetadata) {
-    if (random.nextDouble() <= failureFraction) {
+    if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
+      // Guaranteed to have at-least one error
       failedRecords.add(record);
       errors.put(record.getKey(), t);
     }

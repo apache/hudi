@@ -281,7 +281,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
       writeStatus.getStat().setNumInserts(insertRecordsWritten);
-      writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
+      writeStatus.getStat().setTotalWriteErrors(writeStatus.getTotalErrorRecords());
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       writeStatus.getStat().setRuntimeStats(runtimeStats);

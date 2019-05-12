@@ -251,7 +251,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       writeStatus.getStat().setNumInserts(insertRecordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
-      writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
+      writeStatus.getStat().setTotalWriteErrors(writeStatus.getTotalErrorRecords());
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       writeStatus.getStat().setRuntimeStats(runtimeStats);
