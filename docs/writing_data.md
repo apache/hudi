@@ -26,8 +26,22 @@ Command line options describe capabilities in more detail
 [hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` --help
 Usage: <main class> [options]
   Options:
+    --commit-on-errors
+        Commit even when some records failed to be written
+      Default: false
+    --enable-hive-sync
+          Enable syncing to hive
+       Default: false
+    --filter-dupes
+          Should duplicate records from source be dropped/filtered outbefore 
+          insert/bulk-insert 
+      Default: false
     --help, -h
-
+    --hoodie-conf
+          Any configuration that can be set in the properties file (using the CLI 
+          parameter "--propsFilePath") can also be passed command line using this 
+          parameter 
+          Default: []
     --key-generator-class
       Subclass of com.uber.hoodie.KeyGenerator to generate a HoodieKey from
       the given avro record. Built in: SimpleKeyGenerator (uses provided field
@@ -84,7 +98,6 @@ Usage: <main class> [options]
       schema) before writing. Default : Not set. E:g -
       com.uber.hoodie.utilities.transform.SqlQueryBasedTransformer (which
       allows a SQL query template to be passed as a transformation function)
-
 ```
 
 The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
