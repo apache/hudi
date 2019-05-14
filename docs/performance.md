@@ -11,8 +11,8 @@ the conventional alternatives for achieving these tasks.
 
 ## Upserts
 
-Following shows the speed up obtained for NoSQL ingestion, 
-by switching from bulk loads off HBase to Parquet to incrementally upserting on a Hudi dataset, on 5 tables ranging from small to huge.
+Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi dataset on the copy-on-write storage,
+on 5 tables ranging from small to huge (as opposed to bulk loading the tables)
 
 {% include image.html file="hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" max-width="1000" %}
 
@@ -21,65 +21,23 @@ significant savings on the overall compute cost.
 
 {% include image.html file="hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" max-width="1000" %}
 
-Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table.
+Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table. 
+See [here](https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide) for some tuning tips.
 
-## Tuning
+## Indexing
 
-Writing data via Hudi happens as a Spark job and thus general rules of spark debugging applies here too. Below is a list of things to keep in mind, if you are looking to improving performance or reliability.
+In order to efficiently upsert data, Hudi needs to classify records in a write batch into inserts & updates (tagged with the file group 
+it belongs to). In order to speed this operation, Hudi employs a pluggable index mechanism that stores a mapping between recordKey and 
+the file group id it belongs to. By default, Hudi uses a built in index that uses file ranges and bloom filters to accomplish this, with
+upto 10x speed up over a spark join to do the same. 
 
-**Input Parallelism** : By default, Hudi tends to over-partition input (i.e `withParallelism(1500)`), to ensure each Spark partition stays within the 2GB limit for inputs upto 500GB. Bump this up accordingly if you have larger inputs. We recommend having shuffle parallelism `hoodie.[insert|upsert|bulkinsert].shuffle.parallelism` such that its atleast input_data_size/500MB
+Hudi provides best indexing performance when you model the recordKey to be monotonically increasing (e.g timestamp prefix), leading to range pruning filtering
+out a lot of files for comparison. Even for UUID based keys, there are [known techniques](https://www.percona.com/blog/2014/12/19/store-uuid-optimized-way/) to achieve this.
+For e.g , with 100M timestamp prefixed keys (5% updates, 95% inserts) on a event table with 80B keys/3 partitions/11416 files/10TB data, Hudi index achieves a 
+**~7X (2880 secs vs 440 secs) speed up** over vanilla spark join. Even for a challenging workload like an '100% update' database ingestion workload spanning 
+3.25B UUID keys/30 partitions/6180 files using 300 cores, Hudi indexing offers a **80-100% speedup**.
 
-**Off-heap memory** : Hudi writes parquet files and that needs good amount of off-heap memory proportional to schema width. Consider setting something like `spark.yarn.executor.memoryOverhead` or `spark.yarn.driver.memoryOverhead`, if you are running into such failures.
-
-**Spark Memory** : Typically, hudi needs to be able to read a single file into memory to perform merges or compactions and thus the executor memory should be sufficient to accomodate this. In addition, Hoodie caches the input to be able to intelligently place data and thus leaving some `spark.storage.memoryFraction` will generally help boost performance.
-
-**Sizing files** : Set `limitFileSize` above judiciously, to balance ingest/write latency vs number of files & consequently metadata overhead associated with it.
-
-**Timeseries/Log data** : Default configs are tuned for database/nosql changelogs where individual record sizes are large. Another very popular class of data is timeseries/event/log data that tends to be more volumnious with lot more records per partition. In such cases
-    - Consider tuning the bloom filter accuracy via `.bloomFilterFPP()/bloomFilterNumEntries()` to achieve your target index look up time
-    - Consider making a key that is prefixed with time of the event, which will enable range pruning & significantly speeding up index lookup.
-
-**GC Tuning** : Please be sure to follow garbage collection tuning tips from Spark tuning guide to avoid OutOfMemory errors
-[Must] Use G1/CMS Collector. Sample CMS Flags to add to spark.executor.extraJavaOptions :
-
-```
--XX:NewSize=1g -XX:SurvivorRatio=2 -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:CMSInitiatingOccupancyFraction=70 -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintTenuringDistribution -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/hoodie-heapdump.hprof
-````
-
-If it keeps OOMing still, reduce spark memory conservatively: `spark.memory.fraction=0.2, spark.memory.storageFraction=0.2` allowing it to spill rather than OOM. (reliably slow vs crashing intermittently)
-
-Below is a full working production config
-
-```
- spark.driver.extraClassPath    /etc/hive/conf
- spark.driver.extraJavaOptions    -XX:+PrintTenuringDistribution -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintGCTimeStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/hoodie-heapdump.hprof
- spark.driver.maxResultSize    2g
- spark.driver.memory    4g
- spark.executor.cores    1
- spark.executor.extraJavaOptions    -XX:+PrintFlagsFinal -XX:+PrintReferenceGC -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintAdaptiveSizePolicy -XX:+UnlockDiagnosticVMOptions -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/hoodie-heapdump.hprof
- spark.executor.id    driver
- spark.executor.instances    300
- spark.executor.memory    6g
- spark.rdd.compress true
-
- spark.kryoserializer.buffer.max    512m
- spark.serializer    org.apache.spark.serializer.KryoSerializer
- spark.shuffle.memoryFraction    0.2
- spark.shuffle.service.enabled    true
- spark.sql.hive.convertMetastoreParquet    false
- spark.storage.memoryFraction    0.6
- spark.submit.deployMode    cluster
- spark.task.cpus    1
- spark.task.maxFailures    4
-
- spark.yarn.driver.memoryOverhead    1024
- spark.yarn.executor.memoryOverhead    3072
- spark.yarn.max.executor.failures    100
-
-````
-
-
-## Read Optimized Query Performance
+## Read Optimized Queries
 
 The major design goal for read optimized view is to achieve the latency reduction & efficiency gains in previous section,
 with no impact on queries. Following charts compare the Hudi vs non-Hudi datasets across Hive/Presto/Spark queries and demonstrate this.

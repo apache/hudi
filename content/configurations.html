@@ -593,21 +593,37 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.use.caching</code> <br />
 <span style="color:grey">Only applies if index type is BLOOM. <br /> When true, the input RDD will cached to speed up index lookup by reducing IO for computing parallelism or affected partitions</span></p>
 
+<h5 id="bloomIndexTreebasedFilter">bloomIndexTreebasedFilter(useTreeFilter = true)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.use.treebased.filter</code> <br />
+<span style="color:grey">Only applies if index type is BLOOM. <br /> When true, interval tree based file pruning optimization is enabled. This mode speeds-up file-pruning based on key ranges when compared with the brute-force mode</span></p>
+
+<h5 id="bloomIndexBucketizedChecking">bloomIndexBucketizedChecking(bucketizedChecking = true)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.bucketized.checking</code> <br />
+<span style="color:grey">Only applies if index type is BLOOM. <br /> When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup</span></p>
+
+<h5 id="bloomIndexKeysPerBucket">bloomIndexKeysPerBucket(keysPerBucket = 10000000)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.keys.per.bucket</code> <br />
+<span style="color:grey">Only applies if bloomIndexBucketizedChecking is enabled and index type is bloom. <br /> This configuration controls the “bucket” size which tracks the number of record-key checks made against a single file and is the unit of work allocated to each partition performing bloom filter lookup. A higher value would amortize the fixed cost of reading a bloom filter to memory. </span></p>
+
 <h5 id="bloomIndexParallelism">bloomIndexParallelism(0)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.parallelism</code> <br />
 <span style="color:grey">Only applies if index type is BLOOM. <br /> This is the amount of parallelism for index lookup, which involves a Spark Shuffle. By default, this is auto computed based on input workload characteristics</span></p>
 
 <h5 id="hbaseZkQuorum">hbaseZkQuorum(zkString) [Required]</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.index.hbase.zkquorum</code> <br />
-<span style="color:grey">Only application if index type is HBASE. HBase ZK Quorum url to connect to.</span></p>
+<span style="color:grey">Only applies if index type is HBASE. HBase ZK Quorum url to connect to.</span></p>
 
 <h5 id="hbaseZkPort">hbaseZkPort(port) [Required]</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.index.hbase.zkport</code> <br />
-<span style="color:grey">Only application if index type is HBASE. HBase ZK Quorum port to connect to.</span></p>
+<span style="color:grey">Only applies if index type is HBASE. HBase ZK Quorum port to connect to.</span></p>
+
+<h5 id="hbaseTableName">hbaseZkZnodeParent(zkZnodeParent)  [Required]</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.index.hbase.zknode.path</code> <br />
+<span style="color:grey">Only applies if index type is HBASE. This is the root znode that will contain all the znodes created/used by HBase.</span></p>
 
 <h5 id="hbaseTableName">hbaseTableName(tableName)  [Required]</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.index.hbase.table</code> <br />
-<span style="color:grey">Only application if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span></p>
+<span style="color:grey">Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span></p>
 
 <h4 id="storage-configs">Storage configs</h4>
 <p>Controls aspects around sizing parquet and log files.</p>
@@ -646,6 +662,10 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.logfile.to.parquet.compression.ratio</code> <br />
 <span style="color:grey">Expected additional compression as records move from log files to parquet. Used for merge_on_read storage to send inserts into log files &amp; control the size of compacted parquet file.</span></p>
 
+<h5 id="parquetCompressionCodec">parquetCompressionCodec(parquetCompressionCodec = gzip)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.parquet.compression.codec</code> <br />
+<span style="color:grey">Compression Codec for parquet files </span></p>
+
 <h4 id="compaction-configs">Compaction configs</h4>
 <p>Configs that control compaction (merging of log files onto a new parquet base file), cleaning (reclamation of older/unused file groups).
 <a href="#withCompactionConfig">withCompactionConfig</a> (HoodieCompactionConfig) <br /></p>
@@ -661,6 +681,10 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h5 id="archiveCommitsWith">archiveCommitsWith(minCommits = 96, maxCommits = 128)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.keep.min.commits</code>, <code class="highlighter-rouge">hoodie.keep.max.commits</code> <br />
 <span style="color:grey">Each commit is a small file in the <code class="highlighter-rouge">.hoodie</code> directory. Since DFS typically does not favor lots of small files, Hudi archives older commits into a sequential log. A commit is published atomically by a rename of the commit file.</span></p>
+
+<h5 id="withCommitsArchivalBatchSize">withCommitsArchivalBatchSize(batch = 10)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.commits.archival.batch</code> <br />
+<span style="color:grey">This controls the number of commit instants read in memory as a batch and archived together.</span></p>
 
 <h5 id="compactionSmallFileSize">compactionSmallFileSize(size = 0)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.parquet.small.file.limit</code> <br />
@@ -752,6 +776,9 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.memory.compaction.fraction</code> <br />
 <span style="color:grey">HoodieCompactedLogScanner reads logblocks, converts records to HoodieRecords and then merges these log blocks and records. At any point, the number of entries in a log block can be less than or equal to the number of entries in the corresponding parquet file. This can lead to OOM in the Scanner. Hence, a spillable map helps alleviate the memory pressure. Use this config to set the max allowable inMemory footprint of the spillable map.</span></p>
 
+<h5 id="withWriteStatusFailureFraction">withWriteStatusFailureFraction(failureFraction = 0.1)</h5>
+<p>Property: <code class="highlighter-rouge">hoodie.memory.writestatus.failure.fraction</code> <br />
+<span style="color:grey">This property controls what fraction of the failed record, exceptions we report back to driver</span></p>
 
 
     <div class="tags">
