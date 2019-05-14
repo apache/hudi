@@ -450,7 +450,7 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";
 
-    @Parameter(names = {"--commit-on-errors"})
+    @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)
