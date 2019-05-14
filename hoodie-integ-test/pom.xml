@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.6-SNAPSHOT</version>
+    <version>0.4.6</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>hoodie-integ-test</artifactId>
