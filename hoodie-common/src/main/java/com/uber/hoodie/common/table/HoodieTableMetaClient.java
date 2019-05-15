@@ -85,7 +85,7 @@ public class HoodieTableMetaClient implements Serializable {
       throws DatasetNotFoundException {
     log.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
-    this.hadoopConf = new SerializableConfiguration(conf);
+    this.hadoopConf = new SerializableConfiguration(new Configuration(conf));
     Path basePathDir = new Path(this.basePath);
     this.metaPath = basePath + File.separator + METAFOLDER_NAME;
     Path metaPathDir = new Path(this.metaPath);

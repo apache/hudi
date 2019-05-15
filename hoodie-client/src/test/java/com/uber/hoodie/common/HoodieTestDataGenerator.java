@@ -31,16 +31,23 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -83,15 +90,21 @@ public class HoodieTestDataGenerator {
 
   private static Random rand = new Random(46474747);
 
-  private List<KeyPartition> existingKeysList = new ArrayList<>();
-  private String[] partitionPaths;
+  private final Map<Integer, KeyPartition> existingKeys;
+  private final String[] partitionPaths;
+  private int numExistingKeys;
 
   public HoodieTestDataGenerator(String[] partitionPaths) {
-    this.partitionPaths = Arrays.copyOf(partitionPaths, partitionPaths.length);
+    this(partitionPaths, new HashMap<>());
   }
 
   public HoodieTestDataGenerator() {
     this(DEFAULT_PARTITION_PATHS);
+  }
+
+  public HoodieTestDataGenerator(String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
+    this.partitionPaths = Arrays.copyOf(partitionPaths, partitionPaths.length);
+    this.existingKeys = keyPartitionMap;
   }
 
   public static void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
@@ -193,19 +206,29 @@ public class HoodieTestDataGenerator {
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
   public List<HoodieRecord> generateInserts(String commitTime, Integer n) throws IOException {
-    List<HoodieRecord> inserts = new ArrayList<>();
-    for (int i = 0; i < n; i++) {
+    return generateInsertsStream(commitTime, n).collect(Collectors.toList());
+  }
+
+  /**
+   * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
+   */
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n)  {
+    int currSize = getNumExistingKeys();
+
+    return IntStream.range(0, n).boxed().map(i -> {
       String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
-      HoodieRecord record = new HoodieRecord(key, generateRandomValue(key, commitTime));
-      inserts.add(record);
-
       KeyPartition kp = new KeyPartition();
       kp.key = key;
       kp.partitionPath = partitionPath;
-      existingKeysList.add(kp);
-    }
-    return inserts;
+      existingKeys.put(currSize + i, kp);
+      numExistingKeys++;
+      try {
+        return new HoodieRecord(key, generateRandomValue(key, commitTime));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+    });
   }
 
   public List<HoodieRecord> generateSameKeyInserts(String commitTime, List<HoodieRecord> origin) throws IOException {
@@ -221,6 +244,7 @@ public class HoodieTestDataGenerator {
   public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String commitTime, int limit) throws
       IOException {
     List<HoodieRecord> inserts = new ArrayList<>();
+    int currSize = getNumExistingKeys();
     for (int i = 0; i < limit; i++) {
       String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
       HoodieKey key = new HoodieKey(UUID.randomUUID().toString(), partitionPath);
@@ -230,7 +254,8 @@ public class HoodieTestDataGenerator {
       KeyPartition kp = new KeyPartition();
       kp.key = key;
       kp.partitionPath = partitionPath;
-      existingKeysList.add(kp);
+      existingKeys.put(currSize + i, kp);
+      numExistingKeys++;
     }
     return inserts;
   }
@@ -293,7 +318,7 @@ public class HoodieTestDataGenerator {
   public List<HoodieRecord> generateUpdates(String commitTime, Integer n) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      KeyPartition kp = existingKeysList.get(rand.nextInt(existingKeysList.size() - 1));
+      KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
       HoodieRecord record = generateUpdateRecord(kp.key, commitTime);
       updates.add(record);
     }
@@ -307,39 +332,55 @@ public class HoodieTestDataGenerator {
    * @param n Number of unique records
    * @return list of hoodie record updates
    */
-  public List<HoodieRecord> generateUniqueUpdates(String commitTime, Integer n) throws IOException {
-    List<HoodieRecord> updates = new ArrayList<>();
-    Set<KeyPartition> used = new HashSet<>();
+  public List<HoodieRecord> generateUniqueUpdates(String commitTime, Integer n) {
+    return generateUniqueUpdatesStream(commitTime, n).collect(Collectors.toList());
+  }
 
-    if (n > existingKeysList.size()) {
+  /**
+   * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
+   *
+   * @param commitTime Commit Timestamp
+   * @param n Number of unique records
+   * @return stream of hoodie record updates
+   */
+  public Stream<HoodieRecord> generateUniqueUpdatesStream(String commitTime, Integer n) {
+    final Set<KeyPartition> used = new HashSet<>();
+
+    if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
     }
 
-    for (int i = 0; i < n; i++) {
-      int index = rand.nextInt(existingKeysList.size() - 1);
-      KeyPartition kp = existingKeysList.get(index);
+    return IntStream.range(0, n).boxed().map(i -> {
+      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
+      KeyPartition kp = existingKeys.get(index);
       // Find the available keyPartition starting from randomly chosen one.
       while (used.contains(kp)) {
-        index = (index + 1) % existingKeysList.size();
-        kp = existingKeysList.get(index);
+        index = (index + 1) % numExistingKeys;
+        kp = existingKeys.get(index);
       }
-      HoodieRecord record = new HoodieRecord(kp.key, generateRandomValue(kp.key, commitTime));
-      updates.add(record);
       used.add(kp);
-    }
-    return updates;
+      try {
+        return new HoodieRecord(kp.key, generateRandomValue(kp.key, commitTime));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
+    });
   }
 
   public String[] getPartitionPaths() {
     return partitionPaths;
   }
 
-  public List<KeyPartition> getExistingKeysList() {
-    return existingKeysList;
+  public int getNumExistingKeys() {
+    return numExistingKeys;
   }
 
-  public static class KeyPartition {
+  public static class KeyPartition implements Serializable {
     HoodieKey key;
     String partitionPath;
+  }
+
+  public void close() {
+    existingKeys.clear();
   }
 }

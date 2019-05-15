@@ -37,7 +37,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -132,7 +134,11 @@ public class UtilHelpers {
   }
 
   private static SparkConf buildSparkConf(String appName, String defaultMaster) {
-    SparkConf sparkConf = new SparkConf().setAppName(appName);
+    return buildSparkConf(appName, defaultMaster, new HashMap<>());
+  }
+
+  private static SparkConf buildSparkConf(String appName, String defaultMaster, Map<String, String> additionalConfigs) {
+    final SparkConf sparkConf = new SparkConf().setAppName(appName);
     String master = sparkConf.get("spark.master", defaultMaster);
     sparkConf.setMaster(master);
     if (master.startsWith("yarn")) {
@@ -147,8 +153,13 @@ public class UtilHelpers {
         "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
-    sparkConf = HoodieWriteClient.registerClasses(sparkConf);
-    return sparkConf;
+    additionalConfigs.entrySet().forEach(e -> sparkConf.set(e.getKey(), e.getValue()));
+    SparkConf newSparkConf = HoodieWriteClient.registerClasses(sparkConf);
+    return newSparkConf;
+  }
+
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
+    return new JavaSparkContext(buildSparkConf(appName, defaultMaster, configs));
   }
 
   public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {

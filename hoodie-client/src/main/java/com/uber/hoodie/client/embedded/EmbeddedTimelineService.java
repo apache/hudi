@@ -91,6 +91,10 @@ public class EmbeddedTimelineService {
         .withRemoteServerHost(hostAddr).withRemoteServerPort(serverPort).build();
   }
 
+  public FileSystemViewManager getViewManager() {
+    return viewManager;
+  }
+
   public void stop() {
     if (null != server) {
       this.server.close();

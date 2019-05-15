@@ -66,6 +66,7 @@
                 <includes>
                   <include>commons-codec:commons-codec</include>
                   <include>commons-dbcp:commons-dbcp</include>
+                  <include>commons-lang:commons-lang</include>
                   <include>commons-pool:commons-pool</include>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.uber.hoodie:hoodie-client</include>
@@ -108,6 +109,10 @@
                 <relocation>
                   <pattern>org.apache.commons.dbcp.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.commons.dbcp.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.lang.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.apache.commons.lang.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.commons.pool.</pattern>

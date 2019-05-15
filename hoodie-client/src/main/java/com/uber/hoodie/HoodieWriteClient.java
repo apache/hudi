@@ -27,6 +27,7 @@ import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.avro.model.HoodieRestoreMetadata;
 import com.uber.hoodie.avro.model.HoodieRollbackMetadata;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
+import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
@@ -75,6 +76,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -124,7 +126,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   @VisibleForTesting
   HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       boolean rollbackInFlight, HoodieIndex index) {
-    super(jsc, clientConfig);
+    this(jsc, clientConfig, rollbackInFlight, index, Optional.empty());
+  }
+
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
+      boolean rollbackInFlight, HoodieIndex index, Optional<EmbeddedTimelineService> timelineService) {
+    super(jsc, clientConfig, timelineService);
     this.index = index;
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackInFlight = rollbackInFlight;
@@ -1184,7 +1191,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private HoodieTable getTableAndInitCtx(JavaRDD<HoodieRecord<T>> records) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.getHoodieTable(
-        new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
+        new HoodieTableMetaClient(
+            // Clone Configuration here. Otherwise we could see ConcurrentModificationException (race) in multi-threaded
+            // execution (HoodieDeltaStreamer) when Configuration gets serialized by Spark.
+            new Configuration(jsc.hadoopConfiguration()), config.getBasePath(), true), config, jsc);
     if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {
       writeContext = metrics.getCommitCtx();
     } else {
