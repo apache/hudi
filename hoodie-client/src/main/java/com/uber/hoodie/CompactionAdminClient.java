@@ -24,6 +24,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
+import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -66,6 +67,11 @@ public class CompactionAdminClient extends AbstractHoodieClient {
 
   public CompactionAdminClient(JavaSparkContext jsc, String basePath) {
     super(jsc, HoodieWriteConfig.newBuilder().withPath(basePath).build());
+  }
+
+  public CompactionAdminClient(JavaSparkContext jsc, String basePath,
+      java.util.Optional<EmbeddedTimelineService> timelineServer) {
+    super(jsc, HoodieWriteConfig.newBuilder().withPath(basePath).build(), timelineServer);
   }
 
   /**

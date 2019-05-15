@@ -174,4 +174,12 @@ public class CompactionUtils {
       return Stream.empty();
     }
   }
+
+  /**
+   * Return all pending compaction instant times
+   * @return
+   */
+  public static List<HoodieInstant> getPendingCompactionInstantTimes(HoodieTableMetaClient metaClient) {
+    return metaClient.getActiveTimeline().filterPendingCompactionTimeline().getInstants().collect(Collectors.toList());
+  }
 }

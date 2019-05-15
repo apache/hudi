@@ -236,8 +236,9 @@ class DataSourceTest extends AssertionsForJUnit {
 
       inputDF2.write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      Thread.sleep(3000)
+      Thread.sleep(10000)
       val commitInstantTime2: String = HoodieDataSourceHelpers.latestCommit(fs, destPath)
+
       assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
       // Read RO View
       val hoodieROViewDF2 = spark.read.format("com.uber.hoodie")

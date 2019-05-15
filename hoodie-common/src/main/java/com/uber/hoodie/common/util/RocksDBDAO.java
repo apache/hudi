@@ -20,7 +20,6 @@ package com.uber.hoodie.common.util;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.uber.hoodie.common.table.view.FileSystemViewStorageConfig;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -57,7 +56,6 @@ public class RocksDBDAO {
 
   protected static final transient Logger log = LogManager.getLogger(RocksDBDAO.class);
 
-  private final FileSystemViewStorageConfig config;
   private transient ConcurrentHashMap<String, ColumnFamilyHandle> managedHandlesMap;
   private transient ConcurrentHashMap<String, ColumnFamilyDescriptor> managedDescriptorMap;
   private transient RocksDB rocksDB;
@@ -65,10 +63,9 @@ public class RocksDBDAO {
   private final String basePath;
   private final String rocksDBBasePath;
 
-  public RocksDBDAO(String basePath, FileSystemViewStorageConfig config) {
+  public RocksDBDAO(String basePath, String rocksDBBasePath) {
     this.basePath = basePath;
-    this.config = config;
-    this.rocksDBBasePath = String.format("%s/%s/%s", config.getRocksdbBasePath(),
+    this.rocksDBBasePath = String.format("%s/%s/%s", rocksDBBasePath,
         this.basePath.replace("/", "_"), UUID.randomUUID().toString());
     init();
   }
@@ -95,6 +92,7 @@ public class RocksDBDAO {
       managedDescriptorMap = new ConcurrentHashMap<>();
 
       // If already present, loads the existing column-family handles
+
       final DBOptions dbOptions = new DBOptions().setCreateIfMissing(true).setCreateMissingColumnFamilies(true)
           .setWalDir(rocksDBBasePath).setStatsDumpPeriodSec(300).setStatistics(new Statistics());
       dbOptions.setLogger(new org.rocksdb.Logger(dbOptions) {
@@ -184,6 +182,26 @@ public class RocksDBDAO {
   }
 
   /**
+   * Helper to add put operation in batch
+   *
+   * @param batch Batch Handle
+   * @param columnFamilyName Column Family
+   * @param key Key
+   * @param value Payload
+   * @param <T> Type of payload
+   */
+  public <K extends Serializable, T extends Serializable> void putInBatch(WriteBatch batch, String columnFamilyName,
+      K key, T value) {
+    try {
+      byte[] keyBytes = SerializationUtils.serialize(key);
+      byte[] payload = SerializationUtils.serialize(value);
+      batch.put(managedHandlesMap.get(columnFamilyName), keyBytes, payload);
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  /**
    * Perform single PUT on a column-family
    *
    * @param columnFamilyName Column family name
@@ -195,6 +213,23 @@ public class RocksDBDAO {
     try {
       byte[] payload = SerializationUtils.serialize(value);
       getRocksDB().put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  /**
+   * Perform single PUT on a column-family
+   *
+   * @param columnFamilyName Column family name
+   * @param key Key
+   * @param value Payload
+   * @param <T> Type of Payload
+   */
+  public <K extends Serializable, T extends Serializable> void put(String columnFamilyName, K key, T value) {
+    try {
+      byte[] payload = SerializationUtils.serialize(value);
+      getRocksDB().put(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -216,6 +251,21 @@ public class RocksDBDAO {
   }
 
   /**
+   * Helper to add delete operation in batch
+   *
+   * @param batch Batch Handle
+   * @param columnFamilyName Column Family
+   * @param key Key
+   */
+  public <K extends Serializable> void deleteInBatch(WriteBatch batch, String columnFamilyName, K key) {
+    try {
+      batch.delete(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key));
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  /**
    * Perform a single Delete operation
    *
    * @param columnFamilyName Column Family name
@@ -225,6 +275,20 @@ public class RocksDBDAO {
     try {
       getRocksDB().delete(managedHandlesMap.get(columnFamilyName), key.getBytes());
     } catch (RocksDBException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  /**
+   * Perform a single Delete operation
+   *
+   * @param columnFamilyName Column Family name
+   * @param key Key to be deleted
+   */
+  public <K extends Serializable> void delete(String columnFamilyName, K key) {
+    try {
+      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key));
+    } catch (Exception e) {
       throw new HoodieException(e);
     }
   }
@@ -242,6 +306,23 @@ public class RocksDBDAO {
       byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), key.getBytes());
       return val == null ? null : SerializationUtils.deserialize(val);
     } catch (RocksDBException e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  /**
+   * Retrieve a value for a given key in a column family
+   *
+   * @param columnFamilyName Column Family Name
+   * @param key Key to be retrieved
+   * @param <T> Type of object stored.
+   */
+  public <K extends Serializable, T extends Serializable> T get(String columnFamilyName, K key) {
+    Preconditions.checkArgument(!closed);
+    try {
+      byte[] val = getRocksDB().get(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key));
+      return val == null ? null : SerializationUtils.deserialize(val);
+    } catch (Exception e) {
       throw new HoodieException(e);
     }
   }

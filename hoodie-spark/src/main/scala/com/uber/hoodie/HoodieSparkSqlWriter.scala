@@ -32,7 +32,7 @@ import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
@@ -98,21 +98,6 @@ private[hoodie] object HoodieSparkSqlWriter {
 
     val jsc = new JavaSparkContext(sparkContext)
 
-    val hoodieRecords =
-      if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean) {
-        DataSourceUtils.dropDuplicates(
-          jsc,
-          hoodieAllIncomingRecords,
-          mapAsJavaMap(parameters))
-      } else {
-        hoodieAllIncomingRecords
-      }
-
-    if (hoodieRecords.isEmpty()) {
-      log.info("new batch has no new records, skipping...")
-      return (true, None)
-    }
-
     val basePath = new Path(parameters("path"))
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(basePath)
@@ -141,6 +126,22 @@ private[hoodie] object HoodieSparkSqlWriter {
     val client = DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get, tblName.get,
       mapAsJavaMap(parameters)
     )
+
+    val hoodieRecords =
+      if (parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean) {
+        DataSourceUtils.dropDuplicates(
+          jsc,
+          hoodieAllIncomingRecords,
+          mapAsJavaMap(parameters), client.getTimelineServer)
+      } else {
+        hoodieAllIncomingRecords
+      }
+
+    if (hoodieRecords.isEmpty()) {
+      log.info("new batch has no new records, skipping...")
+      return (true, None)
+    }
+
     val commitTime = client.startCommit()
 
     val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)

@@ -20,6 +20,7 @@ package com.uber.hoodie;
 
 import com.google.common.base.Optional;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
+import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -69,12 +70,20 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   /**
    * @param basePath path to Hoodie dataset
    */
-  public HoodieReadClient(JavaSparkContext jsc, String basePath) {
+  public HoodieReadClient(JavaSparkContext jsc, String basePath,
+      java.util.Optional<EmbeddedTimelineService> timelineService) {
     this(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
         // by default we use HoodieBloomIndex
         .withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .build());
+        .build(), timelineService);
+  }
+
+  /**
+   * @param basePath path to Hoodie dataset
+   */
+  public HoodieReadClient(JavaSparkContext jsc, String basePath) {
+    this(jsc, basePath, java.util.Optional.empty());
   }
 
   /**
@@ -91,13 +100,19 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    * @param clientConfig instance of HoodieWriteConfig
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
-    super(jsc, clientConfig);
+    this(jsc, clientConfig, java.util.Optional.empty());
+  }
+
+  /**
+   * @param clientConfig instance of HoodieWriteConfig
+   */
+  public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
+      java.util.Optional<EmbeddedTimelineService> timelineService) {
+    super(jsc, clientConfig, timelineService);
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
-    this.hoodieTable = HoodieTable
-        .getHoodieTable(metaClient,
-            clientConfig, jsc);
+    this.hoodieTable = HoodieTable.getHoodieTable(metaClient, clientConfig, jsc);
     this.commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
     this.sqlContextOpt = Optional.absent();

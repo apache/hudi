@@ -51,7 +51,7 @@ import org.apache.log4j.Logger;
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
  */
-public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R> {
+public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
 
   private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
@@ -149,6 +149,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   /**
    * Custom iterator to iterate over values written to disk
    */
+  @Override
   public Iterator<R> iterator() {
     return new LazyFileIterable(filePath, valueMetadataMap).iterator();
   }
