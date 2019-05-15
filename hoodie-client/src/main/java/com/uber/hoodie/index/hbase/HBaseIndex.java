@@ -28,6 +28,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieDependentSystemUnavailableException;
@@ -59,6 +60,8 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
+
+import scala.Tuple2;
 
 /**
  * Hoodie Index implementation backed by HBase
@@ -99,10 +102,24 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   private void init(HoodieWriteConfig config) {
-    multiPutBatchSize = config.getHbaseIndexGetBatchSize();
-    qpsFraction = config.getHbaseIndexQPSFraction();
-    maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();
-    putBatchSizeCalculator = new HbasePutBatchSizeCalculator();
+    this.multiPutBatchSize = config.getHbaseIndexGetBatchSize();
+    this.qpsFraction = config.getHbaseIndexQPSFraction();
+    this.maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();
+    this.putBatchSizeCalculator = new HbasePutBatchSizeCalculator();
+  }
+
+  @VisibleForTesting
+  public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
+    try {
+      logger.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
+      final HBaseIndexQPSResourceAllocator resourceAllocator =
+          (HBaseIndexQPSResourceAllocator) ReflectionUtils.loadClass(
+              config.getHBaseQPSResourceAllocatorClass(), config);
+      return resourceAllocator;
+    } catch (Exception e) {
+      logger.warn("error while instantiating HBaseIndexQPSResourceAllocator", e);
+    }
+    return new DefaultHBaseQPSResourceAllocator(config);
   }
 
   @Override
@@ -351,12 +368,27 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   @Override
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
       HoodieTable<T> hoodieTable) {
-    setPutBatchSize(writeStatusRDD, jsc);
-    return writeStatusRDD.mapPartitionsWithIndex(updateLocationFunction(), true);
+    final HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
+    JavaRDD<WriteStatus> writeStatusResultRDD;
+    setPutBatchSize(writeStatusRDD, hBaseIndexQPSResourceAllocator, jsc);
+    logger.info("multiPutBatchSize: before puts" + multiPutBatchSize);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeStatusRDD.mapPartitionsWithIndex(
+        updateLocationFunction(), true);
+    // Forcing a spark action so HBase puts are triggered before releasing resources
+    if (this.config.getHBaseIndexShouldComputeQPSDynamically()) {
+      logger.info("writestatus count: " + writeStatusJavaRDD.count());
+      writeStatusResultRDD = writeStatusRDD;
+    } else {
+      writeStatusResultRDD = writeStatusJavaRDD;
+    }
+    // Release QPS resources as HBAse puts are done at this point
+    hBaseIndexQPSResourceAllocator.releaseQPSResources();
+    return writeStatusResultRDD;
   }
 
   private void setPutBatchSize(JavaRDD<WriteStatus> writeStatusRDD,
-      final JavaSparkContext jsc) {
+                               HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator,
+                               final JavaSparkContext jsc) {
     if (config.getHbaseIndexPutBatchSizeAutoCompute()) {
       SparkConf conf = jsc.getConf();
       int maxExecutors = conf.getInt(DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME, 1);
@@ -370,22 +402,35 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         If a writeStatus has any insert, it implies that the corresponding task contacts HBase for
         doing puts, since we only do puts for inserts from HBaseIndex.
        */
-      int hbasePutAccessParallelism = getHBasePutAccessParallelism(writeStatusRDD);
+      final Tuple2<Long, Integer> numPutsParallelismTuple  = getHBasePutAccessParallelism(writeStatusRDD);
+      final long numPuts = numPutsParallelismTuple._1;
+      final int hbasePutsParallelism = numPutsParallelismTuple._2;
+      this.numRegionServersForTable = getNumRegionServersAliveForTable();
+      final float desiredQPSFraction = hBaseIndexQPSResourceAllocator.getQPSFractionForPutsTime(numPuts,
+          this.numRegionServersForTable);
+      logger.info("Desired QPSFraction :" + desiredQPSFraction);
+      logger.info("Number HBase puts :" + numPuts);
+      logger.info("Hbase Puts Parallelism :" + hbasePutsParallelism);
+      final float availableQpsFraction = hBaseIndexQPSResourceAllocator.acquireQPSFraction(desiredQPSFraction, numPuts);
+      logger.info("Allocated QPS Fraction :" + availableQpsFraction);
       multiPutBatchSize = putBatchSizeCalculator
           .getBatchSize(
-              getNumRegionServersAliveForTable(),
+              numRegionServersForTable,
               maxQpsPerRegionServer,
-              hbasePutAccessParallelism,
+              hbasePutsParallelism,
               maxExecutors,
               SLEEP_TIME_MILLISECONDS,
-              qpsFraction);
+              availableQpsFraction);
+      logger.info("multiPutBatchSize :" + multiPutBatchSize);
     }
   }
 
   @VisibleForTesting
-  public int getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
-    return Math.toIntExact(Math.max(writeStatusRDD
-        .filter(w -> w.getStat().getNumInserts() > 0).count(), 1));
+  public Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
+    final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD =
+        writeStatusRDD.filter(w -> w.getStat().getNumInserts() > 0)
+            .mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
+    return insertOnlyWriteStatusRDD.reduce((w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));
   }
 
   public static class HbasePutBatchSizeCalculator implements Serializable {

@@ -35,8 +35,10 @@ import com.uber.hoodie.config.HoodieHBaseIndexConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.index.hbase.DefaultHBaseQPSResourceAllocator;
 import com.uber.hoodie.index.hbase.HBaseIndex;
 import com.uber.hoodie.index.hbase.HBaseIndex.HbasePutBatchSizeCalculator;
+import com.uber.hoodie.index.hbase.HBaseIndexQPSResourceAllocator;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.util.Arrays;
@@ -63,6 +65,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runners.MethodSorters;
 import org.mockito.Mockito;
+
+import scala.Tuple2;
 
 /**
  * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to shutdown across tests,
@@ -331,9 +335,23 @@ public class TestHbaseIndex {
             getSampleWriteStatus(0, 3),
             getSampleWriteStatus(10, 0)),
         10);
-    final int hbasePutAccessParallelism = index.getHBasePutAccessParallelism(writeStatusRDD);
+    final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
+    final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
+    final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
     Assert.assertEquals(10, writeStatusRDD.getNumPartitions());
     Assert.assertEquals(2, hbasePutAccessParallelism);
+    Assert.assertEquals(11, hbaseNumPuts);
+  }
+
+  @Test
+  public void testsHBaseIndexDefaultQPSResourceAllocator() {
+    HoodieWriteConfig config = getConfig();
+    HBaseIndex index = new HBaseIndex(config);
+    HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
+    Assert.assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
+        DefaultHBaseQPSResourceAllocator.class.getName());
+    Assert.assertEquals(config.getHbaseIndexQPSFraction(),
+        hBaseIndexQPSResourceAllocator.acquireQPSFraction(config.getHbaseIndexQPSFraction(), 100), 0.0f);
   }
 
   private WriteStatus getSampleWriteStatus(final int numInserts, final int numUpdateWrites) {
