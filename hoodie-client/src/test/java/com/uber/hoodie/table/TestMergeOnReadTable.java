@@ -905,6 +905,7 @@ public class TestMergeOnReadTable {
           .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath))
           .count() > 0);
     }
+    writeClient.close();
   }
 
   @Test

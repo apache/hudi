@@ -24,11 +24,13 @@ import static org.junit.Assert.fail;
 
 import com.uber.hoodie.DataSourceWriteOptions;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
 import com.uber.hoodie.common.util.TypedProperties;
+import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HoodieHiveClient;
@@ -36,17 +38,28 @@ import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer;
 import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
+import com.uber.hoodie.utilities.sources.DistributedTestDataSource;
 import com.uber.hoodie.utilities.sources.HoodieIncrSource;
+import com.uber.hoodie.utilities.sources.InputBatch;
 import com.uber.hoodie.utilities.sources.TestDataSource;
+import com.uber.hoodie.utilities.sources.config.TestSourceConfig;
 import com.uber.hoodie.utilities.transform.SqlQueryBasedTransformer;
 import com.uber.hoodie.utilities.transform.Transformer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -57,6 +70,7 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -197,6 +211,22 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       assertEquals(expected, recordCount);
     }
 
+    static void assertAtleastNCompactionCommits(int minExpected, String datasetPath, FileSystem fs) {
+      HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
+      HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
+      log.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numCompactionCommits = (int)timeline.getInstants().count();
+      assertTrue("Got=" + numCompactionCommits + ", exp >=" + minExpected, minExpected <= numCompactionCommits);
+    }
+
+    static void assertAtleastNDeltaCommits(int minExpected, String datasetPath, FileSystem fs) {
+      HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
+      HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
+      log.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numDeltaCommits = (int)timeline.getInstants().count();
+      assertTrue("Got=" + numDeltaCommits + ", exp >=" + minExpected, minExpected <= numDeltaCommits);
+    }
+
     static String assertCommitMetadata(String expected, String datasetPath, FileSystem fs, int totalCommits)
         throws IOException {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
@@ -207,6 +237,23 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       assertEquals(totalCommits, timeline.countInstants());
       assertEquals(expected, commitMetadata.getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY));
       return lastInstant.getTimestamp();
+    }
+
+    static void waitTillCondition(Function<Boolean, Boolean> condition, long timeoutInSecs) throws Exception {
+      Future<Boolean> res = Executors.newSingleThreadExecutor().submit(() -> {
+        boolean ret = false;
+        while (!ret) {
+          try {
+            Thread.sleep(3000);
+            ret = condition.apply(true);
+          } catch (Throwable error) {
+            log.warn("Got error :", error);
+            ret = false;
+          }
+        }
+        return true;
+      });
+      res.get(timeoutInSecs, TimeUnit.SECONDS);
     }
   }
 
@@ -259,6 +306,51 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
     assertEquals(2000, counts.get(0).getLong(1));
+  }
+
+  @Test
+  public void testUpsertsCOWContinuousMode() throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow");
+  }
+
+  @Test
+  public void testUpsertsMORContinuousMode() throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_mor");
+  }
+
+  private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir) throws Exception {
+    String datasetBasePath = dfsBasePath + "/" + tempDir;
+    // Keep it higher than batch-size to test continuous mode
+    int totalRecords = 3000;
+
+    // Initial bulk insert
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(datasetBasePath, Operation.UPSERT);
+    cfg.continuousMode = true;
+    cfg.storageType = tableType.name();
+    cfg.configs.add(String.format("%s=%d", TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
+      try {
+        ds.sync();
+      } catch (Exception ex) {
+        throw new RuntimeException(ex.getMessage(), ex);
+      }
+    });
+
+    TestHelpers.waitTillCondition((r) -> {
+      if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
+        TestHelpers.assertAtleastNDeltaCommits(5, datasetBasePath, dfs);
+        TestHelpers.assertAtleastNCompactionCommits(2, datasetBasePath, dfs);
+      } else {
+        TestHelpers.assertAtleastNCompactionCommits(5, datasetBasePath, dfs);
+      }
+      TestHelpers.assertRecordCount(totalRecords, datasetBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertDistanceCount(totalRecords, datasetBasePath + "/*/*.parquet", sqlContext);
+      return true;
+    }, 180);
+    ds.shutdownGracefully();
+    dsFuture.get();
   }
 
   /**
@@ -364,6 +456,20 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
     assertEquals(1000, counts.get(0).getLong(1));
     assertEquals(1000, counts.get(1).getLong(1));
+  }
+
+  @Test
+  public void testDistributedTestDataSource() throws Exception {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, "1000");
+    props.setProperty(TestSourceConfig.NUM_SOURCE_PARTITIONS_PROP, "1");
+    props.setProperty(TestSourceConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS, "true");
+    DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props,
+        jsc, sparkSession, null);
+    InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Optional.empty(), 10000000);
+    batch.getBatch().get().cache();
+    long c = batch.getBatch().get().count();
+    Assert.assertEquals(1000, c);
   }
 
   /**

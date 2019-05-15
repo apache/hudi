@@ -18,6 +18,7 @@
 
 package com.uber.hoodie;
 
+import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
@@ -182,10 +184,10 @@ public class DataSourceUtils {
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
       JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig) throws Exception {
+      HoodieWriteConfig writeConfig, Optional<EmbeddedTimelineService> timelineService) throws Exception {
     HoodieReadClient client = null;
     try {
-      client = new HoodieReadClient<>(jssc, writeConfig);
+      client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (DatasetNotFoundException e) {
@@ -202,12 +204,14 @@ public class DataSourceUtils {
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
                                                      JavaRDD<HoodieRecord> incomingHoodieRecords,
-                                                     Map<String, String> parameters) throws Exception {
+                                                     Map<String, String> parameters,
+                                                     Optional<EmbeddedTimelineService> timelineService)
+      throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig
         .newBuilder()
         .withPath(parameters.get("path"))
         .withProps(parameters).build();
-    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig);
+    return dropDuplicates(jssc, incomingHoodieRecords, writeConfig, timelineService);
   }
 
   public static HiveSyncConfig buildHiveSyncConfig(TypedProperties props, String basePath) {

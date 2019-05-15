@@ -18,17 +18,12 @@
 
 package com.uber.hoodie.utilities.sources;
 
-import com.uber.hoodie.common.HoodieTestDataGenerator;
-import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -38,32 +33,15 @@ import org.apache.spark.sql.SparkSession;
 /**
  * An implementation of {@link Source}, that emits test upserts.
  */
-public class TestDataSource extends AvroSource {
+public class TestDataSource extends AbstractBaseTestSource {
 
   private static volatile Logger log = LogManager.getLogger(TestDataSource.class);
-
-  // Static instance, helps with reuse across a test.
-  private static HoodieTestDataGenerator dataGenerator;
-
-  public static void initDataGen() {
-    dataGenerator = new HoodieTestDataGenerator();
-  }
-
-  public static void resetDataGen() {
-    dataGenerator = null;
-  }
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-  }
-
-  private GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
-    try {
-      Optional<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
-      return (GenericRecord) recordOpt.get();
-    } catch (IOException e) {
-      return null;
+    if (null == dataGenerator) {
+      initDataGen(props);
     }
   }
 
@@ -73,26 +51,14 @@ public class TestDataSource extends AvroSource {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String commitTime = String.format("%05d", nextCommitNum);
+    log.info("Source Limit is set to " + sourceLimit);
+
     // No new data.
     if (sourceLimit <= 0) {
       return new InputBatch<>(Optional.empty(), commitTime);
     }
 
-    // generate `sourceLimit` number of upserts each time.
-    int numExistingKeys = dataGenerator.getExistingKeysList().size();
-    int numUpdates = Math.min(numExistingKeys, (int) sourceLimit / 2);
-    int numInserts = (int) sourceLimit - numUpdates;
-
-    List<GenericRecord> records = new ArrayList<>();
-    try {
-      records.addAll(dataGenerator.generateUniqueUpdates(commitTime, numUpdates).stream()
-          .map(this::toGenericRecord).collect(Collectors.toList()));
-      records.addAll(dataGenerator.generateInserts(commitTime, numInserts).stream()
-          .map(this::toGenericRecord).collect(Collectors.toList()));
-    } catch (IOException e) {
-      log.error("Error generating test data.", e);
-    }
-    
+    List<GenericRecord> records = fetchNextBatch(props, (int)sourceLimit, commitTime).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Optional.of(avroRDD), commitTime);
   }

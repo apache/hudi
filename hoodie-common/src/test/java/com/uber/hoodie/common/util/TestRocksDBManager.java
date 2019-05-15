@@ -67,7 +67,7 @@ public class TestRocksDBManager {
     }).collect(Collectors.toList());
 
     dbManager = new RocksDBDAO("/dummy/path",
-        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build());
+        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
     colFamilies.stream().forEach(family -> dbManager.dropColumnFamily(family));
     colFamilies.stream().forEach(family -> dbManager.addColumnFamily(family));
 
