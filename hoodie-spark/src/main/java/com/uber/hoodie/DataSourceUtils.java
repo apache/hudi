@@ -53,6 +53,14 @@ public class DataSourceUtils {
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName) {
+    Object obj = getNestedFieldVal(record, fieldName);
+    return (obj == null) ? null : obj.toString();
+  }
+
+  /**
+   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
+   */
+  public static Object getNestedFieldVal(GenericRecord record, String fieldName) {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
@@ -65,7 +73,7 @@ public class DataSourceUtils {
 
       // return, if last part of name
       if (i == parts.length - 1) {
-        return val.toString();
+        return val;
       } else {
         // VC: Need a test here
         if (!(val instanceof GenericRecord)) {
