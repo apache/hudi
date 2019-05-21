@@ -24,6 +24,7 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
@@ -55,7 +56,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+  public JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
       JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
     throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
   }

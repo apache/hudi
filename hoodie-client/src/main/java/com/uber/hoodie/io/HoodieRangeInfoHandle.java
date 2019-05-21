@@ -18,25 +18,26 @@
 
 package com.uber.hoodie.io;
 
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.ParquetUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
+/**
+ * Extract range information for a given file slice
+ */
+public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
 
-public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
-
-  protected final String instantTime;
-  protected final HoodieWriteConfig config;
-  protected final FileSystem fs;
-  protected final HoodieTable<T> hoodieTable;
-
-  HoodieIOHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable) {
-    this.instantTime = instantTime;
-    this.config = config;
-    this.hoodieTable = hoodieTable;
-    this.fs = getFileSystem();
+  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T> hoodieTable,
+      Pair<String, String> partitionPathFilePair) {
+    super(config, null, hoodieTable, partitionPathFilePair);
   }
 
-  protected abstract FileSystem getFileSystem();
+  public String[] getMinMaxKeys() {
+    HoodieDataFile dataFile = getLatestDataFile();
+    return ParquetUtils.readMinMaxRecordKeys(hoodieTable.getHadoopConf(), new Path(dataFile.getPath()));
+  }
 }

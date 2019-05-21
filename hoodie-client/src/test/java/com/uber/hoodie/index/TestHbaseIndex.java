@@ -166,7 +166,7 @@ public class TestHbaseIndex {
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 200);
     assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 200);
     assertTrue(javaRDD.filter(
-        record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getCommitTime()
+        record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getInstantTime()
             .equals(newCommitTime))).distinct().count() == 200);
 
   }

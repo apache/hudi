@@ -43,7 +43,7 @@ public class WorkloadStat implements Serializable {
   }
 
   long addUpdates(HoodieRecordLocation location, long numUpdates) {
-    updateLocationToCount.put(location.getFileId(), Pair.of(location.getCommitTime(), numUpdates));
+    updateLocationToCount.put(location.getFileId(), Pair.of(location.getInstantTime(), numUpdates));
     return this.numUpdates += numUpdates;
   }
 

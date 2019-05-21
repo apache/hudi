@@ -151,7 +151,7 @@ public class TestExternalSpillableMap {
     assert onDiskHoodieRecord.getKey().equals(records.get(dkey).getKey());
     // compare the member variables of HoodieRecord not set by the constructor
     assert records.get(ikey).getCurrentLocation().getFileId().equals(SpillableMapTestUtils.DUMMY_FILE_ID);
-    assert records.get(ikey).getCurrentLocation().getCommitTime().equals(SpillableMapTestUtils.DUMMY_COMMIT_TIME);
+    assert records.get(ikey).getCurrentLocation().getInstantTime().equals(SpillableMapTestUtils.DUMMY_COMMIT_TIME);
 
     // test contains
     assertTrue(records.containsKey(ikey));
