@@ -49,12 +49,12 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
       bloomIndexFiles.forEach(indexFileInfo -> {
         if (indexFileInfo.hasKeyRanges()) {
           lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(),
-              indexFileInfo.getMaxRecordKey(), indexFileInfo.getFileName()));
+              indexFileInfo.getMaxRecordKey(), indexFileInfo.getFileId()));
         } else {
           if (!partitionToFilesWithNoRanges.containsKey(partition)) {
             partitionToFilesWithNoRanges.put(partition, new HashSet<>());
           }
-          partitionToFilesWithNoRanges.get(partition).add(indexFileInfo.getFileName());
+          partitionToFilesWithNoRanges.get(partition).add(indexFileInfo.getFileId());
         }
       });
       partitionToFileIndexLookUpTree.put(partition, lookUpTree);

@@ -500,7 +500,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   /**
    * Helper class for a small file's location and its actual size on disk
    */
-  class SmallFile implements Serializable {
+  static class SmallFile implements Serializable {
 
     HoodieRecordLocation location;
     long sizeBytes;

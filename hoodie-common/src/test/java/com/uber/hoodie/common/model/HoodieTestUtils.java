@@ -346,10 +346,10 @@ public class HoodieTestUtils {
       try {
         logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-            .overBaseCommit(location.getCommitTime()).withFs(fs).build();
+            .overBaseCommit(location.getInstantTime()).withFs(fs).build();
 
         Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
-        header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getCommitTime());
+        header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
         header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
         logWriter.appendBlock(new HoodieAvroDataBlock(s.getValue().stream().map(r -> {
           try {

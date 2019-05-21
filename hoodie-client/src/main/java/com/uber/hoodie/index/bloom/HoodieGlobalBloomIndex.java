@@ -21,6 +21,7 @@ package com.uber.hoodie.index.bloom;
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
@@ -83,7 +84,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
     Map<String, String> indexToPartitionMap = new HashMap<>();
     for (Entry<String, List<BloomIndexFileInfo>> entry : partitionToFileIndexInfo.entrySet()) {
-      entry.getValue().forEach(indexFile -> indexToPartitionMap.put(indexFile.getFileName(), entry.getKey()));
+      entry.getValue().forEach(indexFile -> indexToPartitionMap.put(indexFile.getFileId(), entry.getKey()));
     }
 
     IndexFileFilter indexFileFilter = config.getBloomIndexPruneByRanges()
@@ -106,7 +107,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    */
   @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
-      JavaPairRDD<HoodieKey, String> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
+      JavaPairRDD<HoodieKey, HoodieRecordLocation> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
     JavaPairRDD<String, HoodieRecord<T>> rowKeyRecordPairRDD = recordRDD
         .mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 

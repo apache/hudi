@@ -26,7 +26,7 @@ import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.HoodieCreateHandle;
-import com.uber.hoodie.io.HoodieIOHandle;
+import com.uber.hoodie.io.HoodieWriteHandle;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -131,12 +131,11 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload> extend
       BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
     protected final List<WriteStatus> statuses = new ArrayList<>();
-    protected HoodieIOHandle handle;
+    protected HoodieWriteHandle handle;
 
     @Override
     protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
       final HoodieRecord insertPayload = payload.record;
-
       // lazily initialize the handle, for the first time
       if (handle == null) {
         handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(),

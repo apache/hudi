@@ -217,7 +217,7 @@ public class TestHoodieClientBase implements Serializable {
     for (HoodieRecord rec : taggedRecords) {
       assertTrue("Record " + rec + " found with no location.", rec.isCurrentLocationKnown());
       assertEquals("All records should have commit time " + commitTime + ", since updates were made",
-          rec.getCurrentLocation().getCommitTime(), commitTime);
+          rec.getCurrentLocation().getInstantTime(), commitTime);
     }
   }
 

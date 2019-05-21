@@ -27,11 +27,11 @@ import java.io.Serializable;
  */
 public class HoodieRecordLocation implements Serializable {
 
-  private final String commitTime;
+  private final String instantTime;
   private final String fileId;
 
-  public HoodieRecordLocation(String commitTime, String fileId) {
-    this.commitTime = commitTime;
+  public HoodieRecordLocation(String instantTime, String fileId) {
+    this.instantTime = instantTime;
     this.fileId = fileId;
   }
 
@@ -44,26 +44,26 @@ public class HoodieRecordLocation implements Serializable {
       return false;
     }
     HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-    return Objects.equal(commitTime, otherLoc.commitTime)
+    return Objects.equal(instantTime, otherLoc.instantTime)
         && Objects.equal(fileId, otherLoc.fileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(commitTime, fileId);
+    return Objects.hashCode(instantTime, fileId);
   }
 
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieRecordLocation {");
-    sb.append("commitTime=").append(commitTime).append(", ");
+    sb.append("instantTime=").append(instantTime).append(", ");
     sb.append("fileId=").append(fileId);
     sb.append('}');
     return sb.toString();
   }
 
-  public String getCommitTime() {
-    return commitTime;
+  public String getInstantTime() {
+    return instantTime;
   }
 
   public String getFileId() {
