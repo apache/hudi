@@ -41,7 +41,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
-public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
+public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
   private static Logger logger = LogManager.getLogger(HoodieCreateHandle.class);
 
@@ -101,7 +101,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
         storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
         // update the new location of record, so we know where to find it next
-        record.setNewLocation(new HoodieRecordLocation(commitTime, writeStatus.getFileId()));
+        record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
         recordsWritten++;
         insertRecordsWritten++;
       } else {

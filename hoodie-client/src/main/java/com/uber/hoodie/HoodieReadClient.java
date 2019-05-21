@@ -20,6 +20,7 @@ package com.uber.hoodie;
 
 import com.google.common.base.Optional;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
+import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
@@ -119,15 +120,27 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
     }
   }
 
+  private Optional<String> convertToDataFilePath(Optional<Pair<String, String>> partitionPathFileIDPair) {
+    if (partitionPathFileIDPair.isPresent()) {
+      HoodieDataFile dataFile = hoodieTable.getROFileSystemView()
+          .getLatestDataFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
+      return Optional.of(dataFile.getPath());
+    } else {
+      return Optional.absent();
+    }
+  }
+
   /**
    * Given a bunch of hoodie keys, fetches all the individual records out as a data frame
    *
    * @return a dataframe
    */
-  public Dataset<Row> read(JavaRDD<HoodieKey> hoodieKeys, int parallelism) throws Exception {
+  public Dataset<Row> readROView(JavaRDD<HoodieKey> hoodieKeys, int parallelism) {
     assertSqlContext();
-    JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD = index
+    JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> lookupResultRDD = index
         .fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
+    JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD = lookupResultRDD
+        .mapToPair(r -> new Tuple2<>(r._1, convertToDataFilePath(r._2)));
     List<String> paths = keyToFileRDD.filter(keyFileTuple -> keyFileTuple._2().isPresent())
         .map(keyFileTuple -> keyFileTuple._2().get()).collect();
 
@@ -144,7 +157,6 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
 
     // Now, we need to further filter out, for only rows that match the supplied hoodie keys
     JavaRDD<Row> rowRDD = keyRowRDD.join(keyToFileRDD, parallelism).map(tuple -> tuple._2()._1());
-
     return sqlContextOpt.get().createDataFrame(rowRDD, schema);
   }
 

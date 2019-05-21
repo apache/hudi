@@ -48,7 +48,7 @@ class ListBasedIndexFileFilter implements IndexFileFilter {
       // for each candidate file in partition, that needs to be compared.
       for (BloomIndexFileInfo indexInfo : indexInfos) {
         if (shouldCompareWithFile(indexInfo, recordKey)) {
-          toReturn.add(indexInfo.getFileName());
+          toReturn.add(indexInfo.getFileId());
         }
       }
     }

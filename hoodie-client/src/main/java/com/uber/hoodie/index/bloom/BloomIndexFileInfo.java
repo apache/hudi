@@ -22,30 +22,30 @@ import com.google.common.base.Objects;
 import java.io.Serializable;
 
 /**
- * Metadata about a given file, useful for index lookup
+ * Metadata about a given file group, useful for index lookup
  */
 public class BloomIndexFileInfo implements Serializable {
 
-  private final String fileName;
+  private final String fileId;
 
   private final String minRecordKey;
 
   private final String maxRecordKey;
 
-  public BloomIndexFileInfo(String fileName, String minRecordKey, String maxRecordKey) {
-    this.fileName = fileName;
+  public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {
+    this.fileId = fileId;
     this.minRecordKey = minRecordKey;
     this.maxRecordKey = maxRecordKey;
   }
 
-  public BloomIndexFileInfo(String fileName) {
-    this.fileName = fileName;
+  public BloomIndexFileInfo(String fileId) {
+    this.fileId = fileId;
     this.minRecordKey = null;
     this.maxRecordKey = null;
   }
 
-  public String getFileName() {
-    return fileName;
+  public String getFileId() {
+    return fileId;
   }
 
   public String getMinRecordKey() {
@@ -77,19 +77,19 @@ public class BloomIndexFileInfo implements Serializable {
     }
 
     BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equal(that.fileName, fileName) && Objects.equal(that.minRecordKey, minRecordKey)
+    return Objects.equal(that.fileId, fileId) && Objects.equal(that.minRecordKey, minRecordKey)
         && Objects.equal(that.maxRecordKey, maxRecordKey);
 
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(fileName, minRecordKey, maxRecordKey);
+    return Objects.hashCode(fileId, minRecordKey, maxRecordKey);
   }
 
   public String toString() {
     final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
-    sb.append(" fileName=").append(fileName);
+    sb.append(" fileId=").append(fileId);
     sb.append(" minRecordKey=").append(minRecordKey);
     sb.append(" maxRecordKey=").append(maxRecordKey);
     sb.append('}');

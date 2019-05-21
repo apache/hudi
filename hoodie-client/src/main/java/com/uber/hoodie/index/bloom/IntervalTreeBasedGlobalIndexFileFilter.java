@@ -50,9 +50,9 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
     allIndexFiles.forEach(indexFile -> {
       if (indexFile.hasKeyRanges()) {
         indexLookUpTree.insert(new KeyRangeNode(indexFile.getMinRecordKey(),
-            indexFile.getMaxRecordKey(), indexFile.getFileName()));
+            indexFile.getMaxRecordKey(), indexFile.getFileId()));
       } else {
-        filesWithNoRanges.add(indexFile.getFileName());
+        filesWithNoRanges.add(indexFile.getFileId());
       }
     });
   }

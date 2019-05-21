@@ -29,6 +29,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.ReflectionUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieDependentSystemUnavailableException;
@@ -60,7 +61,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function2;
-
 import scala.Tuple2;
 
 /**
@@ -123,9 +123,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+  public JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
       JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
-    //TODO : Change/Remove filterExists in HoodieReadClient() and revisit
     throw new UnsupportedOperationException("HBase index does not implement check exist");
   }
 
@@ -297,7 +296,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                   }
                   Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN,
-                      Bytes.toBytes(loc.get().getCommitTime()));
+                      Bytes.toBytes(loc.get().getInstantTime()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN,
                       Bytes.toBytes(loc.get().getFileId()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN,
