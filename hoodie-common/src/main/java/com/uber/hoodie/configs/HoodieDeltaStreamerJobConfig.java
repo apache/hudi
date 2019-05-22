@@ -113,4 +113,7 @@ public class HoodieDeltaStreamerJobConfig extends AbstractJobConfig {
 
   @Parameter(names = {"--spark-master"}, description = "spark master to use.")
   public String sparkMaster = "local[2]";
+
+  @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
+  public Boolean commitOnErrors = false;
 }
