@@ -177,7 +177,7 @@ public class HoodieBloomIndexCheckFunction implements
             checkAndAddCandidates(recordKey);
           } else {
             // do the actual checking of file & break out
-            ret.add(new KeyLookupResult(currentFile, checkAgainstCurrentFile()));
+            ret.add(new KeyLookupResult(currentFile, currentPartitionPath, checkAgainstCurrentFile()));
             initState(fileName, partitionPath);
             checkAndAddCandidates(recordKey);
             break;
@@ -186,7 +186,7 @@ public class HoodieBloomIndexCheckFunction implements
 
         // handle case, where we ran out of input, close pending work, update return val
         if (!inputItr.hasNext()) {
-          ret.add(new KeyLookupResult(currentFile, checkAgainstCurrentFile()));
+          ret.add(new KeyLookupResult(currentFile, currentPartitionPath, checkAgainstCurrentFile()));
         }
       } catch (Throwable e) {
         if (e instanceof HoodieException) {
