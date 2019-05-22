@@ -20,6 +20,7 @@ package com.uber.hoodie.index.bloom;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
@@ -32,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
-
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -98,5 +98,26 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
           .map(file -> new Tuple2<>(file, new HoodieKey(recordKey, indexToPartitionMap.get(file))))
           .collect(Collectors.toList());
     }).flatMap(List::iterator);
+  }
+
+
+  /**
+   * Tagging for global index should only consider the record key
+   */
+  @Override
+  protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
+      JavaPairRDD<HoodieKey, String> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
+    JavaPairRDD<String, HoodieRecord<T>> rowKeyRecordPairRDD = recordRDD
+        .mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
+
+    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
+    // so we do left outer join.
+    return rowKeyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), p._2)))
+        .values().map(value -> getTaggedRecord(value._1, value._2));
+  }
+
+  @Override
+  public boolean isGlobal() {
+    return true;
   }
 }

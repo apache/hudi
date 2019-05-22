@@ -27,9 +27,11 @@ public class KeyLookupResult {
 
   private final String fileName;
   private final List<String> matchingRecordKeys;
+  private final String partitionPath;
 
-  public KeyLookupResult(String fileName, List<String> matchingRecordKeys) {
+  public KeyLookupResult(String fileName, String partitionPath, List<String> matchingRecordKeys) {
     this.fileName = fileName;
+    this.partitionPath = partitionPath;
     this.matchingRecordKeys = matchingRecordKeys;
   }
 
@@ -39,5 +41,9 @@ public class KeyLookupResult {
 
   public List<String> getMatchingRecordKeys() {
     return matchingRecordKeys;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
   }
 }
