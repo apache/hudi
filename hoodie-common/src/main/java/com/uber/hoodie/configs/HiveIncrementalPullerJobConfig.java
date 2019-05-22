@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HiveIncrementalPullerJobConfig extends AbstractJobConfig {
+public class HiveIncrementalPullerJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--hiveUrl"})
   public String hiveJDBCUrl = "jdbc:hive2://localhost:10014/;transportMode=http;httpPath=hs2";

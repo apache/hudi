@@ -23,7 +23,7 @@ import com.uber.hoodie.HoodieDataSourceHelpers;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractJobConfig;
+import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -46,7 +46,7 @@ import org.apache.spark.sql.streaming.ProcessingTime;
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource streaming
  */
-public class HoodieJavaStreamingApp extends AbstractJobConfig {
+public class HoodieJavaStreamingApp extends AbstractCommandConfig {
 
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
   private String tablePath = "file:///tmp/hoodie/streaming/sample-table";

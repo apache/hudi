@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HoodieCompactorJobConfig extends AbstractJobConfig {
+public class HoodieCompactorJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--base-path",
       "-bp"}, description = "Base path for the dataset", required = true)

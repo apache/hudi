@@ -21,14 +21,9 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 
-import com.uber.hoodie.configs.AbstractJobConfig;
-import com.uber.hoodie.configs.HDFSParquetImporterJobConfig;
-import com.uber.hoodie.configs.HoodieCommitRollbackJobConfig;
-import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig;
+import com.uber.hoodie.configs.*;
+import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig.Operation;
-import com.uber.hoodie.configs.HoodieCompactorJobConfig;
-import com.uber.hoodie.configs.HoodieDeduplicatePartitionJobConfig;
-import com.uber.hoodie.configs.HoodieRollbackToSavePointJobConfig;
 import com.uber.hoodie.exception.InvalidJobConfigException;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -41,7 +36,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-public class SubCommandJobConfigTest extends AbstractJobConfig {
+public class SubCommandJobConfigTest extends AbstractCommandConfig {
 
   enum SubCommandEnum {
     ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
@@ -62,7 +57,7 @@ public class SubCommandJobConfigTest extends AbstractJobConfig {
     System.setOut(System.out);
   }
 
-  private Map<String, AbstractJobConfig> commandConfigMap = new HashMap<>();
+  private Map<String, AbstractCommandConfig> commandConfigMap = new HashMap<>();
 
   {
     commandConfigMap.put(SubCommandEnum.ROLLBACK.name(), new HoodieCommitRollbackJobConfig());

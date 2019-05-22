@@ -25,7 +25,7 @@ import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.Map;
 
-public abstract class AbstractJobConfig implements Serializable {
+public abstract class AbstractCommandConfig implements Serializable {
 
   private static final String SPACE = " ";
 
@@ -110,9 +110,9 @@ public abstract class AbstractJobConfig implements Serializable {
     return parse(cmd, args, showHelpIfArgsLengthZero, exitJobOnHelp);
   }
 
-  public boolean parseJobConfig(String[] args, Map<String, AbstractJobConfig> commandConfigMap) {
-    JCommander cmd = JCommander.newBuilder().build();
-    for (Map.Entry<String, AbstractJobConfig> entry : commandConfigMap.entrySet()) {
+  public boolean parseJobConfig(String[] args, Map<String, AbstractCommandConfig> commandConfigMap) {
+    JCommander cmd = JCommander.newBuilder().addObject(this).build();
+    for (Map.Entry<String, AbstractCommandConfig> entry : commandConfigMap.entrySet()) {
       cmd.addCommand(entry.getKey(), entry.getValue());
     }
 
@@ -143,7 +143,7 @@ public abstract class AbstractJobConfig implements Serializable {
     return output;
   }
 
-  private void printUsage(JCommander cmd, AbstractJobConfig config) {
+  private void printUsage(JCommander cmd, AbstractCommandConfig config) {
     if (config.help) {
       cmd.usage();
     }

@@ -26,7 +26,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractJobConfig;
+import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.index.HoodieIndex.IndexType;
 import java.util.List;
 import java.util.Optional;
@@ -41,7 +41,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic operations. <p>
  */
-public class HoodieClientExample extends AbstractJobConfig {
+public class HoodieClientExample extends AbstractCommandConfig {
 
   private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
 

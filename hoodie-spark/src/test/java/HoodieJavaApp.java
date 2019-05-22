@@ -25,7 +25,7 @@ import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractJobConfig;
+import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import com.uber.hoodie.hive.NonPartitionedExtractor;
 import java.util.List;
@@ -42,7 +42,7 @@ import org.apache.spark.sql.SparkSession;
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource
  */
-public class HoodieJavaApp extends AbstractJobConfig {
+public class HoodieJavaApp extends AbstractCommandConfig {
 
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
   private String tablePath = "file:///tmp/hoodie/sample-table";

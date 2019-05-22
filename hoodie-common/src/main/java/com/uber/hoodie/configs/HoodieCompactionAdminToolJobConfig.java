@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HoodieCompactionAdminToolJobConfig extends AbstractJobConfig {
+public class HoodieCompactionAdminToolJobConfig extends AbstractCommandConfig {
 
   /**
    * Operation Types

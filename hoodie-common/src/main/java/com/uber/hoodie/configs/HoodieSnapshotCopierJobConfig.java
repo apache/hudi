@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HoodieSnapshotCopierJobConfig extends AbstractJobConfig {
+public class HoodieSnapshotCopierJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--base-path",
       "-bp"}, description = "Hoodie table base path", required = true)

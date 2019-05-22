@@ -22,7 +22,7 @@ import com.beust.jcommander.ParameterException;
 import java.util.Arrays;
 import java.util.List;
 
-public class HDFSParquetImporterJobConfig extends AbstractJobConfig {
+public class HDFSParquetImporterJobConfig extends AbstractCommandConfig {
 
   public static class FormatValidator implements IValueValidator<String> {
 

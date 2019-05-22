@@ -22,7 +22,7 @@ import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractJobConfig;
+import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.configs.HDFSParquetImporterJobConfig;
 import com.uber.hoodie.configs.HoodieCommitRollbackJobConfig;
 import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig;
@@ -39,7 +39,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
-public class SparkMain extends AbstractJobConfig {
+public class SparkMain extends AbstractCommandConfig {
 
   private static final Logger LOG = Logger.getLogger(SparkMain.class);
 
@@ -51,7 +51,7 @@ public class SparkMain extends AbstractJobConfig {
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR;
   }
 
-  private Map<String, AbstractJobConfig> commandConfigMap = new HashMap<>();
+  private Map<String, AbstractCommandConfig> commandConfigMap = new HashMap<>();
 
   {
     commandConfigMap.put(SparkCommand.ROLLBACK.name(), new HoodieCommitRollbackJobConfig());
@@ -78,7 +78,7 @@ public class SparkMain extends AbstractJobConfig {
 
     SparkMain mainRunner = new SparkMain();
     mainRunner.parseJobConfig(args, mainRunner.commandConfigMap);
-    AbstractJobConfig config = mainRunner.commandConfigMap.get(cmd.name());
+    AbstractCommandConfig config = mainRunner.commandConfigMap.get(cmd.name());
 
     JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
     int returnCode = 0;

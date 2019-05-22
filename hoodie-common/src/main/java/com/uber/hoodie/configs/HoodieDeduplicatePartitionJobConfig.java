@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HoodieDeduplicatePartitionJobConfig extends AbstractJobConfig {
+public class HoodieDeduplicatePartitionJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--duplicated-partition-path",
       "-dpp"}, description = "Duplicated partition path for deduplication", required = true)

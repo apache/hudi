@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HoodieRollbackToSavePointJobConfig extends AbstractJobConfig {
+public class HoodieRollbackToSavePointJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--savepoint-time",
       "-sp"}, description = "Savepoint time for rollback", required = true)

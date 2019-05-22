@@ -25,7 +25,7 @@ import java.util.List;
 /**
  * Configs needed to sync data into Hive.
  */
-public class HiveSyncJobConfig extends AbstractJobConfig {
+public class HiveSyncJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {
       "--database"}, description = "name of the target database in Hive", required = true)

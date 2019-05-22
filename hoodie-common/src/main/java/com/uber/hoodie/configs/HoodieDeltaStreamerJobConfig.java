@@ -24,7 +24,7 @@ import com.beust.jcommander.ParameterException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HoodieDeltaStreamerJobConfig extends AbstractJobConfig {
+public class HoodieDeltaStreamerJobConfig extends AbstractCommandConfig {
 
   public enum Operation {
     UPSERT, INSERT, BULK_INSERT

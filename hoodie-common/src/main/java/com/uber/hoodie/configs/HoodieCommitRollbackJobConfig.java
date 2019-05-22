@@ -20,7 +20,7 @@ package com.uber.hoodie.configs;
 
 import com.beust.jcommander.Parameter;
 
-public class HoodieCommitRollbackJobConfig extends AbstractJobConfig {
+public class HoodieCommitRollbackJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--commit-time",
       "-sp"}, description = "Commit time for rollback", required = true)

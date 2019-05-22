@@ -20,7 +20,7 @@ import com.beust.jcommander.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HoodieCleanerJobConfig extends AbstractJobConfig {
+public class HoodieCleanerJobConfig extends AbstractCommandConfig {
 
   @Parameter(names = {"--target-base-path"}, description = "base path for the hoodie dataset to be cleaner.",
       required = true)
