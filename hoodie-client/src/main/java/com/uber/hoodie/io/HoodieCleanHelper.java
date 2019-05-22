@@ -25,9 +25,8 @@ import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
-import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.SyncableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
@@ -51,7 +50,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
   private static Logger logger = LogManager.getLogger(HoodieCleanHelper.class);
 
-  private final TableFileSystemView fileSystemView;
+  private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
   private HoodieTable<T> hoodieTable;
@@ -59,12 +58,13 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
   public HoodieCleanHelper(HoodieTable<T> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
-    this.fileSystemView = hoodieTable.getCompletedFileSystemView();
+    this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
     this.config = config;
     this.fgIdToPendingCompactionOperations =
-        ((HoodieTableFileSystemView)hoodieTable.getRTFileSystemView()).getFgIdToPendingCompaction().entrySet()
-            .stream().map(entry -> Pair.of(entry.getKey(), entry.getValue().getValue()))
+        ((SyncableFileSystemView)hoodieTable.getRTFileSystemView()).getPendingCompactionOperations()
+            .map(entry -> Pair.of(new HoodieFileGroupId(entry.getValue().getPartitionPath(),
+                    entry.getValue().getFileId()), entry.getValue()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
@@ -86,7 +86,14 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
 
     for (HoodieFileGroup fileGroup : fileGroups) {
       int keepVersions = config.getCleanerFileVersionsRetained();
-      Iterator<FileSlice> fileSliceIterator = fileGroup.getAllFileSlices().iterator();
+      // do not cleanup slice required for pending compaction
+      Iterator<FileSlice> fileSliceIterator = fileGroup.getAllFileSlices()
+          .filter(fs -> !isFileSliceNeededForPendingCompaction(fs)).iterator();
+      if (isFileGroupInPendingCompaction(fileGroup)) {
+        // We have already saved the last version of file-groups for pending compaction Id
+        keepVersions--;
+      }
+
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
         FileSlice nextSlice = fileSliceIterator.next();
@@ -100,16 +107,14 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
       // Delete the remaining files
       while (fileSliceIterator.hasNext()) {
         FileSlice nextSlice = fileSliceIterator.next();
-        if (!isFileSliceNeededForPendingCompaction(nextSlice)) {
-          if (nextSlice.getDataFile().isPresent()) {
-            HoodieDataFile dataFile = nextSlice.getDataFile().get();
-            deletePaths.add(dataFile.getFileStatus().getPath().toString());
-          }
-          if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-            // If merge on read, then clean the log files for the commits as well
-            deletePaths.addAll(nextSlice.getLogFiles().map(file -> file.getPath().toString())
-                .collect(Collectors.toList()));
-          }
+        if (nextSlice.getDataFile().isPresent()) {
+          HoodieDataFile dataFile = nextSlice.getDataFile().get();
+          deletePaths.add(dataFile.getPath());
+        }
+        if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
+          // If merge on read, then clean the log files for the commits as well
+          deletePaths.addAll(nextSlice.getLogFiles().map(file -> file.getPath().toString())
+              .collect(Collectors.toList()));
         }
       }
     }
@@ -180,7 +185,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime,
                   HoodieTimeline.GREATER)) {
             // this is a commit, that should be cleaned.
-            aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getFileStatus().getPath().toString()));
+            aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getPath()));
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
               deletePaths.addAll(aSlice.getLogFiles().map(file -> file.getPath().toString())
@@ -257,5 +262,9 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
           HoodieTimeline.GREATER_OR_EQUAL);
     }
     return false;
+  }
+
+  private boolean isFileGroupInPendingCompaction(HoodieFileGroup fg) {
+    return fgIdToPendingCompactionOperations.containsKey(fg.getFileGroupId());
   }
 }

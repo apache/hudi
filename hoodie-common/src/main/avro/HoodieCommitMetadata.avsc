@@ -92,6 +92,11 @@
                         "name":"totalRollbackBlocks",
                         "type":["null","long"],
                         "default" : null
+                     },
+                     {
+                        "name":"fileSizeInBytes",
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }

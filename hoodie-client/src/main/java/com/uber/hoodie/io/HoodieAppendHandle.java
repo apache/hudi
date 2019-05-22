@@ -26,25 +26,25 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
-import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.table.TableFileSystemView.RealtimeView;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
 import com.uber.hoodie.common.table.log.HoodieLogFormat.Writer;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieAppendException;
 import com.uber.hoodie.exception.HoodieUpsertException;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -67,7 +67,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private List<IndexedRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
   private List<HoodieKey> keysToDelete = new ArrayList<>();
-  private TableFileSystemView.RealtimeView fileSystemView;
+
   private String partitionPath;
   private Iterator<HoodieRecord<T>> recordItr;
   // Total number of records written during an append
@@ -95,30 +95,29 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
   public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    super(config, commitTime, hoodieTable);
+    super(config, commitTime, fileId, hoodieTable);
     writeStatus.setStat(new HoodieDeltaWriteStat());
     this.fileId = fileId;
-    this.fileSystemView = hoodieTable.getRTFileSystemView();
     this.recordItr = recordItr;
   }
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable) {
-    this(config, commitTime, hoodieTable, UUID.randomUUID().toString(), null);
+  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable, String fileId) {
+    this(config, commitTime, hoodieTable, fileId, null);
   }
 
   private void init(HoodieRecord record) {
     if (doInit) {
       this.partitionPath = record.getPartitionPath();
       // extract some information from the first record
-      Optional<FileSlice> fileSlice = fileSystemView.getLatestFileSlices(partitionPath)
-          .filter(fileSlice1 -> fileSlice1.getFileId().equals(fileId)).findFirst();
+      RealtimeView rtView = hoodieTable.getRTFileSystemView();
+      Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       // Set the base commit time as the current commitTime for new inserts into log files
       String baseInstantTime = commitTime;
       if (fileSlice.isPresent()) {
         baseInstantTime = fileSlice.get().getBaseInstantTime();
       } else {
         // This means there is no base data file, start appending to a new log file
-        fileSlice = Optional.of(new FileSlice(partitionPath, baseInstantTime, this.fileId));
+        fileSlice = Option.of(new FileSlice(partitionPath, baseInstantTime, this.fileId));
         logger.info("New InsertHandle for partition :" + partitionPath);
       }
       writeStatus.getStat().setPrevCommit(baseInstantTime);
@@ -242,6 +241,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     try {
       // flush any remaining records to disk
       doAppend(header);
+      long sizeInBytes = writer.getCurrentSize();
       if (writer != null) {
         writer.close();
       }
@@ -251,7 +251,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       writeStatus.getStat().setNumInserts(insertRecordsWritten);
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
-      writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
+      writeStatus.getStat().setFileSizeInBytes(sizeInBytes);
+      writeStatus.getStat().setTotalWriteErrors(writeStatus.getTotalErrorRecords());
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       writeStatus.getStat().setRuntimeStats(runtimeStats);
@@ -266,14 +267,18 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
     return writeStatus;
   }
 
-  private Writer createLogWriter(Optional<FileSlice> fileSlice, String baseCommitTime)
+  private Writer createLogWriter(Option<FileSlice> fileSlice, String baseCommitTime)
       throws IOException, InterruptedException {
+    Optional<HoodieLogFile> latestLogFile = fileSlice.get().getLatestLogFile();
+
     return HoodieLogFormat.newWriterBuilder()
         .onParentPath(new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath))
         .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(
-            fileSlice.get().getLogFiles().map(logFile -> logFile.getLogVersion())
-                .max(Comparator.naturalOrder()).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+            latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
         .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs)
+        .withLogWriteToken(
+            latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
+        .withRolloverLogWriteToken(writeToken)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
 

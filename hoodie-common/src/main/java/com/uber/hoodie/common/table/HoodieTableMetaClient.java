@@ -61,6 +61,7 @@ public class HoodieTableMetaClient implements Serializable {
   public static String METAFOLDER_NAME = ".hoodie";
   public static String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
   public static String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
+  public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
   private transient FileSystem fs;
@@ -143,6 +144,22 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * @return Temp Folder path
+   */
+  public String getTempFolderPath() {
+    return basePath + File.separator + TEMPFOLDER_NAME;
+  }
+
+  /**
+   *  Returns Marker folder path
+    * @param instantTs Instant Timestamp
+   * @return
+   */
+  public String getMarkerFolderPath(String instantTs) {
+    return String.format("%s%s%s", getTempFolderPath(), File.separator, instantTs);
+  }
+
+  /**
    * @return Auxiliary Meta path
    */
   public String getMetaAuxiliaryPath() {
@@ -191,6 +208,16 @@ public class HoodieTableMetaClient implements Serializable {
     if (activeTimeline == null) {
       activeTimeline = new HoodieActiveTimeline(this);
     }
+    return activeTimeline;
+  }
+
+  /**
+   * Reload ActiveTimeline and cache
+   *
+   * @return Active instants timeline
+   */
+  public synchronized HoodieActiveTimeline reloadActiveTimeline() {
+    activeTimeline = new HoodieActiveTimeline(this);
     return activeTimeline;
   }
 
@@ -405,5 +432,21 @@ public class HoodieTableMetaClient implements Serializable {
     sb.append(", tableType=").append(tableType);
     sb.append('}');
     return sb.toString();
+  }
+
+  public void setBasePath(String basePath) {
+    this.basePath = basePath;
+  }
+
+  public void setMetaPath(String metaPath) {
+    this.metaPath = metaPath;
+  }
+
+  public void setActiveTimeline(HoodieActiveTimeline activeTimeline) {
+    this.activeTimeline = activeTimeline;
+  }
+
+  public void setTableConfig(HoodieTableConfig tableConfig) {
+    this.tableConfig = tableConfig;
   }
 }

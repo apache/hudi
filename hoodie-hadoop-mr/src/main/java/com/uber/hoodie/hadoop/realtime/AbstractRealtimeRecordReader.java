@@ -361,8 +361,9 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   public long getMaxCompactionMemoryInBytes() {
+    // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math.ceil(Double
         .valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
-        * jobConf.getMemoryForMapTask());
+        * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 }

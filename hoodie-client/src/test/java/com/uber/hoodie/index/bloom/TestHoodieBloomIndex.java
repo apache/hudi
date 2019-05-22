@@ -36,11 +36,18 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.commons.io.IOUtils;
@@ -53,8 +60,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import scala.Tuple2;
 
+@RunWith(Parameterized.class)
 public class TestHoodieBloomIndex {
 
   private JavaSparkContext jsc = null;
@@ -63,7 +73,21 @@ public class TestHoodieBloomIndex {
   private String schemaStr;
   private Schema schema;
 
-  public TestHoodieBloomIndex() throws Exception {
+  private boolean rangePruning;
+  private boolean treeFiltering;
+  private boolean bucketizedChecking;
+
+  @Parameterized.Parameters(name = "{index}: Test with rangePruning={0}, treeFiltering ={1}, bucketizedChecking is:{2}")
+  public static Collection<Object[]> data() {
+    Object[][] data = new Object[][]{{true, true, true}, {false, true, true}, {true, true, false},
+        {true, false, true}};
+    return Arrays.asList(data);
+  }
+
+  public TestHoodieBloomIndex(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
+    this.rangePruning = rangePruning;
+    this.treeFiltering = treeFiltering;
+    this.bucketizedChecking = bucketizedChecking;
   }
 
   @Before
@@ -89,6 +113,18 @@ public class TestHoodieBloomIndex {
     if (jsc != null) {
       jsc.stop();
     }
+  }
+
+  private HoodieWriteConfig makeConfig() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexPruneByRanges(rangePruning)
+            .bloomIndexTreebasedFilter(treeFiltering)
+            .bloomIndexBucketizedChecking(bucketizedChecking)
+            .bloomIndexKeysPerBucket(2)
+            .build())
+        .build();
+    return config;
   }
 
   @Test
@@ -130,7 +166,7 @@ public class TestHoodieBloomIndex {
 
   @Test
   public void testLoadInvolvedFiles() throws IOException {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = makeConfig();
     HoodieBloomIndex index = new HoodieBloomIndex(config);
 
     // Create some partitions, and put some files
@@ -188,58 +224,57 @@ public class TestHoodieBloomIndex {
     table = HoodieTable.getHoodieTable(metadata, config, jsc);
     filesList = index.loadInvolvedFiles(partitions, jsc, table);
     assertEquals(filesList.size(), 4);
-    // these files will not have the key ranges
-    assertNull(filesList.get(0)._2().getMaxRecordKey());
-    assertNull(filesList.get(0)._2().getMinRecordKey());
-    assertFalse(filesList.get(1)._2().hasKeyRanges());
-    assertNotNull(filesList.get(2)._2().getMaxRecordKey());
-    assertNotNull(filesList.get(2)._2().getMinRecordKey());
-    assertTrue(filesList.get(3)._2().hasKeyRanges());
 
-    // no longer sorted, but should have same files.
+    if (rangePruning) {
+      // these files will not have the key ranges
+      assertNull(filesList.get(0)._2().getMaxRecordKey());
+      assertNull(filesList.get(0)._2().getMinRecordKey());
+      assertFalse(filesList.get(1)._2().hasKeyRanges());
+      assertNotNull(filesList.get(2)._2().getMaxRecordKey());
+      assertNotNull(filesList.get(2)._2().getMinRecordKey());
+      assertTrue(filesList.get(3)._2().hasKeyRanges());
 
-    List<Tuple2<String, BloomIndexFileInfo>> expected = Arrays.asList(
-        new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2_0_20160401010101.parquet")),
-        new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1_0_20150312101010.parquet")),
-        new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3_0_20150312101010.parquet", "000", "000")),
-        new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4_0_20150312101010.parquet", "001", "003")));
-    assertEquals(expected, filesList);
-  }
+      // no longer sorted, but should have same files.
 
-  @Test
-  public void testRangePruning() {
-    for (Boolean rangePruning : new boolean[]{false, true}) {
-      Map<String, String> props = new HashMap<>();
-      props.put("hoodie.bloom.index.prune.by" + ".ranges", rangePruning.toString());
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
-      HoodieBloomIndex index = new HoodieBloomIndex(config);
-
-      final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
-      partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
-          new BloomIndexFileInfo("f2", "000", "000"), new BloomIndexFileInfo("f3", "001", "003"),
-          new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
-
-      JavaPairRDD<String, String> partitionRecordKeyPairRDD = jsc.parallelize(Arrays.asList(
-          new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"), new Tuple2<>("2017/10/22", "005"),
-          new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
-
-      List<Tuple2<String, Tuple2<String, HoodieKey>>> comparisonKeyList = index.explodeRecordRDDWithFileComparisons(
-          partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
-
-      assertEquals(10, comparisonKeyList.size());
-      Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream().collect(Collectors.groupingBy(
-          t -> t._2()._2().getRecordKey(), Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList())));
-
-      assertEquals(4, recordKeyToFileComps.size());
-      assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("002")));
-      assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("003")));
-      assertEquals(new HashSet<>(Arrays.asList("f1", "f4")), new HashSet<>(recordKeyToFileComps.get("004")));
-      assertEquals(new HashSet<>(Arrays.asList("f1", "f4")), new HashSet<>(recordKeyToFileComps.get("005")));
+      List<Tuple2<String, BloomIndexFileInfo>> expected = Arrays.asList(
+          new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2_0_20160401010101.parquet")),
+          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1_0_20150312101010.parquet")),
+          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3_0_20150312101010.parquet", "000", "000")),
+          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4_0_20150312101010.parquet", "001", "003")));
+      assertEquals(expected, filesList);
     }
   }
 
   @Test
-  public void testCheckUUIDsAgainstOneFile() throws IOException, InterruptedException, ClassNotFoundException {
+  public void testRangePruning() {
+    HoodieWriteConfig config = makeConfig();
+    HoodieBloomIndex index = new HoodieBloomIndex(config);
+
+    final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
+    partitionToFileIndexInfo.put("2017/10/22", Arrays.asList(new BloomIndexFileInfo("f1"),
+        new BloomIndexFileInfo("f2", "000", "000"), new BloomIndexFileInfo("f3", "001", "003"),
+        new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
+
+    JavaPairRDD<String, String> partitionRecordKeyPairRDD = jsc.parallelize(Arrays.asList(
+        new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"), new Tuple2<>("2017/10/22", "005"),
+        new Tuple2<>("2017/10/22", "004"))).mapToPair(t -> t);
+
+    List<Tuple2<String, HoodieKey>> comparisonKeyList = index.explodeRecordRDDWithFileComparisons(
+        partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
+
+    assertEquals(10, comparisonKeyList.size());
+    Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream().collect(Collectors.groupingBy(
+        t -> t._2.getRecordKey(), Collectors.mapping(t -> t._1, Collectors.toList())));
+
+    assertEquals(4, recordKeyToFileComps.size());
+    assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("002")));
+    assertEquals(new HashSet<>(Arrays.asList("f1", "f3", "f4")), new HashSet<>(recordKeyToFileComps.get("003")));
+    assertEquals(new HashSet<>(Arrays.asList("f1", "f4")), new HashSet<>(recordKeyToFileComps.get("004")));
+    assertEquals(new HashSet<>(Arrays.asList("f1", "f4")), new HashSet<>(recordKeyToFileComps.get("005")));
+  }
+
+  @Test
+  public void testCheckUUIDsAgainstOneFile() throws IOException, InterruptedException {
 
     // Create some records to use
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -299,7 +334,7 @@ public class TestHoodieBloomIndex {
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = makeConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
@@ -315,76 +350,71 @@ public class TestHoodieBloomIndex {
 
   @Test
   public void testTagLocation() throws Exception {
-    for (Boolean rangePruning : new boolean[]{false, true}) {
-      Map<String, String> props = new HashMap<>();
-      props.put("hoodie.bloom.index.prune.by" + ".ranges", rangePruning.toString());
-      // We have some records to be tagged (two different partitions)
+    // We have some records to be tagged (two different partitions)
+    String rowKey1 = UUID.randomUUID().toString();
+    String rowKey2 = UUID.randomUUID().toString();
+    String rowKey3 = UUID.randomUUID().toString();
+    String rowKey4 = UUID.randomUUID().toString();
+    String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
+    String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\","
+        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
+    String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    String recordStr4 = "{\"_row_key\":\"" + rowKey4 + "\","
+        + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
+    TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
+    HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
+        rowChange1);
+    TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
+    HoodieRecord record2 = new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()),
+        rowChange2);
+    TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
+    HoodieRecord record3 = new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
+        rowChange3);
+    TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
+    HoodieRecord record4 = new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()),
+        rowChange4);
+    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
-      String rowKey1 = UUID.randomUUID().toString();
-      String rowKey2 = UUID.randomUUID().toString();
-      String rowKey3 = UUID.randomUUID().toString();
-      String rowKey4 = UUID.randomUUID().toString();
-      String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-      String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\","
-          + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-      String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-      String recordStr4 = "{\"_row_key\":\"" + rowKey4 + "\","
-          + "\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-      TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-      HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
-          rowChange1);
-      TestRawTripPayload rowChange2 = new TestRawTripPayload(recordStr2);
-      HoodieRecord record2 = new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()),
-          rowChange2);
-      TestRawTripPayload rowChange3 = new TestRawTripPayload(recordStr3);
-      HoodieRecord record3 = new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()),
-          rowChange3);
-      TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
-      HoodieRecord record4 = new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()),
-          rowChange4);
-      JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
+    // Also create the metadata and config
+    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieWriteConfig config = makeConfig();
+    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
-      // Also create the metadata and config
-      HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-      HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withProps(props).build();
-      HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    // Let's tag
+    HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
+    JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
-      // Let's tag
-      HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
-      JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
+    // Should not find any files
+    for (HoodieRecord record : taggedRecordRDD.collect()) {
+      assertFalse(record.isCurrentLocationKnown());
+    }
 
-      // Should not find any files
-      for (HoodieRecord record : taggedRecordRDD.collect()) {
-        assertFalse(record.isCurrentLocationKnown());
-      }
+    // We create three parquet file, each having one record. (two different partitions)
+    String filename1 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
+    String filename2 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
+    String filename3 =
+        HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
 
-      // We create three parquet file, each having one record. (two different partitions)
-      String filename1 =
-          HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, null, true);
-      String filename2 =
-          HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record2), schema, null, true);
-      String filename3 =
-          HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
+    // We do the tag again
+    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
-      // We do the tag again
-      metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-      table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
-      taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
-
-      // Check results
-      for (HoodieRecord record : taggedRecordRDD.collect()) {
-        if (record.getRecordKey().equals(rowKey1)) {
-          assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename1)));
-        } else if (record.getRecordKey().equals(rowKey2)) {
-          assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
-        } else if (record.getRecordKey().equals(rowKey3)) {
-          assertTrue(!record.isCurrentLocationKnown());
-        } else if (record.getRecordKey().equals(rowKey4)) {
-          assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
-        }
+    // Check results
+    for (HoodieRecord record : taggedRecordRDD.collect()) {
+      if (record.getRecordKey().equals(rowKey1)) {
+        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename1)));
+      } else if (record.getRecordKey().equals(rowKey2)) {
+        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
+      } else if (record.getRecordKey().equals(rowKey3)) {
+        assertTrue(!record.isCurrentLocationKnown());
+      } else if (record.getRecordKey().equals(rowKey4)) {
+        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
       }
     }
   }
@@ -417,7 +447,7 @@ public class TestHoodieBloomIndex {
 
     // Also create the metadata and config
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = makeConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     // Let's tag
@@ -490,7 +520,7 @@ public class TestHoodieBloomIndex {
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = makeConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
 
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);

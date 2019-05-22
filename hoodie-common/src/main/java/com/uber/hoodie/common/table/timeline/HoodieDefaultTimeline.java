@@ -17,11 +17,17 @@
 package com.uber.hoodie.common.table.timeline;
 
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.util.StringUtils;
+import com.uber.hoodie.exception.HoodieException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -36,13 +42,29 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   private static final transient Logger log = LogManager.getLogger(HoodieDefaultTimeline.class);
 
-  protected Function<HoodieInstant, Optional<byte[]>> details;
-  protected List<HoodieInstant> instants;
+  private static final String HASHING_ALGORITHM = "SHA-256";
+
+  protected transient Function<HoodieInstant, Optional<byte[]>> details;
+  private List<HoodieInstant> instants;
+  private String timelineHash;
 
   public HoodieDefaultTimeline(Stream<HoodieInstant> instants,
       Function<HoodieInstant, Optional<byte[]>> details) {
-    this.instants = instants.collect(Collectors.toList());
     this.details = details;
+    setInstants(instants.collect(Collectors.toList()));
+  }
+
+  public void setInstants(List<HoodieInstant> instants) {
+    this.instants = instants;
+    final MessageDigest md;
+    try {
+      md = MessageDigest.getInstance(HASHING_ALGORITHM);
+      this.instants.stream().forEach(i -> md.update(
+          StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()).getBytes()));
+    } catch (NoSuchAlgorithmException nse) {
+      throw new HoodieException(nse);
+    }
+    this.timelineHash = new String(Hex.encodeHex(md.digest()));
   }
 
   /**
@@ -102,6 +124,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filter(Predicate<HoodieInstant> filter) {
+    return new HoodieDefaultTimeline(instants.stream().filter(filter), details);
+  }
+
+  @Override
   public boolean empty() {
     return !instants.stream().findFirst().isPresent();
   }
@@ -149,6 +176,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public String getTimelineHash() {
+    return timelineHash;
+  }
+
+  @Override
   public Stream<HoodieInstant> getInstants() {
     return instants.stream();
   }
@@ -159,7 +191,6 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return firstCommit.isPresent()
         && HoodieTimeline.compareTimestamps(instant, firstCommit.get().getTimestamp(), LESSER);
   }
-
 
   @Override
   public Optional<byte[]> getInstantDetails(HoodieInstant instant) {

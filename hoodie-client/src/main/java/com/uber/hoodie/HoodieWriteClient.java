@@ -62,7 +62,6 @@ import com.uber.hoodie.table.UserDefinedBulkInsertPartitioner;
 import com.uber.hoodie.table.WorkloadProfile;
 import com.uber.hoodie.table.WorkloadStat;
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.Arrays;
@@ -73,7 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileSystem;
+import java.util.stream.IntStream;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -92,12 +91,9 @@ import scala.Tuple2;
  * Note that, at any given time, there can only be one Spark job performing these operatons on a
  * Hoodie dataset.
  */
-public class HoodieWriteClient<T extends HoodieRecordPayload> implements Serializable {
+public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
   private static Logger logger = LogManager.getLogger(HoodieWriteClient.class);
-  private final transient FileSystem fs;
-  private final transient JavaSparkContext jsc;
-  private final HoodieWriteConfig config;
   private final boolean rollbackInFlight;
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
@@ -126,9 +122,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
   @VisibleForTesting
   HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
       boolean rollbackInFlight, HoodieIndex index) {
-    this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
-    this.jsc = jsc;
-    this.config = clientConfig;
+    super(jsc, clientConfig);
     this.index = index;
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackInFlight = rollbackInFlight;
@@ -160,7 +154,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx();
+    HoodieTable<T> table = getTableAndInitCtx(records);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords = combineOnCondition(
@@ -189,7 +183,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
       final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx();
+    HoodieTable<T> table = getTableAndInitCtx(preppedRecords);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, true);
     } catch (Throwable e) {
@@ -213,7 +207,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx();
+    HoodieTable<T> table = getTableAndInitCtx(records);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords = combineOnCondition(
@@ -241,7 +235,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
       final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx();
+    HoodieTable<T> table = getTableAndInitCtx(preppedRecords);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, false);
     } catch (Throwable e) {
@@ -290,7 +284,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx();
+    HoodieTable<T> table = getTableAndInitCtx(records);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords = combineOnCondition(
@@ -324,7 +318,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords,
       final String commitTime, Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx();
+    HoodieTable<T> table = getTableAndInitCtx(preppedRecords);
     try {
       return bulkInsertInternal(preppedRecords, commitTime, table, bulkInsertPartitioner);
     } catch (Throwable e) {
@@ -340,9 +334,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       String commitTime, HoodieTable<T> table,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;
+    final int parallelism = config.getBulkInsertShuffleParallelism();
     if (bulkInsertPartitioner.isDefined()) {
       repartitionedRecords = bulkInsertPartitioner.get()
-          .repartitionRecords(dedupedRecords, config.getBulkInsertShuffleParallelism());
+          .repartitionRecords(dedupedRecords, parallelism);
     } else {
       // Now, sort the records and line them up nicely for loading.
       repartitionedRecords = dedupedRecords.sortBy(record -> {
@@ -350,10 +345,16 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
         // the records split evenly across RDD partitions, such that small partitions fit
         // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
         return String.format("%s+%s", record.getPartitionPath(), record.getRecordKey());
-      }, true, config.getBulkInsertShuffleParallelism());
+      }, true, parallelism);
     }
+
+    //generate new file ID prefixes for each output partition
+    final List<String> fileIDPrefixes = IntStream.range(0, parallelism)
+        .mapToObj(i -> FSUtils.createNewFileIdPfx())
+        .collect(Collectors.toList());
+
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
-        .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table), true)
+        .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table, fileIDPrefixes), true)
         .flatMap(writeStatuses -> writeStatuses.iterator());
 
     return updateIndexAndCommitIfNeeded(writeStatusRDD, table, commitTime);
@@ -505,20 +506,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     updateMetadataAndRollingStats(actionType, metadata, stats);
 
     // Finalize write
-    final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
-    try {
-      table.finalizeWrite(jsc, stats);
-      if (finalizeCtx != null) {
-        Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
-        durationInMs.ifPresent(duration -> {
-          logger.info("Finalize write elapsed time (milliseconds): " + duration);
-          metrics.updateFinalizeWriteMetrics(duration, stats.size());
-        });
-      }
-    } catch (HoodieIOException ioe) {
-      throw new HoodieCommitException(
-          "Failed to complete commit " + commitTime + " due to finalize errors.", ioe);
-    }
+    finalizeWrite(table, commitTime, stats);
 
     // add in extra metadata
     if (extraMetadata.isPresent()) {
@@ -977,7 +965,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
    * Releases any resources used by the client.
    */
   public void close() {
-    // UNDER CONSTRUCTION
+    // Stop timeline-server if running
+    super.close();
   }
 
   /**
@@ -1189,8 +1178,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
   }
 
-  private HoodieTable getTableAndInitCtx() {
-    // Create a Hoodie table which encapsulated the commits and files visible
+  private HoodieTable getTableAndInitCtx(JavaRDD<HoodieRecord<T>> records) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.getHoodieTable(
         new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true), config, jsc);
@@ -1277,7 +1265,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
       String compactionCommitTime, boolean autoCommit, Optional<Map<String, String>> extraMetadata) {
     if (autoCommit) {
       HoodieCommitMetadata metadata =
-          doCompactionCommit(compactedStatuses, table.getMetaClient(), compactionCommitTime, extraMetadata);
+          doCompactionCommit(table, compactedStatuses, compactionCommitTime, extraMetadata);
       if (compactionTimer != null) {
         long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
         try {
@@ -1295,6 +1283,23 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     }
   }
 
+  private void finalizeWrite(HoodieTable<T> table, String instantTime, List<HoodieWriteStat> stats) {
+    try {
+      final Timer.Context finalizeCtx = metrics.getFinalizeCtx();
+      table.finalizeWrite(jsc, instantTime, stats);
+      if (finalizeCtx != null) {
+        Optional<Long> durationInMs = Optional.of(metrics.getDurationInMs(finalizeCtx.stop()));
+        durationInMs.ifPresent(duration -> {
+          logger.info("Finalize write elapsed time (milliseconds): " + duration);
+          metrics.updateFinalizeWriteMetrics(duration, stats.size());
+        });
+      }
+    } catch (HoodieIOException ioe) {
+      throw new HoodieCommitException(
+          "Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
+    }
+  }
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
    *
@@ -1308,8 +1313,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }
 
-  private HoodieCommitMetadata doCompactionCommit(JavaRDD<WriteStatus> writeStatuses,
-      HoodieTableMetaClient metaClient, String compactionCommitTime, Optional<Map<String, String>> extraMetadata) {
+  private HoodieCommitMetadata doCompactionCommit(HoodieTable<T> table, JavaRDD<WriteStatus> writeStatuses,
+      String compactionCommitTime, Optional<Map<String, String>> extraMetadata) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat)
         .collect();
 
@@ -1317,6 +1323,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     for (HoodieWriteStat stat : updateStatusMap) {
       metadata.addWriteStat(stat.getPartitionPath(), stat);
     }
+
+    // Finalize write
+    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
+    finalizeWrite(table, compactionCommitTime, stats);
 
     // Copy extraMetadata
     extraMetadata.ifPresent(m -> {
@@ -1348,7 +1358,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> implements Seriali
     Optional<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
     compactionInstantTimeOpt.ifPresent(compactionInstantTime -> {
       try {
-        compact(compactionInstantTime);
+        // inline compaction should auto commit as the user is never given control
+        compact(compactionInstantTime, true);
       } catch (IOException ioe) {
         throw new HoodieIOException(ioe.getMessage(), ioe);
       }

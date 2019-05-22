@@ -49,6 +49,8 @@ import org.junit.Assert;
 
 public class CompactionTestUtils {
 
+  private static String TEST_WRITE_TOKEN = "1-0-1";
+
   public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> setupAndValidateCompactionOperations(
       HoodieTableMetaClient metaClient, boolean inflight,
       int numEntriesInPlan1, int numEntriesInPlan2,
@@ -151,7 +153,7 @@ public class CompactionTestUtils {
         FileSlice slice = new FileSlice(DEFAULT_PARTITION_PATHS[0], instantId, fileId);
         if (createDataFile) {
           slice.setDataFile(new TestHoodieDataFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0]
-              + "/" + FSUtils.makeDataFileName(instantId, 1, fileId)));
+              + "/" + FSUtils.makeDataFileName(instantId, TEST_WRITE_TOKEN, fileId)));
         }
         String logFilePath1 = HoodieTestUtils
             .getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0], instantId, fileId,
@@ -182,7 +184,7 @@ public class CompactionTestUtils {
     private final String path;
 
     public TestHoodieDataFile(String path) {
-      super(null);
+      super("/tmp/ce481ee7-9e53-4a2e-9992-f9e295fa79c0_11_20180918020003.parquet");
       this.path = path;
     }
 

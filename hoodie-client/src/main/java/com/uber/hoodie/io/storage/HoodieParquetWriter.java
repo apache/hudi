@@ -17,6 +17,7 @@
 package com.uber.hoodie.io.storage;
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
+import com.uber.hoodie.common.io.storage.HoodieWrapperFileSystem;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.FSUtils;

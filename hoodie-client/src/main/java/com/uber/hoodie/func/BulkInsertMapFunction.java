@@ -35,17 +35,19 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload> implements
   private String commitTime;
   private HoodieWriteConfig config;
   private HoodieTable<T> hoodieTable;
+  private List<String> fileIDPrefixes;
 
   public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config,
-      HoodieTable<T> hoodieTable) {
+      HoodieTable<T> hoodieTable, List<String> fileIDPrefixes) {
     this.commitTime = commitTime;
     this.config = config;
     this.hoodieTable = hoodieTable;
+    this.fileIDPrefixes = fileIDPrefixes;
   }
 
   @Override
-  public Iterator<List<WriteStatus>> call(Integer partition,
-      Iterator<HoodieRecord<T>> sortedRecordItr) throws Exception {
-    return new CopyOnWriteLazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable);
+  public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> sortedRecordItr) {
+    return new CopyOnWriteLazyInsertIterable<>(sortedRecordItr, config, commitTime, hoodieTable,
+        fileIDPrefixes.get(partition));
   }
 }

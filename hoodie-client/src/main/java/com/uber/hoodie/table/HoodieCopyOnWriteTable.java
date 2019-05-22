@@ -28,8 +28,6 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
-import com.uber.hoodie.common.model.HoodieWriteStat;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -52,13 +50,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
@@ -186,9 +182,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, Optional<HoodieDataFile> dataFileOpt) throws IOException {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieDataFile oldDataFile) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileId, keyToNewRecords, dataFileOpt);
+    HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, commitTime, fileId);
   }
 
@@ -231,18 +227,18 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   protected HoodieMergeHandle getUpdateHandle(String commitTime, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, Optional<HoodieDataFile> dataFileToBeMerged) {
+      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieDataFile dataFileToBeMerged) {
     return new HoodieMergeHandle<>(config, commitTime, this, keyToNewRecords, fileId, dataFileToBeMerged);
   }
 
-  public Iterator<List<WriteStatus>> handleInsert(String commitTime,
+  public Iterator<List<WriteStatus>> handleInsert(String commitTime, String idPfx,
       Iterator<HoodieRecord<T>> recordItr) throws Exception {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       logger.info("Empty partition");
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
-    return new CopyOnWriteLazyInsertIterable<>(recordItr, config, commitTime, this);
+    return new CopyOnWriteLazyInsertIterable<>(recordItr, config, commitTime, this, idPfx);
   }
 
   public Iterator<List<WriteStatus>> handleInsert(String commitTime, String partitionPath, String fileId,
@@ -262,9 +258,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
-        return handleInsert(commitTime, recordItr);
+        return handleInsert(commitTime, binfo.fileIdPrefix, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(commitTime, binfo.fileLoc, recordItr);
+        return handleUpdate(commitTime, binfo.fileIdPrefix, recordItr);
       } else {
         throw new HoodieUpsertException(
             "Unknown bucketType " + btype + " for partition :" + partition);
@@ -377,9 +373,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
               .withDeletedFileResults(filesToDeletedStatus).build();
         }).collect();
 
-    // clean temporary data files
-    cleanTemporaryDataFiles(jsc);
-
     // Delete Inflight instant if enabled
     deleteInflightInstant(deleteInstants, activeTimeline,
         new HoodieInstant(true, actionType, commit));
@@ -392,96 +385,25 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    * @param activeTimeline  Hoodie active timeline
    * @param instantToBeDeleted Instant to be deleted
    */
-  protected static void deleteInflightInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
+  protected void deleteInflightInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
       HoodieInstant instantToBeDeleted) {
     // Remove the rolled back inflight commits
     if (deleteInstant) {
-      activeTimeline.deleteInflight(instantToBeDeleted);
-      logger.info("Deleted inflight commit " + instantToBeDeleted);
+      try {
+        //TODO: Cleanup Hoodie 1.0 rollback to simply call super.cleanFailedWrites with consistency check disabled
+        // and empty WriteStat list.
+        Path markerDir = new Path(metaClient.getMarkerFolderPath(instantToBeDeleted.getTimestamp()));
+        logger.info("Removing marker directory=" + markerDir);
+        if (metaClient.getFs().exists(markerDir)) {
+          metaClient.getFs().delete(markerDir, true);
+        }
+        activeTimeline.deleteInflight(instantToBeDeleted);
+        logger.info("Deleted inflight commit " + instantToBeDeleted);
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
     } else {
       logger.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
-    }
-  }
-
-  /**
-   * Finalize the written data files
-   *
-   * @param stats List of HoodieWriteStats
-   * @return number of files finalized
-   */
-  @Override
-  @SuppressWarnings("unchecked")
-  public void finalizeWrite(JavaSparkContext jsc, List<HoodieWriteStat> stats)
-      throws HoodieIOException {
-
-    super.finalizeWrite(jsc, stats);
-
-    if (config.shouldUseTempFolderForCopyOnWrite()) {
-      // This is to rename each data file from temporary path to its final location
-      jsc.parallelize(stats, config.getFinalizeWriteParallelism())
-          .foreach(writeStat -> {
-            final FileSystem fs = getMetaClient().getFs();
-            final Path finalPath = new Path(config.getBasePath(), writeStat.getPath());
-
-            if (writeStat.getTempPath() != null) {
-              final Path tempPath = new Path(config.getBasePath(), writeStat.getTempPath());
-              boolean success;
-              try {
-                logger.info("Renaming temporary file: " + tempPath + " to " + finalPath);
-                success = fs.rename(tempPath, finalPath);
-              } catch (IOException e) {
-                throw new HoodieIOException(
-                    "Failed to rename file: " + tempPath + " to " + finalPath);
-              }
-
-              if (!success) {
-                throw new HoodieIOException(
-                    "Failed to rename file: " + tempPath + " to " + finalPath);
-              }
-            }
-          });
-
-      // clean temporary data files
-      cleanTemporaryDataFiles(jsc);
-    }
-  }
-
-  /**
-   * Clean temporary data files that are produced from previous failed commit or retried spark
-   * stages.
-   */
-  private void cleanTemporaryDataFiles(JavaSparkContext jsc) {
-    if (!config.shouldUseTempFolderForCopyOnWrite()) {
-      return;
-    }
-
-    final FileSystem fs = getMetaClient().getFs();
-    final Path temporaryFolder = new Path(config.getBasePath(),
-        HoodieTableMetaClient.TEMPFOLDER_NAME);
-    try {
-      if (!fs.exists(temporaryFolder)) {
-        logger.info("Temporary folder does not exist: " + temporaryFolder);
-        return;
-      }
-      List<FileStatus> fileStatusesList = Arrays.asList(fs.listStatus(temporaryFolder));
-      List<Tuple2<String, Boolean>> results = jsc
-          .parallelize(fileStatusesList, config.getFinalizeWriteParallelism()).map(fileStatus -> {
-            FileSystem fs1 = getMetaClient().getFs();
-            boolean success = fs1.delete(fileStatus.getPath(), false);
-            logger
-                .info("Deleting file in temporary folder" + fileStatus.getPath() + "\t" + success);
-            return new Tuple2<>(fileStatus.getPath().toString(), success);
-          }).collect();
-
-      for (Tuple2<String, Boolean> result : results) {
-        if (!result._2()) {
-          logger.info("Failed to delete file: " + result._1());
-          throw new HoodieIOException("Failed to delete file in temporary folder: " + result._1());
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException(
-          "Failed to clean data files in temporary folder: " + temporaryFolder);
     }
   }
 
@@ -625,13 +547,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   class BucketInfo implements Serializable {
 
     BucketType bucketType;
-    String fileLoc;
+    String fileIdPrefix;
 
     @Override
     public String toString() {
       final StringBuilder sb = new StringBuilder("BucketInfo {");
       sb.append("bucketType=").append(bucketType).append(", ");
-      sb.append("fileLoc=").append(fileLoc);
+      sb.append("fileIdPrefix=").append(fileIdPrefix);
       sb.append('}');
       return sb.toString();
     }
@@ -698,12 +620,12 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       }
     }
 
-    private int addUpdateBucket(String fileLoc) {
+    private int addUpdateBucket(String fileIdHint) {
       int bucket = totalBuckets;
-      updateLocationToBucket.put(fileLoc, bucket);
+      updateLocationToBucket.put(fileIdHint, bucket);
       BucketInfo bucketInfo = new BucketInfo();
       bucketInfo.bucketType = BucketType.UPDATE;
-      bucketInfo.fileLoc = fileLoc;
+      bucketInfo.fileIdPrefix = fileIdHint;
       bucketInfoMap.put(totalBuckets, bucketInfo);
       totalBuckets++;
       return bucket;
@@ -765,6 +687,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
               recordsPerBucket.add(totalUnassignedInserts / insertBuckets);
               BucketInfo bucketInfo = new BucketInfo();
               bucketInfo.bucketType = BucketType.INSERT;
+              bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
               bucketInfoMap.put(totalBuckets, bucketInfo);
               totalBuckets++;
             }
@@ -784,7 +707,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         }
       }
     }
-
 
     /**
      * Returns a list  of small files in the given partition path

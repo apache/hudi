@@ -37,6 +37,7 @@ import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
@@ -89,6 +90,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     List<CompactionOperation> operations = compactionPlan.getOperations().stream().map(
             CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     log.info("Compactor compacting " + operations + " files");
+
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionInstantTime))
         .flatMap(List::iterator);
@@ -113,7 +115,6 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         .getTimelineOfActions(
             Sets.newHashSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.ROLLBACK_ACTION,
                 HoodieTimeline.DELTA_COMMIT_ACTION))
-
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     log.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());
     HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs,
@@ -125,9 +126,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
       return Lists.<WriteStatus>newArrayList();
     }
 
-    Optional<HoodieDataFile> oldDataFileOpt = hoodieCopyOnWriteTable.getROFileSystemView()
-        .getLatestDataFilesOn(operation.getPartitionPath(), operation.getBaseInstantTime())
-        .filter(df -> df.getFileId().equals(operation.getFileId())).findFirst();
+    Option<HoodieDataFile> oldDataFileOpt = hoodieCopyOnWriteTable.getROFileSystemView()
+        .getDataFileOn(operation.getPartitionPath(), operation.getBaseInstantTime(), operation.getFileId());
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
@@ -135,7 +135,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // new base parquet file.
     if (operation.getDataFilePath().isPresent()) {
       result = hoodieCopyOnWriteTable
-          .handleUpdate(commitTime, operation.getFileId(), scanner.getRecords(), oldDataFileOpt);
+          .handleUpdate(commitTime, operation.getFileId(), scanner.getRecords(), oldDataFileOpt.get());
     } else {
       result = hoodieCopyOnWriteTable
           .handleInsert(commitTime, operation.getPartitionPath(), operation.getFileId(), scanner.iterator());
@@ -189,6 +189,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
       // In case no partitions could be picked, return no compaction plan
       return null;
     }
+
     TableFileSystemView.RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<HoodieCompactionOperation> operations =
@@ -200,7 +201,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                 .map(
                     s -> {
                       List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile
-                          .getBaseInstantAndLogVersionComparator().reversed()).collect(Collectors.toList());
+                          .getLogFileComparator()).collect(Collectors.toList());
                       totalLogFiles.add((long) logFiles.size());
                       totalFileSlices.add(1L);
                       // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO

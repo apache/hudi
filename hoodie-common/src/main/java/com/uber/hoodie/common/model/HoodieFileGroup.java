@@ -20,6 +20,7 @@ package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Stream;
@@ -51,7 +52,7 @@ public class HoodieFileGroup implements Serializable {
   /**
    * The last completed instant, that acts as a high watermark for all getters
    */
-  private final Optional<HoodieInstant> lastInstant;
+  private final Option<HoodieInstant> lastInstant;
 
   public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
     this(new HoodieFileGroupId(partitionPath, id), timeline);
@@ -61,7 +62,7 @@ public class HoodieFileGroup implements Serializable {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
-    this.lastInstant = timeline.lastInstant();
+    this.lastInstant = Option.fromJavaOptional(timeline.lastInstant());
   }
 
   /**
@@ -152,6 +153,13 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
+   * Gets the latest data file
+   */
+  public Optional<HoodieDataFile> getLatestDataFile() {
+    return getAllDataFiles().findFirst();
+  }
+
+  /**
    * Obtain the latest file slice, upto a commitTime i.e <= maxCommitTime
    */
   public Optional<FileSlice> getLatestFileSliceBeforeOrOn(String maxCommitTime) {
@@ -197,7 +205,20 @@ public class HoodieFileGroup implements Serializable {
     final StringBuilder sb = new StringBuilder("HoodieFileGroup {");
     sb.append("id=").append(fileGroupId);
     sb.append(", fileSlices='").append(fileSlices).append('\'');
+    sb.append(", lastInstant='").append(lastInstant).append('\'');
     sb.append('}');
     return sb.toString();
+  }
+
+  public void addFileSlice(FileSlice slice) {
+    fileSlices.put(slice.getBaseInstantTime(), slice);
+  }
+
+  public Stream<FileSlice> getAllRawFileSlices() {
+    return fileSlices.values().stream();
+  }
+
+  public HoodieTimeline getTimeline() {
+    return timeline;
   }
 }
