@@ -42,6 +42,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.node.NullNode;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -99,15 +100,15 @@ public class HoodieAvroUtils {
     List<Schema.Field> parentFields = new ArrayList<>();
 
     Schema.Field commitTimeField = new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field commitSeqnoField = new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field recordKeyField = new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field partitionPathField = new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field fileNameField = new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
 
     parentFields.add(commitTimeField);
     parentFields.add(commitSeqnoField);
@@ -116,7 +117,7 @@ public class HoodieAvroUtils {
     parentFields.add(fileNameField);
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
-        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), null);
+        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), NullNode.getInstance());
         for (Map.Entry<String, JsonNode> prop : field.getJsonProps().entrySet()) {
           newField.addProp(prop.getKey(), prop.getValue());
         }
@@ -132,7 +133,7 @@ public class HoodieAvroUtils {
 
   private static Schema initRecordKeySchema() {
     Schema.Field recordKeyField = new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
     recordKeySchema.setFields(Arrays.asList(recordKeyField));
     return recordKeySchema;
@@ -163,7 +164,7 @@ public class HoodieAvroUtils {
       return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue());
     }).collect(Collectors.toList());
     for (String newField : newFieldNames) {
-      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", null));
+      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", NullNode.getInstance()));
     }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(newFields);
