@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.utilities;
 
+import com.google.common.base.Preconditions;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
@@ -100,6 +101,16 @@ public class UtilHelpers {
     }
   }
 
+  public static TypedProperties buildProperties(List<String> props) {
+    TypedProperties properties = new TypedProperties();
+    props.stream().forEach(x -> {
+      String[] kv = x.split("=");
+      Preconditions.checkArgument(kv.length == 2);
+      properties.setProperty(kv[0], kv[1]);
+    });
+    return properties;
+  }
+
   /**
    * Parse Schema from file
    *
@@ -163,7 +174,8 @@ public class UtilHelpers {
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,
-      String schemaStr, int parallelism, Optional<String> compactionStrategyClass) throws Exception {
+      String schemaStr, int parallelism, Optional<String> compactionStrategyClass, TypedProperties properties)
+      throws Exception {
     HoodieCompactionConfig compactionConfig =
         compactionStrategyClass.map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy))
@@ -173,6 +185,7 @@ public class UtilHelpers {
         .combineInput(true, true)
         .withCompactionConfig(compactionConfig)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withProps(properties)
         .build();
     return new HoodieWriteClient(jsc, config);
   }
