@@ -406,12 +406,13 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
       final long numPuts = numPutsParallelismTuple._1;
       final int hbasePutsParallelism = numPutsParallelismTuple._2;
       this.numRegionServersForTable = getNumRegionServersAliveForTable();
-      final float desiredQPSFraction = hBaseIndexQPSResourceAllocator.getQPSFractionForPutsTime(numPuts,
-          this.numRegionServersForTable);
+      final float desiredQPSFraction = hBaseIndexQPSResourceAllocator
+                                           .calculateQPSFractionForPutsTime(numPuts, this.numRegionServersForTable);
       logger.info("Desired QPSFraction :" + desiredQPSFraction);
       logger.info("Number HBase puts :" + numPuts);
       logger.info("Hbase Puts Parallelism :" + hbasePutsParallelism);
-      final float availableQpsFraction = hBaseIndexQPSResourceAllocator.acquireQPSFraction(desiredQPSFraction, numPuts);
+      final float availableQpsFraction = hBaseIndexQPSResourceAllocator
+                                             .acquireQPSResources(desiredQPSFraction, numPuts);
       logger.info("Allocated QPS Fraction :" + availableQpsFraction);
       multiPutBatchSize = putBatchSizeCalculator
           .getBatchSize(

@@ -351,7 +351,7 @@ public class TestHbaseIndex {
     Assert.assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
         DefaultHBaseQPSResourceAllocator.class.getName());
     Assert.assertEquals(config.getHbaseIndexQPSFraction(),
-        hBaseIndexQPSResourceAllocator.acquireQPSFraction(config.getHbaseIndexQPSFraction(), 100), 0.0f);
+        hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getHbaseIndexQPSFraction(), 100), 0.0f);
   }
 
   private WriteStatus getSampleWriteStatus(final int numInserts, final int numUpdateWrites) {

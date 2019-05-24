@@ -32,13 +32,13 @@ public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAl
   }
 
   @Override
-  public float getQPSFractionForPutsTime(final long numPuts, final int numRegionServers) {
+  public float calculateQPSFractionForPutsTime(final long numPuts, final int numRegionServers) {
     // Just return the configured qps_fraction without calculating it runtime
     return hoodieWriteConfig.getHbaseIndexQPSFraction();
   }
 
   @Override
-  public float acquireQPSFraction(final float desiredQPSFraction, final long numPuts) {
+  public float acquireQPSResources(final float desiredQPSFraction, final long numPuts) {
     // Return the requested QPSFraction in this default implementation
     return desiredQPSFraction;
   }

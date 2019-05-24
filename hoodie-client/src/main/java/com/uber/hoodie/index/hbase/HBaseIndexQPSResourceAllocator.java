@@ -33,7 +33,7 @@ public interface HBaseIndexQPSResourceAllocator extends Serializable {
    * @param desiredPutsTimeInSecs  Total expected time for the HBase inserts operation
    * @return QPS fraction that needs to be acquired.
    */
-  float getQPSFractionForPutsTime(final long numPuts, final int desiredPutsTimeInSecs);
+  float calculateQPSFractionForPutsTime(final long numPuts, final int desiredPutsTimeInSecs);
 
   /**
    * This method acquires the requested QPS Fraction against HBase cluster for index operation.
@@ -42,7 +42,7 @@ public interface HBaseIndexQPSResourceAllocator extends Serializable {
    * @param numPuts             Number of inserts to be written to HBase index
    * @return value of the acquired QPS Fraction.
    */
-  float acquireQPSFraction(final float desiredQPSFraction, final long numPuts);
+  float acquireQPSResources(final float desiredQPSFraction, final long numPuts);
 
   /**
    * This method releases the acquired QPS Fraction
