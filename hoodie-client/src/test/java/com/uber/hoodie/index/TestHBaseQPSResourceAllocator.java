@@ -46,6 +46,7 @@ public class TestHBaseQPSResourceAllocator {
   private String basePath = null;
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
+  private static String QPS_TEST_SUFFIX_PATH = "qps_test_suffix";
 
   @AfterClass
   public static void clean() {
@@ -74,7 +75,7 @@ public class TestHBaseQPSResourceAllocator {
     // Create a temp folder as the base path
     TemporaryFolder folder = new TemporaryFolder();
     folder.create();
-    basePath = folder.getRoot().getAbsolutePath();
+    basePath = folder.getRoot().getAbsolutePath() + QPS_TEST_SUFFIX_PATH;
     // Initialize table
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
   }
