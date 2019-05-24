@@ -126,14 +126,13 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
       return Lists.<WriteStatus>newArrayList();
     }
 
-    Option<HoodieDataFile> oldDataFileOpt = hoodieCopyOnWriteTable.getROFileSystemView()
-        .getDataFileOn(operation.getPartitionPath(), operation.getBaseInstantTime(), operation.getFileId());
+    Option<HoodieDataFile> oldDataFileOpt = operation.getBaseFile();
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
     // If the dataFile is present, there is a base parquet file present, perform updates else perform inserts into a
     // new base parquet file.
-    if (operation.getDataFilePath().isPresent()) {
+    if (oldDataFileOpt.isPresent()) {
       result = hoodieCopyOnWriteTable
           .handleUpdate(commitTime, operation.getFileId(), scanner.getRecords(), oldDataFileOpt.get());
     } else {

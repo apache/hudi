@@ -110,6 +110,11 @@ public class CompactionOperation implements Serializable {
     return id;
   }
 
+  public Option<HoodieDataFile> getBaseFile() {
+    //TODO: HUDI-130 - Paths return in compaction plan needs to be relative to base-path
+    return dataFilePath.map(df -> new HoodieDataFile(df));
+  }
+
   /**
    * Convert Avro generated Compaction operation to POJO for Spark RDD operation
    * @param operation Hoodie Compaction Operation
