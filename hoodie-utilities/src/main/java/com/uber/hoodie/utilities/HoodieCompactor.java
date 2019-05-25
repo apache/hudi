@@ -18,10 +18,11 @@
 
 package com.uber.hoodie.utilities;
 
+import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.configs.HoodieCompactorJobConfig;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import java.util.Optional;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -33,16 +34,45 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class HoodieCompactor {
 
   private static volatile Logger logger = LogManager.getLogger(HoodieCompactor.class);
-  private final HoodieCompactorJobConfig cfg;
+  private final Config cfg;
   private transient FileSystem fs;
 
-  public HoodieCompactor(HoodieCompactorJobConfig cfg) {
+  public HoodieCompactor(Config cfg) {
     this.cfg = cfg;
   }
 
+  public static class Config extends AbstractCommandConfig {
+
+    @Parameter(names = {"--base-path",
+            "-bp"}, description = "Base path for the dataset", required = true)
+    public String basePath = null;
+    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
+    public String tableName = null;
+    @Parameter(names = {"--instant-time",
+            "-sp"}, description = "Compaction Instant time", required = true)
+    public String compactionInstantTime = null;
+    @Parameter(names = {"--parallelism",
+            "-pl"}, description = "Parallelism for hoodie insert", required = true)
+    public int parallelism = 1;
+    @Parameter(names = {"--schema-file",
+            "-sf"}, description = "path for Avro schema file", required = true)
+    public String schemaFile = null;
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    public String sparkMaster = null;
+    @Parameter(names = {"--spark-memory",
+            "-sm"}, description = "spark memory to use", required = true)
+    public String sparkMemory = null;
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
+    public int retry = 0;
+    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false, arity = 1)
+    public Boolean runSchedule = false;
+    @Parameter(names = {"--strategy", "-st"}, description = "Stratgey Class", required = false)
+    public String strategyClassName = "com.uber.hoodie.io.compact.strategy.UnBoundedCompactionStrategy";
+  }
+
   public static void main(String[] args) throws Exception {
-    final HoodieCompactorJobConfig cfg = new HoodieCompactorJobConfig();
-    cfg.parseJobConfig(args, true);
+    final Config cfg = new Config();
+    cfg.parseCommandConfig(args, true);
 
     HoodieCompactor compactor = new HoodieCompactor(cfg);
     compactor.compact(UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),

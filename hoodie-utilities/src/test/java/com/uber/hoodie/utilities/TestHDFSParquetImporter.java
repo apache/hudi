@@ -26,7 +26,6 @@ import com.uber.hoodie.common.minicluster.HdfsTestService;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
-import com.uber.hoodie.configs.HDFSParquetImporterJobConfig;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.ParseException;
@@ -102,7 +101,7 @@ public class TestHDFSParquetImporter implements Serializable {
       Path srcFolder = new Path(basePath, "testSrc");
       createRecords(srcFolder);
 
-      HDFSParquetImporterJobConfig cfg = getHDFSParquetImporterConfig(srcFolder.toString(),
+      HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(),
           hoodieFolder.toString(), "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1,
           schemaFile);
       AtomicInteger retry = new AtomicInteger(3);
@@ -199,7 +198,7 @@ public class TestHDFSParquetImporter implements Serializable {
       Path hoodieFolder = new Path(basePath, "testTarget");
       Path srcFolder = new Path(basePath.toString(), "srcTest");
       Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
-      HDFSParquetImporterJobConfig cfg = getHDFSParquetImporterConfig(srcFolder.toString(),
+      HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(),
           hoodieFolder.toString(), "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1,
           schemaFile.toString());
       HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
@@ -241,7 +240,7 @@ public class TestHDFSParquetImporter implements Serializable {
       createSchemaFile(schemaFile.toString());
 
       HDFSParquetImporter dataImporter;
-      HDFSParquetImporterJobConfig cfg;
+      HDFSParquetImporter.Config cfg;
 
       // Check for invalid row key.
       cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable",
@@ -262,10 +261,10 @@ public class TestHDFSParquetImporter implements Serializable {
     }
   }
 
-  private HDFSParquetImporterJobConfig getHDFSParquetImporterConfig(String srcPath, String targetPath,
+  private HDFSParquetImporter.Config getHDFSParquetImporterConfig(String srcPath, String targetPath,
       String tableName, String tableType, String rowKey, String partitionKey, int parallelism,
       String schemaFile) {
-    HDFSParquetImporterJobConfig cfg = new HDFSParquetImporterJobConfig();
+    HDFSParquetImporter.Config cfg = new HDFSParquetImporter.Config();
     cfg.srcPath = srcPath;
     cfg.targetPath = targetPath;
     cfg.tableName = tableName;

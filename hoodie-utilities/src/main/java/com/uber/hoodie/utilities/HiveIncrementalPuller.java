@@ -18,9 +18,10 @@
 
 package com.uber.hoodie.utilities;
 
+import com.beust.jcommander.Parameter;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
-import com.uber.hoodie.configs.HiveIncrementalPullerJobConfig;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullSQLException;
@@ -70,10 +71,10 @@ public class HiveIncrementalPuller {
   }
 
   private Connection connection;
-  protected final HiveIncrementalPullerJobConfig config;
+  protected final Config config;
   private final ST incrementalPullSQLtemplate;
 
-  public HiveIncrementalPuller(HiveIncrementalPullerJobConfig config) throws IOException {
+  public HiveIncrementalPuller(Config config) throws IOException {
     this.config = config;
     validateConfig(config);
     String templateContent = IOUtils.toString(
@@ -81,7 +82,7 @@ public class HiveIncrementalPuller {
     incrementalPullSQLtemplate = new ST(templateContent);
   }
 
-  private void validateConfig(HiveIncrementalPullerJobConfig config) {
+  private void validateConfig(Config config) {
     if (config.maxCommits == -1) {
       config.maxCommits = Integer.MAX_VALUE;
     }
@@ -326,9 +327,40 @@ public class HiveIncrementalPuller {
     return ds;
   }
 
+  static class Config extends AbstractCommandConfig {
+
+    @Parameter(names = {"--hiveUrl"})
+    public String hiveJDBCUrl = "jdbc:hive2://localhost:10014/;transportMode=http;httpPath=hs2";
+    @Parameter(names = {"--hiveUser"})
+    public String hiveUsername = "hive";
+    @Parameter(names = {"--hivePass"})
+    public String hivePassword = "";
+    @Parameter(names = {"--queue"})
+    public String yarnQueueName = "hadoop-queue";
+    @Parameter(names = {"--tmp"})
+    public String hoodieTmpDir = "/app/hoodie/intermediate";
+    @Parameter(names = {"--extractSQLFile"}, required = true)
+    public String incrementalSQLFile;
+    @Parameter(names = {"--sourceDb"}, required = true)
+    public String sourceDb;
+    @Parameter(names = {"--sourceTable"}, required = true)
+    public String sourceTable;
+    @Parameter(names = {"--targetDb"})
+    public String targetDb;
+    @Parameter(names = {"--targetTable"}, required = true)
+    public String targetTable;
+    @Parameter(names = {"--tmpdb"})
+    public String tmpDb = "tmp";
+    @Parameter(names = {"--fromCommitTime"})
+    public String fromCommitTime;
+    @Parameter(names = {"--maxCommits"})
+    public int maxCommits = 3;
+  }
+
+
   public static void main(String[] args) throws IOException {
-    final HiveIncrementalPullerJobConfig cfg = new HiveIncrementalPullerJobConfig();
-    cfg.parseJobConfig(args, true);
+    final Config cfg = new Config();
+    cfg.parseCommandConfig(args, true, true);
 
     new HiveIncrementalPuller(cfg).saveDelta();
   }

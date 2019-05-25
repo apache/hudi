@@ -92,10 +92,6 @@
               </artifactSet>
               <relocations>
                 <relocation>
-                  <pattern>com.beust.jcommander.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.beust.jcommander.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.commons.dbcp.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.commons.dbcp.</shadedPattern>
                 </relocation>

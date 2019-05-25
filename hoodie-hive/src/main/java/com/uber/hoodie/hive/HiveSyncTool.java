@@ -19,7 +19,6 @@
 package com.uber.hoodie.hive;
 
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hadoop.HoodieInputFormat;
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
@@ -43,7 +42,7 @@ import parquet.schema.MessageType;
 
 /**
  * Tool to sync a hoodie HDFS dataset with a hive metastore table. Either use it as a api
- * HiveSyncTool.syncHoodieTable(HiveSyncJobConfig) or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
+ * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
  * <p>
  * This utility will get the schema from the latest commit and will sync hive table schema Also this will sync the
  * partitions incrementally (all the partitions modified since the last commit)
@@ -54,9 +53,9 @@ public class HiveSyncTool {
   private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
   public static final String SUFFIX_REALTIME_TABLE = "_rt";
-  private final HiveSyncJobConfig cfg;
+  private final HiveSyncConfig cfg;
 
-  public HiveSyncTool(HiveSyncJobConfig cfg, HiveConf configuration, FileSystem fs) {
+  public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     this.cfg = cfg;
   }
@@ -176,8 +175,8 @@ public class HiveSyncTool {
 
   public static void main(String[] args) throws Exception {
     // parse the params
-    final HiveSyncJobConfig cfg = new HiveSyncJobConfig();
-    cfg.parseJobConfig(args, true);
+    final HiveSyncConfig cfg = new HiveSyncConfig();
+    cfg.parseCommandConfig(args, true, true);
 
     FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
     HiveConf hiveConf = new HiveConf();

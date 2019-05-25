@@ -30,7 +30,6 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
-import com.uber.hoodie.configs.HiveSyncJobConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hive.util.SchemaUtil;
@@ -86,12 +85,12 @@ public class HoodieHiveClient {
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;
   private HiveMetaStoreClient client;
-  private HiveSyncJobConfig syncConfig;
+  private HiveSyncConfig syncConfig;
   private FileSystem fs;
   private Connection connection;
   private HoodieTimeline activeTimeline;
 
-  public HoodieHiveClient(HiveSyncJobConfig cfg, HiveConf configuration, FileSystem fs) {
+  public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     this.syncConfig = cfg;
     this.fs = fs;
     this.metaClient = new HoodieTableMetaClient(fs.getConf(), cfg.basePath, true);

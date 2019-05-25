@@ -29,7 +29,6 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.NumericUtils;
-import com.uber.hoodie.configs.HoodieCommitRollbackJobConfig;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -134,12 +133,12 @@ public class CommitsCommand implements CommandMarker {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    HoodieCommitRollbackJobConfig config = new HoodieCommitRollbackJobConfig();
+    SparkMain.HoodieRollbackCommandConfig config = new SparkMain.HoodieRollbackCommandConfig();
     config.basePath = HoodieCLI.tableMetadata.getBasePath();
     config.commitTime = commitTime;
-    String[] jobConfig = config.getJobConfigsAsCommandOption(SparkCommand.ROLLBACK.name());
+    String[] commandConfig = config.getCommandConfigsAsStringArray(SparkCommand.ROLLBACK.name());
 
-    sparkLauncher.addAppArgs(jobConfig);
+    sparkLauncher.addAppArgs(commandConfig);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

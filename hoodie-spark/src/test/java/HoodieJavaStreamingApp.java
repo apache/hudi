@@ -22,8 +22,8 @@ import com.uber.hoodie.DataSourceWriteOptions;
 import com.uber.hoodie.HoodieDataSourceHelpers;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -94,7 +94,7 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
-    cli.parseJobConfig(args);
+    cli.parseCommandConfig(args);
     cli.run();
   }
 
@@ -229,7 +229,7 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
         .option("checkpointLocation", streamingCheckpointingPath)
         .outputMode(OutputMode.Append());
 
-    updateHiveSyncJobConfig(writer);
+    updateHiveSyncConfig(writer);
     writer
         .trigger(new ProcessingTime(500))
         .start(tablePath)
@@ -239,7 +239,7 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
   /**
    * Setup configs for syncing to hive
    */
-  private DataStreamWriter<Row> updateHiveSyncJobConfig(DataStreamWriter<Row> writer) {
+  private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
       logger.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)

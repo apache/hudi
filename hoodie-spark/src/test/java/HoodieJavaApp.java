@@ -24,8 +24,8 @@ import com.uber.hoodie.NonpartitionedKeyGenerator;
 import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.hive.MultiPartKeysValueExtractor;
 import com.uber.hoodie.hive.NonPartitionedExtractor;
 import java.util.List;
@@ -81,7 +81,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
-    cli.parseJobConfig(args);
+    cli.parseCommandConfig(args);
     cli.run();
   }
 
@@ -134,7 +134,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
         .mode(
             SaveMode.Overwrite); // This will remove any existing data at path below, and create a
 
-    updateHiveSyncJobConfig(writer);
+    updateHiveSyncConfig(writer);
     // new dataset if needed
     writer.save(tablePath); // ultimately where the dataset will be placed
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
@@ -157,7 +157,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
                 SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
-    updateHiveSyncJobConfig(writer);
+    updateHiveSyncConfig(writer);
     writer.save(tablePath);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
     logger.info("Second commit at instant time :" + commitInstantTime1);
@@ -197,7 +197,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
    * @param writer
    * @return
    */
-  private DataFrameWriter<Row> updateHiveSyncJobConfig(DataFrameWriter<Row> writer) {
+  private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
       logger.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)

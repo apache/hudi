@@ -23,10 +23,10 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.configs.AbstractCommandConfig;
 import com.uber.hoodie.index.HoodieIndex.IndexType;
 import java.util.List;
 import java.util.Optional;
@@ -54,7 +54,7 @@ public class HoodieClientExample extends AbstractCommandConfig {
 
   public static void main(String[] args) throws Exception {
     HoodieClientExample cli = new HoodieClientExample();
-    cli.parseJobConfig(args);
+    cli.parseCommandConfig(args);
     cli.run();
   }
 

@@ -16,16 +16,18 @@
  *
  */
 
-package com.uber.hoodie.configs;
+package com.uber.hoodie.hive;
 
 import com.beust.jcommander.Parameter;
+import com.uber.hoodie.config.AbstractCommandConfig;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Configs needed to sync data into Hive.
  */
-public class HiveSyncJobConfig extends AbstractCommandConfig {
+public class HiveSyncConfig extends AbstractCommandConfig {
 
   @Parameter(names = {
       "--database"}, description = "name of the target database in Hive", required = true)
@@ -65,8 +67,8 @@ public class HiveSyncJobConfig extends AbstractCommandConfig {
       + "not set this parameter", arity = 1)
   public Boolean assumeDatePartitioning = false;
 
-  public static HiveSyncJobConfig copy(HiveSyncJobConfig cfg) {
-    HiveSyncJobConfig newConfig = new HiveSyncJobConfig();
+  public static HiveSyncConfig copy(HiveSyncConfig cfg) {
+    HiveSyncConfig newConfig = new HiveSyncConfig();
     newConfig.basePath = cfg.basePath;
     newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
     newConfig.databaseName = cfg.databaseName;

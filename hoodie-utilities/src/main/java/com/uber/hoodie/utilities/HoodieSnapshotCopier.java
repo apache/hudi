@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.utilities;
 
+import com.beust.jcommander.Parameter;
 import com.uber.hoodie.common.SerializableConfiguration;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
@@ -28,7 +29,7 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.configs.HoodieSnapshotCopierJobConfig;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -51,6 +52,21 @@ import scala.Tuple2;
 public class HoodieSnapshotCopier implements Serializable {
 
   private static Logger logger = LogManager.getLogger(HoodieSnapshotCopier.class);
+
+  static class Config extends AbstractCommandConfig {
+
+    @Parameter(names = {"--base-path",
+            "-bp"}, description = "Hoodie table base path", required = true)
+    String basePath = null;
+
+    @Parameter(names = {"--output-path",
+            "-op"}, description = "The snapshot output path", required = true)
+    String outputPath = null;
+
+    @Parameter(names = {"--date-partitioned",
+            "-dp"}, description = "Can we assume date partitioning?", arity = 1)
+    boolean shouldAssumeDatePartitioning = false;
+  }
 
   public void snapshot(JavaSparkContext jsc, String baseDir, final String outputDir,
       final boolean shouldAssumeDatePartitioning) throws IOException {
@@ -157,8 +173,8 @@ public class HoodieSnapshotCopier implements Serializable {
 
   public static void main(String[] args) throws IOException {
     // Take input configs
-    final HoodieSnapshotCopierJobConfig cfg = new HoodieSnapshotCopierJobConfig();
-    cfg.parseJobConfig(args);
+    final Config cfg = new Config();
+    cfg.parseCommandConfig(args);
     logger.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath",
         cfg.basePath, cfg.outputPath));
 

@@ -1,12 +1,13 @@
 package com.uber.hoodie.utilities;
 
+import com.beust.jcommander.Parameter;
 import com.uber.hoodie.CompactionAdminClient;
 import com.uber.hoodie.CompactionAdminClient.RenameOpResult;
 import com.uber.hoodie.CompactionAdminClient.ValidationOpResult;
 import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.configs.HoodieCompactionAdminToolJobConfig;
+import com.uber.hoodie.config.AbstractCommandConfig;
 import java.io.ObjectOutputStream;
 import java.util.List;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -16,18 +17,53 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class HoodieCompactionAdminTool {
 
-  private final HoodieCompactionAdminToolJobConfig cfg;
+  private final Config cfg;
 
-  public HoodieCompactionAdminTool(HoodieCompactionAdminToolJobConfig cfg) {
+  public HoodieCompactionAdminTool(Config cfg) {
     this.cfg = cfg;
+  }
+
+  public enum Operation {
+    VALIDATE,
+    UNSCHEDULE_PLAN,
+    UNSCHEDULE_FILE,
+    REPAIR
+  }
+
+  public static class Config extends AbstractCommandConfig {
+
+    @Parameter(names = {"--operation", "-op"}, description = "Operation", required = true)
+    public Operation operation = Operation.VALIDATE;
+    @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the dataset", required = true)
+    public String basePath = null;
+    @Parameter(names = {"--instant-time", "-in"}, description = "Compaction Instant time", required = false)
+    public String compactionInstantTime = null;
+    @Parameter(names = {"--partition-path", "-pp"}, description = "Partition Path", required = false)
+    public String partitionPath = null;
+    @Parameter(names = {"--file-id", "-id"}, description = "File Id", required = false)
+    public String fileId = null;
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
+    public int parallelism = 3;
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = true)
+    public String sparkMaster = null;
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
+    public String sparkMemory = null;
+    @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode", required = false, arity = 1)
+    public boolean dryRun = false;
+    @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation", required = false, arity = 1)
+    public boolean skipValidation = false;
+    @Parameter(names = {"--output-path", "-ot"}, description = "Output Path", required = false, arity = 1)
+    public String outputPath = null;
+    @Parameter(names = {"--print-output", "-pt"}, description = "Print Output", required = false)
+    public boolean printOutput = true;
   }
 
   /**
    *
    */
   public static void main(String[] args) throws Exception {
-    final HoodieCompactionAdminToolJobConfig cfg = new HoodieCompactionAdminToolJobConfig();
-    cfg.parseJobConfig(args, true);
+    final Config cfg = new Config();
+    cfg.parseCommandConfig(args, true);
 
     HoodieCompactionAdminTool admin = new HoodieCompactionAdminTool(cfg);
     admin.run(UtilHelpers.buildSparkContext("admin-compactor", cfg.sparkMaster, cfg.sparkMemory));

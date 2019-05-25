@@ -25,7 +25,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.configs.HiveSyncJobConfig;
+import com.uber.hoodie.hive.HiveSyncConfig;
 import com.uber.hoodie.hive.HoodieHiveClient;
 import com.uber.hoodie.hive.util.HiveTestService;
 import com.uber.hoodie.utilities.sources.TestDataSource;
@@ -111,17 +111,17 @@ public class UtilitiesTestBase {
   /**
    * Helper to get hive sync config
    */
-  protected static HiveSyncJobConfig getHiveSyncJobConfig(String basePath, String tableName) {
-    HiveSyncJobConfig hiveSyncJobConfig = new HiveSyncJobConfig();
-    hiveSyncJobConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncJobConfig.hiveUser = "";
-    hiveSyncJobConfig.hivePass = "";
-    hiveSyncJobConfig.databaseName = "testdb1";
-    hiveSyncJobConfig.tableName = tableName;
-    hiveSyncJobConfig.basePath = basePath;
-    hiveSyncJobConfig.assumeDatePartitioning = false;
-    hiveSyncJobConfig.partitionFields = new ImmutableList.Builder<String>().add("datestr").build();
-    return hiveSyncJobConfig;
+  protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
+    hiveSyncConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
+    hiveSyncConfig.hiveUser = "";
+    hiveSyncConfig.hivePass = "";
+    hiveSyncConfig.databaseName = "testdb1";
+    hiveSyncConfig.tableName = tableName;
+    hiveSyncConfig.basePath = basePath;
+    hiveSyncConfig.assumeDatePartitioning = false;
+    hiveSyncConfig.partitionFields = new ImmutableList.Builder<String>().add("datestr").build();
+    return hiveSyncConfig;
   }
 
   /**
@@ -130,13 +130,13 @@ public class UtilitiesTestBase {
   private static void clearHiveDb() throws IOException {
     HiveConf hiveConf = new HiveConf();
     // Create Dummy hive sync config
-    HiveSyncJobConfig hiveSyncJobConfig = getHiveSyncJobConfig("/dummy", "dummy");
+    HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");
     hiveConf.addResource(hiveServer.getHiveConf());
-    HoodieTableMetaClient.initTableType(dfs.getConf(), hiveSyncJobConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-        hiveSyncJobConfig.tableName, null);
-    HoodieHiveClient client = new HoodieHiveClient(hiveSyncJobConfig, hiveConf, dfs);
-    client.updateHiveSQL("drop database if exists " + hiveSyncJobConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncJobConfig.databaseName);
+    HoodieTableMetaClient.initTableType(dfs.getConf(), hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
+        hiveSyncConfig.tableName, null);
+    HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveConf, dfs);
+    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
+    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
     client.close();
   }
 

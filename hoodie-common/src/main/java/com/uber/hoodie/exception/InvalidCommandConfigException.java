@@ -16,13 +16,13 @@
 
 package com.uber.hoodie.exception;
 
-public class InvalidJobConfigException extends HoodieException {
+public class InvalidCommandConfigException extends HoodieException {
 
-  public InvalidJobConfigException(String msg) {
+  public InvalidCommandConfigException(String msg) {
     super(msg);
   }
 
-  public InvalidJobConfigException(String msg, Throwable e) {
+  public InvalidCommandConfigException(String msg, Throwable e) {
     super(msg, e);
   }
 }
