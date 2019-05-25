@@ -56,7 +56,7 @@ public class HoodieCompactor {
     public int parallelism = 1;
     @Parameter(names = {"--schema-file",
             "-sf"}, description = "path for Avro schema file", required = true)
-    public String schemaFile = null;
+    public String schemaFile = "";
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory",

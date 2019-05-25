@@ -203,8 +203,6 @@ public class CompactionCommand implements CommandMarker {
       config.basePath = HoodieCLI.tableMetadata.getBasePath();
       config.tableName = HoodieCLI.tableMetadata.getTableConfig().getTableName();
       config.compactionInstantTime = compactionInstantTime;
-      //should be either from cli option or default value will be ""
-      config.schemaFile = "";
       config.sparkMemory = sparkMemory;
       config.runSchedule = true;
       String[] commandConfig = config.getCommandConfigsAsStringArray(SparkCommand.COMPACT_SCHEDULE.toString());

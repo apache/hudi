@@ -109,7 +109,12 @@ public class UtilitiesTestBase {
   }
 
   /**
+   /**
    * Helper to get hive sync config
+   * Helper to get hive sync config
+   * @param basePath
+   * @param tableName
+   * @return
    */
   protected static HiveSyncConfig getHiveSyncConfig(String basePath, String tableName) {
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig();
@@ -126,6 +131,7 @@ public class UtilitiesTestBase {
 
   /**
    * Initialize Hive DB
+   * @throws IOException
    */
   private static void clearHiveDb() throws IOException {
     HiveConf hiveConf = new HiveConf();
