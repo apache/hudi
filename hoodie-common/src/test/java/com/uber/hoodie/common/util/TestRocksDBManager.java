@@ -29,16 +29,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.log4j.Level;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Test;
 
 public class TestRocksDBManager {
-
-  static {
-    RocksDBDAO.log.setLevel(Level.INFO);
-  }
 
   private static RocksDBDAO dbManager;
 
