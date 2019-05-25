@@ -315,6 +315,30 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.valueOf(props.getProperty(HoodieHBaseIndexConfig.HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP));
   }
 
+  public String getHBaseQPSResourceAllocatorClass() {
+    return props.getProperty(HoodieHBaseIndexConfig.HBASE_INDEX_QPS_ALLOCATOR_CLASS);
+  }
+
+  public String getHBaseQPSZKnodePath() {
+    return props.getProperty(HoodieHBaseIndexConfig.HBASE_ZK_PATH_QPS_ROOT);
+  }
+
+  public String getHBaseZkZnodeSessionTimeout() {
+    return props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS);
+  }
+
+  public String getHBaseZkZnodeConnectionTimeout() {
+    return props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS);
+  }
+
+  public boolean getHBaseIndexShouldComputeQPSDynamically() {
+    return Boolean.valueOf(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY));
+  }
+
+  public int getHBaseIndexDesiredPutsTime() {
+    return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
+  }
+
   /**
    * Fraction of the global share of QPS that should be allocated to this job.
    * Let's say there are 3 jobs which have input size in terms of number of rows
@@ -323,6 +347,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
    */
   public float getHbaseIndexQPSFraction() {
     return Float.parseFloat(props.getProperty(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION_PROP));
+  }
+
+  public float getHBaseIndexMinQPSFraction() {
+    return Float.parseFloat(props.getProperty(HoodieHBaseIndexConfig.HBASE_MIN_QPS_FRACTION_PROP));
+  }
+
+  public float getHBaseIndexMaxQPSFraction() {
+    return Float.parseFloat(props.getProperty(HoodieHBaseIndexConfig.HBASE_MAX_QPS_FRACTION_PROP));
   }
 
   /**
