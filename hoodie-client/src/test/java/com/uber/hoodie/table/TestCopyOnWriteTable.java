@@ -50,6 +50,8 @@ import java.util.UUID;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
@@ -63,6 +65,8 @@ import scala.Option;
 import scala.Tuple2;
 
 public class TestCopyOnWriteTable {
+
+  protected static Logger log = LogManager.getLogger(TestCopyOnWriteTable.class);
 
   private String basePath = null;
   private transient JavaSparkContext jsc = null;
@@ -378,7 +382,7 @@ public class TestCopyOnWriteTable {
     int counts = 0;
     for (File file : new File(basePath + "/2016/01/31").listFiles()) {
       if (file.getName().endsWith(".parquet") && FSUtils.getCommitTime(file.getName()).equals(commitTime)) {
-        System.out.println(file.getName() + "-" + file.length());
+        log.info(file.getName() + "-" + file.length());
         counts++;
       }
     }

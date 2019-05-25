@@ -56,6 +56,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -64,6 +66,8 @@ import org.junit.rules.TemporaryFolder;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class HoodieTableFileSystemViewTest {
+
+  private static final transient Logger log = LogManager.getLogger(HoodieTableFileSystemViewTest.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -502,7 +506,7 @@ public class HoodieTableFileSystemViewTest {
     roView.getAllDataFiles(partitionPath);
 
     fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
-    System.out.println("FILESLICE LIST=" + fileSliceList);
+    log.info("FILESLICE LIST=" + fileSliceList);
     dataFiles = fileSliceList.stream().map(FileSlice::getDataFile)
         .filter(Optional::isPresent).map(Optional::get).collect(Collectors.toList());
     assertEquals("Expect only one data-files in latest view as there is only one file-group", 1, dataFiles.size());

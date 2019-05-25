@@ -86,7 +86,7 @@ public class RocksDBDAO {
    */
   private void init() throws HoodieException {
     try {
-      log.warn("DELETING RocksDB persisted at " + rocksDBBasePath);
+      log.info("DELETING RocksDB persisted at " + rocksDBBasePath);
       FileUtils.deleteDirectory(new File(rocksDBBasePath));
 
       managedHandlesMap = new ConcurrentHashMap<>();
