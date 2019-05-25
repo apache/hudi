@@ -80,7 +80,6 @@ public class TestUpdateMapFunction implements Serializable {
   public void testSchemaEvolutionOnUpdate() throws Exception {
     // Create a bunch of records with a old version of schema
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
-    System.out.println("JSC =" + jsc);
     final HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {

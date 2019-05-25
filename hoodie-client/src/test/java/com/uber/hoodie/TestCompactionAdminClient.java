@@ -158,7 +158,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
       Assert.assertTrue("Rename Files must be empty", renameFiles.isEmpty());
     }
     expRenameFiles.entrySet().stream().forEach(r -> {
-      System.out.println("Key :" + r.getKey() + " renamed to " + r.getValue() + " rolled back to "
+      logger.info("Key :" + r.getKey() + " renamed to " + r.getValue() + " rolled back to "
           + renameFilesFromUndo.get(r.getKey()));
     });
 
