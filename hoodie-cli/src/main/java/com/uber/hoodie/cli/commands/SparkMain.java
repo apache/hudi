@@ -78,17 +78,17 @@ public class SparkMain {
         break;
       case COMPACT_SCHEDULE:
         assert (args.length == 5);
-        returnCode = compact(jsc, args[1], args[2], args[3],  1,
+        returnCode = compact(jsc, args[1], args[2], args[3], 1,
             "", args[4], 0, true);
         break;
       case COMPACT_VALIDATE:
         assert (args.length == 7);
-        doCompactValidate(jsc, args[1], args[2], args[3],  Integer.parseInt(args[4]), args[5], args[6]);
+        doCompactValidate(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6]);
         returnCode = 0;
         break;
       case COMPACT_REPAIR:
         assert (args.length == 8);
-        doCompactRepair(jsc, args[1], args[2], args[3],  Integer.parseInt(args[4]), args[5], args[6],
+        doCompactRepair(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
             Boolean.valueOf(args[7]));
         returnCode = 0;
         break;

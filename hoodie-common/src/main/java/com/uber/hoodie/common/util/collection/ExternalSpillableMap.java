@@ -18,15 +18,18 @@ package com.uber.hoodie.common.util.collection;
 
 import com.twitter.common.objectsize.ObjectSizeCalculator;
 import com.uber.hoodie.common.util.SizeEstimator;
-import com.uber.hoodie.exception.HoodieNotSupportedException;
+import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -49,7 +52,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
   private final Map<T, R> inMemoryMap;
   // Map to store key-valuemetadata important to find the values spilled to disk
-  private final DiskBasedMap<T, R> diskBasedMap;
+  private transient volatile DiskBasedMap<T, R> diskBasedMap;
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
@@ -63,10 +66,13 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private volatile long estimatedPayloadSize = 0;
   // Flag to determine whether to stop re-estimating payload size
   private boolean shouldEstimatePayloadSize = true;
-
+  // Base File Path
+  private final String baseFilePath;
+  
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath,
       SizeEstimator<T> keySizeEstimator, SizeEstimator<R> valueSizeEstimator) throws IOException {
     this.inMemoryMap = new HashMap<>();
+    this.baseFilePath = baseFilePath;
     this.diskBasedMap = new DiskBasedMap<>(baseFilePath);
     this.maxInMemorySizeInBytes = (long) Math
         .floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
@@ -75,25 +81,40 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.valueSizeEstimator = valueSizeEstimator;
   }
 
+  private DiskBasedMap<T, R> getDiskBasedMap() {
+    if (null == diskBasedMap) {
+      synchronized (this) {
+        if (null == diskBasedMap) {
+          try {
+            diskBasedMap = new DiskBasedMap<>(baseFilePath);
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
+        }
+      }
+    }
+    return diskBasedMap;
+  }
+
   /**
    * A custom iterator to wrap over iterating in-memory + disk spilled data
    */
   public Iterator<R> iterator() {
-    return new IteratorWrapper<>(inMemoryMap.values().iterator(), diskBasedMap.iterator());
+    return new IteratorWrapper<>(inMemoryMap.values().iterator(), getDiskBasedMap().iterator());
   }
 
   /**
    * Number of entries in DiskBasedMap
    */
   public int getDiskBasedMapNumEntries() {
-    return diskBasedMap.size();
+    return getDiskBasedMap().size();
   }
 
   /**
    * Number of bytes spilled to disk
    */
   public long getSizeOfFileOnDiskInBytes() {
-    return diskBasedMap.sizeOfFileOnDiskInBytes();
+    return getDiskBasedMap().sizeOfFileOnDiskInBytes();
   }
 
   /**
@@ -112,30 +133,30 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   @Override
   public int size() {
-    return inMemoryMap.size() + diskBasedMap.size();
+    return inMemoryMap.size() + getDiskBasedMap().size();
   }
 
   @Override
   public boolean isEmpty() {
-    return inMemoryMap.isEmpty() && diskBasedMap.isEmpty();
+    return inMemoryMap.isEmpty() && getDiskBasedMap().isEmpty();
   }
 
   @Override
   public boolean containsKey(Object key) {
-    return inMemoryMap.containsKey(key) || diskBasedMap.containsKey(key);
+    return inMemoryMap.containsKey(key) || getDiskBasedMap().containsKey(key);
   }
 
   @Override
   public boolean containsValue(Object value) {
-    return inMemoryMap.containsValue(value) || diskBasedMap.containsValue(value);
+    return inMemoryMap.containsValue(value) || getDiskBasedMap().containsValue(value);
   }
 
   @Override
   public R get(Object key) {
     if (inMemoryMap.containsKey(key)) {
       return inMemoryMap.get(key);
-    } else if (diskBasedMap.containsKey(key)) {
-      return diskBasedMap.get(key);
+    } else if (getDiskBasedMap().containsKey(key)) {
+      return getDiskBasedMap().get(key);
     }
     return null;
   }
@@ -166,19 +187,19 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
       }
       inMemoryMap.put(key, value);
     } else {
-      diskBasedMap.put(key, value);
+      getDiskBasedMap().put(key, value);
     }
     return value;
   }
 
   @Override
   public R remove(Object key) {
-    // NOTE : diskBasedMap.remove does not delete the data from disk
+    // NOTE : getDiskBasedMap().remove does not delete the data from disk
     if (inMemoryMap.containsKey(key)) {
       currentInMemoryMapSize -= estimatedPayloadSize;
       return inMemoryMap.remove(key);
-    } else if (diskBasedMap.containsKey(key)) {
-      return diskBasedMap.remove(key);
+    } else if (getDiskBasedMap().containsKey(key)) {
+      return getDiskBasedMap().remove(key);
     }
     return null;
   }
@@ -193,7 +214,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   @Override
   public void clear() {
     inMemoryMap.clear();
-    diskBasedMap.clear();
+    getDiskBasedMap().clear();
     currentInMemoryMapSize = 0L;
   }
 
@@ -201,23 +222,29 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   public Set<T> keySet() {
     Set<T> keySet = new HashSet<T>();
     keySet.addAll(inMemoryMap.keySet());
-    keySet.addAll(diskBasedMap.keySet());
+    keySet.addAll(getDiskBasedMap().keySet());
     return keySet;
   }
 
   @Override
   public Collection<R> values() {
-    if (diskBasedMap.isEmpty()) {
+    if (getDiskBasedMap().isEmpty()) {
       return inMemoryMap.values();
     }
-    throw new HoodieNotSupportedException("Cannot return all values in memory");
+    List<R> result = new ArrayList<>(inMemoryMap.values());
+    result.addAll(getDiskBasedMap().values());
+    return result;
+  }
+
+  public Stream<R> valueStream() {
+    return Stream.concat(inMemoryMap.values().stream(), getDiskBasedMap().valueStream());
   }
 
   @Override
   public Set<Entry<T, R>> entrySet() {
     Set<Entry<T, R>> entrySet = new HashSet<>();
     entrySet.addAll(inMemoryMap.entrySet());
-    entrySet.addAll(diskBasedMap.entrySet());
+    entrySet.addAll(getDiskBasedMap().entrySet());
     return entrySet;
   }
 

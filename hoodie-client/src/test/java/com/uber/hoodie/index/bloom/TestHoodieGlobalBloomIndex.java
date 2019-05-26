@@ -190,31 +190,31 @@ public class TestHoodieGlobalBloomIndex {
         new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"), new Tuple2<>("2017/10/22", "005"),
         new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
 
-    List<Tuple2<String, Tuple2<String, HoodieKey>>> comparisonKeyList = index.explodeRecordRDDWithFileComparisons(
-        partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
+    List<Tuple2<String, HoodieKey>> comparisonKeyList =
+        index.explodeRecordRDDWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyPairRDD).collect();
 
-    /* epecting:
-      f4#003, f4, HoodieKey { recordKey=003 partitionPath=2017/10/23}
-      f1#003, f1, HoodieKey { recordKey=003 partitionPath=2017/10/22}
-      f3#003, f3, HoodieKey { recordKey=003 partitionPath=2017/10/22}
-      f4#002, f4, HoodieKey { recordKey=002 partitionPath=2017/10/23}
-      f1#002, f1, HoodieKey { recordKey=002 partitionPath=2017/10/22}
-      f3#002, f3, HoodieKey { recordKey=002 partitionPath=2017/10/22}
-      f4#005, f4, HoodieKey { recordKey=005 partitionPath=2017/10/23}
-      f1#005, f1, HoodieKey { recordKey=005 partitionPath=2017/10/22}
-      f4#004, f4, HoodieKey { recordKey=004 partitionPath=2017/10/23}
-      f1#004, f1, HoodieKey { recordKey=004 partitionPath=2017/10/22}
+    /* expecting:
+      f4, HoodieKey { recordKey=003 partitionPath=2017/10/23}
+      f1, HoodieKey { recordKey=003 partitionPath=2017/10/22}
+      f3, HoodieKey { recordKey=003 partitionPath=2017/10/22}
+      f4, HoodieKey { recordKey=002 partitionPath=2017/10/23}
+      f1, HoodieKey { recordKey=002 partitionPath=2017/10/22}
+      f3, HoodieKey { recordKey=002 partitionPath=2017/10/22}
+      f4, HoodieKey { recordKey=005 partitionPath=2017/10/23}
+      f1, HoodieKey { recordKey=005 partitionPath=2017/10/22}
+      f4, HoodieKey { recordKey=004 partitionPath=2017/10/23}
+      f1, HoodieKey { recordKey=004 partitionPath=2017/10/22}
      */
     assertEquals(10, comparisonKeyList.size());
 
-    Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream().collect(Collectors.groupingBy(
-        t -> t._2()._2().getRecordKey(), Collectors.mapping(t -> t._2()._1().split("#")[0], Collectors.toList())));
+    Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
+        .collect(Collectors.groupingBy(t -> t._2.getRecordKey(), Collectors.mapping(Tuple2::_1, Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
-    assertEquals(Arrays.asList("f4", "f1", "f3"), recordKeyToFileComps.get("002"));
-    assertEquals(Arrays.asList("f4", "f1", "f3"), recordKeyToFileComps.get("003"));
-    assertEquals(Arrays.asList("f4", "f1"), recordKeyToFileComps.get("004"));
-    assertEquals(Arrays.asList("f4", "f1"), recordKeyToFileComps.get("005"));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("002")));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1", "f3")), new HashSet<>(recordKeyToFileComps.get("003")));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1")), new HashSet<>(recordKeyToFileComps.get("004")));
+    assertEquals(new HashSet<>(Arrays.asList("f4", "f1")), new HashSet<>(recordKeyToFileComps.get("005")));
   }
 
 

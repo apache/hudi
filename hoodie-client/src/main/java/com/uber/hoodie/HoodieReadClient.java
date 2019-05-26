@@ -24,19 +24,16 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.CompactionUtils;
-import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.table.HoodieTable;
-import java.io.Serializable;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -52,13 +49,10 @@ import scala.Tuple2;
 /**
  * Provides an RDD based API for accessing/filtering Hoodie tables, based on keys.
  */
-public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializable {
+public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
   private static final Logger logger = LogManager.getLogger(HoodieReadClient.class);
 
-  private final transient JavaSparkContext jsc;
-
-  private final transient FileSystem fs;
   /**
    * TODO: We need to persist the index type into hoodie.properties and be able to access the index
    * just with a simple basepath pointing to the dataset. Until, then just always assume a
@@ -94,9 +88,8 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * @param clientConfig instance of HoodieWriteConfig
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
+    super(jsc, clientConfig);
     final String basePath = clientConfig.getBasePath();
-    this.jsc = jsc;
-    this.fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath, true);
     this.hoodieTable = HoodieTable
@@ -130,7 +123,6 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * @return a dataframe
    */
   public Dataset<Row> read(JavaRDD<HoodieKey> hoodieKeys, int parallelism) throws Exception {
-
     assertSqlContext();
     JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD = index
         .fetchRecordLocation(hoodieKeys, jsc, hoodieTable);

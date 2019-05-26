@@ -16,10 +16,7 @@
 
 package com.uber.hoodie.common.util.collection;
 
-import com.uber.hoodie.common.util.SerializationUtils;
-import com.uber.hoodie.common.util.SpillableMapUtils;
 import com.uber.hoodie.exception.HoodieException;
-import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Iterator;
@@ -34,19 +31,19 @@ import java.util.stream.Collectors;
 public class LazyFileIterable<T, R> implements Iterable<R> {
 
   // Used to access the value written at a specific position in the file
-  private final RandomAccessFile readOnlyFileHandle;
+  private final String filePath;
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, DiskBasedMap.ValueMetadata> inMemoryMetadataOfSpilledData;
 
-  public LazyFileIterable(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map) {
-    this.readOnlyFileHandle = file;
+  public LazyFileIterable(String filePath, Map<T, DiskBasedMap.ValueMetadata> map) {
+    this.filePath = filePath;
     this.inMemoryMetadataOfSpilledData = map;
   }
 
   @Override
   public Iterator<R> iterator() {
     try {
-      return new LazyFileIterator<>(readOnlyFileHandle, inMemoryMetadataOfSpilledData);
+      return new LazyFileIterator<>(filePath, inMemoryMetadataOfSpilledData);
     } catch (IOException io) {
       throw new HoodieException("Unable to initialize iterator for file on disk", io);
     }
@@ -57,11 +54,15 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
    */
   public class LazyFileIterator<T, R> implements Iterator<R> {
 
+    private final String filePath;
     private RandomAccessFile readOnlyFileHandle;
-    private Iterator<Map.Entry<T, DiskBasedMap.ValueMetadata>> metadataIterator;
+    private final Iterator<Map.Entry<T, DiskBasedMap.ValueMetadata>> metadataIterator;
 
-    public LazyFileIterator(RandomAccessFile file, Map<T, DiskBasedMap.ValueMetadata> map) throws IOException {
-      this.readOnlyFileHandle = file;
+    public LazyFileIterator(String filePath, Map<T, DiskBasedMap.ValueMetadata> map) throws IOException {
+      this.filePath = filePath;
+      this.readOnlyFileHandle = new RandomAccessFile(filePath, "r");
+      readOnlyFileHandle.seek(0);
+
       // sort the map in increasing order of offset of value so disk seek is only in one(forward) direction
       this.metadataIterator = map
           .entrySet()
@@ -70,22 +71,25 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
               (Map.Entry<T, DiskBasedMap.ValueMetadata> o1, Map.Entry<T, DiskBasedMap.ValueMetadata> o2) ->
                   o1.getValue().getOffsetOfValue().compareTo(o2.getValue().getOffsetOfValue()))
           .collect(Collectors.toList()).iterator();
+      this.addShutdownHook();
     }
 
     @Override
     public boolean hasNext() {
-      return this.metadataIterator.hasNext();
+      boolean available = this.metadataIterator.hasNext();
+      if (!available) {
+        close();
+      }
+      return available;
     }
 
     @Override
     public R next() {
-      Map.Entry<T, DiskBasedMap.ValueMetadata> entry = this.metadataIterator.next();
-      try {
-        return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(readOnlyFileHandle,
-            entry.getValue().getOffsetOfValue(), entry.getValue().getSizeOfValue()));
-      } catch (IOException e) {
-        throw new HoodieIOException("Unable to read hoodie record from value spilled to disk", e);
+      if (!hasNext()) {
+        throw new IllegalStateException("next() called on EOF'ed stream. File :" + filePath);
       }
+      Map.Entry<T, DiskBasedMap.ValueMetadata> entry = this.metadataIterator.next();
+      return DiskBasedMap.get(entry.getValue(), readOnlyFileHandle);
     }
 
     @Override
@@ -96,6 +100,25 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     @Override
     public void forEachRemaining(Consumer<? super R> action) {
       action.accept(next());
+    }
+
+    private void close() {
+      if (readOnlyFileHandle != null) {
+        try {
+          readOnlyFileHandle.close();
+          readOnlyFileHandle = null;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }
+
+    private void addShutdownHook() {
+      Runtime.getRuntime().addShutdownHook(new Thread() {
+        public void run() {
+          close();
+        }
+      });
     }
   }
 }

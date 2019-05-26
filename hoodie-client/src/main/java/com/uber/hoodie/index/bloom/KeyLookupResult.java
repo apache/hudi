@@ -21,17 +21,17 @@ package com.uber.hoodie.index.bloom;
 import java.util.List;
 
 /**
- * Encapsulates the result from an index lookup
+ * Encapsulates the result from a key lookup
  */
-public class IndexLookupResult {
+public class KeyLookupResult {
 
-  private String fileName;
+  private final String fileName;
+  private final List<String> matchingRecordKeys;
+  private final String partitionPath;
 
-
-  private List<String> matchingRecordKeys;
-
-  public IndexLookupResult(String fileName, List<String> matchingRecordKeys) {
+  public KeyLookupResult(String fileName, String partitionPath, List<String> matchingRecordKeys) {
     this.fileName = fileName;
+    this.partitionPath = partitionPath;
     this.matchingRecordKeys = matchingRecordKeys;
   }
 
@@ -41,5 +41,9 @@ public class IndexLookupResult {
 
   public List<String> getMatchingRecordKeys() {
     return matchingRecordKeys;
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
   }
 }

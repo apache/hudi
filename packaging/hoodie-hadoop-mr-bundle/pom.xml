@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.6-SNAPSHOT</version>
+    <version>0.4.7-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -124,6 +124,11 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
@@ -197,8 +202,24 @@
                    <shadedPattern>com.uber.hoodie.parquet.schema</shadedPattern>
                  </relocation>
                  <relocation>
-                   <pattern>org.apache.commons</pattern>
-                   <shadedPattern>com.uber.hoodie.org.apache.commons</shadedPattern>
+                   <pattern>org.apache.commons.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.apache.commons.codec.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.codec.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.kryo.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.objenesis.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.minlog.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
                  </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -211,8 +232,21 @@
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
                   <include>commons-io:commons-io</include>
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
+              <filters>
+                <filter>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>

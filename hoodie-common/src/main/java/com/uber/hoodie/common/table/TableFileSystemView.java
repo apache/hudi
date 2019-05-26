@@ -16,9 +16,13 @@
 
 package com.uber.hoodie.common.table;
 
+import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieFileGroup;
+import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
+import com.uber.hoodie.common.util.collection.Pair;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -30,9 +34,9 @@ import java.util.stream.Stream;
 public interface TableFileSystemView {
 
   /**
-   * ReadOptimizedView - methods to provide a view of columnar data files only.
+   * ReadOptimizedView with methods to only access latest version of file for the instant(s) passed.
    */
-  interface ReadOptimizedView {
+  interface ReadOptimizedViewWithLatestSlice {
 
     /**
      * Stream all the latest data files in the given partition
@@ -40,44 +44,58 @@ public interface TableFileSystemView {
     Stream<HoodieDataFile> getLatestDataFiles(String partitionPath);
 
     /**
+     * Get Latest data file for a partition and file-Id
+     */
+    Option<HoodieDataFile> getLatestDataFile(String partitionPath, String fileId);
+
+    /**
      * Stream all the latest data files, in the file system view
      */
     Stream<HoodieDataFile> getLatestDataFiles();
 
     /**
-     * Stream all the latest version data files in the given partition with precondition that
-     * commitTime(file) before maxCommitTime
+     * Stream all the latest version data files in the given partition with precondition that commitTime(file) before
+     * maxCommitTime
      */
     Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
         String maxCommitTime);
 
     /**
-     * Stream all the latest version data files in the given partition with precondition that
-     * instant time of file matches passed in instant time.
-     */
-    Stream<HoodieDataFile> getLatestDataFilesOn(String partitionPath, String instantTime);
-
-    /**
      * Stream all the latest data files pass
      */
     Stream<HoodieDataFile> getLatestDataFilesInRange(List<String> commitsToReturn);
+  }
 
+  /**
+   * ReadOptimizedView - methods to provide a view of columnar data files only.
+   */
+  interface ReadOptimizedView extends ReadOptimizedViewWithLatestSlice {
     /**
      * Stream all the data file versions grouped by FileId for a given partition
      */
     Stream<HoodieDataFile> getAllDataFiles(String partitionPath);
+
+    /**
+     * Get the version of data file matching the instant time in the given partition
+     */
+    Option<HoodieDataFile> getDataFileOn(String partitionPath, String instantTime, String fileId);
+
   }
 
   /**
-   * RealtimeView - methods to access a combination of columnar data files + log files with real
-   * time data.
+   * RealtimeView with methods to only access latest version of file-slice for the instant(s) passed.
    */
-  interface RealtimeView {
+  interface RealtimeViewWithLatestSlice {
 
     /**
      * Stream all the latest file slices in the given partition
      */
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
+
+    /**
+     * Get Latest File Slice for a given fileId in a given partition
+     */
+    Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId);
 
     /**
      * Stream all the latest uncompacted file slices in the given partition
@@ -106,15 +124,39 @@ public interface TableFileSystemView {
      * Stream all the latest file slices, in the given range
      */
     Stream<FileSlice> getLatestFileSliceInRange(List<String> commitsToReturn);
+  }
+
+  /**
+   * RealtimeView - methods to access a combination of columnar data files + log files with real time data.
+   */
+  interface RealtimeView extends RealtimeViewWithLatestSlice {
 
     /**
      * Stream all the file slices for a given partition, latest or not.
      */
     Stream<FileSlice> getAllFileSlices(String partitionPath);
+
   }
 
   /**
    * Stream all the file groups for a given partition
    */
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
+
+  /**
+   * Return Pending Compaction Operations
+   *
+   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   */
+  Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
+
+  /**
+   * Last Known Instant on which the view is built
+   */
+  Option<HoodieInstant> getLastInstant();
+
+  /**
+   * Timeline corresponding to the view
+   */
+  HoodieTimeline getTimeline();
 }

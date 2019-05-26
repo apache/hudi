@@ -1,3 +1,63 @@
+Release 0.4.6
+------------------------------------
+
+### Highlights
+ * Index performance! Interval trees + bucketized checking speed up index lookup upto 10x!
+ * Faster writing due to cached avro encoder/decoders, lighter memory usage, lesser data shuffled.
+ * Support for spark jobs using > 1 cores per executor
+ * DeltaStreamer bug fixes (inline compaction, hive sync, error record handling)
+ * Empty Record payload to support deletes out-of-box easily
+ * Fixes to hive/spark bundles around dependencies, versioning, shading
+
+### Full PR List
+
+ * **@bvardar** - Minor CLI documentation change in delta-streamer #679
+ * **@n3nash** - converting map task memory from mb to bytes #678
+ * **@bvaradar** - Fix various errors found by long running delta-streamer tests #675
+ * **@vinothchandar** - Bucketized Bloom Filter checking #671
+ * **@pseudomuto** - SparkUtil#initLauncher shoudn't raise when spark-defaults.conf doesn't exist #670
+ * **@abhioncbr** - HUDI-101: added exclusion filters for signature files. #669
+ * **@ovj** - migrating kryo's dependency from twitter chill to plain kryo library #649
+ * **@bvaradar** - Revert "HUDI-101: added mevn-shade plugin with filters." #665
+ * **@abhioncbr** - HUDI-101: added mevn-shade plugin with filters. #659
+ * **@bvaradar** - Rollback inflights when using Spark [Streaming] write #660
+ * **@vinothchandar** - Making DataSource/DeltaStreamer use defaults for combining #634
+ * **@vinothchandar** - Fixes HUDI-85 : Interval tree based pruning for Bloom Index #653
+ * **@takezoe** - Fix to enable hoodie.datasource.read.incr.filters #655
+ * **@n3nash** - Removing OLD MAGIC header #648
+ * **@bvaradar** - Revert "Read and apply schema for each log block from the metadata header instead of the latest schema" #647
+ * **@lyogev** - Add empty payload class to support deletes via apache spark #635
+ * **@bvaradar** - Move to apachehudi dockerhub repository & use openjdk docker containers #644
+ * **@bvaradar** - Fix Hive RT query failure in hoodie demo #645
+ * **@ovj** - Revert - Replacing Apache commons-lang3 object serializer with Kryo #642
+ * **@n3nash** - Read and apply schema for each log block from the metadata header instead of the latest schema #640
+ * **@bhasudha** - FIXES HUDI-98: Fix multiple issues when using build_local_docker_images for demo setup #636
+ * **@n3nash** - Performing commit archiving in batches to avoid keeping a huge chunk in memory #631
+ * **@bvaradar** - Essential Hive packages missing in hoodie spark bundle #633
+ * **@n3nash** - 1. Minor changes to fix compaction 2. Adding 2 compaction policies 3. Adding a Hbase index property #629
+ * **@milantracy** - [HUDI-66] FSUtils.getRelativePartitionPath does not handle repeated f… #627
+ * **@vinothchandar** - Fixing small file handling, inline compaction defaults #599
+ * **@vinothchandar** - Follow up HUDI-27 : Call super.close() in HoodieWraperFileSystem::close() #621
+ * **@vinothchandar** - Fix HUDI-27 : Support num_cores > 1 for writing through spark #620
+ * **@vinothchandar** - Fixes HUDI-38: Reduce memory overhead of WriteStatus #616
+ * **@vinothchandar** - Fixed HUDI-87 : Remove schemastr from BaseAvroPayload #619
+ * **@vinothchandar** - Fixes HUDI-9 : Check precondition minInstantsToKeep > cleanerCommitsR… #617
+ * **@n3nash** - Fixing source schema and writer schema distinction in payloads #612
+ * **@ambition119** - [HUDI-63] Removed unused BucketedIndex code #608
+ * **@bvaradar** - run_hive_sync tool must be able to handle case where there are multiple standalone jdbc jars in hive installation dir #609
+ * **@milantracy** - add a script that shuts down demo cluster gracefully #606
+ * **@n3nash** - Enable multi rollbacks for MOR table type #546
+ * **@ovj** - Replacing Apache commons-lang3 object serializer with Kryo serializer #583
+ * **@kaka11chen** - Add compression codec configurations for HoodieParquetWriter. #604
+ * **@smarthi** - HUDI-75: Add KEYS #601
+ * **@vinothchandar** - Removing docs folder from master branch #602
+ * **@bvaradar** - Fix hive sync and deltastreamer issue in demo #593
+ * **@bhasudha** - Fix quickstart documentation for querying via Presto #598
+ * **@ovj** - Handling duplicate record update for single partition (duplicates in single or different parquet files) #584
+ * **@kaka11chen** - Fix avro doesn't have short and byte type. #595
+ * **@bvaradar** - FIleSystem View to handle same fileIds across partitions correctly #572
+ * **@vinothchandar** - Upgrade various jar, gem versions for maintenance #575
+
 Release 0.4.5
 ------------------------------------
 

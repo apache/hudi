@@ -41,6 +41,10 @@ public class StringUtils {
     return join(elements, "");
   }
 
+  public static <T> String joinUsingDelim(String delim, final String... elements) {
+    return join(elements, delim);
+  }
+
   public static String join(final String[] array, final String separator) {
     if (array == null) {
       return null;

@@ -53,6 +53,14 @@ public class DataSourceUtils {
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName) {
+    Object obj = getNestedFieldVal(record, fieldName);
+    return (obj == null) ? null : obj.toString();
+  }
+
+  /**
+   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
+   */
+  public static Object getNestedFieldVal(GenericRecord record, String fieldName) {
     String[] parts = fieldName.split("\\.");
     GenericRecord valueNode = record;
     int i = 0;
@@ -65,7 +73,7 @@ public class DataSourceUtils {
 
       // return, if last part of name
       if (i == parts.length - 1) {
-        return val.toString();
+        return val;
       } else {
         // VC: Need a test here
         if (!(val instanceof GenericRecord)) {
@@ -128,12 +136,16 @@ public class DataSourceUtils {
       String basePath, String tblName, Map<String, String> parameters) throws Exception {
 
     // inline compaction is on by default for MOR
-    boolean inlineCompact = parameters.containsKey(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
-        && parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY()).equals(DataSourceWriteOptions
-        .MOR_STORAGE_TYPE_OPT_VAL());
+    boolean inlineCompact = parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
+        .equals(DataSourceWriteOptions.MOR_STORAGE_TYPE_OPT_VAL());
 
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().combineInput(true, true)
+    // insert/bulk-insert combining to be true, if filtering for duplicates
+    boolean combineInserts = Boolean.parseBoolean(parameters.get(
+        DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withAutoCommit(false)
+        .combineInput(combineInserts, true)
         .withSchema(schemaStr).forTable(tblName).withIndexConfig(
             HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -145,7 +157,7 @@ public class DataSourceUtils {
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
 
-    return new HoodieWriteClient<>(jssc, writeConfig);
+    return new HoodieWriteClient<>(jssc, writeConfig, true);
   }
 
 

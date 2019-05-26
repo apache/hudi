@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.6-SNAPSHOT</version>
+    <version>0.4.7-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -148,6 +148,18 @@
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
@@ -165,6 +177,15 @@
                   <exclude>org.apache.spark:*</exclude>
                 </excludes>
               </artifactSet>
+              <filters>
+                <filter>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>
@@ -185,6 +206,10 @@
     <dependency>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
     </dependency>
     <dependency>
       <groupId>org.scala-lang</groupId>

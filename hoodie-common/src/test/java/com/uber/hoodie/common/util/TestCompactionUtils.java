@@ -50,6 +50,8 @@ import org.junit.rules.TemporaryFolder;
 
 public class TestCompactionUtils {
 
+  private static String TEST_WRITE_TOKEN = "1-0-1";
+
   private static final Map<String, Double> metrics =
       new ImmutableMap.Builder<String, Double>()
           .put("key1", 1.0)
@@ -77,7 +79,7 @@ public class TestCompactionUtils {
 
     // File Slice with data-file but no log files
     FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noLog1");
-    noLogFileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog.parquet"));
+    noLogFileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
     op = CompactionUtils.buildFromFileSlice(
         DEFAULT_PARTITION_PATHS[0], noLogFileSlice, Optional.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(noLogFileSlice, op, DEFAULT_PARTITION_PATHS[0]);
@@ -85,20 +87,20 @@ public class TestCompactionUtils {
     //File Slice with no data-file but log files present
     FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
     noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     op = CompactionUtils.buildFromFileSlice(
         DEFAULT_PARTITION_PATHS[0], noDataFileSlice, Optional.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(noDataFileSlice, op, DEFAULT_PARTITION_PATHS[0]);
 
     //File Slice with data-file and log files present
     FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
-    fileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog.parquet"));
+    fileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
     fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     op = CompactionUtils.buildFromFileSlice(
         DEFAULT_PARTITION_PATHS[0], fileSlice, Optional.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(fileSlice, op, DEFAULT_PARTITION_PATHS[0]);
@@ -110,18 +112,18 @@ public class TestCompactionUtils {
   private Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> buildCompactionPlan() {
     FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "empty1");
     FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
-    fileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog.parquet"));
+    fileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
     fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noLog1");
-    noLogFileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog.parquet"));
+    noLogFileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
     FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
     noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
     noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2))));
+        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     List<FileSlice> fileSliceList = Arrays.asList(emptyFileSlice, noDataFileSlice, fileSlice, noLogFileSlice);
     List<Pair<String, FileSlice>> input = fileSliceList.stream().map(f -> Pair.of(DEFAULT_PARTITION_PATHS[0], f))
         .collect(Collectors.toList());

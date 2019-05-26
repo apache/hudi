@@ -21,7 +21,7 @@
   <groupId>com.uber.hoodie</groupId>
   <artifactId>hoodie</artifactId>
   <packaging>pom</packaging>
-  <version>0.4.6-SNAPSHOT</version>
+  <version>0.4.7-SNAPSHOT</version>
   <description>Hoodie is a Apache Spark library that provides the ability to efficiently do
     incremental processing on datasets in HDFS
   </description>
@@ -30,12 +30,13 @@
 
   <modules>
     <module>hoodie-common</module>
-    <module>hoodie-client</module>
     <module>hoodie-cli</module>
+    <module>hoodie-client</module>
     <module>hoodie-hadoop-mr</module>
     <module>hoodie-hive</module>
-    <module>hoodie-utilities</module>
     <module>hoodie-spark</module>
+    <module>hoodie-timeline-service</module>
+    <module>hoodie-utilities</module>
     <module>packaging/hoodie-hadoop-mr-bundle</module>
     <module>packaging/hoodie-hive-bundle</module>
     <module>packaging/hoodie-spark-bundle</module>
@@ -123,7 +124,7 @@
     <maven-dependency-plugin.version>2.10</maven-dependency-plugin.version>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
-    <fasterxml.version>2.8.11</fasterxml.version>
+    <fasterxml.version>2.6.7</fasterxml.version>
     <parquet.version>1.8.1</parquet.version>
     <junit.version>4.11</junit.version>
     <mockito.version>1.9.5</mockito.version>
@@ -132,7 +133,7 @@
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>1.2.1</hive.version>
-    <metrics.version>3.1.1</metrics.version>
+    <metrics.version>4.0.2</metrics.version>
     <spark.version>2.1.0</spark.version>
     <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
@@ -480,6 +481,16 @@
         <scope>provided</scope>
       </dependency>
       <dependency>
+        <groupId>org.rocksdb</groupId>
+        <artifactId>rocksdbjni</artifactId>
+        <version>5.17.2</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-codec</groupId>
+        <artifactId>commons-codec</artifactId>
+        <version>1.4</version>
+      </dependency>
+      <dependency>
         <groupId>commons-logging</groupId>
         <artifactId>commons-logging</artifactId>
         <version>1.2</version>
@@ -489,7 +500,6 @@
         <artifactId>commons-io</artifactId>
         <version>2.6</version>
       </dependency>
-
       <!-- Storage formats -->
       <!-- Spark parquet version 1.7.0 does not play well with the hive 1.1.0 installed in cluster (which requires twitter parquet 1.5.0) -->
       <dependency>
@@ -596,6 +606,11 @@
       </dependency>
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>fluent-hc</artifactId>
+        <version>4.3.2</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpcore</artifactId>
         <version>4.3.2</version>
       </dependency>
@@ -697,6 +712,11 @@
         <artifactId>hive-exec</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.rocksdb</groupId>
+        <artifactId>rocksdbjni</artifactId>
+        <version>5.5.1</version>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>

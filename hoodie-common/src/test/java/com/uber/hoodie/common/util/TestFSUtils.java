@@ -23,13 +23,17 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 
 public class TestFSUtils {
+
+  private static String TEST_WRITE_TOKEN = "1-0-1";
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -39,22 +43,8 @@ public class TestFSUtils {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     int taskPartitionId = 2;
     String fileName = UUID.randomUUID().toString();
-    assertTrue(FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName)
-        .equals(fileName + "_" + taskPartitionId + "_" + commitTime + ".parquet"));
-  }
-
-  @Test
-  public void testMakeTempDataFileName() {
-    String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-    String partitionPath = "2017/12/31";
-    int taskPartitionId = Integer.MAX_VALUE;
-    int stageId = Integer.MAX_VALUE;
-    long taskAttemptId = Long.MAX_VALUE;
-    String fileName = UUID.randomUUID().toString();
-    assertTrue(
-        FSUtils.makeTempDataFileName(partitionPath, commitTime, taskPartitionId, fileName, stageId, taskAttemptId)
-            .equals(partitionPath.replace("/", "-") + "_" + fileName + "_" + taskPartitionId + "_" + commitTime + "_"
-                + stageId + "_" + taskAttemptId + ".parquet"));
+    assertTrue(FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName)
+        .equals(fileName + "_" + TEST_WRITE_TOKEN + "_" + commitTime + ".parquet"));
   }
 
   @Test
@@ -70,7 +60,7 @@ public class TestFSUtils {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     int taskPartitionId = 2;
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
+    String fullFileName = FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName);
     assertTrue(FSUtils.getCommitTime(fullFileName).equals(commitTime));
   }
 
@@ -79,7 +69,7 @@ public class TestFSUtils {
     String commitTime = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
     int taskPartitionId = 2;
     String fileName = UUID.randomUUID().toString();
-    String fullFileName = FSUtils.makeDataFileName(commitTime, taskPartitionId, fileName);
+    String fullFileName = FSUtils.makeDataFileName(commitTime, TEST_WRITE_TOKEN, fileName);
     assertTrue(FSUtils.getFileId(fullFileName).equals(fileName));
   }
 
@@ -120,5 +110,48 @@ public class TestFSUtils {
     Path basePath = new Path("/test/apache");
     Path partitionPath = new Path("/test/apache/apache/hudi");
     assertEquals("apache/hudi", FSUtils.getRelativePartitionPath(basePath, partitionPath));
+  }
+
+  @Test
+  public void testOldLogFileName() {
+    // Check if old log file names are still parseable by FSUtils method
+    String partitionPath = "2019/01/01/";
+    String fileName = UUID.randomUUID().toString();
+    String oldLogFile = makeOldLogFileName(fileName, ".log", "100", 1);
+    Path rlPath = new Path(new Path(partitionPath), oldLogFile);
+    Assert.assertTrue(FSUtils.isLogFile(rlPath));
+    Assert.assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
+    Assert.assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
+    Assert.assertEquals(1, FSUtils.getFileVersionFromLog(rlPath));
+    Assert.assertNull(FSUtils.getTaskPartitionIdFromLogPath(rlPath));
+    Assert.assertNull(FSUtils.getStageIdFromLogPath(rlPath));
+    Assert.assertNull(FSUtils.getTaskAttemptIdFromLogPath(rlPath));
+    Assert.assertNull(FSUtils.getWriteTokenFromLogPath(rlPath));
+  }
+
+  @Test
+  public void tesLogFileName() {
+    // Check if log file names are parseable by FSUtils method
+    String partitionPath = "2019/01/01/";
+    String fileName = UUID.randomUUID().toString();
+    String logFile = FSUtils.makeLogFileName(fileName, ".log", "100", 2, "1-0-1");
+    System.out.println("Log File =" + logFile);
+    Path rlPath = new Path(new Path(partitionPath), logFile);
+    Assert.assertTrue(FSUtils.isLogFile(rlPath));
+    Assert.assertEquals(fileName, FSUtils.getFileIdFromLogPath(rlPath));
+    Assert.assertEquals("100", FSUtils.getBaseCommitTimeFromLogPath(rlPath));
+    Assert.assertEquals(2, FSUtils.getFileVersionFromLog(rlPath));
+    Assert.assertEquals(new Integer(1), FSUtils.getTaskPartitionIdFromLogPath(rlPath));
+    Assert.assertEquals(new Integer(0), FSUtils.getStageIdFromLogPath(rlPath));
+    Assert.assertEquals(new Integer(1), FSUtils.getTaskAttemptIdFromLogPath(rlPath));
+
+  }
+
+  public static String makeOldLogFileName(String fileId, String logFileExtension,
+      String baseCommitTime, int version) {
+    Pattern oldLogFilePattern =
+        Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(\\.([0-9]*))");
+    return "." + String
+        .format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
   }
 }

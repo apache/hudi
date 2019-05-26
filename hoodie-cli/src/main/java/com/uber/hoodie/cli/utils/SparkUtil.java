@@ -21,6 +21,8 @@ import com.uber.hoodie.cli.commands.SparkMain;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.File;
 import java.net.URISyntaxException;
+
+import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -37,8 +39,13 @@ public class SparkUtil {
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
     String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
         .getAbsolutePath();
-    SparkLauncher sparkLauncher = new SparkLauncher().setAppResource(currentJar).setMainClass(SparkMain.class.getName())
-        .setPropertiesFile(propertiesFile);
+    SparkLauncher sparkLauncher = new SparkLauncher().setAppResource(currentJar)
+        .setMainClass(SparkMain.class.getName());
+
+    if (StringUtils.isNotEmpty(propertiesFile)) {
+      sparkLauncher.setPropertiesFile(propertiesFile);
+    }
+
     File libDirectory = new File(new File(currentJar).getParent(), "lib");
     for (String library : libDirectory.list()) {
       sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath());

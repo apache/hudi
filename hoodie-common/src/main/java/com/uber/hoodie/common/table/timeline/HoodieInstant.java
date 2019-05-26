@@ -39,7 +39,9 @@ public class HoodieInstant implements Serializable {
     // Inflight instant
     INFLIGHT,
     // Committed instant
-    COMPLETED
+    COMPLETED,
+    // Invalid instant
+    INVALID
   }
 
   private State state = State.COMPLETED;

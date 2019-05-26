@@ -54,7 +54,6 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
-  private static final byte[] oldMagicBuffer = new byte[4];
   private static final byte[] magicBuffer = new byte[6];
   private final Schema readerSchema;
   private HoodieLogFormat.LogFormatVersion nextBlockVersion;
@@ -121,23 +120,11 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     Map<HeaderMetadataType, String> header = null;
 
     try {
-      if (isOldMagic()) {
-        // 1 Read the block type for a log block
-        type = inputStream.readInt();
-
-        Preconditions.checkArgument(type < HoodieLogBlockType.values().length,
-            "Invalid block byte type found " + type);
-        blockType = HoodieLogBlockType.values()[type];
-
-        // 2 Read the total size of the block
-        blocksize = inputStream.readInt();
-      } else {
-        // 1 Read the total size of the block
-        blocksize = (int) inputStream.readLong();
-      }
+      // 1 Read the total size of the block
+      blocksize = (int) inputStream.readLong();
     } catch (EOFException | CorruptedLogFileException e) {
       // An exception reading any of the above indicates a corrupt block
-      // Create a corrupt block by finding the next OLD_MAGIC marker or EOF
+      // Create a corrupt block by finding the next MAGIC marker or EOF
       return createCorruptBlock();
     }
 
@@ -297,20 +284,10 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   /**
-   * Read log format version from log file, if present For old log files written with Magic header
-   * OLD_MAGIC and without version, return DEFAULT_VERSION
+   * Read log format version from log file.
    */
   private HoodieLogFormat.LogFormatVersion readVersion() throws IOException {
-    // If not old log file format (written with Magic header OLD_MAGIC), then read log version
-    if (Arrays.equals(oldMagicBuffer, HoodieLogFormat.OLD_MAGIC)) {
-      Arrays.fill(oldMagicBuffer, (byte) 0);
-      return new HoodieLogFormatVersion(HoodieLogFormatVersion.DEFAULT_VERSION);
-    }
     return new HoodieLogFormatVersion(inputStream.readInt());
-  }
-
-  private boolean isOldMagic() {
-    return Arrays.equals(oldMagicBuffer, HoodieLogFormat.OLD_MAGIC);
   }
 
 
@@ -334,13 +311,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // 1. Read magic header from the start of the block
     inputStream.readFully(magicBuffer, 0, 6);
     if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
-      inputStream.seek(pos);
-      // 1. Read old magic header from the start of the block
-      // (for backwards compatibility of older log files written without log version)
-      inputStream.readFully(oldMagicBuffer, 0, 4);
-      if (!Arrays.equals(oldMagicBuffer, HoodieLogFormat.OLD_MAGIC)) {
-        return false;
-      }
+      return false;
     }
     return true;
   }

@@ -133,6 +133,11 @@ public class HoodieWriteStat implements Serializable {
    */
   private long totalRollbackBlocks;
 
+  /**
+   * File Size as of close
+   */
+  private long fileSizeInBytes;
+
   @Nullable
   @JsonIgnore
   private RuntimeStats runtimeStats;
@@ -285,6 +290,14 @@ public class HoodieWriteStat implements Serializable {
     this.totalRollbackBlocks = totalRollbackBlocks;
   }
 
+  public long getFileSizeInBytes() {
+    return fileSizeInBytes;
+  }
+
+  public void setFileSizeInBytes(long fileSizeInBytes) {
+    this.fileSizeInBytes = fileSizeInBytes;
+  }
+
   @Nullable
   public RuntimeStats getRuntimeStats() {
     return runtimeStats;
@@ -297,11 +310,8 @@ public class HoodieWriteStat implements Serializable {
   /**
    * Set path and tempPath relative to the given basePath.
    */
-  public void setPaths(Path basePath, Path path, Path tempPath) {
+  public void setPath(Path basePath, Path path) {
     this.path = path.toString().replace(basePath + "/", "");
-    if (tempPath != null) {
-      this.tempPath = tempPath.toString().replace(basePath + "/", "");
-    }
   }
 
   @Override

@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.io.storage;
+package com.uber.hoodie.common.io.storage;
 
 import com.uber.hoodie.common.storage.StorageSchemes;
+import com.uber.hoodie.common.util.ConsistencyGuard;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.NoOpConsistencyGuard;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.net.URI;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeoutException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.ContentSummary;
@@ -64,6 +67,16 @@ public class HoodieWrapperFileSystem extends FileSystem {
       ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
+  private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
+
+  public HoodieWrapperFileSystem() {
+  }
+
+  public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard) {
+    this.fileSystem = fileSystem;
+    this.uri = fileSystem.getUri();
+    this.consistencyGuard = consistencyGuard;
+  }
 
   public static Path convertToHoodiePath(Path file, Configuration conf) {
     try {
@@ -139,8 +152,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
       return fsDataOutputStream;
     }
 
-    SizeAwareFSDataOutputStream os = new SizeAwareFSDataOutputStream(
-            fsDataOutputStream, () -> openStreams.remove(path.getName()));
+    SizeAwareFSDataOutputStream os = new SizeAwareFSDataOutputStream(path,
+            fsDataOutputStream, consistencyGuard, () -> openStreams.remove(path.getName()));
     openStreams.put(path.getName(), os);
     return os;
   }
@@ -157,66 +170,66 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream create(Path f, Progressable progress) throws IOException {
-    return fileSystem.create(convertToDefaultPath(f), progress);
+    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication) throws IOException {
-    return fileSystem.create(convertToDefaultPath(f), replication);
+    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication));
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication, Progressable progress)
       throws IOException {
-    return fileSystem.create(convertToDefaultPath(f), replication, progress);
+    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication, progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize) throws IOException {
-    return fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize);
+    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, Progressable progress)
       throws IOException {
-    return fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress);
+    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication,
       long blockSize, Progressable progress) throws IOException {
-    return fileSystem
-        .create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress);
+    return wrapOutputStream(f, fileSystem
+        .create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags,
       int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
-    return fileSystem
+    return wrapOutputStream(f, fileSystem
         .create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize,
-            progress);
+            progress));
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags,
       int bufferSize, short replication, long blockSize, Progressable progress,
       Options.ChecksumOpt checksumOpt) throws IOException {
-    return fileSystem
+    return wrapOutputStream(f, fileSystem
         .create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize,
-            progress, checksumOpt);
+            progress, checksumOpt));
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication,
       long blockSize) throws IOException {
-    return fileSystem
-        .create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize);
+    return wrapOutputStream(f, fileSystem
+        .create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress)
       throws IOException {
-    return fileSystem.append(convertToDefaultPath(f), bufferSize, progress);
+    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize, progress));
   }
 
   @Override
@@ -226,7 +239,16 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
-    return fileSystem.delete(convertToDefaultPath(f), recursive);
+    boolean success = fileSystem.delete(convertToDefaultPath(f), recursive);
+
+    if (success) {
+      try {
+        consistencyGuard.waitTillFileDisappears(f);
+      } catch (TimeoutException e) {
+        return false;
+      }
+    }
+    return success;
   }
 
   @Override
@@ -251,6 +273,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+    } catch (TimeoutException e) {
+      // pass
+    }
     return fileSystem.getFileStatus(convertToDefaultPath(f));
   }
 
@@ -353,12 +380,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream append(Path f) throws IOException {
-    return fileSystem.append(convertToDefaultPath(f));
+    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f)));
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize) throws IOException {
-    return fileSystem.append(convertToDefaultPath(f), bufferSize);
+    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize));
   }
 
   @Override

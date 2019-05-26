@@ -22,14 +22,14 @@ import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
-import java.util.Optional;
+import java.util.Objects;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 /**
- * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and
- * extension from the log file path.
+ * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and extension from the log
+ * file path.
  * <p>
  * Also contains logic to roll-over the log file
  */
@@ -38,73 +38,126 @@ public class HoodieLogFile implements Serializable {
   public static final String DELTA_EXTENSION = ".log";
   public static final Integer LOGFILE_BASE_VERSION = 1;
 
-  private final Path path;
-  private Optional<FileStatus> fileStatus;
+  private transient FileStatus fileStatus;
+  private final String pathStr;
+  private long fileLen;
 
   public HoodieLogFile(FileStatus fileStatus) {
-    this(fileStatus.getPath());
-    this.fileStatus = Optional.of(fileStatus);
+    this.fileStatus = fileStatus;
+    this.pathStr = fileStatus.getPath().toString();
+    this.fileLen = fileStatus.getLen();
   }
 
   public HoodieLogFile(Path logPath) {
-    this.path = logPath;
-    this.fileStatus = Optional.empty();
+    this.fileStatus = null;
+    this.pathStr = logPath.toString();
+    this.fileLen = 0;
+  }
+
+  public HoodieLogFile(String logPathStr) {
+    this.fileStatus = null;
+    this.pathStr = logPathStr;
+    this.fileLen = -1;
   }
 
   public String getFileId() {
-    return FSUtils.getFileIdFromLogPath(path);
+    return FSUtils.getFileIdFromLogPath(getPath());
   }
 
   public String getBaseCommitTime() {
-    return FSUtils.getBaseCommitTimeFromLogPath(path);
+    return FSUtils.getBaseCommitTimeFromLogPath(getPath());
   }
 
   public int getLogVersion() {
-    return FSUtils.getFileVersionFromLog(path);
+    return FSUtils.getFileVersionFromLog(getPath());
+  }
+
+  public String getLogWriteToken() {
+    return FSUtils.getWriteTokenFromLogPath(getPath());
   }
 
   public String getFileExtension() {
-    return FSUtils.getFileExtensionFromLog(path);
+    return FSUtils.getFileExtensionFromLog(getPath());
   }
 
   public Path getPath() {
-    return path;
+    return new Path(pathStr);
   }
 
   public String getFileName() {
-    return path.getName();
+    return getPath().getName();
   }
 
-  public Optional<FileStatus> getFileStatus() {
+  public void setFileLen(long fileLen) {
+    this.fileLen = fileLen;
+  }
+
+  public long getFileSize() {
+    return fileLen;
+  }
+
+  public FileStatus getFileStatus() {
     return fileStatus;
   }
 
-  public Optional<Long> getFileSize() {
-    return fileStatus.map(FileStatus::getLen);
+  public void setFileStatus(FileStatus fileStatus) {
+    this.fileStatus = fileStatus;
   }
 
-  public HoodieLogFile rollOver(FileSystem fs) throws IOException {
+  public HoodieLogFile rollOver(FileSystem fs, String logWriteToken) throws IOException {
     String fileId = getFileId();
     String baseCommitTime = getBaseCommitTime();
+    Path path = getPath();
     String extension = "." + FSUtils.getFileExtensionFromLog(path);
     int newVersion = FSUtils
         .computeNextLogVersion(fs, path.getParent(), fileId,
             extension, baseCommitTime);
     return new HoodieLogFile(new Path(path.getParent(),
-        FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion)));
+        FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion, logWriteToken)));
   }
 
-  public static Comparator<HoodieLogFile> getBaseInstantAndLogVersionComparator() {
-    return (o1, o2) -> {
+  public static Comparator<HoodieLogFile> getLogFileComparator() {
+    return new LogFileComparator();
+  }
+
+  public static Comparator<HoodieLogFile> getReverseLogFileComparator() {
+    return new LogFileComparator().reversed();
+  }
+
+  /**
+   * Comparator to order log-files
+   */
+  public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
+
+    private transient Comparator<HoodieLogFile> writeTokenComparator;
+
+    private Comparator<HoodieLogFile> getWriteTokenComparator() {
+      if (null == writeTokenComparator) {
+        // writeTokenComparator is not serializable. Hence, lazy loading
+        writeTokenComparator = Comparator.nullsFirst(Comparator.comparing(HoodieLogFile::getLogWriteToken));
+      }
+      return writeTokenComparator;
+    }
+
+    @Override
+    public int compare(HoodieLogFile o1, HoodieLogFile o2) {
       String baseInstantTime1 = o1.getBaseCommitTime();
       String baseInstantTime2 = o2.getBaseCommitTime();
+
       if (baseInstantTime1.equals(baseInstantTime2)) {
-        // reverse the order by log-version when base-commit is same
-        return new Integer(o2.getLogVersion()).compareTo(o1.getLogVersion());
+
+        if (o1.getLogVersion() == o2.getLogVersion()) {
+          // Compare by write token when base-commit and log-version is same
+          return getWriteTokenComparator().compare(o1, o2);
+        }
+
+        // compare by log-version when base-commit is same
+        return Integer.compare(o1.getLogVersion(), o2.getLogVersion());
       }
-      // reverse the order by base-commits
-      return baseInstantTime2.compareTo(baseInstantTime1);
-    };
+
+      // compare by base-commits
+      return baseInstantTime1.compareTo(baseInstantTime2);
+    }
   }
 
   @Override
@@ -116,16 +169,19 @@ public class HoodieLogFile implements Serializable {
       return false;
     }
     HoodieLogFile that = (HoodieLogFile) o;
-    return path != null ? path.equals(that.path) : that.path == null;
+    return Objects.equals(pathStr, that.pathStr);
   }
 
   @Override
   public int hashCode() {
-    return path != null ? path.hashCode() : 0;
+    return Objects.hash(pathStr);
   }
 
   @Override
   public String toString() {
-    return "HoodieLogFile {" + path + '}';
+    return "HoodieLogFile{"
+        + "pathStr='" + pathStr + '\''
+        + ", fileLen=" + fileLen
+        + '}';
   }
 }
