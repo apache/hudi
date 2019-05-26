@@ -50,6 +50,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -64,6 +66,7 @@ import org.apache.spark.sql.SQLContext;
  */
 public class HoodieClientTestUtils {
 
+  private static final transient Logger log = LogManager.getLogger(HoodieClientTestUtils.class);
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
     List<WriteStatus> statuses = new ArrayList<>();
@@ -137,7 +140,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths = getLatestFileIDsToFullPath(basePath, commitTimeline,
           Arrays.asList(commitInstant));
-      System.out.println("Path :" + paths.values());
+      log.info("Path :" + paths.values());
       return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
           .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
     } catch (Exception e) {

@@ -22,7 +22,6 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
-import com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +34,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class HoodieCleaner {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static volatile Logger log = LogManager.getLogger(HoodieCleaner.class);
 
   /**
    * Config for Cleaner
@@ -55,14 +54,14 @@ public class HoodieCleaner {
   /**
    * Bag of properties with source, hoodie client, key generator etc.
    */
-  TypedProperties props;
+  private TypedProperties props;
 
   public HoodieCleaner(Config cfg, JavaSparkContext jssc) throws IOException {
     this.cfg = cfg;
     this.jssc = jssc;
     this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
-
-    this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs) :
+        UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     log.info("Creating Cleaner with configs : " + props.toString());
   }
 
@@ -89,7 +88,6 @@ public class HoodieCleaner {
     public String propsFilePath =
             "file://" + System.getProperty("user.dir")
                     + "/src/test/resources/delta-streamer-config/dfs-source.properties";
-
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
             + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();

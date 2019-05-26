@@ -30,11 +30,17 @@ import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.AbstractCommandConfig;
+import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -53,70 +59,23 @@ import scala.Tuple2;
  * Loads data from Parquet Sources
  */
 public class HDFSParquetImporter implements Serializable {
+  private static volatile Logger log = LogManager.getLogger(HDFSParquetImporter.class);
 
   public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
   private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
   private final Config cfg;
   private transient FileSystem fs;
+  /**
+   * Bag of properties with source, hoodie client, key generator etc.
+   */
+  private TypedProperties props;
 
   public HDFSParquetImporter(Config cfg) throws IOException {
     this.cfg = cfg;
+    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs) :
+        UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    log.info("Creating Cleaner with configs : " + props.toString());
   }
-
-  public static class FormatValidator implements IValueValidator<String> {
-
-    List<String> validFormats = Arrays.asList("parquet");
-
-    @Override
-    public void validate(String name, String value) throws ParameterException {
-      if (value == null || !validFormats.contains(value)) {
-        throw new ParameterException(String.format(
-                "Invalid format type: value:%s: supported formats:%s", value, validFormats));
-      }
-    }
-  }
-
-  public static class Config extends AbstractCommandConfig {
-    @Parameter(names = {"--command", "-c"},
-            description = "Write command Valid values are insert(default)/upsert",
-            required = false)
-    public String command = "INSERT";
-    @Parameter(names = {"--src-path",
-            "-sp"}, description = "Base path for the input dataset", required = true)
-    public String srcPath = null;
-    @Parameter(names = {"--target-path",
-            "-tp"}, description = "Base path for the target hoodie dataset", required = true)
-    public String targetPath = null;
-    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
-    public String tableName = null;
-    @Parameter(names = {"--table-type", "-tt"}, description = "Table type", required = true)
-    public String tableType = null;
-    @Parameter(names = {"--row-key-field",
-            "-rk"}, description = "Row key field name", required = true)
-    public String rowKey = null;
-    @Parameter(names = {"--partition-key-field",
-            "-pk"}, description = "Partition key field name", required = true)
-    public String partitionKey = null;
-    @Parameter(names = {"--parallelism",
-            "-pl"}, description = "Parallelism for hoodie insert", required = true)
-    public int parallelism = 1;
-    @Parameter(names = {"--schema-file",
-            "-sf"}, description = "path for Avro schema file", required = true)
-    public String schemaFile = null;
-    @Parameter(names = {"--format",
-            "-f"}, description = "Format for the input data.", required = false, validateValueWith =
-            FormatValidator.class)
-    public String format = null;
-    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
-    public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory",
-            "-sm"}, description = "spark memory to use", required = true)
-    public String sparkMemory = null;
-    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
-    public int retry = 0;
-  }
-
-
 
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
@@ -164,7 +123,7 @@ public class HDFSParquetImporter implements Serializable {
           .initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
       HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr,
-          cfg.parallelism, Optional.empty());
+          cfg.parallelism, Optional.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
       // Get instant time.
@@ -241,5 +200,65 @@ public class HDFSParquetImporter implements Serializable {
       return client.insert(hoodieRecords, instantTime);
     }
     return client.upsert(hoodieRecords, instantTime);
+  }
+
+  public static class FormatValidator implements IValueValidator<String> {
+
+    List<String> validFormats = Arrays.asList("parquet");
+
+    @Override
+    public void validate(String name, String value) throws ParameterException {
+      if (value == null || !validFormats.contains(value)) {
+        throw new ParameterException(String.format(
+            "Invalid format type: value:%s: supported formats:%s", value, validFormats));
+      }
+    }
+  }
+
+  public static class Config extends AbstractCommandConfig {
+
+    @Parameter(names = {"--command", "-c"},
+        description = "Write command Valid values are insert(default)/upsert",
+        required = false)
+    public String command = "INSERT";
+    @Parameter(names = {"--src-path",
+        "-sp"}, description = "Base path for the input dataset", required = true)
+    public String srcPath = null;
+    @Parameter(names = {"--target-path",
+        "-tp"}, description = "Base path for the target hoodie dataset", required = true)
+    public String targetPath = null;
+    @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
+    public String tableName = null;
+    @Parameter(names = {"--table-type", "-tt"}, description = "Table type", required = true)
+    public String tableType = null;
+    @Parameter(names = {"--row-key-field",
+        "-rk"}, description = "Row key field name", required = true)
+    public String rowKey = null;
+    @Parameter(names = {"--partition-key-field",
+        "-pk"}, description = "Partition key field name", required = true)
+    public String partitionKey = null;
+    @Parameter(names = {"--parallelism",
+        "-pl"}, description = "Parallelism for hoodie insert", required = true)
+    public int parallelism = 1;
+    @Parameter(names = {"--schema-file",
+        "-sf"}, description = "path for Avro schema file", required = true)
+    public String schemaFile = null;
+    @Parameter(names = {"--format",
+        "-f"}, description = "Format for the input data.", required = false, validateValueWith =
+        FormatValidator.class)
+    public String format = null;
+    @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
+    public String sparkMaster = null;
+    @Parameter(names = {"--spark-memory",
+        "-sm"}, description = "spark memory to use", required = true)
+    public String sparkMemory = null;
+    @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
+    public int retry = 0;
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "hoodie client for importing")
+    public String propsFilePath = null;
+    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+    public List<String> configs = new ArrayList<>();
   }
 }
