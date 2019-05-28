@@ -77,7 +77,7 @@ public class RepairsCommand implements CommandMarker {
 
     String latestCommit = HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get()
         .getTimestamp();
-    List<String> partitionPaths = FSUtils.getAllFoldersThreeLevelsDown(HoodieCLI.fs,
+    List<String> partitionPaths = FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs,
         HoodieCLI.tableMetadata.getBasePath());
     Path basePath = new Path(HoodieCLI.tableMetadata.getBasePath());
     String[][] rows = new String[partitionPaths.size() + 1][];
