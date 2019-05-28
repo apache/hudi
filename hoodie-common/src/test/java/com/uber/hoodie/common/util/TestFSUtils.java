@@ -20,8 +20,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.uber.hoodie.common.model.HoodieTestUtils;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.exception.HoodieException;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.apache.hadoop.conf.Configuration;
@@ -30,6 +36,7 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
+import org.junit.rules.TemporaryFolder;
 
 public class TestFSUtils {
 
@@ -53,6 +60,71 @@ public class TestFSUtils {
     int taskPartitionId = 2;
     assertTrue(FSUtils.maskWithoutFileId(commitTime, taskPartitionId)
         .equals("*_" + taskPartitionId + "_" + commitTime + ".parquet"));
+  }
+
+  @Test
+  /**
+   * Tests if process Files return only paths excluding marker directories
+   * Cleaner, Rollback and compaction-scheduling logic was recursively processing all subfolders including that
+   * of ".hoodie" when looking for partition-paths. This causes a race when they try to list all folders (recursively)
+   * but the marker directory (that of compaction inside of ".hoodie" folder) is deleted underneath by compactor.
+   * This code tests the fix by ensuring ".hoodie" and their subfolders are never processed.
+   */
+  public void testProcessFiles() throws Exception {
+    TemporaryFolder tmpFolder = new TemporaryFolder();
+    tmpFolder.create();
+    // All directories including marker dirs.
+    List<String> folders = Arrays.asList("2016/04/15", "2016/05/16", ".hoodie/.temp/2/2016/04/15",
+        ".hoodie/.temp/2/2016/05/16");
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
+    String basePath = metaClient.getBasePath();
+    folders.stream().forEach(f -> {
+      try {
+        metaClient.getFs().mkdirs(new Path(new Path(basePath), f));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    // Files inside partitions and marker directories
+    List<String> files = Arrays.asList(
+        "2016/04/15/1_1-0-1_20190528120000.parquet",
+        "2016/05/16/2_1-0-1_20190528120000.parquet",
+        ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000.parquet",
+        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000.parquet"
+    );
+
+    files.stream().forEach(f -> {
+      try {
+        metaClient.getFs().create(new Path(new Path(basePath), f));
+      } catch (IOException e) {
+        throw new HoodieException(e);
+      }
+    });
+
+    // Test excluding meta-folder
+    final List<String> collected = new ArrayList<>();
+    FSUtils.processFiles(metaClient.getFs(), basePath, (status) -> {
+      collected.add(status.getPath().toString());
+      return true;
+    }, true);
+
+    Assert.assertTrue("Hoodie MetaFolder MUST be skipped but got :" + collected, collected.stream()
+        .noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
+    // Check if only files are listed
+    Assert.assertEquals(2, collected.size());
+
+    // Test including meta-folder
+    final List<String> collected2 = new ArrayList<>();
+    FSUtils.processFiles(metaClient.getFs(), basePath, (status) -> {
+      collected2.add(status.getPath().toString());
+      return true;
+    }, false);
+
+    Assert.assertFalse("Hoodie MetaFolder will be present :" + collected2, collected2.stream()
+        .noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
+    // Check if only files are listed including hoodie.properties
+    Assert.assertEquals("Collected=" + collected2, 5, collected2.size());
   }
 
   @Test
