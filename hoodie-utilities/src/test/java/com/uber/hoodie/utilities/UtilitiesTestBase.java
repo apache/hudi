@@ -109,8 +109,6 @@ public class UtilitiesTestBase {
   }
 
   /**
-   /**
-   * Helper to get hive sync config
    * Helper to get hive sync config
    * @param basePath
    * @param tableName
