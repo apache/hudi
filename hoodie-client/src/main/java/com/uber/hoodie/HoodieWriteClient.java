@@ -405,7 +405,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       });
 
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      Optional<HoodieInstant> instant = activeTimeline.filterInflightsExcludingCompaction().lastInstant();
+      Optional<HoodieInstant> instant =
+          activeTimeline.getCommitsTimeline().filterInflightsExcludingCompaction().lastInstant();
       activeTimeline.saveToInflight(instant.get(),
           Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException io) {
@@ -1079,7 +1080,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         config.getBasePath(), true);
     // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-    metaClient.getActiveTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
+    metaClient.getCommitsTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
       Preconditions.checkArgument(
           HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
           "Earliest write inflight instant time must be later "
