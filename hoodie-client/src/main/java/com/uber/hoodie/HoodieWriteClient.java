@@ -1326,8 +1326,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
 
     // Finalize write
-    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
-    finalizeWrite(table, compactionCommitTime, stats);
+    finalizeWrite(table, compactionCommitTime, updateStatusMap);
 
     // Copy extraMetadata
     extraMetadata.ifPresent(m -> {
@@ -1336,9 +1335,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       });
     });
 
-    logger.info("Compaction finished with result " + metadata);
-
-    logger.info("Committing Compaction " + compactionCommitTime);
+    logger.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
     try {
