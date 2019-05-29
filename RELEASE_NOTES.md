@@ -1,3 +1,28 @@
+Release 0.4.7
+------------------------------------
+
+### Highlights
+ * Major releases with fundamental changes to filesystem listing & write failure handling
+ * Introduced the first version of HoodieTimelineServer that runs embedded on the driver
+ * With all executors fetching filesystem listing via RPC to timeline server, drastically reduced filesystem listing!
+ * Failing concurrent write tasks are now handled differently to be robust against spark stage retries
+ * Bug fixes/clean up around indexing, compaction
+
+### Full PR List
+ * **@bvaradar** - HUDI-135 - Skip Meta folder when looking for partitions #698
+ * **@bvaradar** - HUDI-136 - Only inflight commit timeline (.commit/.deltacommit) must be used when checking for sanity during compaction scheduling #699
+ * **@bvaradar** - HUDI-134 - Disable inline compaction for Hoodie Demo #696
+ * **@v3nkatesh** - default implementation for HBase index qps allocator #685
+ * **@bvaradar** - SparkUtil#initLauncher shoudn't raise when spark-defaults.conf doesn't exist #670HUDI-131 Zero File Listing in Compactor run #693
+ * **@vinothchandar** - Fixed HUDI-116 : Handle duplicate record keys across partitions #687
+ * **@leilinen** - HUDI-105 : Fix up offsets not available on leader exception #650
+ * **@bvaradar** - Allow users to set hoodie configs figs for Compactor, Cleaner and HDFSParquetImporter utility scripts #691
+ * **@bvaradar** - Spark Stage retry handling #651
+ * **@pseudomoto** - HUDI-113: Use Pair over # delimited string #672
+ * **@bvaradar** - Support nested types for recordKey, partitionPath and combineKey #684
+ * **@vinothchandar** - Downgrading fasterxml jackson to 2.6.7 to be spark compatible #686
+ * **@bvaradar** - Timeline Service with Incremental View Syncing support #600
+
 Release 0.4.6
 ------------------------------------
 
@@ -11,7 +36,7 @@ Release 0.4.6
 
 ### Full PR List
 
- * **@bvardar** - Minor CLI documentation change in delta-streamer #679
+ * **@bvaradar** - Minor CLI documentation change in delta-streamer #679
  * **@n3nash** - converting map task memory from mb to bytes #678
  * **@bvaradar** - Fix various errors found by long running delta-streamer tests #675
  * **@vinothchandar** - Bucketized Bloom Filter checking #671
