@@ -19,36 +19,67 @@
 package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.Serializable;
 import java.util.Optional;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.api.java.JavaRDD;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
  */
-public abstract class Source implements Serializable {
+public abstract class Source<T> implements Serializable {
+  protected static volatile Logger log = LogManager.getLogger(Source.class);
 
-  protected transient TypedProperties props;
-
-  protected transient JavaSparkContext sparkContext;
-
-  protected transient SchemaProvider schemaProvider;
-
-
-  protected Source(TypedProperties props, JavaSparkContext sparkContext, SchemaProvider schemaProvider) {
-    this.props = props;
-    this.sparkContext = sparkContext;
-    this.schemaProvider = schemaProvider;
+  public enum SourceType {
+    JSON,
+    AVRO,
+    ROW
   }
 
+  protected transient TypedProperties props;
+  protected transient JavaSparkContext sparkContext;
+  protected transient SparkSession sparkSession;
+  private transient SchemaProvider overriddenSchemaProvider;
+
+  private final SourceType sourceType;
+
+  protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+      SchemaProvider schemaProvider) {
+    this(props, sparkContext, sparkSession, schemaProvider, SourceType.AVRO);
+  }
+
+  protected Source(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
+      SchemaProvider schemaProvider, SourceType sourceType) {
+    this.props = props;
+    this.sparkContext = sparkContext;
+    this.sparkSession = sparkSession;
+    this.overriddenSchemaProvider = schemaProvider;
+    this.sourceType = sourceType;
+  }
+
+  protected abstract InputBatch<T> fetchNewData(Optional<String> lastCkptStr, long sourceLimit);
+
   /**
-   * Fetches new data upto sourceLimit, from the provided checkpoint and returns an RDD of the
-   * data, as well as the checkpoint to be written as a result of that.
+   * Main API called by Hoodie Delta Streamer to fetch records
+   * @param lastCkptStr Last Checkpoint
+   * @param sourceLimit Source Limit
+   * @return
    */
-  public abstract Pair<Optional<JavaRDD<GenericRecord>>, String> fetchNewData(
-      Optional<String> lastCheckpointStr, long sourceLimit);
+  public final InputBatch<T> fetchNext(Optional<String> lastCkptStr, long sourceLimit) {
+    InputBatch<T> batch = fetchNewData(lastCkptStr, sourceLimit);
+    // If overriddenSchemaProvider is passed in CLI, use it
+    return overriddenSchemaProvider == null ? batch : new InputBatch<>(batch.getBatch(),
+        batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
+  }
+
+  public SourceType getSourceType() {
+    return sourceType;
+  }
+
+  public SparkSession getSparkSession() {
+    return sparkSession;
+  }
 }

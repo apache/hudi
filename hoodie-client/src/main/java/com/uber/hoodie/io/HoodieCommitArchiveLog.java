@@ -150,7 +150,7 @@ public class HoodieCommitArchiveLog {
 
     //TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concats
-    HoodieTimeline commitTimeline = table.getCompletedCommitTimeline();
+    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     Optional<HoodieInstant> oldestPendingCompactionInstant =
         table.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
 
@@ -245,11 +245,11 @@ public class HoodieCommitArchiveLog {
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
+        if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+          writeToFile(wrapperSchema, records);
+        }
       }
-      Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
-      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
-      this.writer = writer.appendBlock(block);
+      writeToFile(wrapperSchema, records);
     } catch (Exception e) {
       throw new HoodieCommitException("Failed to archive commits", e);
     }
@@ -257,6 +257,16 @@ public class HoodieCommitArchiveLog {
 
   public Path getArchiveFilePath() {
     return archiveFilePath;
+  }
+
+  private void writeToFile(Schema wrapperSchema, List<IndexedRecord> records) throws Exception {
+    if (records.size() > 0) {
+      Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
+      HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
+      this.writer = writer.appendBlock(block);
+      records.clear();
+    }
   }
 
   private IndexedRecord convertToAvroRecord(HoodieTimeline commitTimeline,

@@ -23,9 +23,13 @@ import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.TypedProperties;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -37,9 +41,12 @@ public class HoodieCompactor {
   private static volatile Logger logger = LogManager.getLogger(HoodieCompactor.class);
   private final Config cfg;
   private transient FileSystem fs;
+  private TypedProperties props;
 
   public HoodieCompactor(Config cfg) {
     this.cfg = cfg;
+    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs) :
+        UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
   }
 
   public static class Config implements Serializable {
@@ -70,6 +77,14 @@ public class HoodieCompactor {
     public String strategyClassName = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
+
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "hoodie client for compacting")
+    public String propsFilePath = null;
+
+    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+    public List<String> configs = new ArrayList<>();
   }
 
   public static void main(String[] args) throws Exception {
@@ -108,7 +123,7 @@ public class HoodieCompactor {
     //Get schema.
     String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
     HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism,
-        Optional.empty());
+        Optional.empty(), props);
     JavaRDD<WriteStatus> writeResponse = client.compact(cfg.compactionInstantTime);
     return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
   }
@@ -116,7 +131,7 @@ public class HoodieCompactor {
   private int doSchedule(JavaSparkContext jsc) throws Exception {
     //Get schema.
     HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism,
-        Optional.of(cfg.strategyClassName));
+        Optional.of(cfg.strategyClassName), props);
     client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Optional.empty());
     return 0;
   }

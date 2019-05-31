@@ -17,7 +17,9 @@
 package com.uber.hoodie.common.model;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,6 +32,14 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public static String RECORD_KEY_METADATA_FIELD = "_hoodie_record_key";
   public static String PARTITION_PATH_METADATA_FIELD = "_hoodie_partition_path";
   public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
+
+  public static final List<String> HOODIE_META_COLUMNS =
+      new ImmutableList.Builder<String>().add(COMMIT_TIME_METADATA_FIELD)
+      .add(COMMIT_SEQNO_METADATA_FIELD)
+      .add(RECORD_KEY_METADATA_FIELD)
+      .add(PARTITION_PATH_METADATA_FIELD)
+      .add(FILENAME_METADATA_FIELD)
+      .build();
 
   /**
    * Identifies the record across the table
@@ -56,6 +66,12 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
+  }
+
+  public HoodieRecord(HoodieRecord<T> record) {
+    this(record.key, record.data);
+    this.currentLocation = record.currentLocation;
+    this.newLocation = record.newLocation;
   }
 
   public HoodieKey getKey() {

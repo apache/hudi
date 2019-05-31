@@ -20,26 +20,27 @@ package com.uber.hoodie.index.bloom;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieKey;
+import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
-
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
-
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
 /**
- * This filter will only work with hoodie dataset since it will only load partitions
- * with .hoodie_partition_metadata file in it.
+ * This filter will only work with hoodie dataset since it will only load partitions with .hoodie_partition_metadata
+ * file in it.
  */
 public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends HoodieBloomIndex<T> {
 
@@ -53,7 +54,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   @Override
   @VisibleForTesting
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final JavaSparkContext jsc,
-                                                             final HoodieTable hoodieTable) {
+      final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
       List<String> allPartitionPaths = FSUtils
@@ -66,45 +67,57 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   }
 
   /**
-   * For each incoming record, produce N output records, 1 each for each file against which the
-   * record's key needs to be checked. For datasets, where the keys have a definite insert order
-   * (e.g: timestamp as prefix), the number of files to be compared gets cut down a lot from range
-   * pruning.
+   * For each incoming record, produce N output records, 1 each for each file against which the record's key needs to be
+   * checked. For datasets, where the keys have a definite insert order (e.g: timestamp as prefix), the number of files
+   * to be compared gets cut down a lot from range pruning.
    *
-   * Sub-partition to ensure the records can be looked up against files & also prune
-   * file<=>record comparisons based on recordKey
-   * ranges in the index info.
-   * the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will be ignored
-   * since the search scope should be bigger than that
+   * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
+   * recordKey ranges in the index info. the partition path of the incoming record (partitionRecordKeyPairRDD._2()) will
+   * be ignored since the search scope should be bigger than that
    */
+
   @Override
   @VisibleForTesting
-  JavaPairRDD<String, Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
+  JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
-    List<Tuple2<String, BloomIndexFileInfo>> indexInfos =
-        partitionToFileIndexInfo.entrySet().stream()
-            .flatMap(e1 -> e1.getValue().stream()
-                .map(e2 -> new Tuple2<>(e1.getKey(), e2)))
-            .collect(Collectors.toList());
+    Map<String, String> indexToPartitionMap = new HashMap<>();
+    for (Entry<String, List<BloomIndexFileInfo>> entry : partitionToFileIndexInfo.entrySet()) {
+      entry.getValue().forEach(indexFile -> indexToPartitionMap.put(indexFile.getFileName(), entry.getKey()));
+    }
+
+    IndexFileFilter indexFileFilter = config.getBloomIndexPruneByRanges()
+        ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
+        : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
 
     return partitionRecordKeyPairRDD.map(partitionRecordKeyPair -> {
       String recordKey = partitionRecordKeyPair._2();
+      String partitionPath = partitionRecordKeyPair._1();
 
-      List<Tuple2<String, Tuple2<String, HoodieKey>>> recordComparisons = new ArrayList<>();
-      if (indexInfos != null) { // could be null, if there are no files in a given partition yet.
-        // for each candidate file in partition, that needs to be compared.
-        for (Tuple2<String, BloomIndexFileInfo> indexInfo : indexInfos) {
-          if (shouldCompareWithFile(indexInfo._2(), recordKey)) {
-            recordComparisons.add(
-                new Tuple2<>(String.format("%s#%s", indexInfo._2().getFileName(), recordKey),
-                    new Tuple2<>(indexInfo._2().getFileName(),
-                        new HoodieKey(recordKey, indexInfo._1()))));
-          }
-        }
-      }
-      return recordComparisons;
-    }).flatMapToPair(List::iterator);
+      return indexFileFilter.getMatchingFiles(partitionPath, recordKey).stream()
+          .map(file -> new Tuple2<>(file, new HoodieKey(recordKey, indexToPartitionMap.get(file))))
+          .collect(Collectors.toList());
+    }).flatMap(List::iterator);
   }
 
+
+  /**
+   * Tagging for global index should only consider the record key
+   */
+  @Override
+  protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
+      JavaPairRDD<HoodieKey, String> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
+    JavaPairRDD<String, HoodieRecord<T>> rowKeyRecordPairRDD = recordRDD
+        .mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
+
+    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
+    // so we do left outer join.
+    return rowKeyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), p._2)))
+        .values().map(value -> getTaggedRecord(value._1, value._2));
+  }
+
+  @Override
+  public boolean isGlobal() {
+    return true;
+  }
 }

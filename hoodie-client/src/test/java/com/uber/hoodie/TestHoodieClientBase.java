@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
@@ -74,6 +75,28 @@ public class TestHoodieClientBase implements Serializable {
   protected TemporaryFolder folder = null;
   protected transient HoodieTestDataGenerator dataGen = null;
 
+  private HoodieWriteClient writeClient;
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws Exception {
+    closeClient();
+    writeClient = new HoodieWriteClient(jsc, cfg);
+    return writeClient;
+  }
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit)
+      throws Exception {
+    closeClient();
+    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit);
+    return writeClient;
+  }
+
+  private void closeClient() {
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
+    }
+  }
+
   @Before
   public void init() throws IOException {
     // Initialize a local spark env
@@ -104,6 +127,8 @@ public class TestHoodieClientBase implements Serializable {
    * Properly release resources at end of each test
    */
   public void tearDown() throws IOException {
+    closeClient();
+
     if (null != sqlContext) {
       logger.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
@@ -144,6 +169,7 @@ public class TestHoodieClientBase implements Serializable {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
+        .withWriteStatusClass(TestRawTripPayload.MetadataMergeWriteStatus.class)
         .withConsistencyCheckEnabled(true)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())

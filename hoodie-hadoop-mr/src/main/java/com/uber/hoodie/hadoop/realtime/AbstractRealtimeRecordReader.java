@@ -333,8 +333,11 @@ public abstract class AbstractRealtimeRecordReader {
     }
 
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-    List<String> partitioningFields = Arrays.stream(
-        jobConf.get("partition_columns", "").split(",")).collect(Collectors.toList());
+
+    String partitionFields = jobConf.get("partition_columns", "");
+    List<String> partitioningFields =
+        partitionFields.length() > 0 ? Arrays.stream(partitionFields.split(",")).collect(Collectors.toList())
+            : new ArrayList<>();
     writerSchema = addPartitionFields(writerSchema, partitioningFields);
 
     List<String> projectionFields = orderFields(
@@ -358,8 +361,9 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   public long getMaxCompactionMemoryInBytes() {
+    // jobConf.getMemoryForMapTask() returns in MB
     return (long) Math.ceil(Double
         .valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
-        * jobConf.getMemoryForMapTask());
+        * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 }

@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie-hadoop-docker</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.5-SNAPSHOT</version>
+    <version>0.4.8-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <packaging>pom</packaging>
@@ -62,7 +62,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>varadarb/hudi-hadoop_${docker.hadoop.version}-base</repository>
+              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-base</repository>
               <forceTags>true</forceTags>
               <tag>latest</tag>
             </configuration>
@@ -78,7 +78,7 @@
             <configuration>
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
-              <repository>varadarb/hudi-hadoop_${docker.hadoop.version}-base</repository>
+              <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-base</repository>
               <forceTags>true</forceTags>
               <tag>${project.version}</tag>
             </configuration>

@@ -17,7 +17,6 @@
 package com.uber.hoodie.io.strategy;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
-import java.util.Optional;
 import org.apache.hadoop.fs.Path;
 
 public class TestHoodieLogFile extends HoodieLogFile {
@@ -25,7 +24,7 @@ public class TestHoodieLogFile extends HoodieLogFile {
   private final long size;
 
   public TestHoodieLogFile(long size) {
-    super((Path) null);
+    super("/tmp/.ce481ee7-9e53-4a2e-9992-f9e295fa79c0_20180919184844.log.1");
     this.size = size;
   }
 
@@ -39,7 +38,7 @@ public class TestHoodieLogFile extends HoodieLogFile {
   }
 
   @Override
-  public Optional<Long> getFileSize() {
-    return Optional.of(size);
+  public long getFileSize() {
+    return size;
   }
 }

@@ -26,6 +26,7 @@ import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDataFile;
+import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
@@ -48,7 +49,9 @@ import org.junit.Assert;
 
 public class CompactionTestUtils {
 
-  public static Map<String, Pair<String, HoodieCompactionOperation>> setupAndValidateCompactionOperations(
+  private static String TEST_WRITE_TOKEN = "1-0-1";
+
+  public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> setupAndValidateCompactionOperations(
       HoodieTableMetaClient metaClient, boolean inflight,
       int numEntriesInPlan1, int numEntriesInPlan2,
       int numEntriesInPlan3, int numEntriesInPlan4) throws IOException {
@@ -91,10 +94,10 @@ public class CompactionTestUtils {
     });
 
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath(), true);
-    Map<String, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
+    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 
-    Map<String, Pair<String, HoodieCompactionOperation>> expPendingCompactionMap =
+    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> expPendingCompactionMap =
         generateExpectedCompactionOperations(Arrays.asList(plan1, plan2, plan3, plan4), baseInstantsToCompaction);
 
     // Ensure Compaction operations are fine.
@@ -102,12 +105,13 @@ public class CompactionTestUtils {
     return expPendingCompactionMap;
   }
 
-  public static Map<String, Pair<String, HoodieCompactionOperation>> generateExpectedCompactionOperations(
+  public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> generateExpectedCompactionOperations(
       List<HoodieCompactionPlan> plans, Map<String, String> baseInstantsToCompaction) {
     return plans.stream()
         .flatMap(plan -> {
           if (plan.getOperations() != null) {
-            return plan.getOperations().stream().map(op -> Pair.of(op.getFileId(),
+            return plan.getOperations().stream().map(op -> Pair.of(
+                new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
                 Pair.of(baseInstantsToCompaction.get(op.getBaseInstantTime()), op)));
           }
           return Stream.empty();
@@ -146,10 +150,10 @@ public class CompactionTestUtils {
             instantId, fileId, Optional.of(1));
         HoodieTestUtils.createNewLogFile(metaClient.getFs(), metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
             instantId, fileId, Optional.of(2));
-        FileSlice slice = new FileSlice(instantId, fileId);
+        FileSlice slice = new FileSlice(DEFAULT_PARTITION_PATHS[0], instantId, fileId);
         if (createDataFile) {
           slice.setDataFile(new TestHoodieDataFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0]
-              + "/" + FSUtils.makeDataFileName(instantId, 1, fileId)));
+              + "/" + FSUtils.makeDataFileName(instantId, TEST_WRITE_TOKEN, fileId)));
         }
         String logFilePath1 = HoodieTestUtils
             .getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0], instantId, fileId,
@@ -180,7 +184,7 @@ public class CompactionTestUtils {
     private final String path;
 
     public TestHoodieDataFile(String path) {
-      super(null);
+      super("/tmp/ce481ee7-9e53-4a2e-9992-f9e295fa79c0_11_20180918020003.parquet");
       this.path = path;
     }
 

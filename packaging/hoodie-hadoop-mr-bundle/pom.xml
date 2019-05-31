@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.5-SNAPSHOT</version>
+    <version>0.4.8-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -67,6 +67,48 @@
     </dependency>
 
     <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+      <version>${hive.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-exec</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-shims</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+     <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-serde</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-metastore</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-common</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
     </dependency>
@@ -74,6 +116,16 @@
     <dependency>
       <groupId>commons-logging</groupId>
       <artifactId>commons-logging</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
     </dependency>
 
     <dependency>
@@ -100,12 +152,6 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo</artifactId>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -156,8 +202,24 @@
                    <shadedPattern>com.uber.hoodie.parquet.schema</shadedPattern>
                  </relocation>
                  <relocation>
-                   <pattern>org.apache.commons</pattern>
-                   <shadedPattern>com.uber.hoodie.org.apache.commons</shadedPattern>
+                   <pattern>org.apache.commons.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.apache.commons.codec.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.apache.commons.codec.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.kryo.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>org.objenesis.</pattern>
+                   <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
+                 </relocation>
+                 <relocation>
+                   <pattern>com.esotericsoftware.minlog.</pattern>
+                   <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
                  </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -169,9 +231,23 @@
                   <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
+                  <include>commons-io:commons-io</include>
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
-              <finalName>${project.artifactId}-${project.version}${hiveJarSuffix}</finalName>
+              <filters>
+                <filter>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>
           </execution>
         </executions>
@@ -182,116 +258,4 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
   </properties>
-  
-  <profiles>
-    <profile>
-      <id>hive12</id>
-      <activation>
-        <property>
-          <name>!hive11</name>
-        </property>
-      </activation>
-      <properties>
-        <hiveJarSuffix />
-      </properties>
-      <dependencies>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive12.version}</version>
-          <exclusions>
-            <exclusion>
-              <groupId>commons-logging</groupId>
-              <artifactId>commons-logging</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-exec</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-service</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-shims</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-         <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-serde</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-metastore</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive12.groupid}</groupId>
-          <artifactId>hive-common</artifactId>
-          <version>${hive12.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
-    <profile>
-      <id>hive11</id>
-      <activation>
-        <property>
-          <name>hive11</name>
-        </property>
-      </activation>
-      <properties>
-        <hiveJarSuffix>.hive11</hiveJarSuffix>
-      </properties>
-      <dependencies>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-service</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-shims</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-       <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>${hive11.version}</version>
-          <exclusions>
-            <exclusion>
-              <groupId>commons-logging</groupId>
-              <artifactId>commons-logging</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-serde</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-metastore</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-common</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-        <dependency>
-          <groupId>${hive11.groupid}</groupId>
-          <artifactId>hive-exec</artifactId>
-          <version>${hive11.version}</version>
-        </dependency>
-      </dependencies>
-   </profile>
-  </profiles>
-
 </project>

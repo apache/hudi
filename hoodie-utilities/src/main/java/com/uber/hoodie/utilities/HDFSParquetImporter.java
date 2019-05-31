@@ -30,10 +30,12 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableConfig;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -57,14 +59,22 @@ import scala.Tuple2;
  * Loads data from Parquet Sources
  */
 public class HDFSParquetImporter implements Serializable {
+  private static volatile Logger log = LogManager.getLogger(HDFSParquetImporter.class);
 
   public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
   private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
   private final Config cfg;
   private transient FileSystem fs;
+  /**
+   * Bag of properties with source, hoodie client, key generator etc.
+   */
+  private TypedProperties props;
 
   public HDFSParquetImporter(Config cfg) throws IOException {
     this.cfg = cfg;
+    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs) :
+        UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    log.info("Creating Cleaner with configs : " + props.toString());
   }
 
   public static void main(String[] args) throws Exception {
@@ -116,7 +126,7 @@ public class HDFSParquetImporter implements Serializable {
           .initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
       HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr,
-          cfg.parallelism, Optional.empty());
+          cfg.parallelism, Optional.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
       // Get instant time.
@@ -247,6 +257,12 @@ public class HDFSParquetImporter implements Serializable {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
+    @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
+        + "hoodie client for importing")
+    public String propsFilePath = null;
+    @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
+        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+    public List<String> configs = new ArrayList<>();
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }

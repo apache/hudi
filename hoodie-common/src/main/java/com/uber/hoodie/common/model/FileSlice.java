@@ -19,6 +19,7 @@
 package com.uber.hoodie.common.model;
 
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.Stream;
@@ -30,9 +31,9 @@ import java.util.stream.Stream;
 public class FileSlice implements Serializable {
 
   /**
-   * id of the slice
+   * File Group Id of the Slice
    */
-  private String fileId;
+  private HoodieFileGroupId fileGroupId;
 
   /**
    * Point in the timeline, at which the slice was created
@@ -50,11 +51,15 @@ public class FileSlice implements Serializable {
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
-  public FileSlice(String baseInstantTime, String fileId) {
-    this.fileId = fileId;
+  public FileSlice(String partitionPath, String baseInstantTime, String fileId) {
+    this(new HoodieFileGroupId(partitionPath, fileId), baseInstantTime);
+  }
+
+  public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime) {
+    this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.dataFile = null;
-    this.logFiles = new TreeSet<>(HoodieLogFile.getBaseInstantAndLogVersionComparator());
+    this.logFiles = new TreeSet<>(HoodieLogFile.getReverseLogFileComparator());
   }
 
   public void setDataFile(HoodieDataFile dataFile) {
@@ -73,21 +78,62 @@ public class FileSlice implements Serializable {
     return baseInstantTime;
   }
 
+  public String getPartitionPath() {
+    return fileGroupId.getPartitionPath();
+  }
+
   public String getFileId() {
-    return fileId;
+    return fileGroupId.getFileId();
+  }
+
+  public HoodieFileGroupId getFileGroupId() {
+    return fileGroupId;
   }
 
   public Optional<HoodieDataFile> getDataFile() {
     return Optional.ofNullable(dataFile);
   }
 
+  public Optional<HoodieLogFile> getLatestLogFile() {
+    return logFiles.stream().findFirst();
+  }
+
+  /**
+   * Returns true if there is no data file and no log files. Happens as part of pending compaction
+   * @return
+   */
+  public boolean isEmpty() {
+    return (dataFile == null) && (logFiles.isEmpty());
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FileSlice {");
-    sb.append("baseCommitTime=").append(baseInstantTime);
+    sb.append("fileGroupId=").append(fileGroupId);
+    sb.append(", baseCommitTime=").append(baseInstantTime);
     sb.append(", dataFile='").append(dataFile).append('\'');
     sb.append(", logFiles='").append(logFiles).append('\'');
     sb.append('}');
     return sb.toString();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    FileSlice slice = (FileSlice) o;
+    return Objects.equals(fileGroupId, slice.fileGroupId)
+        && Objects.equals(baseInstantTime, slice.baseInstantTime)
+        && Objects.equals(dataFile, slice.dataFile)
+        && Objects.equals(logFiles, slice.logFiles);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(fileGroupId, baseInstantTime);
   }
 }

@@ -16,8 +16,10 @@
 
 package com.uber.hoodie.hive;
 
+import com.google.common.base.Preconditions;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Partition Key extractor treating each value delimited by slash as separate key.
@@ -27,6 +29,14 @@ public class MultiPartKeysValueExtractor implements PartitionValueExtractor {
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
     String[] splits = partitionPath.split("/");
-    return Arrays.asList(splits);
+    return Arrays.stream(splits).map(s -> {
+      if (s.contains("=")) {
+        String[] moreSplit = s.split("=");
+        Preconditions.checkArgument(moreSplit.length == 2,
+            "Partition Field (" + s + ") not in expected format");
+        return moreSplit[1];
+      }
+      return s;
+    }).collect(Collectors.toList());
   }
 }

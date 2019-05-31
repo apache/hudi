@@ -39,7 +39,9 @@ public class HoodieInstant implements Serializable {
     // Inflight instant
     INFLIGHT,
     // Committed instant
-    COMPLETED
+    COMPLETED,
+    // Invalid instant
+    INVALID
   }
 
   private State state = State.COMPLETED;
@@ -131,6 +133,9 @@ public class HoodieInstant implements Serializable {
       } else {
         return HoodieTimeline.makeCommitFileName(timestamp);
       }
+    } else if (HoodieTimeline.RESTORE_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightRestoreFileName(timestamp)
+          : HoodieTimeline.makeRestoreFileName(timestamp);
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }

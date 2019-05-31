@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.config;
 
+import com.uber.hoodie.index.hbase.DefaultHBaseQPSResourceAllocator;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -29,11 +30,18 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
   public static final String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
   public static final String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
   public static final String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
+  public static final String HBASE_ZK_ZNODEPARENT = "hoodie.index.hbase.zknode.path";
   /**
    * Note that if HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP is set to true, this batch size will not
    * be honored for HBase Puts
    */
   public static final String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
+
+  /**
+   * Property to set which implementation of HBase QPS resource allocator to be used
+   */
+  public static final String HBASE_INDEX_QPS_ALLOCATOR_CLASS = "hoodie.index.hbase.qps.allocator.class";
+  public static final String DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS = DefaultHBaseQPSResourceAllocator.class.getName();
   /**
    * Property to set to enable auto computation of put batch size
    */
@@ -67,6 +75,34 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    * Region Servers
    */
   public static final float DEFAULT_HBASE_QPS_FRACTION = 0.5f;
+
+  /**
+   *  Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on volume
+   */
+  public static final String HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = "hoodie.index.hbase.dynamic_qps";
+  public static final boolean DEFAULT_HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = false;
+  /**
+   *  Min and Max for HBASE_QPS_FRACTION_PROP to stabilize skewed volume workloads
+   */
+  public static final String HBASE_MIN_QPS_FRACTION_PROP = "hoodie.index.hbase.min.qps.fraction";
+  public static final String DEFAULT_HBASE_MIN_QPS_FRACTION_PROP = "0.002";
+
+  public static final String HBASE_MAX_QPS_FRACTION_PROP = "hoodie.index.hbase.max.qps.fraction";
+  public static final String DEFAULT_HBASE_MAX_QPS_FRACTION_PROP = "0.06";
+  /**
+   *  Hoodie index desired puts operation time in seconds
+   */
+  public static final String HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = "hoodie.index.hbase.desired_puts_time_in_secs";
+  public static final int DEFAULT_HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = 600;
+  public static final String HBASE_SLEEP_MS_PUT_BATCH_PROP = "hoodie.index.hbase.sleep.ms.for.put.batch";
+  public static final String HBASE_SLEEP_MS_GET_BATCH_PROP = "hoodie.index.hbase.sleep.ms.for.get.batch";
+  public static final String HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS = "hoodie.index.hbase.zk.session_timeout_ms";
+  public static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 60 * 1000;
+  public static final String HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS =
+      "hoodie.index.hbase.zk.connection_timeout_ms";
+  public static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 15 * 1000;
+  public static final String HBASE_ZK_PATH_QPS_ROOT = "hoodie.index.hbase.zkpath.qps_root";
+  public static final String DEFAULT_HBASE_ZK_PATH_QPS_ROOT = "/QPS_ROOT";
 
   public HoodieHBaseIndexConfig(final Properties props) {
       super(props);
@@ -110,26 +146,73 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public HoodieHBaseIndexConfig.Builder hbaseIndexGetBatchSize(int getBatchSize) {
+    public Builder hbaseZkZnodeQPSPath(String zkZnodeQPSPath) {
+      props.setProperty(HBASE_ZK_PATH_QPS_ROOT, zkZnodeQPSPath);
+      return this;
+    }
+
+    public Builder hbaseIndexGetBatchSize(int getBatchSize) {
       props.setProperty(HBASE_GET_BATCH_SIZE_PROP, String.valueOf(getBatchSize));
       return this;
     }
 
-    public HoodieHBaseIndexConfig.Builder hbaseIndexPutBatchSize(int putBatchSize) {
+    public Builder hbaseIndexPutBatchSize(int putBatchSize) {
       props.setProperty(HBASE_PUT_BATCH_SIZE_PROP, String.valueOf(putBatchSize));
       return this;
     }
 
-    public HoodieHBaseIndexConfig.Builder hbaseIndexPutBatchSizeAutoCompute(
-        boolean putBatchSizeAutoCompute) {
-      props.setProperty(HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP,
-          String.valueOf(putBatchSizeAutoCompute));
+    public Builder hbaseIndexPutBatchSizeAutoCompute(boolean putBatchSizeAutoCompute) {
+      props.setProperty(HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP, String.valueOf(putBatchSizeAutoCompute));
       return this;
     }
 
-    public HoodieHBaseIndexConfig.Builder hbaseIndexQPSFraction(float qpsFraction) {
-      props.setProperty(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION_PROP,
-          String.valueOf(qpsFraction));
+    public Builder hbaseIndexDesiredPutsTime(int desiredPutsTime) {
+      props.setProperty(HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS, String.valueOf(desiredPutsTime));
+      return this;
+    }
+
+    public Builder hbaseIndexShouldComputeQPSDynamically(boolean shouldComputeQPsDynamically) {
+      props.setProperty(HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY, String.valueOf(shouldComputeQPsDynamically));
+      return this;
+    }
+
+    public Builder hbaseIndexQPSFraction(float qpsFraction) {
+      props.setProperty(HBASE_QPS_FRACTION_PROP, String.valueOf(qpsFraction));
+      return this;
+    }
+
+    public Builder hbaseIndexMinQPSFraction(float minQPSFraction) {
+      props.setProperty(HBASE_MIN_QPS_FRACTION_PROP, String.valueOf(minQPSFraction));
+      return this;
+    }
+
+    public Builder hbaseIndexMaxQPSFraction(float maxQPSFraction) {
+      props.setProperty(HBASE_MAX_QPS_FRACTION_PROP, String.valueOf(maxQPSFraction));
+      return this;
+    }
+
+    public Builder hbaseIndexSleepMsBetweenPutBatch(int sleepMsBetweenPutBatch) {
+      props.setProperty(HBASE_SLEEP_MS_PUT_BATCH_PROP, String.valueOf(sleepMsBetweenPutBatch));
+      return this;
+    }
+
+    public Builder withQPSResourceAllocatorType(String qpsResourceAllocatorClass) {
+      props.setProperty(HBASE_INDEX_QPS_ALLOCATOR_CLASS, qpsResourceAllocatorClass);
+      return this;
+    }
+
+    public Builder hbaseIndexZkSessionTimeout(int zkSessionTimeout) {
+      props.setProperty(HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS, String.valueOf(zkSessionTimeout));
+      return this;
+    }
+
+    public Builder hbaseIndexZkConnectionTimeout(int zkConnectionTimeout) {
+      props.setProperty(HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS, String.valueOf(zkConnectionTimeout));
+      return this;
+    }
+
+    public Builder hbaseZkZnodeParent(String zkZnodeParent) {
+      props.setProperty(HBASE_ZK_ZNODEPARENT, zkZnodeParent);
       return this;
     }
 
@@ -160,14 +243,25 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(HBASE_PUT_BATCH_SIZE_PROP),
           HBASE_PUT_BATCH_SIZE_PROP, String.valueOf(DEFAULT_HBASE_BATCH_SIZE));
       setDefaultOnCondition(props, !props.containsKey(HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP),
-          HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP,
-          String.valueOf(DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE));
+          HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP, String.valueOf(DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE));
       setDefaultOnCondition(props, !props.containsKey(HBASE_QPS_FRACTION_PROP),
           HBASE_QPS_FRACTION_PROP, String.valueOf(DEFAULT_HBASE_QPS_FRACTION));
-      setDefaultOnCondition(props,
-          !props.containsKey(HBASE_MAX_QPS_PER_REGION_SERVER_PROP),
-          HBASE_MAX_QPS_PER_REGION_SERVER_PROP, String.valueOf(
-              DEFAULT_HBASE_MAX_QPS_PER_REGION_SERVER));
+      setDefaultOnCondition(props, !props.containsKey(HBASE_MAX_QPS_PER_REGION_SERVER_PROP),
+          HBASE_MAX_QPS_PER_REGION_SERVER_PROP, String.valueOf(DEFAULT_HBASE_MAX_QPS_PER_REGION_SERVER));
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY),
+          HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY, String.valueOf(DEFAULT_HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY));
+      setDefaultOnCondition(props, !props.containsKey(HBASE_INDEX_QPS_ALLOCATOR_CLASS),
+          HBASE_INDEX_QPS_ALLOCATOR_CLASS, String.valueOf(DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS));
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS),
+          HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS, String.valueOf(DEFAULT_HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
+      setDefaultOnCondition(props, !props.containsKey(HBASE_ZK_PATH_QPS_ROOT),
+          HBASE_ZK_PATH_QPS_ROOT, String.valueOf(DEFAULT_HBASE_ZK_PATH_QPS_ROOT));
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS),
+          HOODIE_INDEX_HBASE_ZK_SESSION_TIMEOUT_MS, String.valueOf(DEFAULT_ZK_SESSION_TIMEOUT_MS));
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS),
+          HOODIE_INDEX_HBASE_ZK_CONNECTION_TIMEOUT_MS, String.valueOf(DEFAULT_ZK_CONNECTION_TIMEOUT_MS));
+      setDefaultOnCondition(props, !props.containsKey(HBASE_INDEX_QPS_ALLOCATOR_CLASS),
+          HBASE_INDEX_QPS_ALLOCATOR_CLASS, String.valueOf(DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS));
       return config;
     }
 

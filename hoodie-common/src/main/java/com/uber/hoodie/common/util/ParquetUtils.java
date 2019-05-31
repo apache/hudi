@@ -113,14 +113,12 @@ public class ParquetUtils {
     return footer;
   }
 
-
   /**
    * Get the schema of the given parquet file.
    */
   public static MessageType readSchema(Configuration configuration, Path parquetFilePath) {
     return readMetadata(configuration, parquetFilePath).getFileMetaData().getSchema();
   }
-
 
   private static List<String> readParquetFooter(Configuration configuration, Path parquetFilePath,
       String... footerNames) {

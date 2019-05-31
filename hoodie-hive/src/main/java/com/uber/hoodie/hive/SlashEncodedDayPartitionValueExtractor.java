@@ -33,10 +33,17 @@ import org.joda.time.format.DateTimeFormatter;
  */
 public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExtractor {
 
-  private final DateTimeFormatter dtfOut;
+  private transient DateTimeFormatter dtfOut;
 
   public SlashEncodedDayPartitionValueExtractor() {
     this.dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
+  }
+
+  private DateTimeFormatter getDtfOut() {
+    if (dtfOut == null) {
+      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
+    }
+    return dtfOut;
   }
 
   @Override
@@ -52,6 +59,6 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
     int mm = Integer.parseInt(splits[1]);
     int dd = Integer.parseInt(splits[2]);
     DateTime dateTime = new DateTime(year, mm, dd, 0, 0);
-    return Lists.newArrayList(dtfOut.print(dateTime));
+    return Lists.newArrayList(getDtfOut().print(dateTime));
   }
 }

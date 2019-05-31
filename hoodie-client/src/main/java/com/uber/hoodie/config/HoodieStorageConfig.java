@@ -44,6 +44,9 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   public static final String PARQUET_COMPRESSION_RATIO = "hoodie.parquet.compression.ratio";
   // Default compression ratio for parquet
   public static final String DEFAULT_STREAM_COMPRESSION_RATIO = String.valueOf(0.1);
+  public static final String PARQUET_COMPRESSION_CODEC = "hoodie.parquet.compression.codec";
+  // Default compression codec for parquet
+  public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = "gzip";
   public static final String LOGFILE_TO_PARQUET_COMPRESSION_RATIO = "hoodie.logfile.to.parquet.compression.ratio";
   // Default compression ratio for log file to parquet, general 3x
   public static final String DEFAULT_LOGFILE_TO_PARQUET_COMPRESSION_RATIO = String.valueOf(0.35);
@@ -105,6 +108,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder parquetCompressionCodec(String parquetCompressionCodec) {
+      props.setProperty(PARQUET_COMPRESSION_CODEC, parquetCompressionCodec);
+      return this;
+    }
+
     public Builder logFileToParquetCompressionRatio(double logFileToParquetCompressionRatio) {
       props.setProperty(LOGFILE_TO_PARQUET_COMPRESSION_RATIO, String.valueOf(logFileToParquetCompressionRatio));
       return this;
@@ -124,6 +132,8 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
           LOGFILE_SIZE_MAX_BYTES, DEFAULT_LOGFILE_SIZE_MAX_BYTES);
       setDefaultOnCondition(props, !props.containsKey(PARQUET_COMPRESSION_RATIO),
           PARQUET_COMPRESSION_RATIO, DEFAULT_STREAM_COMPRESSION_RATIO);
+      setDefaultOnCondition(props, !props.containsKey(PARQUET_COMPRESSION_CODEC),
+          PARQUET_COMPRESSION_CODEC, DEFAULT_PARQUET_COMPRESSION_CODEC);
       setDefaultOnCondition(props, !props.containsKey(LOGFILE_TO_PARQUET_COMPRESSION_RATIO),
           LOGFILE_TO_PARQUET_COMPRESSION_RATIO, DEFAULT_LOGFILE_TO_PARQUET_COMPRESSION_RATIO);
       return config;

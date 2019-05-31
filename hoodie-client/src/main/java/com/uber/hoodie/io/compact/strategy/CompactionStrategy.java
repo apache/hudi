@@ -59,8 +59,8 @@ public abstract class CompactionStrategy implements Serializable {
     Map<String, Double> metrics = Maps.newHashMap();
     Long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();
     // Total size of all the log files
-    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(Optional::isPresent)
-        .map(Optional::get).reduce((size1, size2) -> size1 + size2).orElse(0L);
+    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
+        .reduce((size1, size2) -> size1 + size2).orElse(0L);
     // Total read will be the base file + all the log files
     Long totalIORead = FSUtils.getSizeInMB((dataFile.isPresent() ? dataFile.get().getFileSize() : 0L)
         + totalLogFileSize);
@@ -105,9 +105,19 @@ public abstract class CompactionStrategy implements Serializable {
    * @param pendingCompactionPlans Pending Compaction Plans for strategy to schedule next compaction plan
    * @return list of compactions to perform in this run
    */
-  protected List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
+  public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations,
       List<HoodieCompactionPlan> pendingCompactionPlans) {
     return operations;
+  }
+
+  /**
+   * Filter the partition paths based on compaction strategy
+   * @param writeConfig
+   * @param allPartitionPaths
+   * @return
+   */
+  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    return allPartitionPaths;
   }
 }

@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.utilities;
 
+import com.google.common.base.Preconditions;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
@@ -30,9 +31,13 @@ import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.Source;
+import com.uber.hoodie.utilities.transform.Transformer;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Optional;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -43,6 +48,7 @@ import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 
 /**
  * Bunch of helper methods
@@ -51,12 +57,12 @@ public class UtilHelpers {
   private static Logger logger = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg,
-      JavaSparkContext jssc, SchemaProvider schemaProvider)
+      JavaSparkContext jssc, SparkSession sparkSession, SchemaProvider schemaProvider)
       throws IOException {
     try {
       return (Source) ReflectionUtils.loadClass(sourceClass,
-          new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SchemaProvider.class},
-          cfg, jssc, schemaProvider);
+          new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class},
+          cfg, jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
@@ -65,20 +71,44 @@ public class UtilHelpers {
   public static SchemaProvider createSchemaProvider(String schemaProviderClass,
       TypedProperties cfg, JavaSparkContext jssc) throws IOException {
     try {
-      return (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
+      return schemaProviderClass == null ? null :
+          (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
     }
   }
 
+  public static Transformer createTransformer(String transformerClass) throws IOException {
+    try {
+      return transformerClass == null ? null : (Transformer) ReflectionUtils.loadClass(transformerClass);
+    } catch (Throwable e) {
+      throw new IOException("Could not load transformer class " + transformerClass, e);
+    }
+  }
+
   /**
    */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath) {
+  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     try {
-      return new DFSPropertiesConfiguration(fs, cfgPath);
+      DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(fs, cfgPath);
+      if (!overriddenProps.isEmpty()) {
+        logger.info("Adding overridden properties to file properties.");
+        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+      }
+      return conf;
     } catch (Exception e) {
       throw new HoodieException("Unable to read props file at :" + cfgPath, e);
     }
+  }
+
+  public static TypedProperties buildProperties(List<String> props) {
+    TypedProperties properties = new TypedProperties();
+    props.stream().forEach(x -> {
+      String[] kv = x.split("=");
+      Preconditions.checkArgument(kv.length == 2);
+      properties.setProperty(kv[0], kv[1]);
+    });
+    return properties;
   }
 
   /**
@@ -109,7 +139,7 @@ public class UtilHelpers {
       sparkConf.set("spark.eventLog.overwrite", "true");
       sparkConf.set("spark.eventLog.enabled", "true");
     }
-    sparkConf.set("spark.driver.maxResultSize", "2g");
+    sparkConf.setIfMissing("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
@@ -144,7 +174,8 @@ public class UtilHelpers {
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,
-      String schemaStr, int parallelism, Optional<String> compactionStrategyClass) throws Exception {
+      String schemaStr, int parallelism, Optional<String> compactionStrategyClass, TypedProperties properties)
+      throws Exception {
     HoodieCompactionConfig compactionConfig =
         compactionStrategyClass.map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy))
@@ -154,6 +185,7 @@ public class UtilHelpers {
         .combineInput(true, true)
         .withCompactionConfig(compactionConfig)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withProps(properties)
         .build();
     return new HoodieWriteClient(jsc, config);
   }

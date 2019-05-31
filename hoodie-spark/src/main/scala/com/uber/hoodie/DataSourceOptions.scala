@@ -43,7 +43,7 @@ object DataSourceReadOptions {
   val VIEW_TYPE_INCREMENTAL_OPT_VAL = "incremental"
   val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
-
+  val DEFAULTPUSH_DOWN_FILTERS_OPT_VAL = ""
 
   /**
     * Instant time to start incrementally pulling data from. The instanttime here need not
@@ -64,6 +64,13 @@ object DataSourceReadOptions {
     *
     */
   val END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.end.instanttime"
+
+  /**
+    * For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions,
+    *  filters appearing late in the sequence of transformations cannot be automatically pushed down.
+    *  This option allows setting filters directly on Hoodie Source
+    */
+  val PUSH_DOWN_INCR_FILTERS_OPT_KEY = "hoodie.datasource.read.incr.filters"
 }
 
 /**

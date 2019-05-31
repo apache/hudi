@@ -34,17 +34,24 @@ import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.storage.HoodieParquetConfig;
 import com.uber.hoodie.io.storage.HoodieParquetWriter;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -59,6 +66,7 @@ import org.apache.spark.sql.SQLContext;
  */
 public class HoodieClientTestUtils {
 
+  private static final transient Logger log = LogManager.getLogger(HoodieClientTestUtils.class);
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
     List<WriteStatus> statuses = new ArrayList<>();
@@ -100,7 +108,7 @@ public class HoodieClientTestUtils {
       throws Exception {
     String parentPath = String.format("%s/%s", basePath, partitionPath);
     new File(parentPath).mkdirs();
-    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, 0, fileId));
+    String path = String.format("%s/%s", parentPath, FSUtils.makeDataFileName(commitTime, "1-0-1", fileId));
     new File(path).createNewFile();
     new RandomAccessFile(path, "rw").setLength(length);
   }
@@ -108,7 +116,7 @@ public class HoodieClientTestUtils {
   public static SparkConf getSparkConfForTest(String appName) {
     SparkConf sparkConf = new SparkConf().setAppName(appName)
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .setMaster("local[1]");
+        .setMaster("local[8]");
     return HoodieReadClient.addHoodieSupport(sparkConf);
   }
 
@@ -132,7 +140,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths = getLatestFileIDsToFullPath(basePath, commitTimeline,
           Arrays.asList(commitInstant));
-      System.out.println("Path :" + paths.values());
+      log.info("Path :" + paths.values());
       return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
           .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
     } catch (Exception e) {
@@ -231,7 +239,7 @@ public class HoodieClientTestUtils {
     Thread.sleep(1000);
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(commitTime, 1, fileId);
+    String filename = FSUtils.makeDataFileName(commitTime, "1-0-1", fileId);
     HoodieTestUtils.createCommitFiles(basePath, commitTime);
     return HoodieClientTestUtils
         .writeParquetFile(basePath, partitionPath, filename, records, schema, filter, createCommitTime);

@@ -21,6 +21,7 @@ package com.uber.hoodie.index.bloom;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.util.HoodieTimer;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIndexException;
@@ -42,8 +43,8 @@ import scala.Tuple2;
  * actual files
  */
 public class HoodieBloomIndexCheckFunction implements
-    Function2<Integer, Iterator<Tuple2<String, Tuple2<String, HoodieKey>>>,
-        Iterator<List<IndexLookupResult>>> {
+    Function2<Integer, Iterator<Tuple2<String, HoodieKey>>,
+        Iterator<List<KeyLookupResult>>> {
 
   private static Logger logger = LogManager.getLogger(HoodieBloomIndexCheckFunction.class);
 
@@ -65,11 +66,12 @@ public class HoodieBloomIndexCheckFunction implements
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
+        HoodieTimer timer = new HoodieTimer().startTimer();
         Set<String> fileRowKeys = ParquetUtils.filterParquetRowKeys(configuration, filePath,
             new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
-        logger.info("After checking with row keys, we have " + foundRecordKeys.size()
-            + " results, for file " + filePath + " => " + foundRecordKeys);
+        logger.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
         if (logger.isDebugEnabled()) {
           logger.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
         }
@@ -81,14 +83,14 @@ public class HoodieBloomIndexCheckFunction implements
   }
 
   @Override
-  public Iterator<List<IndexLookupResult>> call(Integer partition,
-      Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> filePartitionRecordKeyTripletItr)
+  public Iterator<List<KeyLookupResult>> call(Integer partition,
+      Iterator<Tuple2<String, HoodieKey>> fileParitionRecordKeyTripletItr)
       throws Exception {
-    return new LazyKeyCheckIterator(filePartitionRecordKeyTripletItr);
+    return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }
 
   class LazyKeyCheckIterator extends
-      LazyIterableIterator<Tuple2<String, Tuple2<String, HoodieKey>>, List<IndexLookupResult>> {
+      LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {
 
     private List<String> candidateRecordKeys;
 
@@ -98,13 +100,16 @@ public class HoodieBloomIndexCheckFunction implements
 
     private String currentPartitionPath;
 
+    private long totalKeysChecked;
+
     LazyKeyCheckIterator(
-        Iterator<Tuple2<String, Tuple2<String, HoodieKey>>> filePartitionRecordKeyTripletItr) {
+        Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
       currentFile = null;
       candidateRecordKeys = new ArrayList<>();
       bloomFilter = null;
       currentPartitionPath = null;
+      totalKeysChecked = 0;
     }
 
     @Override
@@ -114,81 +119,75 @@ public class HoodieBloomIndexCheckFunction implements
     private void initState(String fileName, String partitionPath) throws HoodieIndexException {
       try {
         Path filePath = new Path(basePath + "/" + partitionPath + "/" + fileName);
-        bloomFilter = ParquetUtils
-            .readBloomFilterFromParquetMetadata(metaClient.getHadoopConf(), filePath);
+        HoodieTimer timer = new HoodieTimer().startTimer();
+        bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(metaClient.getHadoopConf(), filePath);
+        logger.info(String.format("Read bloom filter from %s/%s in %d ms", partitionPath, fileName, timer.endTimer()));
         candidateRecordKeys = new ArrayList<>();
         currentFile = fileName;
         currentPartitionPath = partitionPath;
+        totalKeysChecked = 0;
       } catch (Exception e) {
         throw new HoodieIndexException("Error checking candidate keys against file.", e);
       }
     }
 
-    @Override
-    protected List<IndexLookupResult> computeNext() {
+    // check record key against bloom filter of current file & add to possible keys if needed
+    private void checkAndAddCandidates(String recordKey) {
+      if (bloomFilter.mightContain(recordKey)) {
+        if (logger.isDebugEnabled()) {
+          logger.debug("Record key " + recordKey + " matches bloom filter in file " + currentPartitionPath
+              + "/" + currentFile);
+        }
+        candidateRecordKeys.add(recordKey);
+      }
+      totalKeysChecked++;
+    }
 
-      List<IndexLookupResult> ret = new ArrayList<>();
+    private List<String> checkAgainstCurrentFile() {
+      Path filePath = new Path(basePath + "/" + currentPartitionPath + "/" + currentFile);
+      if (logger.isDebugEnabled()) {
+        logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
+      }
+      List<String> matchingKeys = checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath);
+      logger.info(String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
+          totalKeysChecked, candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(),
+          matchingKeys.size()));
+      return matchingKeys;
+    }
+
+    @Override
+    protected List<KeyLookupResult> computeNext() {
+
+      List<KeyLookupResult> ret = new ArrayList<>();
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-
-          Tuple2<String, Tuple2<String, HoodieKey>> currentTuple = inputItr.next();
-          String fileName = currentTuple._2._1;
-          String partitionPath = currentTuple._2._2.getPartitionPath();
-          String recordKey = currentTuple._2._2.getRecordKey();
+          Tuple2<String, HoodieKey> currentTuple = inputItr.next();
+          String fileName = currentTuple._1;
+          String partitionPath = currentTuple._2.getPartitionPath();
+          String recordKey = currentTuple._2.getRecordKey();
 
           // lazily init state
           if (currentFile == null) {
             initState(fileName, partitionPath);
           }
 
-          // if continue on current file)
+          // if continue on current file
           if (fileName.equals(currentFile)) {
-            // check record key against bloom filter of current file & add to possible keys if
-            // needed
-            if (bloomFilter.mightContain(recordKey)) {
-              if (logger.isDebugEnabled()) {
-                logger.debug("#1 Adding " + recordKey + " as candidate for file " + fileName);
-              }
-              candidateRecordKeys.add(recordKey);
-            }
+            checkAndAddCandidates(recordKey);
           } else {
             // do the actual checking of file & break out
-            Path filePath = new Path(basePath + "/" + currentPartitionPath + "/" + currentFile);
-            logger.info(
-                "#1 After bloom filter, the candidate row keys is reduced to " + candidateRecordKeys
-                    .size() + " for " + filePath);
-            if (logger.isDebugEnabled()) {
-              logger
-                  .debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
-            }
-            ret.add(new IndexLookupResult(currentFile,
-                checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath)));
-
+            ret.add(new KeyLookupResult(currentFile, currentPartitionPath, checkAgainstCurrentFile()));
             initState(fileName, partitionPath);
-            if (bloomFilter.mightContain(recordKey)) {
-              if (logger.isDebugEnabled()) {
-                logger.debug("#2 Adding " + recordKey + " as candidate for file " + fileName);
-              }
-              candidateRecordKeys.add(recordKey);
-            }
+            checkAndAddCandidates(recordKey);
             break;
           }
         }
 
         // handle case, where we ran out of input, close pending work, update return val
         if (!inputItr.hasNext()) {
-          Path filePath = new Path(basePath + "/" + currentPartitionPath + "/" + currentFile);
-          logger.info(
-              "#2 After bloom filter, the candidate row keys is reduced to " + candidateRecordKeys
-                  .size() + " for " + filePath);
-          if (logger.isDebugEnabled()) {
-            logger.debug("#The candidate row keys for " + filePath + " => " + candidateRecordKeys);
-          }
-          ret.add(new IndexLookupResult(currentFile,
-              checkCandidatesAgainstFile(metaClient.getHadoopConf(), candidateRecordKeys, filePath)));
+          ret.add(new KeyLookupResult(currentFile, currentPartitionPath, checkAgainstCurrentFile()));
         }
-
       } catch (Throwable e) {
         if (e instanceof HoodieException) {
           throw e;

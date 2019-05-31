@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.5-SNAPSHOT</version>
+    <version>0.4.8-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -62,6 +62,7 @@
             <import>${basedir}/src/main/avro/HoodieCompactionMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieCleanMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieRestoreMetadata.avsc</import>
           </imports>
         </configuration>
       </plugin>
@@ -69,6 +70,10 @@
   </build>
 
   <dependencies>
+    <dependency>
+      <groupId>org.rocksdb</groupId>
+      <artifactId>rocksdbjni</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
@@ -120,9 +125,22 @@
       <classifier>tests</classifier>
     </dependency>
     <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.5.4</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>fluent-hc</artifactId>
+      <version>4.5.4</version>
+    </dependency>
+    <dependency>
       <groupId>com.esotericsoftware</groupId>
       <artifactId>kryo</artifactId>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.avro</groupId>
@@ -144,6 +162,11 @@
         <groupId>com.twitter.common</groupId>
         <artifactId>objectsize</artifactId>
         <version>0.0.12</version>
+    </dependency>
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>4.0.2</version>
     </dependency>
   </dependencies>
 </project>

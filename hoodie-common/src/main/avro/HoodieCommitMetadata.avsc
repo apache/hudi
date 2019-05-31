@@ -15,47 +15,58 @@
                   "fields":[
                      {
                         "name":"fileId",
-                        "type":["null","string"]
+                        "type":["null","string"],
+                        "default" : null
                      },
                      {
                         "name":"path",
-                        "type":["null","string"]
+                        "type":["null","string"],
+                        "default" : null
                      },
                      {
                         "name":"prevCommit",
-                        "type":["null","string"]
+                        "type":["null","string"],
+                        "default" : null
                      },
                      {
                         "name":"numWrites",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"numDeletes",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"numUpdateWrites",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"totalWriteBytes",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"totalWriteErrors",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"partitionPath",
-                        "type":["null","string"]
+                        "type":["null","string"],
+                        "default" : null
                      },
                      {
                         "name":"totalLogRecords",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"totalLogFiles",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"totalUpdatedRecordsCompacted",
@@ -69,15 +80,23 @@
                      },
                      {
                         "name":"totalLogBlocks",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"totalCorruptLogBlock",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
                      },
                      {
                         "name":"totalRollbackBlocks",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default" : null
+                     },
+                     {
+                        "name":"fileSizeInBytes",
+                        "type":["null","long"],
+                        "default" : null
                      }
                   ]
                }

@@ -38,9 +38,9 @@ import java.util.stream.Collectors;
 public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
-  private static String datePartitionFormat = "yyyy/MM/dd";
+  protected static String datePartitionFormat = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
-  private static Comparator<String> comparator = (String leftPartition,
+  protected static Comparator<String> comparator = (String leftPartition,
       String rightPartition) -> {
     try {
       Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
@@ -69,5 +69,13 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
         .flatMap(e -> e.getValue().stream())
         .collect(Collectors.toList());
     return filteredList;
+  }
+
+  @Override
+  public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> allPartitionPaths) {
+    List<String> filteredPartitionPaths = allPartitionPaths.stream().map(partition -> partition.replace("/", "-"))
+        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
+        .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
+    return filteredPartitionPaths;
   }
 }

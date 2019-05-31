@@ -1,7 +1,7 @@
 ARG HADOOP_VERSION=2.8.4 
 ARG HIVE_VERSION=2.3.3
 ARG SPARK_VERSION=2.3.1
-FROM varadarb/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
 COPY master.sh /opt/spark
 

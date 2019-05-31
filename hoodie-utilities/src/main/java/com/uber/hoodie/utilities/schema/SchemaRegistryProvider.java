@@ -42,12 +42,15 @@ public class SchemaRegistryProvider extends SchemaProvider {
    */
   public static class Config {
 
-    private static final String SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
+    private static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
+    private static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
+        "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
   }
 
   private final Schema schema;
+  private final Schema targetSchema;
 
-  private String fetchSchemaFromRegistry(String registryUrl) throws IOException {
+  private static String fetchSchemaFromRegistry(String registryUrl) throws IOException {
     URL registry = new URL(registryUrl);
     ObjectMapper mapper = new ObjectMapper();
     JsonNode node = mapper.readTree(registry.openStream());
@@ -56,17 +59,32 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SCHEMA_REGISTRY_URL_PROP));
-    String registryUrl = props.getString(Config.SCHEMA_REGISTRY_URL_PROP);
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    String registryUrl = props.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    String targetRegistryUrl = props.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
     try {
-      this.schema = new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+      this.schema = getSchema(registryUrl);
+      if (!targetRegistryUrl.equals(registryUrl)) {
+        this.targetSchema = getSchema(targetRegistryUrl);
+      } else {
+        this.targetSchema = schema;
+      }
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema from registry :" + registryUrl, ioe);
     }
   }
 
+  private static Schema getSchema(String registryUrl) throws IOException {
+    return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+  }
+
   @Override
   public Schema getSourceSchema() {
     return schema;
+  }
+
+  @Override
+  public Schema getTargetSchema() {
+    return targetSchema;
   }
 }

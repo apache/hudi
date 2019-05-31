@@ -74,13 +74,14 @@ public class TestHoodieCommitArchiveLog {
 
   @AfterClass
   public static void cleanUp() throws Exception {
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
+    // same JVM
+    FileSystem.closeAll();
+
     if (hdfsTestService != null) {
       hdfsTestService.stop();
       dfsCluster.shutdown();
     }
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
-    // same JVM
-    FileSystem.closeAll();
   }
 
   @BeforeClass
@@ -134,7 +135,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4).build())
+            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
     HoodieTestUtils.init(hadoopConf, basePath);
     // Requested Compaction
@@ -245,7 +246,7 @@ public class TestHoodieCommitArchiveLog {
 
     //read the file
     HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(dfs,
-        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1")),
+        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1_1-0-1")),
         HoodieArchivedMetaEntry.getClassSchema());
 
     int archivedRecordsCount = 0;
@@ -279,7 +280,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     // Requested Compaction
@@ -346,7 +347,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
@@ -372,7 +373,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
@@ -404,7 +405,7 @@ public class TestHoodieCommitArchiveLog {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 5).build()).build();
+            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(dfs.getConf(), basePath);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());

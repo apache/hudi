@@ -19,6 +19,7 @@ package com.uber.hoodie.common.table.log;
 import static com.uber.hoodie.common.util.SchemaTestUtil.getSimpleSchema;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -176,6 +177,63 @@ public class HoodieLogFormatTest {
   }
 
   @Test
+  public void testConcurrentAppendOnExistingLogFileWithoutWriteToken() throws Exception {
+    testConcurrentAppend(true, false);
+  }
+
+  @Test
+  public void testConcurrentAppendOnExistingLogFileWithWriteToken() throws Exception {
+    testConcurrentAppend(true, true);
+  }
+
+  @Test
+  public void testConcurrentAppendOnFirstLogFileVersion() throws Exception {
+    testConcurrentAppend(false, true);
+  }
+
+  private void testConcurrentAppend(boolean logFileExists, boolean newLogFileFormat) throws Exception {
+    HoodieLogFormat.WriterBuilder builder1 = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs);
+    HoodieLogFormat.WriterBuilder builder2 = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
+        .overBaseCommit("100").withFs(fs);
+
+    if (newLogFileFormat && logFileExists) {
+      // Assume there is an existing log-file with write token
+      builder1 = builder1.withLogVersion(1).withLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN)
+          .withRolloverLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+      builder2 = builder2.withLogVersion(1).withLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN)
+          .withRolloverLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+    } else if (newLogFileFormat) {
+      // First log file of the file-slice
+      builder1 = builder1.withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+          .withLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN)
+          .withRolloverLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+      builder2 = builder2.withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+          .withLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN)
+          .withRolloverLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+    } else {
+      builder1 = builder1.withLogVersion(1).withRolloverLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
+    }
+    Writer writer = builder1.build();
+    Writer writer2 = builder2.build();
+    HoodieLogFile logFile1 = writer.getLogFile();
+    HoodieLogFile logFile2 = writer2.getLogFile();
+    List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
+    writer = writer.appendBlock(dataBlock);
+    writer2 = writer2.appendBlock(dataBlock);
+    writer.close();
+    writer2.close();
+    assertNotNull(logFile1.getLogWriteToken());
+    assertEquals("Log Files must have different versions", logFile1.getLogVersion(), logFile2.getLogVersion() - 1);
+  }
+
+  @Test
   public void testMultipleAppend() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
@@ -225,6 +283,12 @@ public class HoodieLogFormatTest {
     }
   }
 
+  /**
+   * This is actually a test on concurrent append and not recovery lease.
+   * Commenting this out.
+   * https://issues.apache.org/jira/browse/HUDI-117
+   */
+  /**
   @Test
   public void testLeaseRecovery() throws IOException, URISyntaxException, InterruptedException {
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
@@ -253,6 +317,7 @@ public class HoodieLogFormatTest {
         fs.getFileStatus(writer.getLogFile().getPath()).getLen());
     writer.close();
   }
+  **/
 
   @Test
   public void testAppendNotSupported() throws IOException, URISyntaxException, InterruptedException {
@@ -1057,83 +1122,6 @@ public class HoodieLogFormatTest {
     assertEquals("We would read 0 records", 0, scanner.getTotalLogRecords());
   }
 
-  @Test
-  public void testMagicAndLogVersionsBackwardsCompatibility()
-      throws IOException, InterruptedException, URISyntaxException {
-    // Create the log file
-    Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1")
-        .overBaseCommit("100").withFs(fs).build();
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    List<IndexedRecord> records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
-    writer.close();
-
-    // Write 1 with OLD_MAGIC and no log format version
-    // Append a log block to end of the log (mimics a log block with old format
-    // fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
-    FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
-    // create a block with
-    outputStream.write(HoodieLogFormat.OLD_MAGIC);
-    outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    // Write out a length that does not confirm with the content
-    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, new String(HoodieAvroUtils.compress(schema.toString())));
-    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, schema);
-    byte[] content = dataBlock.getBytes(schema);
-    outputStream.writeInt(content.length);
-    // Write out some content
-    outputStream.write(content);
-    outputStream.flush();
-    outputStream.hflush();
-    outputStream.close();
-
-    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
-        .withFs(fs).build();
-
-    // Write 2 with MAGIC and latest log format version
-    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = new HoodieAvroDataBlock(records, header);
-    writer = writer.appendBlock(dataBlock);
-
-    // Write 3 with MAGIC and latest log format version
-    writer = HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId("test-fileid1").overBaseCommit("100")
-        .withFs(fs).build();
-    records = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-    dataBlock = new HoodieAvroDataBlock(records, header);
-    writer = writer.appendBlock(dataBlock);
-    writer.close();
-
-    Reader reader = HoodieLogFormat.newReader(fs, writer.getLogFile(), schema);
-
-    // Read the first block written with latest version and magic
-    reader.hasNext();
-    HoodieLogBlock block = reader.next();
-    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    HoodieAvroDataBlock dBlock = (HoodieAvroDataBlock) block;
-    assertEquals(dBlock.getRecords().size(), 100);
-
-    // Read second block written with old magic and no version
-    reader.hasNext();
-    block = reader.next();
-    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    dBlock = (HoodieAvroDataBlock) block;
-    assertEquals(dBlock.getRecords().size(), 100);
-
-    //Read third block written with latest version and magic
-    reader.hasNext();
-    block = reader.next();
-    assertEquals(block.getBlockType(), HoodieLogBlockType.AVRO_DATA_BLOCK);
-    dBlock = (HoodieAvroDataBlock) block;
-    assertEquals(dBlock.getRecords().size(), 100);
-    reader.close();
-  }
-
   @SuppressWarnings("unchecked")
   @Test
   public void testBasicAppendAndReadInReverse() throws IOException, URISyntaxException, InterruptedException {
@@ -1222,7 +1210,7 @@ public class HoodieLogFormatTest {
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
     // create a block with
-    outputStream.write(HoodieLogFormat.OLD_MAGIC);
+    outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
     // Write out a length that does not confirm with the content
     outputStream.writeInt(1000);
