@@ -93,7 +93,7 @@ Discussion about contributing code to Hudi happens on the [dev@ mailing list](co
   * `hoodie-integ-test` : Longer running integration test processes
   * `hoodie-spark` : Spark datasource for writing and reading Hudi datasets. Streaming sink.
   * `hoodie-utilities` : Houses tools like DeltaStreamer, SnapshotCopier
-  * `packaging` : Poms for building out bundles for easier drop in to Spark, Hive, Presto
+  * `packaging` : Poms for building out bundles for easier drop in to Spark, Hive, Presto, Utilities
   * `style`  : Code formatting, checkstyle files
 
 

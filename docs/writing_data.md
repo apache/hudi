@@ -12,7 +12,7 @@ speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource
 
 ## DeltaStreamer
 
-The `HoodieDeltaStreamer` utility (part of hoodie-utilities) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
+The `HoodieDeltaStreamer` utility (part of hoodie-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
  - Exactly once ingestion of new events from Kafka, [incremental imports](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports) from Sqoop or output of `HiveIncrementalPuller` or files under a DFS folder
  - Support json, avro or a custom record types for the incoming data
@@ -23,7 +23,7 @@ The `HoodieDeltaStreamer` utility (part of hoodie-utilities) provides the way to
 Command line options describe capabilities in more detail
 
 ```
-[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` --help
+[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-*.jar` --help
 Usage: <main class> [options]
   Options:
     --commit-on-errors
@@ -112,7 +112,7 @@ For e.g: once you have Confluent Kafka, Schema registry up & running, produce so
 and then ingest it as follows.
 
 ```
-[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` \
+[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-*.jar` \
   --props file://${PWD}/hoodie-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
   --schemaprovider-class com.uber.hoodie.utilities.schema.SchemaRegistryProvider \
   --source-class com.uber.hoodie.utilities.sources.AvroKafkaSource \
