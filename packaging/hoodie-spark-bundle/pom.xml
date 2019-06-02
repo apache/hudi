@@ -179,6 +179,7 @@
               </artifactSet>
               <filters>
                 <filter>
+                  <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
