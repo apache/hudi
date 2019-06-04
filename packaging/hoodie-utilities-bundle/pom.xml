@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+  ~  Copyright (c) 2019 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
   ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
+  ~  Licensed under the Apache License, Version 2.0 (the "License");
+  ~  you may not use this file except in compliance with the License.
+  ~  You may obtain a copy of the License at
   ~
-  ~          http://www.apache.org/licenses/LICENSE-2.0
+  ~           http://www.apache.org/licenses/LICENSE-2.0
   ~
   ~ Unless required by applicable law or agreed to in writing, software
   ~ distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,16 +15,23 @@
   ~ limitations under the License.
   -->
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
     <version>0.4.8-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-
-  <artifactId>hoodie-utilities</artifactId>
+  <artifactId>hoodie-utilities-bundle</artifactId>
   <packaging>jar</packaging>
+
+  <properties>
+    <log4j.version>1.2.17</log4j.version>
+    <junit.version>4.10</junit.version>
+    <checkstyle.skip>true</checkstyle.skip>
+  </properties>
 
   <build>
     <plugins>
@@ -60,6 +67,7 @@
                   <include>commons-pool:commons-pool</include>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.uber.hoodie:hoodie-client</include>
+                  <include>com.uber.hoodie:hoodie-utilities</include>
                   <include>com.uber.hoodie:hoodie-spark</include>
                   <include>com.uber.hoodie:hoodie-hive</include>
                   <include>com.uber.hoodie:hoodie-hadoop-mr</include>
@@ -91,6 +99,10 @@
                 </includes>
               </artifactSet>
               <relocations>
+                <relocation>
+                  <pattern>com.beust.jcommander.</pattern>
+                  <shadedPattern>com.uber.hoodie.com.beust.jcommander.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>org.apache.commons.dbcp.</pattern>
                   <shadedPattern>com.uber.hoodie.org.apache.commons.dbcp.</shadedPattern>
@@ -296,6 +308,12 @@
 
     <dependency>
       <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-utilities</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-client</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
@@ -344,7 +362,7 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client</artifactId>
-   </dependency>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -438,6 +456,6 @@
       <artifactId>kafka-schema-registry-client</artifactId>
       <version>3.0.0</version>
     </dependency>
-
   </dependencies>
 </project>
+
