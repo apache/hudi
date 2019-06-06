@@ -185,6 +185,10 @@
                   <exclude>org.apache.thrift:*</exclude>
                   <!--Provided by aws-java-sdk-core dependency in presto-hive connector-->
                   <exclude>org.apache.httpcomponents:*</exclude>
+                  <!--Provided by hive-hadoop2-->
+                  <excude>com.fasterxml.jackson.core:*</excude>
+                  <excude>com.fasterxml.jackson.datatype:jackson-datatype-guava</excude>
+                  <excude>org.apache.parquet:*</excude>
                 </excludes>
               </artifactSet>
               <filters>
