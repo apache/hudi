@@ -129,12 +129,12 @@ public class HoodieLogFile implements Serializable {
    */
   public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
 
-    private transient Comparator<HoodieLogFile> writeTokenComparator;
+    private transient Comparator<String> writeTokenComparator;
 
-    private Comparator<HoodieLogFile> getWriteTokenComparator() {
+    private Comparator<String> getWriteTokenComparator() {
       if (null == writeTokenComparator) {
         // writeTokenComparator is not serializable. Hence, lazy loading
-        writeTokenComparator = Comparator.nullsFirst(Comparator.comparing(HoodieLogFile::getLogWriteToken));
+        writeTokenComparator = Comparator.nullsFirst(Comparator.naturalOrder());
       }
       return writeTokenComparator;
     }
@@ -148,7 +148,7 @@ public class HoodieLogFile implements Serializable {
 
         if (o1.getLogVersion() == o2.getLogVersion()) {
           // Compare by write token when base-commit and log-version is same
-          return getWriteTokenComparator().compare(o1, o2);
+          return getWriteTokenComparator().compare(o1.getLogWriteToken(), o2.getLogWriteToken());
         }
 
         // compare by log-version when base-commit is same
