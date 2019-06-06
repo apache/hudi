@@ -1,11 +1,16 @@
 language: java
 jdk:
-  - oraclejdk8
+- oraclejdk8
 sudo: required
 env:
-  - HUDI_QUIETER_LOGGING=1
+- HUDI_QUIETER_LOGGING=1
 services:
-  - docker
+- docker
 cache:
   directories:
-  - $HOME/.m2
+  - "$HOME/.m2"
+notifications:
+  slack:
+    rooms:
+      - secure: WNIZPBY//xf/xTJL1YUPzvPUDwjawaMM4IJ6IqxjRGcZCmuhNVu2XTJ3aL1g6X7ZcJKxJuwoU/TbSO8Dl6rgWSo/2OfyzBd4ks+hgeCsdycccTcvO8giQO1DOUGUSRdvUzOvKjWVK7iARYzQhoZawAYwI09UJLlwhYRCJ1IKc1ZksrEt964GeEmPyJbwMoZOJVUU84jJIAZPIpOFGTKM652FMermg9yaY2W5oSjDXaV98z0/mJV4Ry++J2v0fvoDs5HxkXYhZJP+dpWR82KDr6Q6LGL5/IlJ+b+IH3pF8LyKR4nCH6l1EZ8KpoFZapyYWYQpXMfQoF2K/JEQkpz1EqBCeEDSJ2+j1PPLhOWXd7ok4DsS26S8BP2ImvyXwua51THN1/r1fCGSIdxiQ5C8aeYmPCSr+oLChCVivEG2eeU34Z1nQJ5aDymNGeFE9qUUpjS0ETfFcjI/WQaA+FiYiPkDfeAoT1+6ySdY7l9gJhMygupILjq57IHbqx4nEr/8AB3Rqb8iIDTWDXgUBI9xKmty36zjIGcVOsCT/SGPccxvEJBXQk8uQqs/rDhaA/ErJPMLX/2b7ElSSObKFdjpMaxVvZIE6wvMLJpIYfChDoXwgfhN6zlAFZrEib7PFI4dGkS8u4wkkHkBS7C+uz2e92EhsAB+BIhUR1M3NQ33+Is=
+    on_pull_requests: false
