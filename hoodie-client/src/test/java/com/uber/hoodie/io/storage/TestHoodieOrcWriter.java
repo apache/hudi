@@ -61,8 +61,6 @@ public class TestHoodieOrcWriter {
   private String schemaStr;
   private Schema schema;
 
-  private TemporaryFolder temporaryFolder = new TemporaryFolder();
-
   @Before
   public void init() throws IOException {
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieOrcWriter"));
@@ -73,7 +71,6 @@ public class TestHoodieOrcWriter {
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     schemaStr = IOUtils.toString(getClass().getResourceAsStream("/exampleSchema.txt"), "UTF-8");
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-    temporaryFolder.create();
   }
 
   @Test

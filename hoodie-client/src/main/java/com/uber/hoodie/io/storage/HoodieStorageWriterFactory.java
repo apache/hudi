@@ -18,6 +18,7 @@ package com.uber.hoodie.io.storage;
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport;
 import com.uber.hoodie.common.BloomFilter;
+import com.uber.hoodie.common.model.HoodieFileFormat;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
@@ -40,6 +41,13 @@ public class HoodieStorageWriterFactory {
   private static <T extends HoodieRecordPayload,
       R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(String commitTime, Path path,
       HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable) throws IOException {
+
+    HoodieFileFormat hoodieFileFormat = hoodieTable.getMetaClient().getHoodieFileFormat();
+
+    if (hoodieFileFormat.equals(HoodieFileFormat.ORC)) {
+      return new HoodieOrcWriter(commitTime, path, config, hoodieTable.getHadoopConf());
+    }
+
     BloomFilter filter = new BloomFilter(config.getBloomFilterNumEntries(),
         config.getBloomFilterFPP());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
