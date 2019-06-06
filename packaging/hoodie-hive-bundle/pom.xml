@@ -146,6 +146,11 @@
   </dependencies>
 
   <build>
+    <resources>
+       <resource>
+         <directory>src/main/resources</directory>
+       </resource>
+     </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.rat</groupId>
@@ -211,10 +216,14 @@
               </artifactSet>
               <filters>
                 <filter>
+                  <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
+                    <!-- Use this jar's NOTICE and license file -->
+                    <exclude>META-INF/NOTICE*</exclude>
+                    <exclude>META-INF/LICENSE*</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -228,5 +237,7 @@
 
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
+    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
+    <notice.file>HUDI_NOTICE.txt</notice.file>
   </properties>
 </project>
