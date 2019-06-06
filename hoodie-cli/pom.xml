@@ -31,6 +31,7 @@
     <jar.mainclass>org.springframework.shell.Bootstrap</jar.mainclass>
     <log4j.version>1.2.17</log4j.version>
     <junit.version>4.10</junit.version>
+    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
   </properties>
 
   <repositories>
@@ -50,6 +51,11 @@
   </repositories>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
     <pluginManagement>
       <plugins>
         <plugin>

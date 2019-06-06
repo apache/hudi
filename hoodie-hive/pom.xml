@@ -26,6 +26,10 @@
   <artifactId>hoodie-hive</artifactId>
   <packaging>jar</packaging>
 
+  <properties>
+    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -177,6 +181,11 @@
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.rat</groupId>
