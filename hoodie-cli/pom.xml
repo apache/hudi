@@ -153,13 +153,10 @@
       <artifactId>spark-sql_2.11</artifactId>
     </dependency>
 
-
     <dependency>
-      <groupId>dnl.utils</groupId>
-      <artifactId>textutils</artifactId>
-      <version>0.3.3</version>
-      <scope>system</scope>
-      <systemPath>${basedir}/lib/dnl/utils/textutils/0.3.3/textutils-0.3.3.jar</systemPath>
+      <groupId>com.jakewharton.fliptables</groupId>
+      <artifactId>fliptables</artifactId>
+      <version>1.0.2</version>
     </dependency>
 
     <dependency>
