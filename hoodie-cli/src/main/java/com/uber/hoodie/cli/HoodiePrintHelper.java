@@ -16,10 +16,7 @@
 
 package com.uber.hoodie.cli;
 
-import dnl.utils.text.table.TextTable;
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.Charset;
+import com.jakewharton.fliptables.FlipTable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,19 +29,20 @@ public class HoodiePrintHelper {
 
   /**
    * Print header and raw rows
+   *
    * @param header Header
    * @param rows Raw Rows
    * @return output
    */
   public static String print(String[] header, String[][] rows) {
-    TextTable textTable = new TextTable(header, rows);
-    return printTextTable(textTable);
+    return printTextTable(header, rows);
   }
 
   /**
    * Serialize Table to printable string
+   *
    * @param rowHeader Row Header
-   * @param fieldNameToConverterMap  Field Specific Converters
+   * @param fieldNameToConverterMap Field Specific Converters
    * @param sortByField Sorting field
    * @param isDescending Order
    * @param limit Limit
@@ -71,6 +69,7 @@ public class HoodiePrintHelper {
 
   /**
    * Render rows in Table
+   *
    * @param buffer Table
    * @return output
    */
@@ -81,31 +80,28 @@ public class HoodiePrintHelper {
     String[][] rows = buffer.getRenderRows().stream()
         .map(l -> l.stream().toArray(String[]::new))
         .toArray(String[][]::new);
-    TextTable textTable = new TextTable(header, rows);
-    return printTextTable(textTable);
+    return printTextTable(header, rows);
   }
 
   /**
    * Render only header of the table
+   *
    * @param header Table Header
    * @return output
    */
   private static String print(TableHeader header) {
     String[] head = new String[header.getFieldNames().size()];
     header.getFieldNames().toArray(head);
-    TextTable textTable = new TextTable(head, new String[][]{});
-    return printTextTable(textTable);
+    return printTextTable(head, new String[][]{});
   }
 
   /**
    * Print Text table
-   * @param textTable Text table to be printed
-   * @return
+   *
+   * @param headers Headers
+   * @param data Table
    */
-  private static String printTextTable(TextTable textTable) {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    PrintStream ps = new PrintStream(baos);
-    textTable.printTable(ps, 4);
-    return new String(baos.toByteArray(), Charset.forName("utf-8"));
+  private static String printTextTable(String[] headers, String[][] data) {
+    return FlipTable.of(headers, data);
   }
 }
