@@ -476,13 +476,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   @Override
-  public final Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionStr, String maxCommitTime) {
+  public final Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionStr, String maxCommitTime,
+      boolean includeFileSlicesInPendingCompaction) {
     try {
       readLock.lock();
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
-      return fetchLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime)
-          .map(fs -> filterDataFileAfterPendingCompaction(fs));
+      Stream<FileSlice> fileSliceStream =
+          fetchLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime);
+      if (includeFileSlicesInPendingCompaction) {
+        return fileSliceStream.map(fs -> filterDataFileAfterPendingCompaction(fs));
+      } else {
+        return fileSliceStream.filter(fs -> !isPendingCompactionScheduledForFileId(fs.getFileGroupId()));
+      }
     } finally {
       readLock.unlock();
     }

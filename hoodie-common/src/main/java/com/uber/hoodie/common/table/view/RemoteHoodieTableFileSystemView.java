@@ -108,6 +108,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LAST_INSTANT_TS = "lastinstantts";
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
+  public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
+
 
   private static Logger log = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
 
@@ -327,8 +329,11 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   @Override
-  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime) {
-    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
+  public Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
+      boolean includeFileSlicesInPendingCompaction) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath,
+        new String[]{MAX_INSTANT_PARAM, INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM},
+        new String[]{maxCommitTime, String.valueOf(includeFileSlicesInPendingCompaction)});
     try {
       List<FileSliceDTO> dataFiles = executeRequest(LATEST_SLICES_BEFORE_ON_INSTANT_URL, paramsMap,
           new TypeReference<List<FileSliceDTO>>() {

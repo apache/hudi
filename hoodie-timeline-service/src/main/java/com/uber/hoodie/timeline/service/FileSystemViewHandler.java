@@ -265,7 +265,8 @@ public class FileSystemViewHandler {
       List<FileSliceDTO> dtos =
           sliceHandler.getLatestFileSlicesBeforeOrOn(ctx.validatedQueryParam(BASEPATH_PARAM).getOrThrow(),
               ctx.validatedQueryParam(PARTITION_PARAM).getOrThrow(),
-              ctx.validatedQueryParam(MAX_INSTANT_PARAM).getOrThrow());
+              ctx.validatedQueryParam(MAX_INSTANT_PARAM).getOrThrow(),
+              Boolean.valueOf(ctx.validatedQueryParam(INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM).getOrThrow()));
       writeValueAsString(ctx, dtos);
     }, true));
 

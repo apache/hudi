@@ -865,7 +865,7 @@ public class TestCleaner extends TestHoodieClientBase {
       String baseInstantForCompaction = fileIdToLatestInstantBeforeCompaction.get(fileId);
       Optional<FileSlice> fileSliceForCompaction =
           hoodieTable.getRTFileSystemView().getLatestFileSlicesBeforeOrOn(DEFAULT_FIRST_PARTITION_PATH,
-              baseInstantForCompaction).filter(fs -> fs.getFileId().equals(fileId)).findFirst();
+              baseInstantForCompaction, true).filter(fs -> fs.getFileId().equals(fileId)).findFirst();
       Assert.assertTrue("Base Instant for Compaction must be preserved", fileSliceForCompaction.isPresent());
       Assert.assertTrue("FileSlice has data-file", fileSliceForCompaction.get().getDataFile().isPresent());
       Assert.assertEquals("FileSlice has log-files", 2,
