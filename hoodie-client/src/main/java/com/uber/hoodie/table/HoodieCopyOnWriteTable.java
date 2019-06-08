@@ -387,21 +387,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    */
   protected void deleteInflightInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
       HoodieInstant instantToBeDeleted) {
+    // Remove marker files always on rollback
+    deleteMarkerDir(instantToBeDeleted.getTimestamp());
+
     // Remove the rolled back inflight commits
     if (deleteInstant) {
-      try {
-        //TODO: Cleanup Hoodie 1.0 rollback to simply call super.cleanFailedWrites with consistency check disabled
-        // and empty WriteStat list.
-        Path markerDir = new Path(metaClient.getMarkerFolderPath(instantToBeDeleted.getTimestamp()));
-        logger.info("Removing marker directory=" + markerDir);
-        if (metaClient.getFs().exists(markerDir)) {
-          metaClient.getFs().delete(markerDir, true);
-        }
-        activeTimeline.deleteInflight(instantToBeDeleted);
-        logger.info("Deleted inflight commit " + instantToBeDeleted);
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
+      activeTimeline.deleteInflight(instantToBeDeleted);
+      logger.info("Deleted inflight commit " + instantToBeDeleted);
     } else {
       logger.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
     }
