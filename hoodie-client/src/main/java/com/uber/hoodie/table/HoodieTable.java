@@ -295,6 +295,24 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
+   * Delete Marker directory corresponding to an instant
+   * @param instantTs Instant Time
+   */
+  protected void deleteMarkerDir(String instantTs) {
+    try {
+      FileSystem fs = getMetaClient().getFs();
+      Path markerDir = new Path(metaClient.getMarkerFolderPath(instantTs));
+      if (fs.exists(markerDir)) {
+        // For append only case, we do not write to marker dir. Hence, the above check
+        logger.info("Removing marker directory=" + markerDir);
+        fs.delete(markerDir, true);
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  /**
    * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
    * retries.
    *
@@ -364,11 +382,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         }
       }
       // Now delete the marker directory
-      if (fs.exists(markerDir)) {
-        // For append only case, we do not write to marker dir. Hence, the above check
-        logger.info("Removing marker directory=" + markerDir);
-        fs.delete(markerDir, true);
-      }
+      deleteMarkerDir(instantTs);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
