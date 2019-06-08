@@ -56,9 +56,9 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileSliceDTO> getLatestFileSlicesBeforeOrOn(String basePath, String partitionPath,
-      String maxInstantTime) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime)
-        .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
+      String maxInstantTime, boolean includeFileSlicesInPendingCompaction) {
+    return viewManager.getFileSystemView(basePath).getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime,
+        includeFileSlicesInPendingCompaction).map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestUnCompactedFileSlices(String basePath, String partitionPath) {
