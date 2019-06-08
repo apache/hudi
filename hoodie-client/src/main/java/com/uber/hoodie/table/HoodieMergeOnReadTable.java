@@ -384,7 +384,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
           Optional<FileSlice> smallFileSlice = getRTFileSystemView()
-              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).filter(
+              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false).filter(
                   fileSlice -> fileSlice.getLogFiles().count() < 1
                       && fileSlice.getDataFile().get().getFileSize() < config
                       .getParquetSmallFileLimit()).sorted((FileSlice left, FileSlice right) ->
@@ -394,9 +394,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
             allSmallFileSlices.add(smallFileSlice.get());
           }
         } else {
-          // If we can index log files, we can add more inserts to log files.
+          // If we can index log files, we can add more inserts to log files for fileIds including those under
+          // pending compaction.
           List<FileSlice> allFileSlices = getRTFileSystemView()
-              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
+              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
               .collect(Collectors.toList());
           for (FileSlice fileSlice : allFileSlices) {
             if (isSmallFile(partitionPath, fileSlice)) {
