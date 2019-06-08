@@ -22,6 +22,7 @@ import com.uber.hoodie.cli.utils.InputStreamConsumer;
 import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.model.HoodiePartitionMetadata;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.utilities.DedupeConfig;
 import java.io.IOException;
 import java.util.List;
 import org.apache.hadoop.fs.Path;
@@ -58,10 +59,10 @@ public class RepairsCommand implements CommandMarker {
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    SparkMain.HoodieDeduplicatePartitionCommandConfig config = new SparkMain.HoodieDeduplicatePartitionCommandConfig();
-    config.basePath = HoodieCLI.tableMetadata.getBasePath();
-    config.duplicatedPartitionPath = duplicatedPartitionPath;
-    config.repairedOutputPath = repairedOutputPath;
+    DedupeConfig config = new DedupeConfig();
+    config.basePath_$eq(HoodieCLI.tableMetadata.getBasePath());
+    config.duplicatedPartitionPath_$eq(duplicatedPartitionPath);
+    config.repairOutputPath_$eq(repairedOutputPath);
     String[] commandConfig = config.getCommandConfigsAsStringArray(SparkMain.SparkCommand.DEDUPLICATE.name());
 
     sparkLauncher.addAppArgs(commandConfig);

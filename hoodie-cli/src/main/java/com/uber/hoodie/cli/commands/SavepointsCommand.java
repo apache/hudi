@@ -28,6 +28,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.utilities.HoodieRollback;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -116,7 +117,7 @@ public class SavepointsCommand implements CommandMarker {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    SparkMain.HoodieRollbackCommandConfig config = new SparkMain.HoodieRollbackCommandConfig();
+    HoodieRollback.Config config = new HoodieRollback.Config();
     config.basePath = HoodieCLI.tableMetadata.getBasePath();
     config.savepointTime = commitTime;
     String[] commandConfig =

@@ -42,46 +42,55 @@ import org.apache.spark.sql.SparkSession;
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource
  */
-public class HoodieJavaApp extends AbstractCommandConfig {
+public class HoodieJavaApp {
 
-  @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
-  private String tablePath = "file:///tmp/hoodie/sample-table";
+  public static class Config extends AbstractCommandConfig {
 
-  @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
-  private String tableName = "hoodie_test";
+    @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
+    private String tablePath = "file:///tmp/hoodie/sample-table";
 
-  @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
-  private String tableType = HoodieTableType.COPY_ON_WRITE.name();
+    @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
+    private String tableName = "hoodie_test";
 
-  @Parameter(names = {"--hive-sync", "-hv"}, description = "Enable syncing to hive")
-  private Boolean enableHiveSync = false;
+    @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
+    private String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
-  @Parameter(names = {"--hive-db", "-hd"}, description = "hive database")
-  private String hiveDB = "default";
+    @Parameter(names = {"--hive-sync", "-hv"}, description = "Enable syncing to hive")
+    private Boolean enableHiveSync = false;
 
-  @Parameter(names = {"--hive-table", "-ht"}, description = "hive table")
-  private String hiveTable = "hoodie_sample_test";
+    @Parameter(names = {"--hive-db", "-hd"}, description = "hive database")
+    private String hiveDB = "default";
 
-  @Parameter(names = {"--hive-user", "-hu"}, description = "hive username")
-  private String hiveUser = "hive";
+    @Parameter(names = {"--hive-table", "-ht"}, description = "hive table")
+    private String hiveTable = "hoodie_sample_test";
 
-  @Parameter(names = {"--hive-password", "-hp"}, description = "hive password")
-  private String hivePass = "hive";
+    @Parameter(names = {"--hive-user", "-hu"}, description = "hive username")
+    private String hiveUser = "hive";
 
-  @Parameter(names = {"--hive-url", "-hl"}, description = "hive JDBC URL")
-  private String hiveJdbcUrl = "jdbc:hive2://localhost:10000";
+    @Parameter(names = {"--hive-password", "-hp"}, description = "hive password")
+    private String hivePass = "hive";
 
-  @Parameter(names = {"--non-partitioned", "-np"}, description = "Use non-partitioned Table")
-  private Boolean nonPartitionedTable = false;
+    @Parameter(names = {"--hive-url", "-hl"}, description = "hive JDBC URL")
+    private String hiveJdbcUrl = "jdbc:hive2://localhost:10000";
 
-  @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
-  private Boolean useMultiPartitionKeys = false;
+    @Parameter(names = {"--non-partitioned", "-np"}, description = "Use non-partitioned Table")
+    private Boolean nonPartitionedTable = false;
+
+    @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
+    private Boolean useMultiPartitionKeys = false;
+  }
 
   private static Logger logger = LogManager.getLogger(HoodieJavaApp.class);
+  private final Config cfg;
+
+  public HoodieJavaApp(Config cfg) {
+    this.cfg = cfg;
+  }
 
   public static void main(String[] args) throws Exception {
-    HoodieJavaApp cli = new HoodieJavaApp();
-    cli.parseCommandConfig(args);
+    Config cfg = new Config();
+    cfg.parseCommandConfig(args);
+    HoodieJavaApp cli = new HoodieJavaApp(cfg);
     cli.run();
   }
 
@@ -97,7 +106,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
 
     // Generator of some records to be loaded in.
     HoodieTestDataGenerator dataGen = null;
-    if (nonPartitionedTable) {
+    if (cfg.nonPartitionedTable) {
       // All data goes to base-path
       dataGen = new HoodieTestDataGenerator(new String[]{""});
     } else {
@@ -118,7 +127,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
             "2") // any hoodie client config can be passed like this
         .option("hoodie.upsert.shuffle.parallelism",
             "2") // full list in HoodieWriteConfig & its package
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
+        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), cfg.tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.OPERATION_OPT_KEY(),
             DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL()) // insert
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(),
@@ -127,17 +136,17 @@ public class HoodieJavaApp extends AbstractCommandConfig {
             "partition") // this is the partition to place it into
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(),
             "timestamp") // use to combine duplicate records in input/with disk val
-        .option(HoodieWriteConfig.TABLE_NAME, tableName) // Used by hive sync and queries
+        .option(HoodieWriteConfig.TABLE_NAME, cfg.tableName) // Used by hive sync and queries
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
+            cfg.nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
                 SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .mode(
             SaveMode.Overwrite); // This will remove any existing data at path below, and create a
 
     updateHiveSyncConfig(writer);
     // new dataset if needed
-    writer.save(tablePath); // ultimately where the dataset will be placed
-    String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+    writer.save(cfg.tablePath); // ultimately where the dataset will be placed
+    String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, cfg.tablePath);
     logger.info("First commit at instant time :" + commitInstantTime1);
 
     /**
@@ -148,18 +157,18 @@ public class HoodieJavaApp extends AbstractCommandConfig {
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
     writer = inputDF2.write().format("com.uber.hoodie").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
+        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), cfg.tableType) // Hoodie Table Type
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
+            cfg.nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
                 SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
+        .option(HoodieWriteConfig.TABLE_NAME, cfg.tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
-    writer.save(tablePath);
-    String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+    writer.save(cfg.tablePath);
+    String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, cfg.tablePath);
     logger.info("Second commit at instant time :" + commitInstantTime1);
 
     /**
@@ -168,14 +177,14 @@ public class HoodieJavaApp extends AbstractCommandConfig {
     Dataset<Row> hoodieROViewDF = spark.read().format("com.uber.hoodie")
         // pass any path glob, can include hoodie & non-hoodie
         // datasets
-        .load(tablePath + (nonPartitionedTable ? "/*" : "/*/*/*/*"));
+        .load(cfg.tablePath + (cfg.nonPartitionedTable ? "/*" : "/*/*/*/*"));
     hoodieROViewDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare was greater than 2.
     spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0")
         .show();
 
-    if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
+    if (cfg.tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
@@ -185,7 +194,7 @@ public class HoodieJavaApp extends AbstractCommandConfig {
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
               commitInstantTime1) // Only changes in write 2 above
           .load(
-              tablePath); // For incremental view, pass in the root/base path of dataset
+              cfg.tablePath); // For incremental view, pass in the root/base path of dataset
 
       logger.info("You will only see records from : " + commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
@@ -198,19 +207,19 @@ public class HoodieJavaApp extends AbstractCommandConfig {
    * @return
    */
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
-    if (enableHiveSync) {
-      logger.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(), hivePass)
+    if (cfg.enableHiveSync) {
+      logger.info("Enabling Hive sync to " + cfg.hiveJdbcUrl);
+      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), cfg.hiveTable)
+          .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), cfg.hiveDB)
+          .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), cfg.hiveJdbcUrl)
+          .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY(), cfg.hiveUser)
+          .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(), cfg.hivePass)
           .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY(), "true");
-      if (nonPartitionedTable) {
+      if (cfg.nonPartitionedTable) {
         writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             NonPartitionedExtractor.class.getCanonicalName())
             .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "");
-      } else if (useMultiPartitionKeys) {
+      } else if (cfg.useMultiPartitionKeys) {
         writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "year,month,day")
             .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             MultiPartKeysValueExtractor.class.getCanonicalName());

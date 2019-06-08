@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.cli
+package com.uber.hoodie.utilities
 
 import com.uber.hoodie.avro.HoodieAvroWriteSupport
 import com.uber.hoodie.common.model.HoodieRecord

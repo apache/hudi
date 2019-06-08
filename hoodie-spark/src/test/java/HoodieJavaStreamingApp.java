@@ -46,55 +46,62 @@ import org.apache.spark.sql.streaming.ProcessingTime;
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource streaming
  */
-public class HoodieJavaStreamingApp extends AbstractCommandConfig {
+public class HoodieJavaStreamingApp {
 
-  @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
-  private String tablePath = "file:///tmp/hoodie/streaming/sample-table";
+  public static class Config extends AbstractCommandConfig {
+    @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
+    private String tablePath = "file:///tmp/hoodie/streaming/sample-table";
 
-  @Parameter(names = {"--streaming-source-path", "-ssp"}, description = "path for streaming source file folder")
-  private String streamingSourcePath = "file:///tmp/hoodie/streaming/source";
+    @Parameter(names = {"--streaming-source-path", "-ssp"}, description = "path for streaming source file folder")
+    private String streamingSourcePath = "file:///tmp/hoodie/streaming/source";
 
-  @Parameter(names = {"--streaming-checkpointing-path", "-scp"},
-      description = "path for streaming checking pointing folder")
-  private String streamingCheckpointingPath = "file:///tmp/hoodie/streaming/checkpoint";
+    @Parameter(names = {"--streaming-checkpointing-path", "-scp"},
+        description = "path for streaming checking pointing folder")
+    private String streamingCheckpointingPath = "file:///tmp/hoodie/streaming/checkpoint";
 
-  @Parameter(names = {"--streaming-duration-in-ms", "-sdm"},
-      description = "time in millisecond for the streaming duration")
-  private Long streamingDurationInMs = 15000L;
+    @Parameter(names = {"--streaming-duration-in-ms", "-sdm"},
+        description = "time in millisecond for the streaming duration")
+    private Long streamingDurationInMs = 15000L;
 
-  @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
-  private String tableName = "hoodie_test";
+    @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
+    private String tableName = "hoodie_test";
 
-  @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
-  private String tableType = HoodieTableType.MERGE_ON_READ.name();
+    @Parameter(names = {"--table-type", "-t"}, description = "One of COPY_ON_WRITE or MERGE_ON_READ")
+    private String tableType = HoodieTableType.MERGE_ON_READ.name();
 
-  @Parameter(names = {"--hive-sync", "-hv"}, description = "Enable syncing to hive")
-  private Boolean enableHiveSync = false;
+    @Parameter(names = {"--hive-sync", "-hv"}, description = "Enable syncing to hive")
+    private Boolean enableHiveSync = false;
 
-  @Parameter(names = {"--hive-db", "-hd"}, description = "hive database")
-  private String hiveDB = "default";
+    @Parameter(names = {"--hive-db", "-hd"}, description = "hive database")
+    private String hiveDB = "default";
 
-  @Parameter(names = {"--hive-table", "-ht"}, description = "hive table")
-  private String hiveTable = "hoodie_sample_test";
+    @Parameter(names = {"--hive-table", "-ht"}, description = "hive table")
+    private String hiveTable = "hoodie_sample_test";
 
-  @Parameter(names = {"--hive-user", "-hu"}, description = "hive username")
-  private String hiveUser = "hive";
+    @Parameter(names = {"--hive-user", "-hu"}, description = "hive username")
+    private String hiveUser = "hive";
 
-  @Parameter(names = {"--hive-password", "-hp"}, description = "hive password")
-  private String hivePass = "hive";
+    @Parameter(names = {"--hive-password", "-hp"}, description = "hive password")
+    private String hivePass = "hive";
 
-  @Parameter(names = {"--hive-url", "-hl"}, description = "hive JDBC URL")
-  private String hiveJdbcUrl = "jdbc:hive2://localhost:10000";
+    @Parameter(names = {"--hive-url", "-hl"}, description = "hive JDBC URL")
+    private String hiveJdbcUrl = "jdbc:hive2://localhost:10000";
 
-  @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
-  private Boolean useMultiPartitionKeys = false;
-
+    @Parameter(names = {"--use-multi-partition-keys", "-mp"}, description = "Use Multiple Partition Keys")
+    private Boolean useMultiPartitionKeys = false;
+  }
 
   private static Logger logger = LogManager.getLogger(HoodieJavaStreamingApp.class);
+  private final Config cfg;
+
+  public HoodieJavaStreamingApp(Config cfg) {
+    this.cfg = cfg;
+  }
 
   public static void main(String[] args) throws Exception {
-    HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
-    cli.parseCommandConfig(args);
+    Config cfg = new Config();
+    cfg.parseCommandConfig(args);
+    HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp(cfg);
     cli.run();
   }
 
@@ -111,10 +118,10 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
 
     // folder path clean up and creation, preparing the environment
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
-    fs.delete(new Path(streamingSourcePath), true);
-    fs.delete(new Path(streamingCheckpointingPath), true);
-    fs.delete(new Path(tablePath), true);
-    fs.mkdirs(new Path(streamingSourcePath));
+    fs.delete(new Path(cfg.streamingSourcePath), true);
+    fs.delete(new Path(cfg.streamingCheckpointingPath), true);
+    fs.delete(new Path(cfg.tablePath), true);
+    fs.mkdirs(new Path(cfg.streamingSourcePath));
 
     // Generator of some records to be loaded in.
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -130,7 +137,7 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
 
     // setup the input for streaming
     Dataset<Row> streamingInput = spark.readStream().schema(inputDF1.schema())
-        .json(streamingSourcePath);
+        .json(cfg.streamingSourcePath);
 
     // start streaming and showing
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -169,16 +176,16 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
       FileSystem fs,
       Dataset<Row> inputDF1,
       Dataset<Row> inputDF2) throws Exception {
-    inputDF1.write().mode(SaveMode.Append).json(streamingSourcePath);
+    inputDF1.write().mode(SaveMode.Append).json(cfg.streamingSourcePath);
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
-    String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+    String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, cfg.tablePath);
     logger.info("First commit at instant time :" + commitInstantTime1);
 
-    inputDF2.write().mode(SaveMode.Append).json(streamingSourcePath);
+    inputDF2.write().mode(SaveMode.Append).json(cfg.streamingSourcePath);
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
-    String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
+    String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, cfg.tablePath);
     logger.info("Second commit at instant time :" + commitInstantTime1);
 
     /**
@@ -187,14 +194,14 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
     Dataset<Row> hoodieROViewDF = spark.read().format("com.uber.hoodie")
         // pass any path glob, can include hoodie & non-hoodie
         // datasets
-        .load(tablePath + "/*/*/*/*");
+        .load(cfg.tablePath + "/*/*/*/*");
     hoodieROViewDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare was greater than 2.
     spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0")
         .show();
 
-    if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
+    if (cfg.tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
@@ -204,7 +211,7 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
               commitInstantTime1) // Only changes in write 2 above
           .load(
-              tablePath); // For incremental view, pass in the root/base path of dataset
+              cfg.tablePath); // For incremental view, pass in the root/base path of dataset
 
       logger.info("You will only see records from : " + commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
@@ -221,34 +228,34 @@ public class HoodieJavaStreamingApp extends AbstractCommandConfig {
         .format("com.uber.hoodie")
         .option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType)
+        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), cfg.tableType)
         .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-        .option(HoodieWriteConfig.TABLE_NAME, tableName)
-        .option("checkpointLocation", streamingCheckpointingPath)
+        .option(HoodieWriteConfig.TABLE_NAME, cfg.tableName)
+        .option("checkpointLocation", cfg.streamingCheckpointingPath)
         .outputMode(OutputMode.Append());
 
     updateHiveSyncConfig(writer);
     writer
         .trigger(new ProcessingTime(500))
-        .start(tablePath)
-        .awaitTermination(streamingDurationInMs);
+        .start(cfg.tablePath)
+        .awaitTermination(cfg.streamingDurationInMs);
   }
 
   /**
    * Setup configs for syncing to hive
    */
   private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
-    if (enableHiveSync) {
-      logger.info("Enabling Hive sync to " + hiveJdbcUrl);
-      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
-          .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
-          .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)
-          .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY(), hiveUser)
-          .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(), hivePass)
+    if (cfg.enableHiveSync) {
+      logger.info("Enabling Hive sync to " + cfg.hiveJdbcUrl);
+      writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), cfg.hiveTable)
+          .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), cfg.hiveDB)
+          .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), cfg.hiveJdbcUrl)
+          .option(DataSourceWriteOptions.HIVE_USER_OPT_KEY(), cfg.hiveUser)
+          .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(), cfg.hivePass)
           .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY(), "true");
-      if (useMultiPartitionKeys) {
+      if (cfg.useMultiPartitionKeys) {
         writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "year,month,day")
             .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
                 MultiPartKeysValueExtractor.class.getCanonicalName());

@@ -16,19 +16,16 @@
 
 package com.uber.hoodie.cli.commands;
 
-import com.beust.jcommander.Parameter;
-import com.uber.hoodie.HoodieWriteClient;
-import com.uber.hoodie.cli.DedupeSparkJob;
 import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.AbstractCommandConfig;
-import com.uber.hoodie.config.HoodieIndexConfig;
-import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.InvalidCommandConfigException;
-import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.utilities.DedupeConfig;
+import com.uber.hoodie.utilities.DedupeSparkJob;
 import com.uber.hoodie.utilities.HDFSParquetImporter;
 import com.uber.hoodie.utilities.HoodieCompactionAdminTool;
 import com.uber.hoodie.utilities.HoodieCompactor;
+import com.uber.hoodie.utilities.HoodieRollback;
 import java.util.Arrays;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -46,36 +43,6 @@ public class SparkMain {
     COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR;
   }
 
-  static class HoodieRollbackCommandConfig extends AbstractCommandConfig {
-
-    @Parameter(names = {"--commit-time",
-            "-sp"}, description = "Commit time for rollback")
-    public String commitTime = null;
-
-    @Parameter(names = {"--savepoint-time",
-            "-sp"}, description = "Savepoint time for rollback")
-    public String savepointTime = null;
-
-    @Parameter(names = {"--base-path",
-            "-bp"}, description = "Base path for the hoodie dataset", required = true)
-    public String basePath = null;
-  }
-
-  static class HoodieDeduplicatePartitionCommandConfig extends AbstractCommandConfig {
-
-    @Parameter(names = {"--duplicated-partition-path",
-            "-dpp"}, description = "Duplicated partition path for deduplication", required = true)
-    public String duplicatedPartitionPath = null;
-
-    @Parameter(names = {"--repaired-output-path",
-            "-rop"}, description = "Repaired output path for deduplication", required = true)
-    public String repairedOutputPath = null;
-
-    @Parameter(names = {"--base-path",
-            "-bp"}, description = "Base path for the hoodie dataset", required = true)
-    public String basePath = null;
-  }
-
   public static void main(String[] args) throws Exception {
     String command = args[0];
     LOG.info("Invoking SparkMain:" + command);
@@ -87,14 +54,13 @@ public class SparkMain {
     int returnCode = 0;
     switch (cmd) {
       case ROLLBACK:
-        returnCode = rollback(jsc, getConfig(HoodieRollbackCommandConfig.class, commandConfigs));
+        returnCode = rollback(jsc, getConfig(HoodieRollback.Config.class, commandConfigs));
         break;
       case DEDUPLICATE:
-        returnCode = deduplicatePartitionPath(jsc,
-                getConfig(HoodieDeduplicatePartitionCommandConfig.class, commandConfigs));
+        returnCode = deduplicatePartitionPath(jsc, getConfig(DedupeConfig.class, commandConfigs));
         break;
       case ROLLBACK_TO_SAVEPOINT:
-        returnCode = rollbackToSavepoint(jsc, getConfig(HoodieRollbackCommandConfig.class, commandConfigs));
+        returnCode = rollbackToSavepoint(jsc, getConfig(HoodieRollback.Config.class, commandConfigs));
         break;
       case IMPORT:
       case UPSERT:
@@ -148,44 +114,23 @@ public class SparkMain {
     return new HoodieCompactor(config).compact(jsc, config.retry);
   }
 
-  private static int deduplicatePartitionPath(JavaSparkContext jsc,
-      HoodieDeduplicatePartitionCommandConfig config) {
+  private static int deduplicatePartitionPath(JavaSparkContext jsc, DedupeConfig config) {
     LOG.info("Command config: " + config.toString());
-    DedupeSparkJob job = new DedupeSparkJob(config.basePath, config.duplicatedPartitionPath, config.repairedOutputPath,
+    DedupeSparkJob job = new DedupeSparkJob(config,
         new SQLContext(jsc),
-        FSUtils.getFs(config.basePath, jsc.hadoopConfiguration()));
+        FSUtils.getFs(config.basePath(), jsc.hadoopConfiguration()));
     job.fixDuplicates(true);
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, HoodieRollbackCommandConfig config) throws Exception {
+  private static int rollback(JavaSparkContext jsc, HoodieRollback.Config config) throws Exception {
     LOG.info("Command config: " + config.toString());
-    HoodieWriteClient client = createHoodieClient(jsc, config.basePath);
-    if (client.rollback(config.commitTime)) {
-      LOG.info(String.format("The commit \"%s\" rolled back.", config.commitTime));
-      return 0;
-    } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", config.commitTime));
-      return -1;
-    }
+    return new HoodieRollback(config).rollback(jsc);
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, HoodieRollbackCommandConfig config)
+  private static int rollbackToSavepoint(JavaSparkContext jsc, HoodieRollback.Config config)
       throws Exception {
     LOG.info("Command config: " + config.toString());
-    HoodieWriteClient client = createHoodieClient(jsc, config.basePath);
-    if (client.rollbackToSavepoint(config.savepointTime)) {
-      LOG.info(String.format("The commit \"%s\" rolled back.", config.savepointTime));
-      return 0;
-    } else {
-      LOG.info(String.format("The commit \"%s\" failed to roll back.", config.savepointTime));
-      return -1;
-    }
-  }
-
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
-    return new HoodieWriteClient(jsc, config);
+    return new HoodieRollback(config).rollbackToSavepoint(jsc);
   }
 }
