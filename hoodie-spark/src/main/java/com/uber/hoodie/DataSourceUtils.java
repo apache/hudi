@@ -183,14 +183,19 @@ public class DataSourceUtils {
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
       JavaRDD<HoodieRecord> incomingHoodieRecords,
       HoodieWriteConfig writeConfig) throws Exception {
+    HoodieReadClient client = null;
     try {
-      HoodieReadClient client = new HoodieReadClient<>(jssc, writeConfig);
+      client = new HoodieReadClient<>(jssc, writeConfig);
       return client.tagLocation(incomingHoodieRecords)
           .filter(r -> !((HoodieRecord<HoodieRecordPayload>) r).isCurrentLocationKnown());
     } catch (DatasetNotFoundException e) {
       // this will be executed when there is no hoodie dataset yet
       // so no dups to drop
       return incomingHoodieRecords;
+    } finally {
+      if (null != client) {
+        client.close();
+      }
     }
   }
 
