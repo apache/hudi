@@ -21,6 +21,7 @@ package com.uber.hoodie.hadoop.realtime;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.uber.hoodie.common.model.FileSlice;
+import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
@@ -125,7 +126,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
           List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
           dataFileSplits.forEach(split -> {
             try {
-              List<String> logFilePaths = fileSlice.getLogFiles()
+              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
                   .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
               // Get the maxCommit from the last delta or compaction or commit - when
               // bootstrapped from COW table
