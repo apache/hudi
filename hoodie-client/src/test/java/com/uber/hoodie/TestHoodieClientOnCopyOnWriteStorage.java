@@ -446,10 +446,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("Total inserts in commit3 must add up", keys3.size(), numTotalInsertsInCommit3);
   }
 
-  protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    return HoodieTable.getHoodieTable(metaClient, config, jsc);
-  }
-
   /**
    * Test scenario of new file-group getting added during insert()
    */
