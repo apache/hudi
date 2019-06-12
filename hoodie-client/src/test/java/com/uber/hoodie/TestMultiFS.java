@@ -99,10 +99,10 @@ public class TestMultiFS implements Serializable {
   }
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath)
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .forTable(tableName).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 
   @Test
