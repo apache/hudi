@@ -18,16 +18,12 @@
 
 package com.uber.hoodie;
 
-import com.uber.hoodie.common.model.HoodieKey;
-import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.exception.HoodieException;
-import org.apache.avro.generic.GenericRecord;
 
 /**
  * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as
  * configs.
  */
-mport com.uber.hoodie.DataSourceUtils;
+import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.DataSourceWriteOptions;
 import com.uber.hoodie.KeyGenerator;
 import com.uber.hoodie.common.model.HoodieKey;
