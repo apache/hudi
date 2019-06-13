@@ -292,7 +292,7 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <!-- Sets the VM argument line used when unit tests are run. -->
-          <argLine>${surefireArgLine}</argLine>
+          <argLine>-Xms4096m -Xmx4096m ${surefireArgLine}</argLine>
           <systemPropertyVariables>
             <log4j.configuration>
               ${surefire-log4j.file}
