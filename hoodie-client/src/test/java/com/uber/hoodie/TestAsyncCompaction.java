@@ -92,7 +92,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
   public void testRollbackForInflightCompaction() throws Exception {
     // Rollback inflight compaction
     HoodieWriteConfig cfg = getConfig(false);
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg, true);
+    HoodieWriteClient client = getHoodieWriteClient(cfg, true);
 
     String firstInstantTime = "001";
     String secondInstantTime = "004";
