@@ -733,6 +733,7 @@ public class TestMergeOnReadTable {
         .withAutoCommit(false).withAssumeDatePartitioning(true).withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .compactionSmallFileSize(1 * 1024).withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withEmbeddedTimelineServerEnabled(true)
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1 * 1024).build())
         .forTable("test-trip-table").build();
   }
@@ -1310,6 +1311,7 @@ public class TestMergeOnReadTable {
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024).withInlineCompaction(false)
                 .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024 * 1024).build())
+        .withEmbeddedTimelineServerEnabled(true)
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build());
   }
