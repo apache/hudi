@@ -291,8 +291,12 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
+          <forkCount>3</forkCount>
+          <reuseForks>false</reuseForks>
+          <argLine>-XX:MaxPermSize=256m</argLine>
           <!-- Sets the VM argument line used when unit tests are run. -->
-          <argLine>${surefireArgLine}</argLine>
+          <!--<argLine>${surefireArgLine}    </argLine> -->
+
           <systemPropertyVariables>
             <log4j.configuration>
               ${surefire-log4j.file}
