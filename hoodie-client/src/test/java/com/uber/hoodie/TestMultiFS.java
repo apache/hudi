@@ -48,6 +48,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -63,6 +64,7 @@ public class TestMultiFS implements Serializable {
   private static SQLContext sqlContext;
   private String tablePath = "file:///tmp/hoodie/sample-table";
   protected String tableName = "hoodie_rt";
+  private HoodieWriteClient hdfsWriteClient;
   private String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
   @BeforeClass
@@ -83,6 +85,22 @@ public class TestMultiFS implements Serializable {
     sqlContext = new SQLContext(jsc);
   }
 
+  private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig config) throws Exception {
+    if (null != hdfsWriteClient) {
+      hdfsWriteClient.close();
+    }
+    hdfsWriteClient = new HoodieWriteClient(jsc, config);
+    return hdfsWriteClient;
+  }
+
+  @After
+  public void teardown() {
+    if (null != hdfsWriteClient) {
+      hdfsWriteClient.close();
+      hdfsWriteClient = null;
+    }
+  }
+
   @AfterClass
   public static void cleanupClass() throws Exception {
     if (jsc != null) {
@@ -97,6 +115,7 @@ public class TestMultiFS implements Serializable {
     // same JVM
     FileSystem.closeAll();
   }
+
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
@@ -118,7 +137,7 @@ public class TestMultiFS implements Serializable {
 
     //Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
-    HoodieWriteClient hdfsWriteClient = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient hdfsWriteClient = getHoodieWriteClient(cfg);
 
     // Write generated data to hdfs (only inserts)
     String readCommitTime = hdfsWriteClient.startCommit();
@@ -139,7 +158,7 @@ public class TestMultiFS implements Serializable {
         .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
             HoodieAvroPayload.class.getName());
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
-    HoodieWriteClient localWriteClient = new HoodieWriteClient(jsc, localConfig);
+    HoodieWriteClient localWriteClient = getHoodieWriteClient(localConfig);
 
     String writeCommitTime = localWriteClient.startCommit();
     logger.info("Starting write commit " + writeCommitTime);

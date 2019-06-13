@@ -81,24 +81,40 @@ public class TestHoodieClientBase implements Serializable {
   protected transient HoodieTestDataGenerator dataGen = null;
 
   private HoodieWriteClient writeClient;
+  private HoodieReadClient readClient;
 
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws Exception {
-    closeClient();
-    writeClient = new HoodieWriteClient(jsc, cfg);
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
+    return getHoodieWriteClient(cfg, false);
+  }
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
+    return getHoodieWriteClient(cfg, rollbackInflightCommit, HoodieIndex.createIndex(cfg, jsc));
+  }
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
+      HoodieIndex index) {
+    closeWriteClient();
+    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
     return writeClient;
   }
 
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit)
-      throws Exception {
-    closeClient();
-    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit);
-    return writeClient;
+  protected HoodieReadClient getHoodieReadClient(String basePath) {
+    closeReadClient();
+    readClient = new HoodieReadClient(jsc, basePath);
+    return readClient;
   }
 
-  private void closeClient() {
+  private void closeWriteClient() {
     if (null != writeClient) {
       writeClient.close();
       writeClient = null;
+    }
+  }
+
+  private void closeReadClient() {
+    if (null != readClient) {
+      readClient.close();
+      readClient = null;
     }
   }
 
@@ -132,7 +148,8 @@ public class TestHoodieClientBase implements Serializable {
    * Properly release resources at end of each test
    */
   public void tearDown() throws IOException {
-    closeClient();
+    closeWriteClient();
+    closeReadClient();
 
     if (null != sqlContext) {
       logger.info("Clearing sql context cache of spark-session used in previous test-case");
