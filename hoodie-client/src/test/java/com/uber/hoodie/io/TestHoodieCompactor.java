@@ -64,6 +64,7 @@ public class TestHoodieCompactor {
   private transient HoodieTestDataGenerator dataGen = null;
   private transient FileSystem fs;
   private Configuration hadoopConf;
+  private HoodieWriteClient writeClient;
 
   @Before
   public void init() throws IOException {
@@ -84,12 +85,25 @@ public class TestHoodieCompactor {
 
   @After
   public void clean() {
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
+    }
+
     if (basePath != null) {
       new File(basePath).delete();
     }
     if (jsc != null) {
       jsc.stop();
     }
+  }
+
+  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
+    if (null != writeClient) {
+      writeClient.close();
+    }
+    writeClient = new HoodieWriteClient(jsc, config);
+    return writeClient;
   }
 
   private HoodieWriteConfig getConfig() {
@@ -123,7 +137,7 @@ public class TestHoodieCompactor {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = getConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
 
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -140,7 +154,7 @@ public class TestHoodieCompactor {
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
 
