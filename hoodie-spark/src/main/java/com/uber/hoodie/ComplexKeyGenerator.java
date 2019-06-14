@@ -18,22 +18,19 @@
 
 package com.uber.hoodie;
 
-
-/**
- * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as
- * configs.
- */
-import com.uber.hoodie.DataSourceUtils;
-import com.uber.hoodie.DataSourceWriteOptions;
-import com.uber.hoodie.KeyGenerator;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieException;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.avro.generic.GenericRecord;
-import com.google.gson.*;
 
+/**
+ * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as
+ * configs.
+ */
 public class ComplexKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
