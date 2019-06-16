@@ -110,4 +110,9 @@
     <artifactId>xercesImpl</artifactId>
     <license>Apache License, Version 1.1</license>
   </artifact>
+  <artifact>
+    <groupId>org.jamon</groupId>
+    <artifactId>jamon-runtime</artifactId>
+    <license>Mozilla Public License Version 2.0</license>
+  </artifact>
 </license-lookup>

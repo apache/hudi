@@ -1,6 +1,9 @@
 language: java
 jdk:
 - oraclejdk8
+script: 
+- mvn install -DskipTests=true -DskipITs
+- travis_wait 45 mvn install
 sudo: required
 env:
 - HUDI_QUIETER_LOGGING=1
