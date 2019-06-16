@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -405,7 +407,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       });
 
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      Optional<HoodieInstant> instant = activeTimeline.filterInflightsExcludingCompaction().lastInstant();
+      Optional<HoodieInstant> instant =
+          activeTimeline.getCommitsTimeline().filterInflightsExcludingCompaction().lastInstant();
       activeTimeline.saveToInflight(instant.get(),
           Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException io) {
@@ -1079,7 +1082,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(),
         config.getBasePath(), true);
     // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-    metaClient.getActiveTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
+    metaClient.getCommitsTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
       Preconditions.checkArgument(
           HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
           "Earliest write inflight instant time must be later "
@@ -1325,8 +1328,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
 
     // Finalize write
-    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
-    finalizeWrite(table, compactionCommitTime, stats);
+    finalizeWrite(table, compactionCommitTime, updateStatusMap);
 
     // Copy extraMetadata
     extraMetadata.ifPresent(m -> {
@@ -1335,9 +1337,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       });
     });
 
-    logger.info("Compaction finished with result " + metadata);
-
-    logger.info("Committing Compaction " + compactionCommitTime);
+    logger.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 
     try {

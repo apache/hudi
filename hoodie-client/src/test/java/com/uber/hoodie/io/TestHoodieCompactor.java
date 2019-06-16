@@ -1,17 +1,19 @@
 /*
- *  Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *           http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.uber.hoodie.io;
@@ -62,6 +64,7 @@ public class TestHoodieCompactor {
   private transient HoodieTestDataGenerator dataGen = null;
   private transient FileSystem fs;
   private Configuration hadoopConf;
+  private HoodieWriteClient writeClient;
 
   @Before
   public void init() throws IOException {
@@ -82,12 +85,25 @@ public class TestHoodieCompactor {
 
   @After
   public void clean() {
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
+    }
+
     if (basePath != null) {
       new File(basePath).delete();
     }
     if (jsc != null) {
       jsc.stop();
     }
+  }
+
+  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
+    if (null != writeClient) {
+      writeClient.close();
+    }
+    writeClient = new HoodieWriteClient(jsc, config);
+    return writeClient;
   }
 
   private HoodieWriteConfig getConfig() {
@@ -121,7 +137,7 @@ public class TestHoodieCompactor {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = getConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
 
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -138,7 +154,7 @@ public class TestHoodieCompactor {
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
 

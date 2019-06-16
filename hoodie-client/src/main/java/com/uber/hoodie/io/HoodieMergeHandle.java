@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,6 +28,7 @@ import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -40,6 +43,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -48,7 +52,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
 @SuppressWarnings("Duplicates")
-public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
+public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
   private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
 
@@ -83,6 +87,64 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
         .getPartitionPath(), dataFileToBeMerged);
   }
 
+
+  public static Schema createHoodieWriteSchema(Schema originalSchema) {
+    return HoodieAvroUtils.addMetadataFields(originalSchema);
+  }
+
+  public Path makeNewPath(String partitionPath) {
+    Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
+    try {
+      fs.mkdirs(path); // create a new partition as needed.
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to make dir " + path, e);
+    }
+
+    return new Path(path.toString(), FSUtils.makeDataFileName(instantTime, writeToken, fileId));
+  }
+
+  public Schema getWriterSchema() {
+    return writerSchema;
+  }
+
+  /**
+   * Determines whether we can accept the incoming records, into the current file, depending on
+   * <p>
+   * - Whether it belongs to the same partitionPath as existing records - Whether the current file written bytes lt max
+   * file size
+   */
+  public boolean canWrite(HoodieRecord record) {
+    return false;
+  }
+
+  /**
+   * Perform the actual writing of the given record into the backing file.
+   */
+  public void write(HoodieRecord record, Optional<IndexedRecord> insertValue) {
+    // NO_OP
+  }
+
+  /**
+   * Perform the actual writing of the given record into the backing file.
+   */
+  public void write(HoodieRecord record, Optional<IndexedRecord> avroRecord, Optional<Exception> exception) {
+    Optional recordMetadata = record.getData().getMetadata();
+    if (exception.isPresent() && exception.get() instanceof Throwable) {
+      // Not throwing exception from here, since we don't want to fail the entire job for a single record
+      writeStatus.markFailure(record, exception.get(), recordMetadata);
+      logger.error("Error writing record " + record, exception.get());
+    } else {
+      write(record, avroRecord);
+    }
+  }
+
+  /**
+   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields
+   */
+  protected GenericRecord rewriteRecord(GenericRecord record) {
+    return HoodieAvroUtils.rewriteRecord(record, writerSchema);
+  }
+
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus
    */
@@ -93,14 +155,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       String latestValidFilePath = dataFileToBeMerged.getFileName();
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
-      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
 
       oldFilePath = new Path(
           config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
-      String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/") + FSUtils
-          .makeDataFileName(commitTime, writeToken, fileId)).toString();
+      String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+          + FSUtils.makeDataFileName(instantTime, writeToken, fileId)).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
 
       logger.info(String
@@ -118,13 +180,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
 
       // Create the writer for writing the new version file
       storageWriter = HoodieStorageWriterFactory
-          .getStorageWriter(commitTime, newFilePath, hoodieTable, config, writerSchema);
+          .getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema);
     } catch (IOException io) {
-      logger.error("Error in update task at commit " + commitTime, io);
+      logger.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException(
           "Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
-              + commitTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
+              + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
     }
   }
 
@@ -146,7 +208,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       partitionPath = record.getPartitionPath();
       keyToNewRecords.put(record.getRecordKey(), record);
       // update the new location of the record, so we know where to find it next
-      record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
+      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
     }
     logger.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()

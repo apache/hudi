@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -213,8 +215,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertNodupesWithinPartition(dedupedRecs);
 
     // Perform write-action and check
-    HoodieWriteClient client = new HoodieWriteClient(jsc,
-        getConfigBuilder().combineInput(true, true).build());
+    HoodieWriteClient client = getHoodieWriteClient(
+        getConfigBuilder().combineInput(true, true).build(), false);
     client.startCommitWithTime(newCommitTime);
     List<WriteStatus> statuses = writeFn.apply(client, records, newCommitTime).collect();
     assertNoWriteErrors(statuses);
@@ -234,7 +236,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   private HoodieWriteClient getWriteClientWithDummyIndex(final boolean isGlobal) throws Exception {
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(isGlobal);
-    return new HoodieWriteClient(jsc, getConfigBuilder().build(), false, index);
+    return getHoodieWriteClient(getConfigBuilder().build(), false, index);
   }
 
   /**
@@ -265,7 +267,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       boolean isPrepped) throws Exception {
-    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieWriteConfig);
+    HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     //Write 1 (only inserts)
     String newCommitTime = "001";
@@ -289,7 +291,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    */
   @Test
   public void testDeletes() throws Exception {
-    HoodieWriteClient client = new HoodieWriteClient(jsc, getConfig());
+    HoodieWriteClient client = getHoodieWriteClient(getConfig(), false);
 
     /**
      * Write 1 (inserts and deletes)
@@ -345,7 +347,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
 
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient client = getHoodieWriteClient(config, false);
 
     // Inserts => will write file1
     String commitTime1 = "001";
@@ -444,10 +446,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertEquals("Total inserts in commit3 must add up", keys3.size(), numTotalInsertsInCommit3);
   }
 
-  protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    return HoodieTable.getHoodieTable(metaClient, config, jsc);
-  }
-
   /**
    * Test scenario of new file-group getting added during insert()
    */
@@ -459,7 +457,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient client = getHoodieWriteClient(config, false);
 
     // Inserts => will write file1
     String commitTime1 = "001";

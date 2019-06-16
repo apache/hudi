@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +23,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
 import com.uber.hoodie.index.bloom.HoodieBloomIndex;
@@ -61,12 +64,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Optional[FullFilePath]]
-   * If the optional FullFilePath value is not present, then the key is not found. If the
-   * FullFilePath value is present, it is the path component (without scheme) of the URI underlying
-   * file
+   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Optional[partitionPath, fileID]]
+   * If the optional is empty, then the key is not found.
    */
-  public abstract JavaPairRDD<HoodieKey, Optional<String>> fetchRecordLocation(
+  public abstract JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(
       JavaRDD<HoodieKey> hoodieKeys, final JavaSparkContext jsc, HoodieTable<T> hoodieTable);
 
   /**

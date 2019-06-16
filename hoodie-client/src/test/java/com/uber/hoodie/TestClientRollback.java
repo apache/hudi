@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -202,7 +204,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config, false);
+    HoodieWriteClient client = getHoodieWriteClient(config, false);
 
     // Rollback commit 1 (this should fail, since commit2 is still around)
     try {
@@ -292,7 +294,7 @@ public class TestClientRollback extends TestHoodieClientBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
         HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    new HoodieWriteClient(jsc, config, false);
+    getHoodieWriteClient(config, false);
 
     // Check results, nothing changed
     assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
@@ -309,7 +311,7 @@ public class TestClientRollback extends TestHoodieClientBase {
         && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
 
     // Turn auto rollback on
-    new HoodieWriteClient(jsc, config, true).startCommit();
+    getHoodieWriteClient(config, true).startCommit();
     assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
     assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
     assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));

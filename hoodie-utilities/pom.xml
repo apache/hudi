@@ -1,30 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~          http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
-  -->
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
 
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
     <artifactId>hoodie</artifactId>
     <groupId>com.uber.hoodie</groupId>
-    <version>0.4.7-SNAPSHOT</version>
+    <version>0.4.8-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hoodie-utilities</artifactId>
   <packaging>jar</packaging>
+
+  <properties>
+    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
+  </properties>
 
   <build>
     <plugins>
@@ -39,131 +43,6 @@
           <source>1.8</source>
           <target>1.8</target>
         </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>3.1.1</version>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
-              </dependencyReducedPomLocation>
-              <artifactSet>
-                <includes>
-                  <include>commons-codec:commons-codec</include>
-                  <include>commons-dbcp:commons-dbcp</include>
-                  <include>commons-pool:commons-pool</include>
-                  <include>com.uber.hoodie:hoodie-common</include>
-                  <include>com.uber.hoodie:hoodie-client</include>
-                  <include>com.uber.hoodie:hoodie-spark</include>
-                  <include>com.uber.hoodie:hoodie-hive</include>
-                  <include>com.uber.hoodie:hoodie-hadoop-mr</include>
-                  <include>com.uber.hoodie:hoodie-timeline-service</include>
-                  <include>com.beust:jcommander</include>
-                  <include>com.twitter:bijection-avro_2.11</include>
-                  <include>com.twitter:bijection-core_2.11</include>
-                  <include>org.apache.parquet:parquet-avro</include>
-                  <include>com.twitter:parquet-avro</include>
-                  <include>com.twitter.common:objectsize</include>
-                  <include>io.confluent:kafka-avro-serializer</include>
-                  <include>io.confluent:common-config</include>
-                  <include>io.confluent:common-utils</include>
-                  <include>io.confluent:kafka-schema-registry-client</include>
-                  <include>io.dropwizard.metrics:metrics-core</include>
-                  <include>io.dropwizard.metrics:metrics-graphite</include>
-                  <include>org.apache.spark:spark-streaming-kafka-0-8_2.11</include>
-                  <include>org.apache.kafka:kafka_2.11</include>
-                  <include>com.101tec:zkclient</include>
-                  <include>org.apache.kafka:kafka-clients</include>
-                  <include>org.apache.hive:hive-common</include>
-                  <include>org.apache.hive:hive-service</include>
-                  <include>org.apache.hive:hive-metastore</include>
-                  <include>org.apache.hive:hive-jdbc</include>
-                  <include>com.esotericsoftware:kryo-shaded</include>
-                  <include>org.objenesis:objenesis</include>
-                  <include>com.esotericsoftware:minlog</include>
-                  <include>com.yammer.metrics:metrics-core</include>
-                </includes>
-              </artifactSet>
-              <relocations>
-                <relocation>
-                  <pattern>com.beust.jcommander.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.beust.jcommander.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.dbcp.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.commons.dbcp.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.pool.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.commons.pool.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hive.jdbc.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.metastore.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.common.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.conf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hive.service.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.service.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.hadoop_hive.service.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.objenesis.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.minlog.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.esotericsoftware.minlog.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.codahale.metrics.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.codahale.metrics.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.codec.</pattern>
-                  <shadedPattern>com.uber.hoodie.org.apache.commons.codec.</shadedPattern>
-                </relocation>
-              </relocations>
-              <filters>
-                <filter>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
 
@@ -180,7 +59,7 @@
   <repositories>
     <repository>
       <id>confluent</id>
-      <url>http://packages.confluent.io/maven/</url>
+      <url>https://packages.confluent.io/maven/</url>
     </repository>
   </repositories>
 
@@ -189,6 +68,12 @@
       <groupId>io.javalin</groupId>
       <artifactId>javalin</artifactId>
       <version>2.4.0</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -229,6 +114,18 @@
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-spark</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+      <version>7.6.0.v20120127</version>
     </dependency>
 
     <dependency>
@@ -258,16 +155,8 @@
 
     <dependency>
       <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-exec</artifactId>
-      <version>${hive.version}</version>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
-      <classifier>standalone</classifier>
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>
@@ -278,6 +167,19 @@
           <artifactId>servlet-api</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-exec</artifactId>
+      <version>${hive.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+      <version>${hive.version}</version>
     </dependency>
 
     <dependency>
@@ -353,11 +255,23 @@
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_2.11</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_2.11</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>

@@ -1,19 +1,19 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.hive;
@@ -182,7 +182,10 @@ public class HoodieHiveClient {
 
   private List<String> constructChangePartitions(List<String> partitions) {
     List<String> changePartitions = Lists.newArrayList();
-    String alterTable = "ALTER TABLE " + syncConfig.databaseName + "." + syncConfig.tableName;
+    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
+    String useDatabase = "USE " + syncConfig.databaseName;
+    changePartitions.add(useDatabase);
+    String alterTable = "ALTER TABLE " + syncConfig.tableName;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
@@ -494,7 +497,7 @@ public class HoodieHiveClient {
     if (!hiveJdbcUrl.endsWith("/")) {
       hiveJdbcUrl = hiveJdbcUrl + "/";
     }
-    return hiveJdbcUrl + syncConfig.databaseName + (urlAppend == null ? "" : urlAppend);
+    return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
   }
 
   private static void closeQuietly(ResultSet resultSet, Statement stmt) {
@@ -585,7 +588,7 @@ public class HoodieHiveClient {
     try {
       Table table = client.getTable(syncConfig.databaseName, syncConfig.tableName);
       table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
-      client.alter_table(syncConfig.databaseName, syncConfig.tableName, table, true);
+      client.alter_table(syncConfig.databaseName, syncConfig.tableName, table);
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
           "Failed to get update last commit time synced to " + lastCommitSynced, e);

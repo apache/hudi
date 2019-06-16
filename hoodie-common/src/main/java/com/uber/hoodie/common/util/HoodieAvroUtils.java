@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,6 +44,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.node.NullNode;
 
 /**
  * Helper class to do common stuff across Avro.
@@ -154,16 +157,16 @@ public class HoodieAvroUtils {
    * Add null fields to passed in schema. Caller is responsible for ensuring there is no duplicates.
    * As different query engines have varying constraints regarding treating the case-sensitivity of fields, its best
    * to let caller determine that.
+   *
    * @param schema Passed in schema
    * @param newFieldNames Null Field names to be added
-   * @return
    */
   public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
     List<Field> newFields = schema.getFields().stream().map(field -> {
       return new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue());
     }).collect(Collectors.toList());
     for (String newField : newFieldNames) {
-      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", null));
+      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", NullNode.getInstance()));
     }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(newFields);
@@ -182,11 +185,24 @@ public class HoodieAvroUtils {
 
 
   /**
-   * Given a avro record with a given schema, rewrites it into the new schema
+   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the old
+   * schema
    */
   public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
+    return rewrite(record, record.getSchema(), newSchema);
+  }
+
+  /**
+   * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new
+   * schema
+   */
+  public static GenericRecord rewriteRecordWithOnlyNewSchemaFields(GenericRecord record, Schema newSchema) {
+    return rewrite(record, newSchema, newSchema);
+  }
+
+  private static GenericRecord rewrite(GenericRecord record, Schema schemaWithFields, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
-    for (Schema.Field f : record.getSchema().getFields()) {
+    for (Schema.Field f : schemaWithFields.getFields()) {
       newRecord.put(f.name(), record.get(f.name()));
     }
     if (!GenericData.get().validate(newSchema, newRecord)) {

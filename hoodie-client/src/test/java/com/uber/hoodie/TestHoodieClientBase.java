@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,7 +33,10 @@ import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.table.SyncableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.table.view.FileSystemViewStorageConfig;
+import com.uber.hoodie.common.table.view.FileSystemViewStorageType;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -76,24 +81,40 @@ public class TestHoodieClientBase implements Serializable {
   protected transient HoodieTestDataGenerator dataGen = null;
 
   private HoodieWriteClient writeClient;
+  private HoodieReadClient readClient;
 
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws Exception {
-    closeClient();
-    writeClient = new HoodieWriteClient(jsc, cfg);
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
+    return getHoodieWriteClient(cfg, false);
+  }
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
+    return getHoodieWriteClient(cfg, rollbackInflightCommit, HoodieIndex.createIndex(cfg, jsc));
+  }
+
+  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
+      HoodieIndex index) {
+    closeWriteClient();
+    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
     return writeClient;
   }
 
-  protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit)
-      throws Exception {
-    closeClient();
-    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit);
-    return writeClient;
+  protected HoodieReadClient getHoodieReadClient(String basePath) {
+    closeReadClient();
+    readClient = new HoodieReadClient(jsc, basePath);
+    return readClient;
   }
 
-  private void closeClient() {
+  private void closeWriteClient() {
     if (null != writeClient) {
       writeClient.close();
       writeClient = null;
+    }
+  }
+
+  private void closeReadClient() {
+    if (null != readClient) {
+      readClient.close();
+      readClient = null;
     }
   }
 
@@ -127,7 +148,8 @@ public class TestHoodieClientBase implements Serializable {
    * Properly release resources at end of each test
    */
   public void tearDown() throws IOException {
-    closeClient();
+    closeWriteClient();
+    closeReadClient();
 
     if (null != sqlContext) {
       logger.info("Clearing sql context cache of spark-session used in previous test-case");
@@ -174,7 +196,16 @@ public class TestHoodieClientBase implements Serializable {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+        .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(
+          FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
+              .build());
+  }
+
+  protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    ((SyncableFileSystemView) (table.getRTFileSystemView())).reset();
+    return table;
   }
 
   /**
@@ -215,7 +246,7 @@ public class TestHoodieClientBase implements Serializable {
     for (HoodieRecord rec : taggedRecords) {
       assertTrue("Record " + rec + " found with no location.", rec.isCurrentLocationKnown());
       assertEquals("All records should have commit time " + commitTime + ", since updates were made",
-          rec.getCurrentLocation().getCommitTime(), commitTime);
+          rec.getCurrentLocation().getInstantTime(), commitTime);
     }
   }
 

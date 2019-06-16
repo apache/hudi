@@ -1,19 +1,19 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.index.bloom;
@@ -36,8 +36,10 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
+import com.uber.hoodie.io.HoodieKeyLookupHandle;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.File;
 import java.io.IOException;
@@ -200,10 +202,10 @@ public class TestHoodieBloomIndex {
       // no longer sorted, but should have same files.
 
       List<Tuple2<String, BloomIndexFileInfo>> expected = Arrays.asList(
-          new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2_0_20160401010101.parquet")),
-          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1_0_20150312101010.parquet")),
-          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3_0_20150312101010.parquet", "000", "000")),
-          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4_0_20150312101010.parquet", "001", "003")));
+          new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2")),
+          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1")),
+          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
+          new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
       assertEquals(expected, filesList);
     }
   }
@@ -279,7 +281,7 @@ public class TestHoodieBloomIndex {
     List<String> uuids = Arrays.asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(),
         record4.getRecordKey());
 
-    List<String> results = HoodieBloomIndexCheckFunction.checkCandidatesAgainstFile(jsc.hadoopConfiguration(), uuids,
+    List<String> results = HoodieKeyLookupHandle.checkCandidatesAgainstFile(jsc.hadoopConfiguration(), uuids,
         new Path(basePath + "/2016/01/31/" + filename));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0") || results.get(1).equals(
@@ -417,10 +419,11 @@ public class TestHoodieBloomIndex {
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
-    JavaPairRDD<HoodieKey, Optional<String>> taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, jsc, table);
+    JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> taggedRecordRDD = bloomIndex
+        .fetchRecordLocation(keysRDD, jsc, table);
 
     // Should not find any files
-    for (Tuple2<HoodieKey, Optional<String>> record : taggedRecordRDD.collect()) {
+    for (Tuple2<HoodieKey, Optional<Pair<String, String>>> record : taggedRecordRDD.collect()) {
       assertTrue(!record._2.isPresent());
     }
 
@@ -438,18 +441,16 @@ public class TestHoodieBloomIndex {
     taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, jsc, table);
 
     // Check results
-    for (Tuple2<HoodieKey, Optional<String>> record : taggedRecordRDD.collect()) {
+    for (Tuple2<HoodieKey, Optional<Pair<String, String>>> record : taggedRecordRDD.collect()) {
       if (record._1.getRecordKey().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")) {
         assertTrue(record._2.isPresent());
-        Path path1 = new Path(record._2.get());
-        assertEquals(FSUtils.getFileId(filename1), FSUtils.getFileId(path1.getName()));
+        assertEquals(FSUtils.getFileId(filename1), record._2.get().getRight());
       } else if (record._1.getRecordKey().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")) {
         assertTrue(record._2.isPresent());
-        Path path2 = new Path(record._2.get());
         if (record._1.getPartitionPath().equals("2015/01/31")) {
-          assertEquals(FSUtils.getFileId(filename3), FSUtils.getFileId(path2.getName()));
+          assertEquals(FSUtils.getFileId(filename3), record._2.get().getRight());
         } else {
-          assertEquals(FSUtils.getFileId(filename2), FSUtils.getFileId(path2.getName()));
+          assertEquals(FSUtils.getFileId(filename2), record._2.get().getRight());
         }
       } else if (record._1.getRecordKey().equals("3eb5b87c-1fej-4edd-87b4-6ec96dc405a0")) {
         assertTrue(!record._2.isPresent());

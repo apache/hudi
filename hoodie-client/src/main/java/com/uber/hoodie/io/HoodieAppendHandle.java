@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -57,7 +59,7 @@ import org.apache.spark.util.SizeEstimator;
 /**
  * IO Operation to append data onto an existing file.
  */
-public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOHandle<T> {
+public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
   private static Logger logger = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
@@ -112,7 +114,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       RealtimeView rtView = hoodieTable.getRTFileSystemView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       // Set the base commit time as the current commitTime for new inserts into log files
-      String baseInstantTime = commitTime;
+      String baseInstantTime = instantTime;
       if (fileSlice.isPresent()) {
         baseInstantTime = fileSlice.get().getBaseInstantTime();
       } else {
@@ -132,11 +134,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
         ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogVersion(currentLogFile.getLogVersion());
         ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogOffset(writer.getCurrentSize());
       } catch (Exception e) {
-        logger.error("Error in update task at commit " + commitTime, e);
+        logger.error("Error in update task at commit " + instantTime, e);
         writeStatus.setGlobalError(e);
         throw new HoodieUpsertException(
             "Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
-                + commitTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath()
+                + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath()
                 + partitionPath, e);
       }
       Path path = new Path(partitionPath, writer.getLogFile().getFileName());
@@ -152,13 +154,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
       if (avroRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         avroRecord = Optional.of(rewriteRecord((GenericRecord) avroRecord.get()));
-        String seqId = HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(),
+        String seqId = HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(),
             recordIndex.getAndIncrement());
         HoodieAvroUtils
             .addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
                 hoodieRecord.getPartitionPath(), fileId);
         HoodieAvroUtils
-            .addCommitMetadataToRecord((GenericRecord) avroRecord.get(), commitTime, seqId);
+            .addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
         // If currentLocation is present, then this is an update
         if (hoodieRecord.getCurrentLocation() != null) {
           updatedRecordsWritten++;
@@ -198,7 +200,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
   private void doAppend(Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     try {
-      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
+      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchema.toString());
       if (recordList.size() > 0) {
         writer = writer.appendBlock(new HoodieAvroDataBlock(recordList, header));
@@ -284,7 +286,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieIOH
 
   private void writeToBuffer(HoodieRecord<T> record) {
     // update the new location of the record, so we know where to find it next
-    record.setNewLocation(new HoodieRecordLocation(commitTime, fileId));
+    record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
     Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
       recordList.add(indexedRecord.get());
