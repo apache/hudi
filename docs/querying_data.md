@@ -71,6 +71,13 @@ then the utility can determine if the target dataset has no commits or is behind
 it will automatically use the backfill configuration, since applying the last 24 hours incrementally could take more time than doing a backfill. The current limitation of the tool
 is the lack of support for self-joining the same table in mixed mode (normal and incremental modes).
 
+**NOTE on Hive queries that are executed using Fetch task:**
+Since Fetch tasks invoke InputFormat.listStatus() per partition, Hoodie metadata can be listed in
+every such listStatus() call. In order to avoid this, it might be useful to disable fetch tasks
+using the hive session property for incremental queries: `set hive.fetch.task.conversion=none;` This
+would ensure Map Reduce execution is chosen for a Hive query, which combines partitions (comma
+separated) and calls InputFormat.listStatus() only once with all those partitions.
+
 ## Spark
 
 Spark provides much easier deployment & management of Hudi jars and bundles into jobs/notebooks. At a high level, there are two ways to access Hudi datasets in Spark.
