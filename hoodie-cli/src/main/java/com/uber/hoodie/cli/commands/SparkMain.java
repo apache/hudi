@@ -18,14 +18,14 @@ package com.uber.hoodie.cli.commands;
 
 import com.uber.hoodie.cli.utils.SparkUtil;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.AbstractCommandConfig;
-import com.uber.hoodie.exception.InvalidCommandConfigException;
 import com.uber.hoodie.utilities.DedupeConfig;
 import com.uber.hoodie.utilities.DedupeSparkJob;
 import com.uber.hoodie.utilities.HDFSParquetImporter;
 import com.uber.hoodie.utilities.HoodieCompactionAdminTool;
 import com.uber.hoodie.utilities.HoodieCompactor;
 import com.uber.hoodie.utilities.HoodieRollback;
+import com.uber.hoodie.utilities.config.AbstractCommandConfig;
+import com.uber.hoodie.utilities.exception.InvalidCommandConfigException;
 import java.util.Arrays;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;

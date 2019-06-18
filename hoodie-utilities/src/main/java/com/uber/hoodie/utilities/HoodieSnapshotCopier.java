@@ -29,7 +29,7 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.AbstractCommandConfig;
+import com.uber.hoodie.utilities.config.AbstractCommandConfig;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;

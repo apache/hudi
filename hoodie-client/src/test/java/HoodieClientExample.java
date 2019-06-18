@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,6 +16,7 @@
  * limitations under the License.
  */
 
+import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
@@ -23,7 +26,6 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -41,10 +43,11 @@ import org.apache.spark.api.java.JavaSparkContext;
 /**
  * Driver program that uses the Hoodie client with synthetic workload, and performs basic operations. <p>
  */
-public class HoodieClientExample extends AbstractCommandConfig {
+public class HoodieClientExample {
 
   private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
-
+  @Parameter(names = {"--help", "-h"}, help = true)
+  public Boolean help = false;
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
   private String tablePath = "file:///tmp/hoodie/sample-table";
   @Parameter(names = {"--table-name", "-n"}, description = "table name for Hoodie sample table")
@@ -54,7 +57,12 @@ public class HoodieClientExample extends AbstractCommandConfig {
 
   public static void main(String[] args) throws Exception {
     HoodieClientExample cli = new HoodieClientExample();
-    cli.parseCommandConfig(args);
+    JCommander cmd = new JCommander(cli, args);
+
+    if (cli.help) {
+      cmd.usage();
+      System.exit(1);
+    }
     cli.run();
   }
 

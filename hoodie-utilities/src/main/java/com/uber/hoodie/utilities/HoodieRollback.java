@@ -2,10 +2,10 @@ package com.uber.hoodie.utilities;
 
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
-import com.uber.hoodie.config.AbstractCommandConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
+import com.uber.hoodie.utilities.config.AbstractCommandConfig;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 

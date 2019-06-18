@@ -1,23 +1,24 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.hive;
 
+import com.beust.jcommander.JCommander;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hadoop.HoodieInputFormat;
@@ -42,10 +43,11 @@ import parquet.schema.MessageType;
 
 /**
  * Tool to sync a hoodie HDFS dataset with a hive metastore table. Either use it as a api
- * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar HiveSyncTool [args]
+ * HiveSyncTool.syncHoodieTable(HiveSyncConfig) or as a command line java -cp hoodie-hive.jar
+ * HiveSyncTool [args]
  * <p>
- * This utility will get the schema from the latest commit and will sync hive table schema Also this will sync the
- * partitions incrementally (all the partitions modified since the last commit)
+ * This utility will get the schema from the latest commit and will sync hive table schema Also this
+ * will sync the partitions incrementally (all the partitions modified since the last commit)
  */
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
@@ -111,11 +113,11 @@ public class HiveSyncTool {
   }
 
   /**
-   * Get the latest schema from the last commit and check if its in sync with the hive table schema. If not, evolves the
-   * table schema.
+   * Get the latest schema from the last commit and check if its in sync with the hive table schema.
+   * If not, evolves the table schema.
    *
    * @param tableExists - does table exist
-   * @param schema - extracted schema
+   * @param schema      - extracted schema
    */
   private void syncSchema(boolean tableExists, boolean isRealTime, MessageType schema) {
     // Check and sync schema
@@ -149,8 +151,8 @@ public class HiveSyncTool {
 
 
   /**
-   * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not adds it or if the
-   * partition path does not match, it updates the partition path)
+   * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not
+   * adds it or if the partition path does not match, it updates the partition path)
    */
   private void syncPartitions(List<String> writtenPartitionsSince) {
     try {
@@ -176,8 +178,11 @@ public class HiveSyncTool {
   public static void main(String[] args) throws Exception {
     // parse the params
     final HiveSyncConfig cfg = new HiveSyncConfig();
-    cfg.parseCommandConfig(args, true, true);
-
+    JCommander cmd = new JCommander(cfg, args);
+    if (cfg.help || args.length == 0) {
+      cmd.usage();
+      System.exit(1);
+    }
     FileSystem fs = FSUtils.getFs(cfg.basePath, new Configuration());
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(fs.getConf());

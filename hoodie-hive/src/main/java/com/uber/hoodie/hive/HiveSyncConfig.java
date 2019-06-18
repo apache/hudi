@@ -1,33 +1,32 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.hive;
 
 import com.beust.jcommander.Parameter;
-import com.uber.hoodie.config.AbstractCommandConfig;
-
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Configs needed to sync data into Hive.
  */
-public class HiveSyncConfig extends AbstractCommandConfig {
+public class HiveSyncConfig implements Serializable {
 
   @Parameter(names = {
       "--database"}, description = "name of the target database in Hive", required = true)
@@ -57,15 +56,35 @@ public class HiveSyncConfig extends AbstractCommandConfig {
       + "PartitionValueExtractor "
       + "to extract the partition "
       + "values from HDFS path")
-  public String partitionValueExtractorClass = "com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor";
+  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class
+      .getName();
 
   @Parameter(names = {
       "--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
       + " exists to support "
       + "backward compatibility. If"
       + " you use hoodie 0.3.x, do "
-      + "not set this parameter", arity = 1)
+      + "not set this parameter")
   public Boolean assumeDatePartitioning = false;
+
+  @Parameter(names = {"--help", "-h"}, help = true)
+  public Boolean help = false;
+
+  @Override
+  public String toString() {
+    return "HiveSyncConfig{"
+        + "databaseName='" + databaseName + '\''
+        + ", tableName='" + tableName + '\''
+        + ", hiveUser='" + hiveUser + '\''
+        + ", hivePass='" + hivePass + '\''
+        + ", jdbcUrl='" + jdbcUrl + '\''
+        + ", basePath='" + basePath + '\''
+        + ", partitionFields=" + partitionFields
+        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
+        + ", assumeDatePartitioning=" + assumeDatePartitioning
+        + ", help=" + help
+        + '}';
+  }
 
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();

@@ -16,12 +16,12 @@
  *
  */
 
-package com.uber.hoodie.config;
+package com.uber.hoodie.utilities.config;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterDescription;
-import com.uber.hoodie.exception.InvalidCommandConfigException;
+import com.uber.hoodie.utilities.exception.InvalidCommandConfigException;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 

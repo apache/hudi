@@ -23,8 +23,8 @@ import com.uber.hoodie.common.model.{HoodieDataFile, HoodieRecord}
 import com.uber.hoodie.common.table.HoodieTableMetaClient
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView
 import com.uber.hoodie.common.util.FSUtils
-import com.uber.hoodie.config.AbstractCommandConfig
 import com.uber.hoodie.exception.HoodieException
+import com.uber.hoodie.utilities.config.AbstractCommandConfig
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.log4j.Logger
 import org.apache.spark.sql.{DataFrame, SQLContext}

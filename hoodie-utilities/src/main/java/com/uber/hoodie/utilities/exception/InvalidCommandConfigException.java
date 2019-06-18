@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.exception;
+package com.uber.hoodie.utilities.exception;
+
+import com.uber.hoodie.exception.HoodieException;
 
 public class InvalidCommandConfigException extends HoodieException {
 

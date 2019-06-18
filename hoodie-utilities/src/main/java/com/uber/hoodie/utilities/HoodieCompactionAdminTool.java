@@ -7,7 +7,7 @@ import com.uber.hoodie.CompactionAdminClient.ValidationOpResult;
 import com.uber.hoodie.common.model.HoodieFileGroupId;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.config.AbstractCommandConfig;
+import com.uber.hoodie.utilities.config.AbstractCommandConfig;
 import java.io.ObjectOutputStream;
 import java.util.List;
 import org.apache.hadoop.fs.FSDataOutputStream;

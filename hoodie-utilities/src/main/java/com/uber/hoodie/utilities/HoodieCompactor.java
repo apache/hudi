@@ -23,7 +23,7 @@ import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.TypedProperties;
-import com.uber.hoodie.config.AbstractCommandConfig;
+import com.uber.hoodie.utilities.config.AbstractCommandConfig;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
