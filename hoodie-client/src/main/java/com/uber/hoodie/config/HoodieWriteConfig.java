@@ -70,6 +70,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_CONSISTENCY_CHECK_ENABLED = "false";
   private static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   private static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "false";
+  private static final String FAIL_ON_ARCHIVING_ENABLED_PROP = "hoodie.fail.on.archiving";
+  private static final String DEFAULT_FAIL_ON_ARCHIVING_ENABLED = "false";
 
   // time between successive attempts to ensure written data's metadata is consistent on storage
   private static final String INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP =
@@ -163,6 +165,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isConsistencyCheckEnabled() {
     return Boolean.parseBoolean(props.getProperty(CONSISTENCY_CHECK_ENABLED_PROP));
+  }
+
+  public boolean isFailOnArchivingEnabled() {
+    return Boolean.parseBoolean(props.getProperty(FAIL_ON_ARCHIVING_ENABLED_PROP));
   }
 
   public boolean isEmbeddedTimelineServerEnabled() {
@@ -696,6 +702,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP, String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS));
       setDefaultOnCondition(props, !props.containsKey(MAX_CONSISTENCY_CHECKS_PROP),
           MAX_CONSISTENCY_CHECKS_PROP, String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECKS));
+      setDefaultOnCondition(props, !props.containsKey(FAIL_ON_ARCHIVING_ENABLED_PROP),
+              FAIL_ON_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_ARCHIVING_ENABLED);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet,

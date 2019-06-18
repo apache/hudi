@@ -246,6 +246,11 @@ public class HoodieCommitArchiveLog {
       log.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
+        byte[] instantDetails = commitTimeline.getInstantDetails(hoodieInstant).get();
+        if (instantDetails.length == 0 && this.config.isFailOnArchivingEnabled()) {
+            log.warn("Failed to archive commits - skipping commit: " + hoodieInstant.getFileName());
+            continue;
+        }
         records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
         if (records.size() >= this.config.getCommitArchivalBatchSize()) {
           writeToFile(wrapperSchema, records);
