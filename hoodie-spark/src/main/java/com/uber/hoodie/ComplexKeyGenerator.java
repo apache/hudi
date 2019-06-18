@@ -18,8 +18,6 @@
 
 package com.uber.hoodie;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieException;
@@ -54,25 +52,19 @@ public class ComplexKeyGenerator extends KeyGenerator {
       throw new HoodieException(
               "Unable to find field names for record key or partition path in cfg");
     }
-
-    JsonObject recordKeyJson = new JsonObject();
-
-
+    StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
-      recordKeyJson.addProperty(recordKeyField,DataSourceUtils.getNestedFieldValAsString(record, recordKeyField));
+      recordKey.append(recordKeyField+":"+DataSourceUtils.getNestedFieldValAsString(record, recordKeyField)+",");
     }
-    Gson gson = new Gson();
-    String recordKey = gson.toJson(recordKeyJson);
+    recordKey.deleteCharAt(recordKey.length()-1);
     StringBuilder partitionPath = new StringBuilder();
     try {
       for (String partitionPathField : partitionPathFields) {
         partitionPath.append(DataSourceUtils.getNestedFieldValAsString(record, partitionPathField));
         partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
       }
-      partitionPath.delete(partitionPath.length() - 1, partitionPath.length());
+      partitionPath.deleteCharAt(partitionPath.length() - 1);
     } catch (HoodieException e) {
-      // TODO : optimize this since throwing and catching exception is cpu intensive
-      // if field is not found, lump it into default partition
       partitionPath = partitionPath.append(DEFAULT_PARTITION_PATH);
     }
 
