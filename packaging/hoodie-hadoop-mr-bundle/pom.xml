@@ -134,11 +134,6 @@
     </dependency>
 
     <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-hadoop-bundle</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>com.twitter.common</groupId>
       <artifactId>objectsize</artifactId>
       <version>0.0.12</version>
@@ -227,7 +222,6 @@
                 <includes>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.uber.hoodie:hoodie-hadoop-mr</include>
-                  <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
                   <include>commons-io:commons-io</include>

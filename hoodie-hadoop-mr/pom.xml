@@ -93,10 +93,6 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-hadoop-bundle</artifactId>
-    </dependency>
-    <dependency>
       <groupId>com.twitter.common</groupId>
       <artifactId>objectsize</artifactId>
       <version>0.0.12</version>
