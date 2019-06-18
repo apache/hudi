@@ -384,7 +384,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
           Optional<FileSlice> smallFileSlice = getRTFileSystemView()
-              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).filter(
+              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false).filter(
                   fileSlice -> fileSlice.getLogFiles().count() < 1
                       && fileSlice.getDataFile().get().getFileSize() < config
                       .getParquetSmallFileLimit()).sorted((FileSlice left, FileSlice right) ->
@@ -394,9 +394,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
             allSmallFileSlices.add(smallFileSlice.get());
           }
         } else {
-          // If we can index log files, we can add more inserts to log files.
+          // If we can index log files, we can add more inserts to log files for fileIds including those under
+          // pending compaction.
           List<FileSlice> allFileSlices = getRTFileSystemView()
-              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp())
+              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
               .collect(Collectors.toList());
           for (FileSlice fileSlice : allFileSlices) {
             if (isSmallFile(partitionPath, fileSlice)) {
@@ -489,13 +490,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   private HoodieRollbackStat rollback(HoodieIndex hoodieIndex, String partitionPath, String commit,
       HoodieCommitMetadata commitMetadata, final Map<FileStatus, Boolean> filesToDeletedStatus,
       Map<FileStatus, Long> filesToNumBlocksRollback, Set<String> deletedFiles) {
-    // The following needs to be done since GlobalIndex at the moment does not store the latest commit time.
-    // Also, wStat.getPrevCommit() might not give the right commit time in the following
+    // wStat.getPrevCommit() might not give the right commit time in the following
     // scenario : If a compaction was scheduled, the new commitTime associated with the requested compaction will be
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
-    Map<String, String> fileIdToBaseCommitTimeForLogMap =
-        hoodieIndex.isGlobal() ? this.getRTFileSystemView().getLatestFileSlices(partitionPath)
-            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime)) : null;
+    // But the index (global) might store the baseCommit of the parquet and not the requested, hence get the
+    // baseCommit always by listing the file slice
+    Map<String, String> fileIdToBaseCommitTimeForLogMap = this.getRTFileSystemView().getLatestFileSlices(partitionPath)
+            .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
     commitMetadata.getPartitionToWriteStats().get(partitionPath).stream()
         .filter(wStat -> {
           // Filter out stats without prevCommit since they are all inserts
@@ -503,10 +504,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
               && !deletedFiles.contains(wStat.getFileId());
         }).forEach(wStat -> {
           HoodieLogFormat.Writer writer = null;
-          String baseCommitTime = wStat.getPrevCommit();
-          if (hoodieIndex.isGlobal()) {
-            baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
-          }
+          String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
           try {
             writer = HoodieLogFormat.newWriterBuilder().onParentPath(
                 new Path(this.getMetaClient().getBasePath(), partitionPath))

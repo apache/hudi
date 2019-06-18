@@ -442,7 +442,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
                     .sorted(HoodieLogFile.getLogFileComparator())
                     .collect(Collectors.toList());
     FileSlice fileSliceForCompaction =
-        fileSystemView.getLatestFileSlicesBeforeOrOn(operation.getPartitionPath(), operation.getBaseInstantTime())
+        fileSystemView.getLatestFileSlicesBeforeOrOn(operation.getPartitionPath(), operation.getBaseInstantTime(), true)
             .filter(fs -> fs.getFileId().equals(operation.getFileId())).findFirst().get();
     int maxUsedVersion =
         fileSliceForCompaction.getLogFiles().findFirst().map(HoodieLogFile::getLogVersion)
