@@ -121,11 +121,6 @@
     </dependency>
 
     <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-hadoop-mr-bundle</artifactId>
       <version>${project.version}</version>

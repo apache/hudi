@@ -321,12 +321,7 @@
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-hadoop</artifactId>
-    </dependency>
-
+    
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>bijection-avro_2.11</artifactId>

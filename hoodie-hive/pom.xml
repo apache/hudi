@@ -56,6 +56,11 @@
       <artifactId>libthrift</artifactId>
       <version>${thrift.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>joda-time</groupId>
@@ -163,10 +168,6 @@
       <groupId>org.mockito</groupId>
       <artifactId>mockito-all</artifactId>
       <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
     </dependency>
 
     <dependency>

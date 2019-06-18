@@ -135,11 +135,6 @@
 
     <dependency>
       <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
       <artifactId>parquet-hadoop-bundle</artifactId>
     </dependency>
 
@@ -232,7 +227,6 @@
                 <includes>
                   <include>com.uber.hoodie:hoodie-common</include>
                   <include>com.uber.hoodie:hoodie-hadoop-mr</include>
-                  <include>com.twitter:parquet-avro</include>
                   <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>

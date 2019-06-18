@@ -194,6 +194,11 @@
     </dependency>
 
     <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-common</artifactId>
       <version>${project.version}</version>

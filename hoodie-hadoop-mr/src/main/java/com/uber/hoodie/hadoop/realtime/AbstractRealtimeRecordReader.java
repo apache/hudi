@@ -53,9 +53,9 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import parquet.avro.AvroSchemaConverter;
-import parquet.hadoop.ParquetFileReader;
-import parquet.schema.MessageType;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.schema.MessageType;
 
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real

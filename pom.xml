@@ -476,6 +476,7 @@
         <groupId>log4j</groupId>
         <artifactId>log4j</artifactId>
         <version>${log4j.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <dependency>
@@ -506,12 +507,7 @@
         <groupId>org.apache.parquet</groupId>
         <artifactId>parquet-avro</artifactId>
         <version>${parquet.version}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.apache.parquet</groupId>
-        <artifactId>parquet-hadoop</artifactId>
-        <version>${parquet.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <dependency>
@@ -594,11 +590,6 @@
       <dependency>
         <groupId>com.twitter</groupId>
         <artifactId>parquet-hive-bundle</artifactId>
-        <version>1.6.0</version>
-      </dependency>
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-avro</artifactId>
         <version>1.6.0</version>
       </dependency>
 
