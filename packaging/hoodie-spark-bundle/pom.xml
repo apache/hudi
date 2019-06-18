@@ -37,12 +37,12 @@
   </properties>
 
   <build>
-    <resources>
-      <resource>
-        <directory>src/main/resources</directory>
-      </resource>
-    </resources>
-    <plugins>
+     <resources>
+       <resource>
+         <directory>src/main/resources</directory>
+       </resource>
+     </resources>
+     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
@@ -204,17 +204,17 @@
   </build>
 
   <dependencies>
-    <dependency>
+   <dependency>
       <groupId>com.beust</groupId>
       <artifactId>jcommander</artifactId>
-    </dependency>
+   </dependency>
     <dependency>
       <groupId>commons-dbcp</groupId>
       <artifactId>commons-dbcp</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro</artifactId>
     </dependency>
     <dependency>
       <groupId>commons-codec</groupId>
@@ -320,12 +320,12 @@
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-client</artifactId>
       <version>${project.version}</version>
-    </dependency>
+   </dependency>
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-spark</artifactId>
       <version>${project.version}</version>
-    </dependency>
+   </dependency>
   </dependencies>
 </project>
 

@@ -128,7 +128,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   static class TestHelpers {
-
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op) {
       return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName());
     }
@@ -373,6 +372,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static class DistanceUDF implements UDF4<Double, Double, Double, Double, Double> {
 
     /**
+     *
      * Taken from https://stackoverflow.com/questions/3694380/calculating-distance-between-two-points-using-latitude-
      * longitude-what-am-i-doi
      * Calculate distance between two points in latitude and longitude taking
