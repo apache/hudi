@@ -54,9 +54,9 @@ public class ComplexKeyGenerator extends KeyGenerator {
     }
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
-      recordKey.append(recordKeyField+":"+DataSourceUtils.getNestedFieldValAsString(record, recordKeyField)+",");
+      recordKey.append(recordKeyField + ":" + DataSourceUtils.getNestedFieldValAsString(record, recordKeyField) + ",");
     }
-    recordKey.deleteCharAt(recordKey.length()-1);
+    recordKey.deleteCharAt(recordKey.length() - 1);
     StringBuilder partitionPath = new StringBuilder();
     try {
       for (String partitionPathField : partitionPathFields) {
