@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +26,7 @@ import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.io.HoodieCreateHandle;
-import com.uber.hoodie.io.HoodieIOHandle;
+import com.uber.hoodie.io.HoodieWriteHandle;
 import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -129,12 +131,11 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload> extend
       BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
 
     protected final List<WriteStatus> statuses = new ArrayList<>();
-    protected HoodieIOHandle handle;
+    protected HoodieWriteHandle handle;
 
     @Override
     protected void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
       final HoodieRecord insertPayload = payload.record;
-
       // lazily initialize the handle, for the first time
       if (handle == null) {
         handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(),

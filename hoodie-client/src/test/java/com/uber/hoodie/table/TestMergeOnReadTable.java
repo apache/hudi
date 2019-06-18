@@ -1,19 +1,19 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.table;
@@ -92,6 +92,7 @@ public class TestMergeOnReadTable {
   private static HdfsTestService hdfsTestService;
   private transient JavaSparkContext jsc = null;
   private transient SQLContext sqlContext;
+  private HoodieWriteClient writeClient;
 
   @AfterClass
   public static void cleanUp() throws Exception {
@@ -139,6 +140,11 @@ public class TestMergeOnReadTable {
 
   @After
   public void clean() {
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
+    }
+
     if (basePath != null) {
       new File(basePath).delete();
     }
@@ -147,10 +153,18 @@ public class TestMergeOnReadTable {
     }
   }
 
+  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
+    if (null != writeClient) {
+      writeClient.close();
+    }
+    writeClient = new HoodieWriteClient(jsc, config);
+    return writeClient;
+  }
+
   @Test
   public void testSimpleInsertAndUpdate() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
 
     /**
      * Write 1 (only inserts)
@@ -234,7 +248,7 @@ public class TestMergeOnReadTable {
   @Test
   public void testMetadataAggregateFromWriteStatus() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder(false).withWriteStatusClass(MetadataMergeWriteStatus.class).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
 
     String newCommitTime = "001";
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -257,7 +271,7 @@ public class TestMergeOnReadTable {
   @Test
   public void testSimpleInsertUpdateAndDelete() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
 
     /**
      * Write 1 (only inserts, written as parquet file)
@@ -342,7 +356,7 @@ public class TestMergeOnReadTable {
     HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);
 
     HoodieWriteConfig cfg = getConfig(true);
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
 
     /**
      * Write 1 (only inserts)
@@ -401,7 +415,7 @@ public class TestMergeOnReadTable {
   public void testRollbackWithDeltaAndCompactionCommit() throws Exception {
 
     HoodieWriteConfig cfg = getConfig(false);
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
 
     // Test delta commit rollback
     /**
@@ -445,7 +459,7 @@ public class TestMergeOnReadTable {
      */
     final String commitTime1 = "002";
     // WriteClient with custom config (disable small file handling)
-    client = new HoodieWriteClient(jsc, getHoodieWriteConfigWithSmallFileHandlingOff());
+    client = getWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff());
     client.startCommitWithTime(commitTime1);
 
     List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
@@ -475,7 +489,7 @@ public class TestMergeOnReadTable {
      * Write 3 (inserts + updates - testing successful delta commit)
      */
     final String commitTime2 = "002";
-    client = new HoodieWriteClient(jsc, cfg);
+    client = getWriteClient(cfg);
     client.startCommitWithTime(commitTime2);
 
     copyOfRecords = new ArrayList<>(records);
@@ -566,7 +580,7 @@ public class TestMergeOnReadTable {
   public void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
 
     HoodieWriteConfig cfg = getConfig(false);
-    final HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    final HoodieWriteClient client = getWriteClient(cfg);
     List<String> allCommits = new ArrayList<>();
     /**
      * Write 1 (only inserts)
@@ -611,7 +625,7 @@ public class TestMergeOnReadTable {
     newCommitTime = "002";
     allCommits.add(newCommitTime);
     // WriteClient with custom config (disable small file handling)
-    HoodieWriteClient nClient = new HoodieWriteClient(jsc, getHoodieWriteConfigWithSmallFileHandlingOff());
+    HoodieWriteClient nClient = getWriteClient(getHoodieWriteConfigWithSmallFileHandlingOff());
     nClient.startCommitWithTime(newCommitTime);
 
     List<HoodieRecord> copyOfRecords = new ArrayList<>(records);
@@ -733,6 +747,7 @@ public class TestMergeOnReadTable {
         .withAutoCommit(false).withAssumeDatePartitioning(true).withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .compactionSmallFileSize(1 * 1024).withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withEmbeddedTimelineServerEnabled(true)
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1 * 1024).build())
         .forTable("test-trip-table").build();
   }
@@ -740,7 +755,7 @@ public class TestMergeOnReadTable {
   @Test
   public void testUpsertPartitioner() throws Exception {
     HoodieWriteConfig cfg = getConfig(true);
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
 
     /**
      * Write 1 (only inserts, written as parquet file)
@@ -821,7 +836,7 @@ public class TestMergeOnReadTable {
   public void testLogFileCountsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig(true);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
@@ -896,7 +911,7 @@ public class TestMergeOnReadTable {
   public void testMetadataValuesAfterInsertUpsertAndCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig(false);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
@@ -939,7 +954,7 @@ public class TestMergeOnReadTable {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
     HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
@@ -978,7 +993,7 @@ public class TestMergeOnReadTable {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
     HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
@@ -1032,7 +1047,7 @@ public class TestMergeOnReadTable {
     // insert 100 records
     // Setting IndexType to be InMemory to simulate Global Index nature
     HoodieWriteConfig config = getConfigBuilder(false, IndexType.INMEMORY).build();
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     String newCommitTime = "100";
     writeClient.startCommitWithTime(newCommitTime);
@@ -1087,7 +1102,7 @@ public class TestMergeOnReadTable {
   public void testRollingStatsInMetadata() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
@@ -1177,7 +1192,7 @@ public class TestMergeOnReadTable {
   public void testRollingStatsWithSmallFileHandling() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder(false, IndexType.INMEMORY).withAutoCommit(false).build();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
+    HoodieWriteClient client = getWriteClient(cfg);
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     Map<String, Long> fileIdToInsertsMap = new HashMap<>();
     Map<String, Long> fileIdToUpsertsMap = new HashMap<>();
@@ -1310,6 +1325,7 @@ public class TestMergeOnReadTable {
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024).withInlineCompaction(false)
                 .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024 * 1024).build())
+        .withEmbeddedTimelineServerEnabled(true)
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build());
   }

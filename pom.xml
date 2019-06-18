@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <!--
-  ~ Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~          http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
-  -->
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
 
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
@@ -118,7 +120,7 @@
     </contributor>
   </contributors>
 
-  <inceptionYear>2015-2016</inceptionYear>
+  <inceptionYear>2016</inceptionYear>
 
 
   <properties>
@@ -134,7 +136,7 @@
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>1.2.1</hive.version>
+    <hive.version>2.3.1</hive.version>
     <metrics.version>4.0.2</metrics.version>
     <spark.version>2.1.0</spark.version>
     <avro.version>1.7.7</avro.version>
@@ -143,6 +145,9 @@
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
     <hbase.version>1.2.3</hbase.version>
+    <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
+    <notice.dir>${project.basedir}</notice.dir>
+    <notice.file>NOTICE.txt</notice.file>
   </properties>
 
   <scm>
@@ -167,6 +172,30 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.jasig.maven</groupId>
+        <artifactId>maven-notice-plugin</artifactId>
+        <version>1.1.0</version>
+        <executions>
+          <execution>
+            <id>generate-notice</id>
+            <!-- Generate notice before packaging so that they can be added to jar -->
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>generate</goal>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <noticeTemplate>file://${maven.multiModuleProjectDirectory}/release/config/NOTICE.template</noticeTemplate>
+          <licenseMapping>
+            <param>file://${maven.multiModuleProjectDirectory}/release/config/license-mappings.xml</param>
+          </licenseMapping>
+          <outputDir>${notice.dir}</outputDir>
+          <fileName>${notice.file}</fileName>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
@@ -340,6 +369,39 @@
           <artifactId>apache-rat-plugin</artifactId>
           <version>0.11</version>
           <configuration>
+            <excludeSubProjects>false</excludeSubProjects>
+            <numUnapprovedLicenses>0</numUnapprovedLicenses>
+            <licenses>
+              <!-- Enforce this license:
+                   Licensed to the Apache Software Foundation (ASF) under one
+                   or more contributor license agreements.  See the NOTICE file
+                   distributed with this work for additional information
+                   regarding copyright ownership.  The ASF licenses this file
+                   to you under the Apache License, Version 2.0 (the
+                   "License"); you may not use this file except in compliance
+                   with the License.  You may obtain a copy of the License at
+                   http://www.apache.org/licenses/LICENSE-2.0
+                   Unless required by applicable law or agreed to in writing,
+                   software distributed under the License is distributed on an
+                   "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+                   KIND, either express or implied.  See the License for the
+                   specific language governing permissions and limitations
+                   under the License.
+              -->
+              <license implementation="org.apache.rat.analysis.license.SimplePatternBasedLicense">
+                <licenseFamilyCategory>AL2 </licenseFamilyCategory>
+                <licenseFamilyName>Apache License 2.0</licenseFamilyName>
+                <notes />
+                <patterns>
+                  <pattern>Licensed to the Apache Software Foundation (ASF) under one</pattern>
+                </patterns>
+              </license>
+            </licenses>
+            <licenseFamilies>
+              <licenseFamily implementation="org.apache.rat.license.SimpleLicenseFamily">
+                <familyName>Apache License 2.0</familyName>
+              </licenseFamily>
+            </licenseFamilies>
             <excludes>
               <exclude>**/.*</exclude>
               <exclude>**/*.txt</exclude>
@@ -684,14 +746,27 @@
       <dependency>
         <groupId>org.codehaus.jackson</groupId>
         <artifactId>jackson-core-asl</artifactId>
-        <version>1.9.13</version>
+        <version>${codehaus-jackson.version}</version>
       </dependency>
 
       <dependency>
         <groupId>org.codehaus.jackson</groupId>
         <artifactId>jackson-mapper-asl</artifactId>
-        <version>1.9.13</version>
+        <version>${codehaus-jackson.version}</version>
       </dependency>
+
+      <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-jaxrs</artifactId>
+        <version>${codehaus-jackson.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.codehaus.jackson</groupId>
+        <artifactId>jackson-xc</artifactId>
+        <version>${codehaus-jackson.version}</version>
+      </dependency>
+
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-service</artifactId>

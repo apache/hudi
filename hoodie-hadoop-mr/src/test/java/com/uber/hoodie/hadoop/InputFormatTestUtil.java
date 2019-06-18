@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,7 +20,9 @@ package com.uber.hoodie.hadoop;
 
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTestUtils;
+import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import java.io.File;
 import java.io.FilenameFilter;
@@ -27,8 +31,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroParquetWriter;
@@ -77,6 +83,11 @@ public class InputFormatTestUtil {
     new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".commit").createNewFile();
   }
 
+  public static void deltaCommit(TemporaryFolder basePath, String commitNumber) throws IOException {
+    // create the commit
+    new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".deltacommit").createNewFile();
+  }
+
   public static void setupIncremental(JobConf jobConf, String startCommit,
       int numberOfCommitsToPull) {
     String modePropertyName = String
@@ -105,6 +116,16 @@ public class InputFormatTestUtil {
     return partitionPath;
   }
 
+
+  public static File prepareSimpleParquetDataset(TemporaryFolder basePath, Schema schema,
+      int numberOfFiles, int numberOfRecords, String commitNumber) throws Exception {
+    basePath.create();
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
+    File partitionPath = basePath.newFolder("2016", "05", "01");
+    createSimpleData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
+    return partitionPath;
+  }
+
   public static File prepareNonPartitionedParquetDataset(TemporaryFolder baseDir, Schema schema,
       int numberOfFiles, int numberOfRecords, String commitNumber) throws IOException {
     baseDir.create();
@@ -126,6 +147,31 @@ public class InputFormatTestUtil {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber,
             fileId)) {
           parquetWriter.write(record);
+        }
+      } finally {
+        parquetWriter.close();
+      }
+    }
+  }
+
+  private static void createSimpleData(Schema schema,
+      File partitionPath,  int numberOfFiles, int numberOfRecords, String commitNumber)
+      throws Exception {
+    AvroParquetWriter parquetWriter;
+    for (int i = 0; i < numberOfFiles; i++) {
+      String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i);
+      File dataFile = new File(partitionPath, fileId);
+      parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
+      try {
+        List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
+        String commitTime = HoodieActiveTimeline.createNewCommitTime();
+        Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(schema);
+        for (IndexedRecord record : records) {
+          GenericRecord p = HoodieAvroUtils.rewriteRecord((GenericRecord) record, hoodieFieldsSchema);
+          p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
+          p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
+          p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitNumber);
+          parquetWriter.write(p);
         }
       } finally {
         parquetWriter.close();

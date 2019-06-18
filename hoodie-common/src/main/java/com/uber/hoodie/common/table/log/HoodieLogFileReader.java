@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -329,6 +331,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   /**
    * hasPrev is not idempotent
    */
+  @Override
   public boolean hasPrev() {
     try {
       if (!this.reverseReader) {
@@ -350,6 +353,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * iterate reverse (prev) or forward (next). Doing both in the same instance is not supported
    * WARNING : Every call to prev() should be preceded with hasPrev()
    */
+  @Override
   public HoodieLogBlock prev() throws IOException {
 
     if (!this.reverseReader) {

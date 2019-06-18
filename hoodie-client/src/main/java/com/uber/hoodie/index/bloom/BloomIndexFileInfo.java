@@ -1,19 +1,19 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.index.bloom;
@@ -22,30 +22,30 @@ import com.google.common.base.Objects;
 import java.io.Serializable;
 
 /**
- * Metadata about a given file, useful for index lookup
+ * Metadata about a given file group, useful for index lookup
  */
 public class BloomIndexFileInfo implements Serializable {
 
-  private final String fileName;
+  private final String fileId;
 
   private final String minRecordKey;
 
   private final String maxRecordKey;
 
-  public BloomIndexFileInfo(String fileName, String minRecordKey, String maxRecordKey) {
-    this.fileName = fileName;
+  public BloomIndexFileInfo(String fileId, String minRecordKey, String maxRecordKey) {
+    this.fileId = fileId;
     this.minRecordKey = minRecordKey;
     this.maxRecordKey = maxRecordKey;
   }
 
-  public BloomIndexFileInfo(String fileName) {
-    this.fileName = fileName;
+  public BloomIndexFileInfo(String fileId) {
+    this.fileId = fileId;
     this.minRecordKey = null;
     this.maxRecordKey = null;
   }
 
-  public String getFileName() {
-    return fileName;
+  public String getFileId() {
+    return fileId;
   }
 
   public String getMinRecordKey() {
@@ -77,19 +77,19 @@ public class BloomIndexFileInfo implements Serializable {
     }
 
     BloomIndexFileInfo that = (BloomIndexFileInfo) o;
-    return Objects.equal(that.fileName, fileName) && Objects.equal(that.minRecordKey, minRecordKey)
+    return Objects.equal(that.fileId, fileId) && Objects.equal(that.minRecordKey, minRecordKey)
         && Objects.equal(that.maxRecordKey, maxRecordKey);
 
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(fileName, minRecordKey, maxRecordKey);
+    return Objects.hashCode(fileId, minRecordKey, maxRecordKey);
   }
 
   public String toString() {
     final StringBuilder sb = new StringBuilder("BloomIndexFileInfo {");
-    sb.append(" fileName=").append(fileName);
+    sb.append(" fileId=").append(fileId);
     sb.append(" minRecordKey=").append(minRecordKey);
     sb.append(" maxRecordKey=").append(maxRecordKey);
     sb.append('}');

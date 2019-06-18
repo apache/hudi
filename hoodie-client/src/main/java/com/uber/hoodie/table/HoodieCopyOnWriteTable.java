@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -387,21 +389,13 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    */
   protected void deleteInflightInstant(boolean deleteInstant, HoodieActiveTimeline activeTimeline,
       HoodieInstant instantToBeDeleted) {
+    // Remove marker files always on rollback
+    deleteMarkerDir(instantToBeDeleted.getTimestamp());
+
     // Remove the rolled back inflight commits
     if (deleteInstant) {
-      try {
-        //TODO: Cleanup Hoodie 1.0 rollback to simply call super.cleanFailedWrites with consistency check disabled
-        // and empty WriteStat list.
-        Path markerDir = new Path(metaClient.getMarkerFolderPath(instantToBeDeleted.getTimestamp()));
-        logger.info("Removing marker directory=" + markerDir);
-        if (metaClient.getFs().exists(markerDir)) {
-          metaClient.getFs().delete(markerDir, true);
-        }
-        activeTimeline.deleteInflight(instantToBeDeleted);
-        logger.info("Deleted inflight commit " + instantToBeDeleted);
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
+      activeTimeline.deleteInflight(instantToBeDeleted);
+      logger.info("Deleted inflight commit " + instantToBeDeleted);
     } else {
       logger.warn("Rollback finished without deleting inflight instant file. Instant=" + instantToBeDeleted);
     }
@@ -506,7 +500,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   /**
    * Helper class for a small file's location and its actual size on disk
    */
-  class SmallFile implements Serializable {
+  static class SmallFile implements Serializable {
 
     HoodieRecordLocation location;
     long sizeBytes;

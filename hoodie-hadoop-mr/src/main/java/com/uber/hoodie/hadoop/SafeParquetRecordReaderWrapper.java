@@ -1,25 +1,26 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.hadoop;
 
 import java.io.IOException;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.RecordReader;
 
@@ -31,10 +32,10 @@ import org.apache.hadoop.mapred.RecordReader;
  * another thread, we need to ensure new instance of ArrayWritable is buffered. ParquetReader createKey/Value is unsafe
  * as it gets reused for subsequent fetch. This wrapper makes ParquetReader safe for this use-case.
  */
-public class SafeParquetRecordReaderWrapper implements RecordReader<Void, ArrayWritable> {
+public class SafeParquetRecordReaderWrapper implements RecordReader<NullWritable, ArrayWritable> {
 
   // real Parquet reader to be wrapped
-  private final RecordReader<Void, ArrayWritable> parquetReader;
+  private final RecordReader<NullWritable, ArrayWritable> parquetReader;
 
   // Value Class
   private final Class valueClass;
@@ -43,7 +44,7 @@ public class SafeParquetRecordReaderWrapper implements RecordReader<Void, ArrayW
   private final int numValueFields;
 
 
-  public SafeParquetRecordReaderWrapper(RecordReader<Void, ArrayWritable> parquetReader) {
+  public SafeParquetRecordReaderWrapper(RecordReader<NullWritable, ArrayWritable> parquetReader) {
     this.parquetReader = parquetReader;
     ArrayWritable arrayWritable = parquetReader.createValue();
     this.valueClass = arrayWritable.getValueClass();
@@ -51,12 +52,12 @@ public class SafeParquetRecordReaderWrapper implements RecordReader<Void, ArrayW
   }
 
   @Override
-  public boolean next(Void key, ArrayWritable value) throws IOException {
+  public boolean next(NullWritable key, ArrayWritable value) throws IOException {
     return parquetReader.next(key, value);
   }
 
   @Override
-  public Void createKey() {
+  public NullWritable createKey() {
     return parquetReader.createKey();
   }
 

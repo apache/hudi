@@ -1,19 +1,19 @@
 /*
- *  Copyright (c) 2017 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.hadoop.realtime;
@@ -22,68 +22,50 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieAvroUtils;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 
 class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader implements
-    RecordReader<Void, ArrayWritable> {
+    RecordReader<NullWritable, ArrayWritable> {
 
-  protected final RecordReader<Void, ArrayWritable> parquetReader;
-  private final HashMap<String, ArrayWritable> deltaRecordMap;
+  protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
+  private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
 
   public RealtimeCompactedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
-      RecordReader<Void, ArrayWritable> realReader) throws IOException {
+      RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
-    this.deltaRecordMap = new HashMap<>();
-    readAndCompactLog();
+    this.deltaRecordMap = getMergedLogRecordScanner().getRecords();
   }
 
   /**
    * Goes through the log files and populates a map with latest version of each key logged, since
    * the base split was written.
    */
-  private void readAndCompactLog() throws IOException {
-    HoodieMergedLogRecordScanner compactedLogRecordScanner = new HoodieMergedLogRecordScanner(
+  private HoodieMergedLogRecordScanner getMergedLogRecordScanner() throws IOException {
+    // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
+    // but can return records for completed commits > the commit we are trying to read (if using
+    // readCommit() API)
+    return new HoodieMergedLogRecordScanner(
         FSUtils.getFs(split.getPath().toString(), jobConf), split.getBasePath(),
-        split.getDeltaFilePaths(), getReaderSchema(), split.getMaxCommitTime(), getMaxCompactionMemoryInBytes(),
+        split.getDeltaFilePaths(), usesCustomPayload ? getWriterSchema() : getReaderSchema(), split.getMaxCommitTime(),
+        getMaxCompactionMemoryInBytes(),
         Boolean.valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
             DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
         jobConf.get(SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH));
-    // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
-    // but can return records for completed commits > the commit we are trying to read (if using
-    // readCommit() API)
-    for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : compactedLogRecordScanner) {
-      Optional<IndexedRecord> recordOptional = hoodieRecord.getData().getInsertValue(getReaderSchema());
-      ArrayWritable aWritable;
-      String key = hoodieRecord.getRecordKey();
-      if (recordOptional.isPresent()) {
-        GenericRecord rec = (GenericRecord) recordOptional.get();
-        // we assume, a later safe record in the log, is newer than what we have in the map &
-        // replace it.
-        // TODO : handle deletes here
-        aWritable = (ArrayWritable) avroToArrayWritable(rec, getWriterSchema());
-        deltaRecordMap.put(key, aWritable);
-      } else {
-        aWritable = new ArrayWritable(Writable.class, new Writable[0]);
-        deltaRecordMap.put(key, aWritable);
-      }
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Log record : " + arrayWritableToString(aWritable));
-      }
-    }
   }
 
   @Override
-  public boolean next(Void aVoid, ArrayWritable arrayWritable) throws IOException {
+  public boolean next(NullWritable aVoid, ArrayWritable arrayWritable) throws IOException {
     // Call the underlying parquetReader.next - which may replace the passed in ArrayWritable
     // with a new block of values
     boolean result = this.parquetReader.next(aVoid, arrayWritable);
@@ -96,17 +78,32 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
       // return from delta records map if we have some match.
       String key = arrayWritable.get()[HoodieRealtimeInputFormat.HOODIE_RECORD_KEY_COL_POS]
           .toString();
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("key %s, base values: %s, log values: %s", key,
-            arrayWritableToString(arrayWritable), arrayWritableToString(deltaRecordMap.get(key))));
-      }
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
-        Writable[] replaceValue = deltaRecordMap.get(key).get();
-        if (replaceValue.length < 1) {
-          // This record has been deleted, move to the next record
+        Optional<GenericRecord> rec;
+        if (usesCustomPayload) {
+          rec = deltaRecordMap.get(key).getData().getInsertValue(getWriterSchema());
+        } else {
+          rec = deltaRecordMap.get(key).getData().getInsertValue(getReaderSchema());
+        }
+        if (!rec.isPresent()) {
+          // If the record is not present, this is a delete record using an empty payload so skip this base record
+          // and move to the next record
           return next(aVoid, arrayWritable);
+        }
+        GenericRecord recordToReturn = rec.get();
+        if (usesCustomPayload) {
+          // If using a custom payload, return only the projection fields
+          recordToReturn = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(rec.get(), getReaderSchema());
+        }
+        // we assume, a later safe record in the log, is newer than what we have in the map &
+        // replace it.
+        ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(recordToReturn, getWriterSchema());
+        Writable[] replaceValue = aWritable.get();
+        if (LOG.isDebugEnabled()) {
+          LOG.debug(String.format("key %s, base values: %s, log values: %s", key,
+              arrayWritableToString(arrayWritable), arrayWritableToString(aWritable)));
         }
         Writable[] originalValue = arrayWritable.get();
         try {
@@ -115,7 +112,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
         } catch (RuntimeException re) {
           LOG.error("Got exception when doing array copy", re);
           LOG.error("Base record :" + arrayWritableToString(arrayWritable));
-          LOG.error("Log record :" + arrayWritableToString(deltaRecordMap.get(key)));
+          LOG.error("Log record :" + arrayWritableToString(aWritable));
           throw re;
         }
       }
@@ -124,7 +121,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
   }
 
   @Override
-  public Void createKey() {
+  public NullWritable createKey() {
     return parquetReader.createKey();
   }
 

@@ -1,17 +1,19 @@
 /*
- *  Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *           http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.uber.hoodie.common.table.view;
@@ -349,7 +351,7 @@ public class HoodieTableFileSystemViewTest {
     assertEquals("Log File Order check", fileName2, logFiles.get(2).getFileName());
     assertEquals("Log File Order check", fileName1, logFiles.get(3).getFileName());
 
-    fileSliceList = rtView.getLatestFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5)
+    fileSliceList = rtView.getLatestFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5, true)
         .collect(Collectors.toList());
     assertEquals("Expect only one file-id", 1, fileSliceList.size());
     fileSlice = fileSliceList.get(0);
@@ -670,7 +672,7 @@ public class HoodieTableFileSystemViewTest {
     assertTrue(filenames.contains(FSUtils.makeDataFileName(commitTime4, TEST_WRITE_TOKEN, fileId3)));
 
     filenames = Sets.newHashSet();
-    List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4)
+    List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4, true)
         .map(slice -> slice.getLogFiles()).flatMap(logFileList -> logFileList)
         .collect(Collectors.toList());
     assertEquals(logFilesList.size(), 4);
@@ -704,7 +706,7 @@ public class HoodieTableFileSystemViewTest {
     }
 
     logFilesList =
-        rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime3).map(slice -> slice.getLogFiles())
+        rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime3, true).map(slice -> slice.getLogFiles())
             .flatMap(logFileList -> logFileList).collect(Collectors.toList());
     assertEquals(logFilesList.size(), 1);
     assertTrue(logFilesList.get(0).getFileName()
@@ -1133,7 +1135,7 @@ public class HoodieTableFileSystemViewTest {
       assertEquals("Log File Order check", fileName3, logFiles.get(1).getFileName());
       assertEquals("Log File Order check", fileName1, logFiles.get(2).getFileName());
 
-      fileSliceList = rtView.getLatestFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5)
+      fileSliceList = rtView.getLatestFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5, true)
           .collect(Collectors.toList());
       assertEquals("Expect only one file-id", 1, fileSliceList.size());
       fileSlice = fileSliceList.get(0);
@@ -1145,6 +1147,11 @@ public class HoodieTableFileSystemViewTest {
       assertEquals("Log files must include only those after compaction request", 2, logFiles.size());
       assertEquals("Log File Order check", fileName4, logFiles.get(0).getFileName());
       assertEquals("Log File Order check", fileName3, logFiles.get(1).getFileName());
+
+      // Check getLatestFileSlicesBeforeOrOn excluding fileIds in pending compaction
+      fileSliceList = rtView.getLatestFileSlicesBeforeOrOn(partitionPath, deltaInstantTime5, false)
+          .collect(Collectors.toList());
+      assertEquals("Expect empty list as file-id is in pending compaction", 0, fileSliceList.size());
     });
 
     Assert.assertEquals(3, fsView.getPendingCompactionOperations().count());

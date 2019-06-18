@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +26,7 @@ import java.io.IOException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -212,9 +215,9 @@ public class HoodieInputFormatTest {
     int totalCount = 0;
     InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
     for (InputSplit split : splits) {
-      RecordReader<Void, ArrayWritable> recordReader = inputFormat
+      RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat
           .getRecordReader(split, jobConf, null);
-      Void key = recordReader.createKey();
+      NullWritable key = recordReader.createKey();
       ArrayWritable writable = recordReader.createValue();
 
       while (recordReader.next(key, writable)) {

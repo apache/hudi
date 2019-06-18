@@ -1,24 +1,28 @@
 /*
- *  Copyright (c) 2018 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *           http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- *
  */
 
 package com.uber.hoodie.index.bloom;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
 import com.uber.hoodie.common.HoodieClientTestUtils;
@@ -32,16 +36,17 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
-
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
 import org.apache.avro.Schema;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
-
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -154,20 +159,20 @@ public class TestHoodieGlobalBloomIndex {
 
     Map<String, BloomIndexFileInfo> filesMap = toFileMap(filesList);
     // key ranges checks
-    assertNull(filesMap.get("2016/04/01/2_0_20160401010101.parquet").getMaxRecordKey());
-    assertNull(filesMap.get("2016/04/01/2_0_20160401010101.parquet").getMinRecordKey());
-    assertFalse(filesMap.get("2015/03/12/1_0_20150312101010.parquet").hasKeyRanges());
-    assertNotNull(filesMap.get("2015/03/12/3_0_20150312101010.parquet").getMaxRecordKey());
-    assertNotNull(filesMap.get("2015/03/12/3_0_20150312101010.parquet").getMinRecordKey());
-    assertTrue(filesMap.get("2015/03/12/3_0_20150312101010.parquet").hasKeyRanges());
+    assertNull(filesMap.get("2016/04/01/2").getMaxRecordKey());
+    assertNull(filesMap.get("2016/04/01/2").getMinRecordKey());
+    assertFalse(filesMap.get("2015/03/12/1").hasKeyRanges());
+    assertNotNull(filesMap.get("2015/03/12/3").getMaxRecordKey());
+    assertNotNull(filesMap.get("2015/03/12/3").getMinRecordKey());
+    assertTrue(filesMap.get("2015/03/12/3").hasKeyRanges());
 
     Map<String, BloomIndexFileInfo> expected = new HashMap<>();
-    expected.put("2016/04/01/2_0_20160401010101.parquet", new BloomIndexFileInfo("2_0_20160401010101.parquet"));
-    expected.put("2015/03/12/1_0_20150312101010.parquet", new BloomIndexFileInfo("1_0_20150312101010.parquet"));
-    expected.put("2015/03/12/3_0_20150312101010.parquet",
-        new BloomIndexFileInfo("3_0_20150312101010.parquet", "000", "000"));
-    expected.put("2015/03/12/4_0_20150312101010.parquet",
-        new BloomIndexFileInfo("4_0_20150312101010.parquet", "001", "003"));
+    expected.put("2016/04/01/2", new BloomIndexFileInfo("2"));
+    expected.put("2015/03/12/1", new BloomIndexFileInfo("1"));
+    expected.put("2015/03/12/3",
+        new BloomIndexFileInfo("3", "000", "000"));
+    expected.put("2015/03/12/4",
+        new BloomIndexFileInfo("4", "001", "003"));
 
     assertEquals(expected, filesMap);
   }
@@ -300,7 +305,7 @@ public class TestHoodieGlobalBloomIndex {
   private Map<String, BloomIndexFileInfo> toFileMap(List<Tuple2<String, BloomIndexFileInfo>> filesList) {
     Map<String, BloomIndexFileInfo> filesMap = new HashMap<>();
     for (Tuple2<String, BloomIndexFileInfo> t : filesList) {
-      filesMap.put(t._1() + "/" + t._2().getFileName(), t._2());
+      filesMap.put(t._1() + "/" + t._2().getFileId(), t._2());
     }
     return filesMap;
   }

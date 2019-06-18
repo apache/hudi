@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -87,12 +89,12 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    */
   private void testReadFilterExist(HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn) throws Exception {
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getHoodieWriteClient(config);
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
     JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
 
-    HoodieReadClient readClient = new HoodieReadClient(jsc, config.getBasePath());
+    HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());
     JavaRDD<HoodieRecord> filteredRDD = readClient.filterExists(recordsRDD);
 
     // Should not find any files
@@ -104,7 +106,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
     // Verify there are no errors
     assertNoWriteErrors(statuses);
 
-    readClient = new HoodieReadClient(jsc, config.getBasePath());
+    readClient = getHoodieReadClient(config.getBasePath());
     filteredRDD = readClient.filterExists(recordsRDD);
     List<HoodieRecord> result = filteredRDD.collect();
     // Check results
@@ -164,7 +166,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> updateFn,
       boolean isPrepped)
       throws Exception {
-    HoodieWriteClient client = new HoodieWriteClient(jsc, hoodieWriteConfig);
+    HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
     //Write 1 (only inserts)
     String newCommitTime = "001";
     String initCommitTime = "000";
@@ -180,7 +182,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
                 .map(record -> new HoodieRecord(record.getKey(), null))
                 .collect(Collectors.toList()));
     // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieReadClient readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
+    HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
     List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
 
@@ -199,7 +201,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
                 .map(record -> new HoodieRecord(record.getKey(), null))
                 .collect(Collectors.toList()));
     // Index should be able to locate all updates in correct locations.
-    readClient = new HoodieReadClient(jsc, hoodieWriteConfig.getBasePath());
+    readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
     taggedRecords = readClient.tagLocation(recordRDD).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
   }

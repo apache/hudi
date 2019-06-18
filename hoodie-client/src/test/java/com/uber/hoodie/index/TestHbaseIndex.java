@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -82,6 +84,7 @@ public class TestHbaseIndex {
   private static String tableName = "test_table";
   private String basePath = null;
   private transient FileSystem fs;
+  private HoodieWriteClient writeClient;
 
   public TestHbaseIndex() throws Exception {
   }
@@ -111,6 +114,11 @@ public class TestHbaseIndex {
 
   @After
   public void clear() throws Exception {
+    if (null != writeClient) {
+      writeClient.close();
+      writeClient = null;
+    }
+
     if (basePath != null) {
       new File(basePath).delete();
     }
@@ -126,6 +134,14 @@ public class TestHbaseIndex {
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
   }
 
+  private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
+    if (null != writeClient) {
+      writeClient.close();
+    }
+    writeClient = new HoodieWriteClient(jsc, config);
+    return writeClient;
+  }
+
   @Test
   public void testSimpleTagLocationAndUpdate() throws Exception {
 
@@ -137,7 +153,7 @@ public class TestHbaseIndex {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
     writeClient.startCommit();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
@@ -164,7 +180,7 @@ public class TestHbaseIndex {
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 200);
     assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 200);
     assertTrue(javaRDD.filter(
-        record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getCommitTime()
+        record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getInstantTime()
             .equals(newCommitTime))).distinct().count() == 200);
 
   }
@@ -176,7 +192,7 @@ public class TestHbaseIndex {
     // Load to memory
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
 
     String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
@@ -229,7 +245,7 @@ public class TestHbaseIndex {
     // only for test, set the hbaseConnection to mocked object
     index.setHbaseConnection(hbaseConnection);
 
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();
@@ -256,7 +272,7 @@ public class TestHbaseIndex {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    HoodieWriteClient writeClient = getWriteClient(config);
 
     // start a commit and generate test data
     String newCommitTime = writeClient.startCommit();

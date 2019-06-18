@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016 Uber Technologies, Inc. (hoodie-dev-group@uber.com)
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *          http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -79,6 +81,19 @@ public interface HoodieLogFormat {
      * @return the path to this {@link HoodieLogFormat}
      */
     HoodieLogFile getLogFile();
+
+    /**
+     * Read log file in reverse order and check if prev block is present
+     * @return
+     */
+    public boolean hasPrev();
+
+    /**
+     * Read log file in reverse order and return prev block if present
+     * @return
+     * @throws IOException
+     */
+    public HoodieLogBlock prev() throws IOException;
   }
 
 
@@ -242,6 +257,13 @@ public interface HoodieLogFormat {
   static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema)
       throws IOException {
     return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, false);
+  }
+
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean
+      readBlockLazily, boolean reverseReader)
+      throws IOException {
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE,
+        readBlockLazily, reverseReader);
   }
 
   /**

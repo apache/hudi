@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<license-lookup xmlns="https://source.jasig.org/schemas/maven-notice-plugin/license-lookup" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://source.jasig.org/schemas/maven-notice-plugin/license-lookup https://source.jasig.org/schemas/maven-notice-plugin/license-lookup/license-lookup-v1.0.xsd">
+    <artifact>
+        <groupId>asm</groupId>
+        <artifactId>asm-commons</artifactId>
+        <license>3-Clause BSD License</license>
+    </artifact>
+    <artifact>
+        <groupId>asm</groupId>
+        <artifactId>asm</artifactId>
+        <license>3-Clause BSD License</license>
+    </artifact>
+    <artifact>
+        <groupId>asm</groupId>
+        <artifactId>asm-tree</artifactId>
+        <license>3-Clause BSD License</license>
+    </artifact>
+    <artifact>
+        <groupId>commons-beanutils</groupId>
+        <artifactId>commons-beanutils</artifactId>
+        <license>Apache License</license>
+    </artifact>
+    <artifact>
+        <groupId>javax.servlet</groupId>
+        <artifactId>servlet-api</artifactId>
+        <license>CDDL</license>
+    </artifact>
+  <artifact>
+    <groupId>javax.servlet</groupId>
+    <artifactId>jsp-api</artifactId>
+    <license>CDDL</license>
+  </artifact>
+  <artifact>
+    <groupId>javax.xml.stream</groupId>
+    <artifactId>stax-api</artifactId>
+    <license>CDDL</license>
+  </artifact>
+  <artifact>
+      <groupId>javax.servlet.jsp</groupId>
+      <artifactId>jsp-api</artifactId>
+      <license>CDDL</license>
+  </artifact>
+  <artifact>
+      <groupId>javax.transaction</groupId>
+      <artifactId>jta</artifactId>
+      <license>OWN LICENSE (See http://download.oracle.com/otndocs/jcp/jta-1.1-classes-oth-JSpec/jta-1.1-classes-oth-JSpec-license.html)</license>
+  </artifact>
+  <artifact>
+    <groupId>javax.transaction</groupId>
+    <artifactId>transaction-api</artifactId>
+    <license>OWN LICENSE (See http://download.oracle.com/otndocs/jcp/jta-1.1-classes-oth-JSpec/jta-1.1-classes-oth-JSpec-license.html)</license>
+  </artifact>
+    <artifact>
+        <groupId>jdk.tools</groupId>
+        <artifactId>jdk.tools</artifactId>
+        <license>Oracle Binary Code License Agreement for the Java SE</license>
+    </artifact>
+    <artifact>
+        <groupId>org.apache.zookeeper</groupId>
+        <artifactId>zookeeper</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>org.codehaus.jettison</groupId>
+        <artifactId>jettison</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>dnl.utils</groupId>
+        <artifactId>textutils</artifactId>
+        <license>3-Clause BSD License</license>
+    </artifact>
+    <artifact>
+        <groupId>io.confluent</groupId>
+        <artifactId>common-config</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>io.confluent</groupId>
+        <artifactId>common-utils</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-avro-serializer</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-schema-registry-client</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>org.pentaho</groupId>
+        <artifactId>pentaho-aggdesigner-algorithm</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>oro</groupId>
+        <artifactId>oro</artifactId>
+        <license>Apache License, Version 2.0</license>
+    </artifact>
+    <artifact>
+        <groupId>org.antlr</groupId>
+        <artifactId>antlr-runtime</artifactId>
+        <license>BSD</license>
+    </artifact>
+  <artifact>
+    <groupId>xerces</groupId>
+    <artifactId>xercesImpl</artifactId>
+    <license>Apache License, Version 1.1</license>
+  </artifact>
+</license-lookup>
