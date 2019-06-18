@@ -208,12 +208,6 @@
     </dependency>
 
     <dependency>
-        <groupId>org.htrace</groupId>
-        <artifactId>htrace-core</artifactId>
-        <version>3.0.4</version>
-    </dependency>
-
-    <dependency>
         <groupId>org.apache.hbase</groupId>
         <artifactId>hbase-testing-util</artifactId>
         <version>1.2.3</version>
