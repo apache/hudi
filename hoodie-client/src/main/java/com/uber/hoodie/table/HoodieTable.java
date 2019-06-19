@@ -341,7 +341,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
           .filter(p -> p.endsWith(".parquet")).collect(Collectors.toList());
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
-      logger.warn("InValid data paths=" + invalidDataPaths);
+      if (!invalidDataPaths.isEmpty()) {
+        logger.info("Removing duplicate data files created due to spark retries before committing. Paths="
+            + invalidDataPaths);
+      }
 
       Map<String, List<Pair<String, String>>> groupByPartition = invalidDataPaths.stream()
           .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp))
