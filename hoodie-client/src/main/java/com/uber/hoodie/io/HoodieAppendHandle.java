@@ -18,7 +18,7 @@
 
 package com.uber.hoodie.io;
 
-import com.beust.jcommander.internal.Maps;
+import com.google.common.collect.Maps;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.FileSlice;
 import com.uber.hoodie.common.model.HoodieDeltaWriteStat;

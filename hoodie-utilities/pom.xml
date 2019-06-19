@@ -64,17 +64,6 @@
   </repositories>
 
   <dependencies>
-    <dependency>
-      <groupId>io.javalin</groupId>
-      <artifactId>javalin</artifactId>
-      <version>2.4.0</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
 
     <dependency>
       <groupId>io.dropwizard.metrics</groupId>
@@ -123,20 +112,16 @@
     </dependency>
 
     <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-server</artifactId>
-      <version>7.6.0.v20120127</version>
-    </dependency>
-
-    <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
@@ -165,6 +150,10 @@
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>servlet-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty.orbit</groupId>
+          <artifactId>javax.servlet</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -210,19 +199,6 @@
     </dependency>
 
     <dependency>
-      <groupId>commons-codec</groupId>
-      <artifactId>commons-codec</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-pool</groupId>
-      <artifactId>commons-pool</artifactId>
-    </dependency>
-
-    <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
     </dependency>
@@ -230,10 +206,6 @@
     <dependency>
       <groupId>log4j</groupId>
       <artifactId>log4j</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
     </dependency>
 
     <dependency>
@@ -275,12 +247,6 @@
     </dependency>
 
     <dependency>
-      <groupId>com.yammer.metrics</groupId>
-      <artifactId>metrics-core</artifactId>
-      <version>2.2.0</version>
-    </dependency>
-
-    <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-streaming_2.11</artifactId>
       <version>${spark.version}</version>
@@ -291,6 +257,14 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-streaming-kafka-0-8_2.11</artifactId>
       <version>${spark.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.databricks</groupId>
+      <artifactId>spark-avro_2.11</artifactId>
+      <version>4.0.0</version>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Used for SQL templating -->
@@ -314,7 +288,6 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro-mapred</artifactId>
-      <version>1.7.7</version>
     </dependency>
 
     <dependency>

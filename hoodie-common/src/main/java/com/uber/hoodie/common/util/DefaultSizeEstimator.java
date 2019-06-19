@@ -18,8 +18,6 @@
 
 package com.uber.hoodie.common.util;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
-
 /**
  * Default implementation of size-estimator that uses Twitter's ObjectSizeCalculator
  * @param <T>

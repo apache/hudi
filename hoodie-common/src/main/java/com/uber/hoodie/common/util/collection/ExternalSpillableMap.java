@@ -18,7 +18,7 @@
 
 package com.uber.hoodie.common.util.collection;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
+import com.uber.hoodie.common.util.ObjectSizeCalculator;
 import com.uber.hoodie.common.util.SizeEstimator;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;

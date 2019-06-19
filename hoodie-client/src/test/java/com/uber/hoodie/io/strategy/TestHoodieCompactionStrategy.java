@@ -21,8 +21,8 @@ package com.uber.hoodie.io.strategy;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.beust.jcommander.internal.Lists;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -248,7 +248,7 @@ public class TestHoodieCompactionStrategy {
 
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
       Map<Long, List<Long>> sizesMap, Map<Long, String> keyToPartitionMap) {
-    List<HoodieCompactionOperation> operations = Lists.newArrayList(sizesMap.size());
+    List<HoodieCompactionOperation> operations = new ArrayList<>();
 
     sizesMap.forEach((k, v) -> {
       HoodieDataFile df = TestHoodieDataFile.newDataFile(k);

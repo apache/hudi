@@ -18,7 +18,6 @@
 
 package com.uber.hoodie.common.util;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import org.apache.avro.Schema;

@@ -30,7 +30,6 @@
     <spring.shell.version>1.2.0.RELEASE</spring.shell.version>
     <jar.mainclass>org.springframework.shell.Bootstrap</jar.mainclass>
     <log4j.version>1.2.17</log4j.version>
-    <junit.version>4.10</junit.version>
     <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
   </properties>
 
@@ -146,11 +145,6 @@
       <version>${spring.shell.version}</version>
     </dependency>
     <dependency>
-      <groupId>de.vandermeer</groupId>
-      <artifactId>asciitable</artifactId>
-      <version>0.2.5</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_2.11</artifactId>
     </dependency>
@@ -202,12 +196,6 @@
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-common</artifactId>
       <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit-dep</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
     </dependency>
 
     <dependency>
