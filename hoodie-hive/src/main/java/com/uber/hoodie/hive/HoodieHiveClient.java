@@ -57,13 +57,14 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hive.jdbc.HiveDriver;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 @SuppressWarnings("ConstantConditions")
 public class HoodieHiveClient {
@@ -80,7 +81,7 @@ public class HoodieHiveClient {
     }
   }
 
-  private static Logger LOG = LoggerFactory.getLogger(HoodieHiveClient.class);
+  private static Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final HoodieTableMetaClient metaClient;
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;

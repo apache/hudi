@@ -41,6 +41,8 @@ import org.apache.hadoop.hive.metastore.TUGIBasedProcessor;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
 import org.apache.hive.service.server.HiveServer2;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TServer;
@@ -52,13 +54,10 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class HiveTestService {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HiveTestService.class);
-
+  private static Logger LOG = LogManager.getLogger(HiveTestService.class);
   private static final int CONNECTION_TIMEOUT = 30000;
 
   /**

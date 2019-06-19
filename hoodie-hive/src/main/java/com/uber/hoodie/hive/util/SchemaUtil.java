@@ -36,6 +36,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
@@ -43,15 +45,13 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Schema Utilities
  */
 public class SchemaUtil {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SchemaUtil.class);
+  private static Logger LOG = LogManager.getLogger(SchemaUtil.class);
 
   /**
    * Get the schema difference between the storage schema and hive table schema
