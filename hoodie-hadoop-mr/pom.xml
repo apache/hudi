@@ -89,10 +89,6 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-    <dependency>
       <groupId>com.twitter.common</groupId>
       <artifactId>objectsize</artifactId>
       <version>0.0.12</version>
