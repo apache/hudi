@@ -246,9 +246,16 @@ public class HoodieCommitArchiveLog {
       log.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
-        records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
-        if (records.size() >= this.config.getCommitArchivalBatchSize()) {
-          writeToFile(wrapperSchema, records);
+        try {
+          records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
+          if (records.size() >= this.config.getCommitArchivalBatchSize()) {
+            writeToFile(wrapperSchema, records);
+          }
+        } catch (Exception e) {
+          log.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
+          if (this.config.isFailOnTimelineArchivingEnabled()) {
+            throw e;
+          }
         }
       }
       writeToFile(wrapperSchema, records);
