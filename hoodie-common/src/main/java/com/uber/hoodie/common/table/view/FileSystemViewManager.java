@@ -65,7 +65,7 @@ public class FileSystemViewManager {
 
   public FileSystemViewManager(SerializableConfiguration conf, FileSystemViewStorageConfig viewStorageConfig,
       Function2<String, FileSystemViewStorageConfig, SyncableFileSystemView> viewCreator) {
-    this.conf = conf;
+    this.conf = new SerializableConfiguration(conf);
     this.viewStorageConfig = viewStorageConfig;
     this.globalViewMap = new ConcurrentHashMap<>();
     this.viewCreator = viewCreator;
