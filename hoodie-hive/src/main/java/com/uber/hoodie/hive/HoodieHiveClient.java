@@ -285,6 +285,11 @@ public class HoodieHiveClient {
       while (result.next()) {
         String columnName = result.getString(4);
         String columnType = result.getString(6);
+        if ("DECIMAL".equals(columnType)) {
+          int columnSize = result.getInt("COLUMN_SIZE");
+          int decimalDigits = result.getInt("DECIMAL_DIGITS");
+          columnType += String.format("(%s,%s)", columnSize, decimalDigits);
+        }
         schema.put(columnName, columnType);
       }
       return schema;
