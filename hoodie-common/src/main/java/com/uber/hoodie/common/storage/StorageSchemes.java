@@ -28,6 +28,8 @@ public enum StorageSchemes {
   FILE("file", false),
   // Hadoop File System
   HDFS("hdfs", true),
+  // Mapr File System
+  MAPRFS("maprfs", true),
   // Apache Ignite FS
   IGNITE("igfs", true),
   // AWS S3
