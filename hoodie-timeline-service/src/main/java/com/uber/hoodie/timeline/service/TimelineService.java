@@ -50,11 +50,16 @@ public class TimelineService {
     return serverPort;
   }
 
-  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this.conf = FSUtils.prepareHadoopConf(new Configuration());
+  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager,
+      Configuration conf) throws IOException {
+    this.conf = FSUtils.prepareHadoopConf(conf);
     this.fs = FileSystem.get(conf);
     this.serverPort = serverPort;
     this.fsViewsManager = globalFileSystemViewManager;
+  }
+
+  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager) throws IOException {
+    this(serverPort, globalFileSystemViewManager, new Configuration());
   }
 
   public TimelineService(Config config) throws IOException {

@@ -29,11 +29,15 @@ public class SerializableConfiguration implements Serializable {
   private transient Configuration configuration;
 
   public SerializableConfiguration(Configuration configuration) {
-    this.configuration = configuration;
+    this.configuration = new Configuration(configuration);
+  }
+
+  public SerializableConfiguration(SerializableConfiguration configuration) {
+    this.configuration = configuration.get();
   }
 
   public Configuration get() {
-    return configuration;
+    return new Configuration(configuration);
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {
