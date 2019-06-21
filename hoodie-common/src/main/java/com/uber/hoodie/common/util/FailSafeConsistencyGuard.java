@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.common.util;
 
+import com.google.common.base.Preconditions;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,15 +41,12 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   private static final transient Logger log = LogManager.getLogger(FailSafeConsistencyGuard.class);
 
   private final FileSystem fs;
-  private final int maxAttempts;
-  private final long initialDelayMs;
-  private final long maxDelayMs;
+  private final ConsistencyGuardConfig consistencyGuardConfig;
 
-  public FailSafeConsistencyGuard(FileSystem fs, int maxAttempts, long initalDelayMs, long maxDelayMs) {
+  public FailSafeConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) {
     this.fs = fs;
-    this.maxAttempts = maxAttempts;
-    this.initialDelayMs = initalDelayMs;
-    this.maxDelayMs = maxDelayMs;
+    this.consistencyGuardConfig = consistencyGuardConfig;
+    Preconditions.checkArgument(consistencyGuardConfig.isConsistencyCheckEnabled());
   }
 
   @Override
@@ -121,13 +119,13 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    */
   private boolean checkFileVisibility(Path filePath, FileVisibility visibility) throws IOException {
     try {
-      FileStatus[] status = fs.listStatus(filePath);
+      FileStatus status = fs.getFileStatus(filePath);
       switch (visibility) {
         case APPEAR:
-          return status.length != 0;
+          return status != null;
         case DISAPPEAR:
         default:
-          return status.length == 0;
+          return status == null;
       }
     } catch (FileNotFoundException nfe) {
       switch (visibility) {
@@ -147,9 +145,9 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    * @throws TimeoutException
    */
   private void waitForFileVisibility(Path filePath, FileVisibility visibility) throws TimeoutException {
-    long waitMs = initialDelayMs;
+    long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
-    while (attempt < maxAttempts) {
+    while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       try {
         if (checkFileVisibility(filePath, visibility)) {
           return;
@@ -160,7 +158,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
       sleepSafe(waitMs);
       waitMs = waitMs * 2; // double check interval every attempt
-      waitMs = waitMs > maxDelayMs ? maxDelayMs : waitMs;
+      waitMs = Math.min(waitMs, consistencyGuardConfig.getMaxConsistencyCheckIntervalMs());
       attempt++;
     }
     throw new TimeoutException("Timed-out waiting for the file to " + visibility.name());
@@ -173,17 +171,17 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    * @throws TimeoutException when retries are exhausted
    */
   private void retryTillSuccess(Function<Integer, Boolean> predicate, String timedOutMessage) throws TimeoutException {
-    long waitMs = initialDelayMs;
+    long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
-    log.warn("Max Attempts=" + maxAttempts);
-    while (attempt < maxAttempts) {
+    log.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
+    while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       boolean success = predicate.apply(attempt);
       if (success) {
         return;
       }
       sleepSafe(waitMs);
       waitMs = waitMs * 2; // double check interval every attempt
-      waitMs = waitMs > maxDelayMs ? maxDelayMs : waitMs;
+      waitMs = Math.min(waitMs, consistencyGuardConfig.getMaxConsistencyCheckIntervalMs());
       attempt++;
     }
     throw new TimeoutException(timedOutMessage);

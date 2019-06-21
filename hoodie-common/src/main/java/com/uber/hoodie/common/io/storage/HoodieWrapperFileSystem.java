@@ -22,6 +22,7 @@ import com.uber.hoodie.common.storage.StorageSchemes;
 import com.uber.hoodie.common.util.ConsistencyGuard;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.NoOpConsistencyGuard;
+import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.net.URI;
@@ -236,7 +237,28 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
-    return fileSystem.rename(convertToDefaultPath(src), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(src));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for " + src + " to appear", e);
+    }
+
+    boolean success = fileSystem.rename(convertToDefaultPath(src), convertToDefaultPath(dst));
+
+    if (success) {
+      try {
+        consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+      } catch (TimeoutException e) {
+        throw new HoodieException("Timed out waiting for " + dst + " to appear", e);
+      }
+
+      try {
+        consistencyGuard.waitTillFileDisappears(convertToDefaultPath(src));
+      } catch (TimeoutException e) {
+        throw new HoodieException("Timed out waiting for " + src + " to disappear", e);
+      }
+    }
+    return success;
   }
 
   @Override
@@ -247,7 +269,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
       try {
         consistencyGuard.waitTillFileDisappears(f);
       } catch (TimeoutException e) {
-        return false;
+        throw new HoodieException("Timed out waiting for " + f + " to disappear", e);
       }
     }
     return success;
@@ -270,7 +292,15 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
-    return fileSystem.mkdirs(convertToDefaultPath(f), permission);
+    boolean success = fileSystem.mkdirs(convertToDefaultPath(f), permission);
+    if (success) {
+      try {
+        consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+      } catch (TimeoutException e) {
+        throw new HoodieException("Timed out waiting for directory " + f + " to appear", e);
+      }
+    }
+    return success;
   }
 
   @Override
@@ -353,31 +383,39 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream createNonRecursive(Path f, boolean overwrite, int bufferSize,
       short replication, long blockSize, Progressable progress) throws IOException {
-    return fileSystem
-        .createNonRecursive(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize,
-            progress);
+    Path p = convertToDefaultPath(f);
+    return wrapOutputStream(p, fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize,
+        progress));
   }
 
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite,
       int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
-    return fileSystem
-        .createNonRecursive(convertToDefaultPath(f), permission, overwrite, bufferSize, replication,
-            blockSize, progress);
+    Path p = convertToDefaultPath(f);
+    return wrapOutputStream(p, fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication,
+        blockSize, progress));
   }
 
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission,
       EnumSet<CreateFlag> flags, int bufferSize, short replication, long blockSize,
       Progressable progress) throws IOException {
-    return fileSystem
-        .createNonRecursive(convertToDefaultPath(f), permission, flags, bufferSize, replication,
-            blockSize, progress);
+    Path p = convertToDefaultPath(f);
+    return wrapOutputStream(p, fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication,
+        blockSize, progress));
   }
 
   @Override
   public boolean createNewFile(Path f) throws IOException {
-    return fileSystem.createNewFile(convertToDefaultPath(f));
+    boolean newFile = fileSystem.createNewFile(convertToDefaultPath(f));
+    if (newFile) {
+      try {
+        consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+      } catch (TimeoutException e) {
+        throw new HoodieException("Timed out waiting for " + f + " to appear", e);
+      }
+    }
+    return newFile;
   }
 
   @Override
@@ -394,6 +432,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public void concat(Path trg, Path[] psrcs) throws IOException {
     Path[] psrcsNew = convertDefaults(psrcs);
     fileSystem.concat(convertToDefaultPath(trg), psrcsNew);
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(trg));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for " + trg + " to appear", e);
+    }
   }
 
   @Override
@@ -408,7 +451,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean delete(Path f) throws IOException {
-    return fileSystem.delete(convertToDefaultPath(f));
+    return delete(f, true);
   }
 
   @Override
@@ -493,62 +536,100 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f) throws IOException {
-    return fileSystem.mkdirs(convertToDefaultPath(f));
+    boolean success = fileSystem.mkdirs(convertToDefaultPath(f));
+    if (success) {
+      try {
+        consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+      } catch (TimeoutException e) {
+        throw new HoodieException("Timed out waiting for directory " + f + " to appear", e);
+      }
+    }
+    return success;
   }
 
   @Override
   public void copyFromLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.copyFromLocalFile(convertToDefaultPath(src), convertToDefaultPath(dst));
+    fileSystem.copyFromLocalFile(convertToLocalPath(src), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for destination " + dst + " to appear", e);
+    }
   }
 
   @Override
   public void moveFromLocalFile(Path[] srcs, Path dst) throws IOException {
-    fileSystem.moveFromLocalFile(convertDefaults(srcs), convertToDefaultPath(dst));
+    fileSystem.moveFromLocalFile(convertLocalPaths(srcs), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for destination " + dst + " to appear", e);
+    }
   }
 
   @Override
   public void moveFromLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.moveFromLocalFile(convertToDefaultPath(src), convertToDefaultPath(dst));
+    fileSystem.moveFromLocalFile(convertToLocalPath(src), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for destination " + dst + " to appear", e);
+    }
   }
 
   @Override
   public void copyFromLocalFile(boolean delSrc, Path src, Path dst) throws IOException {
-    fileSystem.copyFromLocalFile(delSrc, convertToDefaultPath(src), convertToDefaultPath(dst));
+    fileSystem.copyFromLocalFile(delSrc, convertToLocalPath(src), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for destination " + dst + " to appear", e);
+    }
   }
 
   @Override
   public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path[] srcs, Path dst)
       throws IOException {
     fileSystem
-        .copyFromLocalFile(delSrc, overwrite, convertDefaults(srcs), convertToDefaultPath(dst));
+        .copyFromLocalFile(delSrc, overwrite, convertLocalPaths(srcs), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for destination " + dst + " to appear", e);
+    }
   }
 
   @Override
   public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path src, Path dst)
       throws IOException {
     fileSystem
-        .copyFromLocalFile(delSrc, overwrite, convertToDefaultPath(src), convertToDefaultPath(dst));
+        .copyFromLocalFile(delSrc, overwrite, convertToLocalPath(src), convertToDefaultPath(dst));
+    try {
+      consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+    } catch (TimeoutException e) {
+      throw new HoodieException("Timed out waiting for destination " + dst + " to appear", e);
+    }
   }
 
   @Override
   public void copyToLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.copyToLocalFile(convertToDefaultPath(src), convertToDefaultPath(dst));
+    fileSystem.copyToLocalFile(convertToDefaultPath(src), convertToLocalPath(dst));
   }
 
   @Override
   public void moveToLocalFile(Path src, Path dst) throws IOException {
-    fileSystem.moveToLocalFile(convertToDefaultPath(src), convertToDefaultPath(dst));
+    fileSystem.moveToLocalFile(convertToDefaultPath(src), convertToLocalPath(dst));
   }
 
   @Override
   public void copyToLocalFile(boolean delSrc, Path src, Path dst) throws IOException {
-    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToDefaultPath(dst));
+    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst));
   }
 
   @Override
   public void copyToLocalFile(boolean delSrc, Path src, Path dst, boolean useRawLocalFileSystem)
       throws IOException {
-    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToDefaultPath(dst),
+    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst),
         useRawLocalFileSystem);
   }
 
@@ -787,6 +868,22 @@ public class HoodieWrapperFileSystem extends FileSystem {
     return convertPathWithScheme(oldPath, fileSystem.getScheme());
   }
 
+  private Path convertToLocalPath(Path oldPath) {
+    try {
+      return convertPathWithScheme(oldPath, FileSystem.getLocal(getConf()).getScheme());
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
+
+  private Path[] convertLocalPaths(Path[] psrcs) {
+    Path[] psrcsNew = new Path[psrcs.length];
+    for (int i = 0; i < psrcs.length; i++) {
+      psrcsNew[i] = convertToLocalPath(psrcs[i]);
+    }
+    return psrcsNew;
+  }
+
   private Path[] convertDefaults(Path[] psrcs) {
     Path[] psrcsNew = new Path[psrcs.length];
     for (int i = 0; i < psrcs.length; i++) {
@@ -802,5 +899,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // When the file is first written, we do not have a track of it
     throw new IllegalArgumentException(file.toString()
         + " does not have a open stream. Cannot get the bytes written on the stream");
+  }
+
+  public FileSystem getFileSystem() {
+    return fileSystem;
   }
 }

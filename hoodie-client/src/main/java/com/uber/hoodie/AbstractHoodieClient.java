@@ -19,6 +19,8 @@
 package com.uber.hoodie;
 
 import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
+import com.uber.hoodie.client.utils.ClientUtils;
+import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.io.IOException;
@@ -116,5 +118,9 @@ public abstract class AbstractHoodieClient implements Serializable {
 
   public Optional<EmbeddedTimelineService> getTimelineServer() {
     return timelineServer;
+  }
+
+  protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
+    return ClientUtils.createMetaClient(jsc, config, loadActiveTimelineOnLoad);
   }
 }

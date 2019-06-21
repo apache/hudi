@@ -20,12 +20,17 @@ package com.uber.hoodie.common.table;
 
 import static com.uber.hoodie.common.model.HoodieTableType.MERGE_ON_READ;
 
+import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.SerializableConfiguration;
+import com.uber.hoodie.common.io.storage.HoodieWrapperFileSystem;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.FailSafeConsistencyGuard;
+import com.uber.hoodie.common.util.NoOpConsistencyGuard;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.File;
@@ -66,13 +71,14 @@ public class HoodieTableMetaClient implements Serializable {
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
-  private transient FileSystem fs;
+  private transient HoodieWrapperFileSystem fs;
   private String metaPath;
   private SerializableConfiguration hadoopConf;
   private HoodieTableType tableType;
   private HoodieTableConfig tableConfig;
   private HoodieActiveTimeline activeTimeline;
   private HoodieArchivedTimeline archivedTimeline;
+  private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
 
   public HoodieTableMetaClient(Configuration conf, String basePath)
       throws DatasetNotFoundException {
@@ -81,13 +87,19 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath,
-      boolean loadActiveTimelineOnLoad)
+      boolean loadActiveTimelineOnLoad) {
+    this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build());
+  }
+
+  public HoodieTableMetaClient(Configuration conf, String basePath,
+      boolean loadActiveTimelineOnLoad, ConsistencyGuardConfig consistencyGuardConfig)
       throws DatasetNotFoundException {
     log.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
+    this.consistencyGuardConfig = consistencyGuardConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
     Path basePathDir = new Path(this.basePath);
-    this.metaPath = basePath + File.separator + METAFOLDER_NAME;
+    this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
     DatasetNotFoundException.checkValidDataset(fs, basePathDir, metaPathDir);
@@ -190,11 +202,23 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Get the FS implementation for this table
    */
-  public FileSystem getFs() {
+  public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
-      fs = FSUtils.getFs(metaPath, hadoopConf.get());
+      FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.get());
+      Preconditions.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+          "File System not expected to be that of HoodieWrapperFileSystem");
+      fs = new HoodieWrapperFileSystem(fileSystem, consistencyGuardConfig.isConsistencyCheckEnabled()
+            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig) : new NoOpConsistencyGuard());
     }
     return fs;
+  }
+
+  /**
+   * Return raw file-system
+   * @return
+   */
+  public FileSystem getRawFs() {
+    return getFs().getFileSystem();
   }
 
   public Configuration getHadoopConf() {
@@ -221,6 +245,10 @@ public class HoodieTableMetaClient implements Serializable {
   public synchronized HoodieActiveTimeline reloadActiveTimeline() {
     activeTimeline = new HoodieActiveTimeline(this);
     return activeTimeline;
+  }
+
+  public ConsistencyGuardConfig getConsistencyGuardConfig() {
+    return consistencyGuardConfig;
   }
 
   /**

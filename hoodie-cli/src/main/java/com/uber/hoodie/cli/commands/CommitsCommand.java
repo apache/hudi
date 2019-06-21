@@ -115,9 +115,8 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commits refresh", help = "Refresh the commits")
   public String refreshCommits() throws IOException {
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(HoodieCLI.conf, HoodieCLI.tableMetadata.getBasePath());
-    HoodieCLI.setTableMetadata(metadata);
-    return "Metadata for table " + metadata.getTableConfig().getTableName() + " refreshed.";
+    HoodieCLI.refreshTableMetadata();
+    return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " refreshed.";
   }
 
   @CliCommand(value = "commit rollback", help = "Rollback a commit")

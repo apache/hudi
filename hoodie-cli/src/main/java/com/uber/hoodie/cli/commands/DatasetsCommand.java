@@ -23,6 +23,7 @@ import com.uber.hoodie.cli.HoodiePrintHelper;
 import com.uber.hoodie.cli.TableHeader;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,11 +40,25 @@ public class DatasetsCommand implements CommandMarker {
 
   @CliCommand(value = "connect", help = "Connect to a hoodie dataset")
   public String connect(
-      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset") final String path)
-      throws IOException {
-    boolean initialized = HoodieCLI.initConf();
-    HoodieCLI.initFS(initialized);
-    HoodieCLI.setTableMetadata(new HoodieTableMetaClient(HoodieCLI.conf, path));
+      @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset") final String path,
+      @CliOption(key = {"eventuallyConsistent"}, mandatory = false, unspecifiedDefaultValue = "false",
+          help = "Enable eventual consistency") final boolean eventuallyConsistent,
+      @CliOption(key = {"initialCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "2000",
+          help = "Initial wait time for eventual consistency") final Integer initialConsistencyIntervalMs,
+      @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "300000",
+          help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
+      @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "7",
+          help = "Max checks for eventual consistency") final Integer maxConsistencyChecks) throws IOException {
+    HoodieCLI.setConsistencyGuardConfig(
+        ConsistencyGuardConfig.newBuilder()
+            .withConsistencyCheckEnabled(eventuallyConsistent)
+            .withInitialConsistencyCheckIntervalMs(initialConsistencyIntervalMs)
+            .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs)
+            .withMaxConsistencyChecks(maxConsistencyChecks)
+            .build());
+    HoodieCLI.initConf();
+    HoodieCLI.connectTo(path);
+    HoodieCLI.initFS(true);
     HoodieCLI.state = HoodieCLI.CLIState.DATASET;
     return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " loaded";
   }
@@ -85,7 +100,7 @@ public class DatasetsCommand implements CommandMarker {
     HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, payloadClass);
 
     // Now connect to ensure loading works
-    return connect(path);
+    return connect(path, false, 0, 0, 0);
   }
 
   @CliAvailabilityIndicator({"desc"})
