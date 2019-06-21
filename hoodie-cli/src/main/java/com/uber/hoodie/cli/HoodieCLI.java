@@ -19,6 +19,7 @@
 package com.uber.hoodie.cli;
 
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
+import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
@@ -27,14 +28,28 @@ import org.apache.hadoop.fs.FileSystem;
 public class HoodieCLI {
 
   public static Configuration conf;
+  public static ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   public static FileSystem fs;
   public static CLIState state = CLIState.INIT;
+  public static String basePath;
   public static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
 
 
   public enum CLIState {
     INIT, DATASET, SYNC
+  }
+
+  public static void setConsistencyGuardConfig(ConsistencyGuardConfig config) {
+    consistencyGuardConfig = config;
+  }
+
+  private static void setTableMetaClient(HoodieTableMetaClient tableMetadata) {
+    HoodieCLI.tableMetadata = tableMetadata;
+  }
+
+  private static void setBasePath(String basePath) {
+    HoodieCLI.basePath = basePath;
   }
 
   public static boolean initConf() {
@@ -47,11 +62,16 @@ public class HoodieCLI {
 
   public static void initFS(boolean force) throws IOException {
     if (fs == null || force) {
-      fs = FileSystem.get(conf);
+      fs = (tableMetadata != null) ? tableMetadata.getFs() : FileSystem.get(conf);
     }
   }
 
-  public static void setTableMetadata(HoodieTableMetaClient tableMetadata) {
-    HoodieCLI.tableMetadata = tableMetadata;
+  public static void refreshTableMetadata() {
+    setTableMetaClient(new HoodieTableMetaClient(HoodieCLI.conf, basePath, false, HoodieCLI.consistencyGuardConfig));
+  }
+
+  public static void connectTo(String basePath) {
+    setBasePath(basePath);
+    refreshTableMetadata();
   }
 }

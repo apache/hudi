@@ -48,6 +48,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
+import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -195,7 +196,8 @@ public class TestCleaner extends TestHoodieClientBase {
         HoodieCompactionConfig.newBuilder().withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(maxVersions).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1)
-        .withFinalizeWriteParallelism(1).withConsistencyCheckEnabled(true)
+        .withFinalizeWriteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
 
@@ -357,7 +359,9 @@ public class TestCleaner extends TestHoodieClientBase {
         HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainCommits(maxCommits).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1)
-        .withFinalizeWriteParallelism(1).withConsistencyCheckEnabled(true).build();
+        .withFinalizeWriteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
 
     final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =

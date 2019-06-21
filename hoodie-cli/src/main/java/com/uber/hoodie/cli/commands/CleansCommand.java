@@ -23,7 +23,6 @@ import com.uber.hoodie.avro.model.HoodieCleanPartitionMetadata;
 import com.uber.hoodie.cli.HoodieCLI;
 import com.uber.hoodie.cli.HoodiePrintHelper;
 import com.uber.hoodie.cli.TableHeader;
-import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -91,9 +90,8 @@ public class CleansCommand implements CommandMarker {
 
   @CliCommand(value = "cleans refresh", help = "Refresh the commits")
   public String refreshCleans() throws IOException {
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(HoodieCLI.conf, HoodieCLI.tableMetadata.getBasePath());
-    HoodieCLI.setTableMetadata(metadata);
-    return "Metadata for table " + metadata.getTableConfig().getTableName() + " refreshed.";
+    HoodieCLI.refreshTableMetadata();
+    return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " refreshed.";
   }
 
   @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")

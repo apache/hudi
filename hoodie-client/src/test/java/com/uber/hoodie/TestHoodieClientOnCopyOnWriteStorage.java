@@ -39,6 +39,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.common.util.collection.Pair;
@@ -686,8 +687,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
   private Pair<Path, JavaRDD<WriteStatus>> testConsistencyCheck(HoodieTableMetaClient metaClient, String commitTime)
       throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withMaxConsistencyCheckIntervalMs(1)
-        .withInitialConsistencyCheckIntervalMs(1).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
+            .withConsistencyCheckEnabled(true)
+            .withMaxConsistencyCheckIntervalMs(1)
+            .withInitialConsistencyCheckIntervalMs(1)
+            .build())
+        .build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
 
     client.startCommitWithTime(commitTime);

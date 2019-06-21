@@ -43,7 +43,6 @@ public abstract class HoodieReadHandle<T extends HoodieRecordPayload> extends Ho
     return hoodieTable.getMetaClient().getFs();
   }
 
-
   public Pair<String, String> getPartitionPathFilePair() {
     return partitionPathFilePair;
   }
