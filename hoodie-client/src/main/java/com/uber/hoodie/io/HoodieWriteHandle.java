@@ -19,14 +19,11 @@
 package com.uber.hoodie.io;
 
 import com.uber.hoodie.WriteStatus;
-import com.uber.hoodie.common.io.storage.HoodieWrapperFileSystem;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.FSUtils;
-import com.uber.hoodie.common.util.FailSafeConsistencyGuard;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieTimer;
-import com.uber.hoodie.common.util.NoOpConsistencyGuard;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
@@ -66,13 +63,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(),
         config.getWriteStatusFailureFraction());
-  }
-
-  private static FileSystem getFileSystem(HoodieTable hoodieTable, HoodieWriteConfig config) {
-    return new HoodieWrapperFileSystem(hoodieTable.getMetaClient().getFs(), config.isConsistencyCheckEnabled()
-        ? new FailSafeConsistencyGuard(hoodieTable.getMetaClient().getFs(),
-        config.getMaxConsistencyChecks(), config.getInitialConsistencyCheckIntervalMs(),
-        config.getMaxConsistencyCheckIntervalMs()) : new NoOpConsistencyGuard());
   }
 
   /**
@@ -175,9 +165,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
 
   @Override
   protected FileSystem getFileSystem() {
-    return new HoodieWrapperFileSystem(hoodieTable.getMetaClient().getFs(), config.isConsistencyCheckEnabled()
-        ? new FailSafeConsistencyGuard(hoodieTable.getMetaClient().getFs(),
-        config.getMaxConsistencyChecks(), config.getInitialConsistencyCheckIntervalMs(),
-        config.getMaxConsistencyCheckIntervalMs()) : new NoOpConsistencyGuard());
+    return hoodieTable.getMetaClient().getFs();
   }
 }

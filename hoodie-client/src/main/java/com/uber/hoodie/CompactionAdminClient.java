@@ -114,7 +114,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    */
   public List<RenameOpResult> unscheduleCompactionPlan(
       String compactionInstant, boolean skipValidation, int parallelism, boolean dryRun) throws Exception {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = createMetaClient(false);
     List<Pair<HoodieLogFile, HoodieLogFile>> renameActions =
         getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, parallelism,
             Optional.absent(), skipValidation);
@@ -156,7 +156,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    */
   public List<RenameOpResult> unscheduleCompactionFileId(HoodieFileGroupId fgId,
       boolean skipValidation, boolean dryRun) throws Exception {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = createMetaClient(false);
     List<Pair<HoodieLogFile, HoodieLogFile>> renameActions =
         getRenamingActionsForUnschedulingCompactionForFileId(metaClient, fgId,
             Optional.absent(), skipValidation);
@@ -198,7 +198,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    */
   public List<RenameOpResult> repairCompaction(String compactionInstant,
       int parallelism, boolean dryRun) throws Exception {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = createMetaClient(false);
     List<ValidationOpResult> validationResults =
         validateCompactionPlan(metaClient, compactionInstant, parallelism);
     List<ValidationOpResult> failed = validationResults.stream()

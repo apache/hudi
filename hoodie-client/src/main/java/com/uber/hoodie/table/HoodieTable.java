@@ -21,6 +21,7 @@ package com.uber.hoodie.table;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.avro.model.HoodieSavepointMetadata;
+import com.uber.hoodie.client.utils.ClientUtils;
 import com.uber.hoodie.common.HoodieCleanStat;
 import com.uber.hoodie.common.HoodieRollbackStat;
 import com.uber.hoodie.common.SerializableConfiguration;
@@ -83,7 +84,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     this.hadoopConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
     this.viewManager = FileSystemViewManager.createViewManager(
         new SerializableConfiguration(jsc.hadoopConfiguration()), config.getViewStorageConfig());
-    this.metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), true);
+    this.metaClient = ClientUtils.createMetaClient(jsc, config, true);
     this.index = HoodieIndex.createIndex(config, jsc);
   }
 
@@ -291,7 +292,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    */
   public void finalizeWrite(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats)
       throws HoodieIOException {
-    cleanFailedWrites(jsc, instantTs, stats, config.isConsistencyCheckEnabled());
+    cleanFailedWrites(jsc, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled());
   }
 
   /**
@@ -412,7 +413,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths,
       FileVisibility visibility) {
-    final FileSystem fileSystem = metaClient.getFs();
+    final FileSystem fileSystem = metaClient.getRawFs();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
       getFailSafeConsistencyGuard(fileSystem).waitTill(partitionPath, fileList, visibility);
@@ -424,8 +425,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   private ConsistencyGuard getFailSafeConsistencyGuard(FileSystem fileSystem) {
-    return new FailSafeConsistencyGuard(fileSystem, config.getMaxConsistencyChecks(),
-        config.getInitialConsistencyCheckIntervalMs(),
-        config.getMaxConsistencyCheckIntervalMs());
+    return new FailSafeConsistencyGuard(fileSystem, config.getConsistencyGuardConfig());
   }
 }
