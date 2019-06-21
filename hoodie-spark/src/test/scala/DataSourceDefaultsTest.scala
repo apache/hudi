@@ -19,7 +19,7 @@ import java.util.Optional
 
 import com.uber.hoodie.common.util.{SchemaTestUtil, TypedProperties}
 import com.uber.hoodie.exception.HoodieException
-import com.uber.hoodie.{DataSourceWriteOptions, EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload, SimpleKeyGenerator}
+import com.uber.hoodie.{DataSourceWriteOptions, EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload, SimpleKeyGenerator, ComplexKeyGenerator}
 import org.apache.avro.generic.GenericRecord
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -95,6 +95,59 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
 
     // if partition path can't be found, return default partition path
     val hk3 = new SimpleKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere"))
+      .getKey(baseRecord);
+    assertEquals("default", hk3.getPartitionPath)
+  }
+
+  @Test def testComplexKeyGenerator() = {
+    // top level, valid fields
+    val hk1 = new ComplexKeyGenerator(getKeyConfig("field1,name", "field1,name")).getKey(baseRecord)
+    assertEquals("field1:field1,name:name1", hk1.getRecordKey)
+    assertEquals("field1/name1", hk1.getPartitionPath)
+
+    // partition path field not specified
+    try {
+      val props = new TypedProperties()
+      props.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "field1")
+      new ComplexKeyGenerator(props).getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: IllegalArgumentException => {
+        // do nothing
+      }
+    };
+
+    // recordkey field not specified
+    try {
+      val props = new TypedProperties()
+      props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionField")
+      new ComplexKeyGenerator(props).getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: IllegalArgumentException => {
+        // do nothing
+      }
+    };
+
+    // nested field as record key and partition path
+    val hk2 = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId,testNestedRecord.isAdmin", "testNestedRecord.userId,testNestedRecord.isAdmin"))
+      .getKey(baseRecord)
+    assertEquals("testNestedRecord.userId:UserId1@001,testNestedRecord.isAdmin:false", hk2.getRecordKey)
+    assertEquals("UserId1@001/false", hk2.getPartitionPath)
+
+    // Nested record key not found
+    try {
+      new ComplexKeyGenerator(getKeyConfig("testNestedRecord.NotThere", "testNestedRecord.isAdmin"))
+        .getKey(baseRecord)
+      fail("Should have errored out")
+    } catch {
+      case e: HoodieException => {
+        // do nothing
+      }
+    };
+
+    // if partition path can't be found, return default partition path
+    val hk3 = new ComplexKeyGenerator(getKeyConfig("testNestedRecord.userId", "testNestedRecord.notThere"))
       .getKey(baseRecord);
     assertEquals("default", hk3.getPartitionPath)
   }
