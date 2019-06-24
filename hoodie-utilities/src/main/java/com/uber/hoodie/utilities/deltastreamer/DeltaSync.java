@@ -151,6 +151,7 @@ public class DeltaSync implements Serializable {
    */
   private final HoodieTableType tableType;
 
+
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
       SchemaProvider schemaProvider, HoodieTableType tableType, TypedProperties props,
       JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
@@ -359,9 +360,8 @@ public class DeltaSync implements Serializable {
         log.info("Commit " + commitTime + " successful!");
 
         // Schedule compaction if needed
-        if (tableType.equals(HoodieTableType.MERGE_ON_READ) && cfg.continuousMode) {
-          scheduledCompactionInstant = writeClient
-              .scheduleCompaction(Optional.of(checkpointCommitMetadata));
+        if (cfg.isAsyncCompactionEnabled()) {
+          scheduledCompactionInstant = writeClient.scheduleCompaction(Optional.of(checkpointCommitMetadata));
         }
 
         // Sync to hive if enabled
@@ -458,7 +458,7 @@ public class DeltaSync implements Serializable {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withPayloadClass(cfg.payloadClassName)
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
-                .withInlineCompaction(!cfg.continuousMode && tableType.equals(HoodieTableType.MERGE_ON_READ)).build())
+                .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withAutoCommit(false);
