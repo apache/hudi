@@ -17,6 +17,7 @@
 
 package com.uber.hoodie.utilities.deltastreamer;
 
+import com.uber.hoodie.common.model.HoodieTableType;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -27,6 +28,8 @@ import java.util.UUID;
 import org.apache.commons.lang.text.StrSubstitutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.SparkConf;
+import scala.Option;
 
 /**
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user
@@ -38,6 +41,8 @@ public class SchedulerConfGenerator {
 
   public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
   public static final String COMPACT_POOL_NAME = "hoodiecompact";
+  public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
+  public static final String SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file";
 
 
   private static final String DELTASYNC_POOL_KEY = "deltasync_pool";
@@ -82,8 +87,32 @@ public class SchedulerConfGenerator {
     return xmlString;
   }
 
-  public static String generateAndStoreConfig(Integer deltaSyncWeight, Integer compactionWeight,
-      Integer deltaSyncMinShare, Integer compactionMinShare) throws IOException {
+
+  /**
+   * Helper to set Spark Scheduling Configs dynamically
+   *
+   * @param cfg Config
+   */
+  public static Map<String, String> getSparkSchedulingConfigs(HoodieDeltaStreamer.Config cfg) throws Exception {
+    final Option<String> sparkSchedulerMode = new SparkConf().getOption(SPARK_SCHEDULER_MODE_KEY);
+
+    Map<String, String> additionalSparkConfigs = new HashMap<>();
+    if (sparkSchedulerMode.isDefined() && "FAIR".equals(sparkSchedulerMode.get())
+        && cfg.continuousMode && cfg.storageType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
+          cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
+      additionalSparkConfigs.put(SPARK_SCHEDULER_ALLOCATION_FILE_KEY, sparkSchedulingConfFile);
+    } else {
+      log.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
+          + "is not set to FAIR at instatiation time. Continuing without scheduling configs");
+    }
+    return additionalSparkConfigs;
+  }
+
+  private static String generateAndStoreConfig(Integer deltaSyncWeight,
+                                               Integer compactionWeight,
+                                               Integer deltaSyncMinShare,
+                                               Integer compactionMinShare) throws IOException {
     File tempConfigFile = File.createTempFile(UUID.randomUUID().toString(), ".xml");
     BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile));
     bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare));
