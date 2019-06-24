@@ -44,7 +44,6 @@ import com.uber.hoodie.utilities.sources.JsonDFSSource;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -257,21 +256,6 @@ public class HoodieDeltaStreamer implements Serializable {
     public Boolean help = false;
   }
 
-  /**
-   * Helper to set Spark Scheduling Configs dynamically
-   *
-   * @param cfg Config
-   */
-  public static Map<String, String> getSparkSchedulingConfigs(Config cfg) throws Exception {
-    Map<String, String> additionalSparkConfigs = new HashMap<>();
-    if (cfg.continuousMode && cfg.storageType.equals(HoodieTableType.MERGE_ON_READ.name())) {
-      String sparkSchedulingConfFile = SchedulerConfGenerator.generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
-          cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
-      additionalSparkConfigs.put("spark.scheduler.allocation.file", sparkSchedulingConfFile);
-    }
-    return additionalSparkConfigs;
-  }
-
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, args);
@@ -280,17 +264,11 @@ public class HoodieDeltaStreamer implements Serializable {
       System.exit(1);
     }
 
-    Map<String, String> additionalSparkConfigs = getSparkSchedulingConfigs(cfg);
+    Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName,
         cfg.sparkMaster, additionalSparkConfigs);
-    if (!("FAIR".equals(jssc.getConf().get("spark.scheduler.mode")))
-        && cfg.continuousMode && cfg.storageType.equals(HoodieTableType.MERGE_ON_READ.name())) {
-      log.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
-          + "is not set to FAIR at instatiation time. Continuing without scheduling configs");
-    }
     new HoodieDeltaStreamer(cfg, jssc).sync();
   }
-
 
   /**
    * Syncs data either in single-run or in continuous mode.
