@@ -42,8 +42,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 4. ["Hudi: Unifying storage and serving for batch and near-real-time analytics"](https://conferences.oreilly.com/strata/strata-ny/public/schedule/detail/70937) - By Nishith Agarwal & Balaji Vardarajan
    September 2018, Strata Data Conference, New York, NY
 
-5. ["Hudi: Large-Scale, Near Real-Time Pipelines at Uber"](https://databricks
-.com/session/hudi-near-real-time-spark-pipelines-at-petabyte-scale) - By Vinoth Chandar & Nishith Agarwal
+5. ["Hudi: Large-Scale, Near Real-Time Pipelines at Uber"](https://databricks.com/session/hudi-near-real-time-spark-pipelines-at-petabyte-scale) - By Vinoth Chandar & Nishith Agarwal
    October 2018, Spark+AI Summit Europe, London, UK
 
 6. ["Powering Uber's global network analytics pipelines in real-time with Apache Hudi"](https://www.youtube.com/watch?v=1w3IpavhSWA) - By Ethan Guo & Nishith Agarwal, April 2019, Data Council SF19, San Francisco, CA.
