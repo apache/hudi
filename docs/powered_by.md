@@ -21,6 +21,10 @@ It also powers several incremental Hive ETL pipelines and being currently integr
 #### Yields.io
 
 Yields.io is the first FinTech platform that uses AI for automated model validation and real-time monitoring on an enterprise-wide scale. Their data lake is managed by Hudi. They are also actively building their infrastructure for incremental, cross language/platform machine learning using Hudi.
+
+#### Yotpo
+
+Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework https://github.com/YotpoLtd/metorikku and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
  
 
 ## Talks & Presentations
@@ -39,8 +43,14 @@ Yields.io is the first FinTech platform that uses AI for automated model validat
    September 2018, Strata Data Conference, New York, NY
 
 5. ["Hudi: Large-Scale, Near Real-Time Pipelines at Uber"](https://databricks
-.com/session/hudi-near-real-time-spark-pipelines-at-petabyte-scale) - By Vinoth Chander & Nishith Agarwal
+.com/session/hudi-near-real-time-spark-pipelines-at-petabyte-scale) - By Vinoth Chandar & Nishith Agarwal
    October 2018, Spark+AI Summit Europe, London, UK
+
+6. ["Powering Uber's global network analytics pipelines in real-time with Apache Hudi"](https://www.youtube.com/watch?v=1w3IpavhSWA) - By Ethan Guo & Nishith Agarwal, April 2019, Data Council SF19, San Francisco, CA.
+
+7. ["Building highly efficient data lakes using Apache Hudi (Incubating)"](https://www.slideshare.net/ChesterChen/sf-big-analytics-20190612-building-highly-efficient-data-lakes-using-apache-hudi) - By Vinoth Chandar 
+   June 2019, SF Big Analytics Meetup, San Mateo, CA
+
 
 ## Articles
 
