@@ -172,7 +172,7 @@ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer
 
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --disable-compaction
 ....
 2018-09-24 22:22:01 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
 2018-09-24 22:22:01 INFO  SparkContext:54 - Successfully stopped SparkContext
@@ -444,7 +444,7 @@ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer
 
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --disable-compaction
 
 exit
 ```
@@ -729,6 +729,9 @@ hoodie:stock_ticks_mor->compactions show all
     | Compaction Instant Time| State    | Total FileIds to be Compacted|
     |==================================================================|
 
+
+
+
 # Schedule a compaction. This will use Spark Launcher to schedule compaction
 hoodie:stock_ticks_mor->compaction schedule
 ....
@@ -743,12 +746,17 @@ hoodie:stock_ticks->connect --path /user/hive/warehouse/stock_ticks_mor
 18/09/24 07:01:16 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ from /user/hive/warehouse/stock_ticks_mor
 Metadata for table stock_ticks_mor loaded
 
+
+
 hoodie:stock_ticks_mor->compactions show all
 18/09/24 06:34:12 INFO timeline.HoodieActiveTimeline: Loaded instants [[20180924041125__clean__COMPLETED], [20180924041125__deltacommit__COMPLETED], [20180924042735__clean__COMPLETED], [20180924042735__deltacommit__COMPLETED], [==>20180924063245__compaction__REQUESTED]]
     ___________________________________________________________________
     | Compaction Instant Time| State    | Total FileIds to be Compacted|
     |==================================================================|
     | 20180924070031         | REQUESTED| 1                            |
+
+
+
 
 # Execute the compaction. The compaction instant value passed below must be the one displayed in the above "compactions show all" query
 hoodie:stock_ticks_mor->compaction run --compactionInstant  20180924070031 --parallelism 2 --sparkMemory 1G  --schemaFilePath /var/demo/config/schema.avsc --retry 1  
@@ -764,6 +772,8 @@ hoodie:stock_ticks_mor->connect --path /user/hive/warehouse/stock_ticks_mor
 18/09/24 07:03:00 INFO table.HoodieTableConfig: Loading dataset properties from /user/hive/warehouse/stock_ticks_mor/.hoodie/hoodie.properties
 18/09/24 07:03:00 INFO table.HoodieTableMetaClient: Finished Loading Table of type MERGE_ON_READ from /user/hive/warehouse/stock_ticks_mor
 Metadata for table stock_ticks_mor loaded
+
+
 
 hoodie:stock_ticks->compactions show all
 18/09/24 07:03:15 INFO timeline.HoodieActiveTimeline: Loaded instants [[20180924064636__clean__COMPLETED], [20180924064636__deltacommit__COMPLETED], [20180924065057__clean__COMPLETED], [20180924065057__deltacommit__COMPLETED], [20180924070031__commit__COMPLETED]]
