@@ -18,13 +18,17 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.KafkaOffsetGen;
 import com.uber.hoodie.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDecoder;
 import java.util.Optional;
 import kafka.serializer.StringDecoder;
+import kafka.utils.VerifiableProperties;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -47,6 +51,8 @@ public class AvroKafkaSource extends AvroSource {
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     offsetGen = new KafkaOffsetGen(props);
+    log.info("Setting SchemaRegistry provider in SchemaProviderBasedKafkaAvroDecoder");
+    SchemaProviderBasedKafkaAvroDecoder.setSchemaProvider(schemaProvider);
   }
 
   @Override
@@ -67,8 +73,54 @@ public class AvroKafkaSource extends AvroSource {
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
     JavaRDD<GenericRecord> recordRDD = KafkaUtils
-        .createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class,
+        .createRDD(sparkContext, String.class, Object.class, StringDecoder.class,
+            SchemaProviderBasedKafkaAvroDecoder.class,
             offsetGen.getKafkaParams(), offsetRanges).values().map(obj -> (GenericRecord) obj);
     return recordRDD;
+  }
+
+
+  /**
+   * KafkaAvroDecoder does not guarantee that it will return generic records deserialized with latest schema.
+   * This causes deserialization errors during writing time when input batch has records conforming to old schema
+   * versions and Hudi tries to deserialize the bytes with latest schema.
+   * Hence, this class which would use SchemaProvider to create GenericRecords with latest schema from schema provider.
+   */
+  public static class SchemaProviderBasedKafkaAvroDecoder extends KafkaAvroDecoder {
+
+    private static SchemaProvider schemaProvider;
+
+    public static SchemaProvider getSchemaProvider() {
+      return schemaProvider;
+    }
+
+    public static void setSchemaProvider(SchemaProvider schemaProvider) {
+      SchemaProviderBasedKafkaAvroDecoder.schemaProvider = schemaProvider;
+    }
+
+    public SchemaProviderBasedKafkaAvroDecoder(SchemaRegistryClient schemaRegistry) {
+      super(schemaRegistry);
+      Preconditions.checkArgument(schemaProvider != null, "SchemaProvider is not set");
+    }
+
+    public SchemaProviderBasedKafkaAvroDecoder(SchemaRegistryClient schemaRegistry, VerifiableProperties props) {
+      super(schemaRegistry, props);
+      Preconditions.checkArgument(schemaProvider != null, "SchemaProvider is not set");
+    }
+
+    public SchemaProviderBasedKafkaAvroDecoder(VerifiableProperties props) {
+      super(props);
+      Preconditions.checkArgument(schemaProvider != null, "SchemaProvider is not set");
+    }
+
+    @Override
+    public Object fromBytes(byte[] bytes) {
+      return this.deserialize(bytes, schemaProvider.getSourceSchema());
+    }
+
+    @Override
+    public Object fromBytes(byte[] bytes, Schema readerSchema) {
+      return this.deserialize(bytes, readerSchema);
+    }
   }
 }
