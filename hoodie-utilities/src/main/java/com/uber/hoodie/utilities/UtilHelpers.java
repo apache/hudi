@@ -80,6 +80,16 @@ public class UtilHelpers {
     }
   }
 
+  public static SchemaProvider createSchemaProvider(String schemaProviderClass,
+      TypedProperties cfg) throws IOException {
+    try {
+      return schemaProviderClass == null ? null :
+          (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg);
+    } catch (Throwable e) {
+      throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
+    }
+  }
+
   public static Transformer createTransformer(String transformerClass) throws IOException {
     try {
       return transformerClass == null ? null : (Transformer) ReflectionUtils.loadClass(transformerClass);

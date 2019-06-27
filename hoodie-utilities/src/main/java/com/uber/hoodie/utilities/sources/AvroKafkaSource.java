@@ -67,7 +67,7 @@ public class AvroKafkaSource extends AvroSource {
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
     JavaRDD<GenericRecord> recordRDD = KafkaUtils
-        .createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class,
+        .createRDD(sparkContext, String.class, Object.class, StringDecoder.class, SourceSchemaKafkaAvroDecoder.class,
             offsetGen.getKafkaParams(), offsetRanges).values().map(obj -> (GenericRecord) obj);
     return recordRDD;
   }
