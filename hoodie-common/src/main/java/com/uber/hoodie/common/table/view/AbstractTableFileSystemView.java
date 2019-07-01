@@ -51,6 +51,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -216,7 +218,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           log.info("Building file system view for partition (" + partitionPathStr + ")");
 
           // Create the path if it does not exist already
-          Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
+          Path partitionPath = StringUtils.isBlank(partitionPathStr)
+                  ? new Path(metaClient.getBasePath()) : new Path(metaClient.getBasePath(), partitionPathStr);
+          // Path partitionPath = new Path(metaClient.getBasePath(), partitionPathStr);
           FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);

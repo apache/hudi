@@ -61,6 +61,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -315,7 +316,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       throws IOException {
     logger.info("Cleaning path " + partitionPath);
     FileSystem fs = getMetaClient().getFs();
-    FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
+    // FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
+    FileStatus[] toBeDeleted = StringUtils.isBlank(partitionPath)
+            ? fs.listStatus(new Path(config.getBasePath()), filter) :
+            fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
@@ -340,7 +344,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       }
       return false;
     };
-    FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
+    // FileStatus[] toBeDeleted = fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
+    FileStatus[] toBeDeleted = StringUtils.isBlank(partitionPath)
+            ? fs.listStatus(new Path(config.getBasePath()), filter) :
+            fs.listStatus(new Path(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
