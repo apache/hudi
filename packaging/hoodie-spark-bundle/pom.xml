@@ -169,7 +169,7 @@
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
                 <excludes>
-                  <exclude>com.databricks:spark-avro_2.11</exclude>
+                  <!--<exclude>com.databricks:spark-avro_2.11</exclude>-->
                   <exclude>log4j:*</exclude>
                   <exclude>org.apache.avro:*</exclude>
                   <exclude>org.apache.derby:derby</exclude>
@@ -239,11 +239,11 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_2.11</artifactId>
     </dependency>
-    <dependency>
-      <groupId>com.databricks</groupId>
-      <artifactId>spark-avro_2.11</artifactId>
-      <version>4.0.0</version>
-    </dependency>
+    <!--<dependency>-->
+      <!--<groupId>com.databricks</groupId>-->
+      <!--<artifactId>spark-avro_2.11</artifactId>-->
+      <!--<version>4.0.0</version>-->
+    <!--</dependency>-->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>

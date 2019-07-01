@@ -88,7 +88,8 @@ private[hoodie] object HoodieSparkSqlWriter {
       parameters(KEYGENERATOR_CLASS_OPT_KEY),
       toProperties(parameters)
     )
-    val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
+    //-- val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
+    val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, schema.toString, structName, nameSpace)
     val hoodieAllIncomingRecords = genericRecords.map(gr => {
       val orderingVal = DataSourceUtils.getNestedFieldValAsString(
         gr, parameters(PRECOMBINE_FIELD_OPT_KEY)).asInstanceOf[Comparable[_]]
