@@ -56,8 +56,17 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   // Allows incremental Timeline syncing
   private final boolean incrementalTimelineSyncEnabled;
 
+  // This is the visible active timeline used only for incremental view syncing
+  private HoodieTimeline visibleActiveTimeline;
+
   protected IncrementalTimelineSyncFileSystemView(boolean enableIncrementalTimelineSync) {
     this.incrementalTimelineSyncEnabled = enableIncrementalTimelineSync;
+  }
+
+  @Override
+  protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
+    this.visibleActiveTimeline = visibleActiveTimeline;
+    super.refreshTimeline(visibleActiveTimeline);
   }
 
   @Override
@@ -70,7 +79,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           runIncrementalSync(newTimeline, diffResult);
           log.info("Finished incremental sync");
           // Reset timeline to latest
-          visibleActiveTimeline = newTimeline;
+          refreshTimeline(newTimeline);
           return;
         }
       }
@@ -336,5 +345,10 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     List<HoodieFileGroup> fgs =
         buildFileGroups(viewDataFiles.values().stream(), viewLogFiles.values().stream(), timeline, true);
     storePartitionView(partition, fgs);
+  }
+
+  @Override
+  public HoodieTimeline getTimeline() {
+    return visibleActiveTimeline;
   }
 }

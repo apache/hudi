@@ -86,7 +86,7 @@ public class RepairsCommand implements CommandMarker {
 
     int ind = 0;
     for (String partition : partitionPaths) {
-      Path partitionPath = new Path(basePath, partition);
+      Path partitionPath = FSUtils.getPartitionPath(basePath, partition);
       String[] row = new String[3];
       row[0] = partition;
       row[1] = "Yes";

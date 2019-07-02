@@ -103,8 +103,7 @@ public class HoodieTableFileSystemViewTest {
       fsView.close();
       fsView = null;
     }
-    fsView = getFileSystemView(
-        metaClient.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants());
+    fsView = getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
     roView = (TableFileSystemView.ReadOptimizedView) fsView;
     rtView = (TableFileSystemView.RealtimeView) fsView;
   }
@@ -615,10 +614,12 @@ public class HoodieTableFileSystemViewTest {
     // Put some files in the partition
     String fullPartitionPath = basePath + "/2016/05/01/";
     new File(fullPartitionPath).mkdirs();
-    String commitTime1 = "1";
-    String commitTime2 = "2";
-    String commitTime3 = "3";
-    String commitTime4 = "4";
+    String cleanTime1 = "1";
+    String commitTime1 = "2";
+    String commitTime2 = "3";
+    String commitTime3 = "4";
+    String commitTime4 = "5";
+
     String fileId1 = UUID.randomUUID().toString();
     String fileId2 = UUID.randomUUID().toString();
     String fileId3 = UUID.randomUUID().toString();
@@ -640,10 +641,28 @@ public class HoodieTableFileSystemViewTest {
     new File(fullPartitionPath + FSUtils.makeLogFileName(fileId4, HoodieLogFile.DELTA_EXTENSION,
         commitTime4, 0, TEST_WRITE_TOKEN)).createNewFile();
 
+    // Create commit/clean files
+    new File(basePath + "/.hoodie/" + cleanTime1 + ".clean").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime2 + ".commit").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime3 + ".commit").createNewFile();
     new File(basePath + "/.hoodie/" + commitTime4 + ".commit").createNewFile();
+
+    testStreamLatestVersionInPartition(isLatestFileSliceOnly, fullPartitionPath, commitTime1, commitTime2, commitTime3,
+        commitTime4, fileId1, fileId2, fileId3, fileId4);
+
+    // Now create a scenario where archiving deleted commits (1,2, and 3)  but retained cleaner clean1. Now clean1 is
+    // the lowest commit time. Scenario for HUDI-162 - Here clean is the earliest action in active timeline
+    new File(basePath + "/.hoodie/" + commitTime1 + ".commit").delete();
+    new File(basePath + "/.hoodie/" + commitTime2 + ".commit").delete();
+    new File(basePath + "/.hoodie/" + commitTime3 + ".commit").delete();
+    testStreamLatestVersionInPartition(isLatestFileSliceOnly, fullPartitionPath, commitTime1, commitTime2, commitTime3,
+        commitTime4, fileId1, fileId2, fileId3, fileId4);
+  }
+
+  private void testStreamLatestVersionInPartition(boolean isLatestFileSliceOnly, String fullPartitionPath,
+      String commitTime1, String commitTime2, String commitTime3, String commitTime4, String fileId1, String fileId2,
+      String fileId3, String fileId4) throws IOException {
 
     // Now we list the entire partition
     FileStatus[] statuses = metaClient.getFs().listStatus(new Path(fullPartitionPath));
@@ -711,7 +730,6 @@ public class HoodieTableFileSystemViewTest {
     assertEquals(logFilesList.size(), 1);
     assertTrue(logFilesList.get(0).getFileName()
         .equals(FSUtils.makeLogFileName(fileId2, HoodieLogFile.DELTA_EXTENSION, commitTime3, 0, TEST_WRITE_TOKEN)));
-
   }
 
   @Test

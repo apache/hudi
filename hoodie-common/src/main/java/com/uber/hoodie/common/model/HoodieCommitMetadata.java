@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uber.hoodie.common.util.FSUtils;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
@@ -30,7 +31,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -107,7 +107,7 @@ public class HoodieCommitMetadata implements Serializable {
     HashMap<String, String> fullPaths = new HashMap<>();
     for (Map.Entry<String, String> entry : getFileIdAndRelativePaths().entrySet()) {
       String fullPath =
-          (entry.getValue() != null) ? (new Path(basePath, entry.getValue())).toString() : null;
+          (entry.getValue() != null) ? (FSUtils.getPartitionPath(basePath, entry.getValue())).toString() : null;
       fullPaths.put(entry.getKey(), fullPath);
     }
     return fullPaths;
