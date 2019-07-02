@@ -198,7 +198,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     partitionToFileGroupsMap.put(partitionPath, newList);
   }
 
-
   @Override
   public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
     return partitionToFileGroupsMap.values().stream().flatMap(fg -> {

@@ -106,6 +106,12 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
+   *  Timeline to just include commits (commit/deltacommit) and compaction actions
+   * @return
+   */
+  HoodieTimeline getCommitsAndCompactionTimeline();
+
+  /**
    * Filter this timeline to just include requested and inflight compaction instants
    * @return
    */

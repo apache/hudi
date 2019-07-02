@@ -71,8 +71,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected HoodieTableMetaClient metaClient;
 
-  // This is the commits that will be visible for all views extending this view
-  protected HoodieTimeline visibleActiveTimeline;
+  // This is the commits timeline that will be visible for all views extending this view
+  private HoodieTimeline visibleCommitsAndCompactionTimeline;
 
   // Used to concurrently load and populate partition views
   private ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>(4096);
@@ -92,7 +92,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
-    this.visibleActiveTimeline = visibleActiveTimeline;
+    refreshTimeline(visibleActiveTimeline);
+
     // Load Pending Compaction Operations
     resetPendingCompactionOperations(
         CompactionUtils.getAllPendingCompactionOperations(metaClient).values()
@@ -101,11 +102,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
+   * Refresh commits timeline
+   * @param visibleActiveTimeline  Visible Active Timeline
+   */
+  protected void refreshTimeline(HoodieTimeline visibleActiveTimeline) {
+    this.visibleCommitsAndCompactionTimeline = visibleActiveTimeline.getCommitsAndCompactionTimeline();
+  }
+
+  /**
    * Adds the provided statuses into the file system view, and also caches it inside this object.
    */
   protected List<HoodieFileGroup> addFilesToView(FileStatus[] statuses) {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleActiveTimeline, true);
+    List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, visibleCommitsAndCompactionTimeline, true);
     long fgBuildTimeTakenMs = timer.endTimer();
     timer.startTimer();
     // Group by partition for efficient updates for both InMemory and DiskBased stuctures.
@@ -133,7 +142,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   protected List<HoodieFileGroup> buildFileGroups(Stream<HoodieDataFile> dataFileStream,
       Stream<HoodieLogFile> logFileStream, HoodieTimeline timeline, boolean addPendingCompactionFileSlice) {
-
     Map<Pair<String, String>, List<HoodieDataFile>> dataFiles = dataFileStream
         .collect(Collectors.groupingBy((dataFile) -> {
           String partitionPathStr = getPartitionPathFromFilePath(dataFile.getPath());
@@ -187,7 +195,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       resetViewState();
 
       // Initialize with new Hoodie timeline.
-      init(metaClient, visibleActiveTimeline);
+      init(metaClient, getTimeline());
     } finally {
       writeLock.unlock();
     }
@@ -288,6 +296,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
         getPendingCompactionOperationWithInstant(fileSlice.getFileGroupId());
+    log.info("Pending Compaction instant for (" + fileSlice + ") is :" + compactionWithInstantTime);
     return (compactionWithInstantTime.isPresent())
         && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.get().getKey());
   }
@@ -300,6 +309,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected FileSlice filterDataFileAfterPendingCompaction(FileSlice fileSlice) {
     if (isFileSliceAfterPendingCompaction(fileSlice)) {
+      log.info("File Slice (" + fileSlice + ") is in pending compaction");
       // Data file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed = new FileSlice(fileSlice.getPartitionPath(),
@@ -417,7 +427,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllDataFiles(partitionPath)
-          .filter(df -> visibleActiveTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
+          .filter(df -> visibleCommitsAndCompactionTimeline.containsOrBeforeTimelineStarts(df.getCommitTime()))
           .filter(df -> !isDataFileDueToPendingCompaction(df));
     } finally {
       readLock.unlock();
@@ -794,12 +804,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public Option<HoodieInstant> getLastInstant() {
-    return Option.fromJavaOptional(visibleActiveTimeline.lastInstant());
+    return Option.fromJavaOptional(getTimeline().lastInstant());
   }
 
   @Override
   public HoodieTimeline getTimeline() {
-    return visibleActiveTimeline;
+    return visibleCommitsAndCompactionTimeline;
   }
 
   @Override
@@ -822,10 +832,18 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param newTimeline New Hoodie Timeline
    */
   protected void runSync(HoodieTimeline oldTimeline, HoodieTimeline newTimeline) {
-    visibleActiveTimeline = newTimeline;
+    refreshTimeline(newTimeline);
     addedPartitions.clear();
     resetViewState();
     // Initialize with new Hoodie timeline.
     init(metaClient, newTimeline);
+  }
+
+  /**
+   * Return Only Commits and Compaction timeline for building file-groups
+   * @return
+   */
+  public HoodieTimeline getVisibleCommitsAndCompactionTimeline() {
+    return visibleCommitsAndCompactionTimeline;
   }
 }

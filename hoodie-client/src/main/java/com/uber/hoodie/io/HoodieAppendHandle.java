@@ -274,7 +274,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     Optional<HoodieLogFile> latestLogFile = fileSlice.get().getLatestLogFile();
 
     return HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new Path(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+        .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
         .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(
             latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
         .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs)
