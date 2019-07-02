@@ -18,6 +18,7 @@
 
 package com.uber.hoodie.common.table.timeline;
 
+import com.google.common.collect.Sets;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.StringUtils;
 import com.uber.hoodie.exception.HoodieException;
@@ -25,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -100,6 +102,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return new HoodieDefaultTimeline(instants.stream().filter(s -> {
       return !s.isInflight() || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION);
     }), details);
+  }
+
+  @Override
+  public HoodieTimeline getCommitsAndCompactionTimeline() {
+    Set<String> validActions = Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION);
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
   }
 
   @Override

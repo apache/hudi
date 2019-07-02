@@ -507,7 +507,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
           String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
           try {
             writer = HoodieLogFormat.newWriterBuilder().onParentPath(
-                new Path(this.getMetaClient().getBasePath(), partitionPath))
+                FSUtils.getPartitionPath(this.getMetaClient().getBasePath(), partitionPath))
                 .withFileId(wStat.getFileId()).overBaseCommit(baseCommitTime)
                 .withFs(this.metaClient.getFs())
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();

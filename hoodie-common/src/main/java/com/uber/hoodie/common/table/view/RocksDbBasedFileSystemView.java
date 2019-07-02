@@ -319,7 +319,8 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     return sliceStream.map(s -> Pair.of(Pair.of(s.getPartitionPath(), s.getFileId()), s))
         .collect(Collectors.groupingBy(Pair::getKey)).entrySet().stream().map(slicePair -> {
           HoodieFileGroup fg =
-              new HoodieFileGroup(slicePair.getKey().getKey(), slicePair.getKey().getValue(), visibleActiveTimeline);
+              new HoodieFileGroup(slicePair.getKey().getKey(), slicePair.getKey().getValue(),
+                  getVisibleCommitsAndCompactionTimeline());
           slicePair.getValue().forEach(e -> fg.addFileSlice(e.getValue()));
           return fg;
         });
