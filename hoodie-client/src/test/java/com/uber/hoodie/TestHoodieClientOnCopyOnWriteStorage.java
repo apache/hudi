@@ -43,6 +43,7 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
+import com.uber.hoodie.config.HoodieMemoryConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
@@ -258,13 +259,34 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
+   * Test UpsertPrepped API for HoodieRecord's new location tagging during merge handle with
+   * {@link com.uber.hoodie.common.util.collection.ExternalSpillableMap}
+   * Fixes Hudi issue #773.
+   */
+  @Test
+  public void testUpsertsPreppedUsingSpillableDiskForMerge() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+            .withMemoryConfig(HoodieMemoryConfig.newBuilder()
+                    // Enforcing that we spill everything to disk.
+                    .withMaxMemoryFractionPerCompaction(0)
+                    .withMaxMemoryFractionPerPartitionMerge(0)
+                    .build())
+            .build();
+    final JavaRDD<WriteStatus> writeStatus = testUpsertsInternal(hoodieWriteConfig,
+            HoodieWriteClient::upsertPreppedRecords, true);
+    writeStatus.collect().stream().forEach(
+        w -> w.getWrittenRecords().stream().forEach(
+            r -> Assert.assertTrue(r.getNewLocation().isPresent())));
+  }
+
+  /**
    * Test one of HoodieWriteClient upsert(Prepped) APIs
    *
    * @param hoodieWriteConfig Write Config
    * @param writeFn One of Hoodie Write Function API
    * @throws Exception in case of error
    */
-  private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig,
+  private JavaRDD<WriteStatus> testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       boolean isPrepped) throws Exception {
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
@@ -281,7 +303,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     newCommitTime = "004";
     numRecords = 100;
     String commitTimeBetweenPrevAndNew = "002";
-    updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+    return updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         Optional.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
         initCommitTime, numRecords, writeFn, isPrepped, true, numRecords, 200, 2);
   }
