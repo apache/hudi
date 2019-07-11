@@ -28,8 +28,6 @@
   <packaging>jar</packaging>
 
   <properties>
-    <log4j.version>1.2.17</log4j.version>
-    <junit.version>4.10</junit.version>
     <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
   </properties>
 
@@ -52,12 +50,11 @@
         <plugin>
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
-          <version>3.3.1</version>
+          <version>${scala-maven-plugin.version}</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>2.0.2</version>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -156,95 +153,14 @@
   </build>
 
   <dependencies>
+    <!-- Scala -->
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
-      <version>3.0.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_2.11</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_2.11</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.databricks</groupId>
-      <artifactId>spark-avro_2.11</artifactId>
-      <version>4.0.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-scala_2.11</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-      <scope>provided</scope>
-    </dependency>
 
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-      <version>${log4j.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-configuration2</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-metastore</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-common</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-
+    <!-- Hoodie -->
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-client</artifactId>
@@ -265,12 +181,93 @@
       <artifactId>hoodie-hive</artifactId>
       <version>${project.version}</version>
     </dependency>
+
+    <!-- Logging -->
     <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit-dep</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
     </dependency>
+
+    <!-- Fasterxml -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.module</groupId>
+      <artifactId>jackson-module-scala_2.11</artifactId>
+    </dependency>
+
+    <!-- Avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+    </dependency>
+
+    <!-- Spark -->
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_2.11</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_2.11</artifactId>
+    </dependency>
+
+    <!-- Spark (Packages) -->
+    <dependency>
+      <groupId>com.databricks</groupId>
+      <artifactId>spark-avro_2.11</artifactId>
+      <version>4.0.0</version>
+    </dependency>
+
+    <!-- Apache Commons -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-configuration2</artifactId>
+    </dependency>
+
+    <!-- Hadoop -->
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Hive -->
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-metastore</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-common</artifactId>
+      <version>${hive.version}</version>
+    </dependency>
+
+    <!-- Hoodie - Test -->
     <dependency>
       <groupId>com.uber.hoodie</groupId>
       <artifactId>hoodie-client</artifactId>
@@ -285,6 +282,20 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.scalatest</groupId>
+      <artifactId>scalatest_2.11</artifactId>
+      <version>${scalatest.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit-dep</artifactId>
+      <version>${junit-dep.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
