@@ -28,71 +28,28 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- Hoodie -->
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-common</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-metastore</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-common</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.thrift</groupId>
-      <artifactId>libthrift</artifactId>
-      <version>${thrift.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.thrift</groupId>
-      <artifactId>libfb303</artifactId>
-      <version>0.9.3</version>
-    </dependency>
-
-    <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-    </dependency>
-
-    <!-- Apache commons -->
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hive</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <!-- All other hoodie deps will come from hoodie-hadoop-mr-bundle -->
+          <groupId>com.uber.hoodie</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Logging -->
@@ -105,43 +62,93 @@
       <artifactId>slf4j-log4j12</artifactId>
     </dependency>
 
-    <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-    </dependency>
-
+    <!-- Parquet (Twitter) -->
     <dependency>
       <groupId>com.twitter</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- Thrift -->
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${thrift.version}</version>
     </dependency>
- 
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hive</artifactId>
-      <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <!-- All other hoodie deps will come from hoodie-hadoop-mr-bundle -->
-          <groupId>com.uber.hoodie</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libfb303</artifactId>
+      <version>0.9.3</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.beust</groupId>
+      <artifactId>jcommander</artifactId>
+    </dependency>
+
+    <!-- Apache Commons -->
+    <dependency>
+      <groupId>commons-dbcp</groupId>
+      <artifactId>commons-dbcp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+    </dependency>
+
+    <!-- Httpcomponents -->
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpcore</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+    </dependency>
+
+    <!-- Hadoop -->
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-auth</artifactId>
+    </dependency>
+
+    <!-- Hive -->
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-metastore</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-common</artifactId>
     </dependency>
   </dependencies>
 
