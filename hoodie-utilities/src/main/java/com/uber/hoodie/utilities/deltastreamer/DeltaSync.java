@@ -171,7 +171,7 @@ public class DeltaSync implements Serializable {
     refreshTimeline();
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassName);
-    this.keyGenerator = DataSourceUtils.createKeyGenerator(cfg.keyGeneratorClass, props);
+    this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
 
     this.formatAdapter = new SourceFormatAdapter(UtilHelpers.createSource(cfg.sourceClassName, props, jssc,
         sparkSession, schemaProvider));
