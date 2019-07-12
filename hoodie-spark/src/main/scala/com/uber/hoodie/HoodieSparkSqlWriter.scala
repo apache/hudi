@@ -100,23 +100,23 @@ private[hoodie] object HoodieSparkSqlWriter {
 
     val basePath = new Path(parameters("path"))
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
-    var exists = fs.exists(basePath)
+    var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
     // Handle various save modes
     if (mode == SaveMode.ErrorIfExists && exists) {
-      throw new HoodieException(s"basePath ${basePath} already exists.")
+      throw new HoodieException(s"hoodie dataset at $basePath already exists.")
     }
     if (mode == SaveMode.Ignore && exists) {
-      log.warn(s" basePath ${basePath} already exists. Ignoring & not performing actual writes.")
+      log.warn(s"hoodie dataset at $basePath already exists. Ignoring & not performing actual writes.")
       return (true, None)
     }
     if (mode == SaveMode.Overwrite && exists) {
-      log.warn(s" basePath ${basePath} already exists. Deleting existing data & overwriting with new data.")
+      log.warn(s"hoodie dataset at $basePath already exists. Deleting existing data & overwriting with new data.")
       fs.delete(basePath, true)
       exists = false
     }
 
-    // Create the dataset if not present (APPEND mode)
+    // Create the dataset if not present
     if (!exists) {
       HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get, storageType,
         tblName.get, "archived")
