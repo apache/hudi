@@ -90,10 +90,17 @@ public class DataSourceUtils {
   }
 
   /**
-   * Create a key generator class via reflection, passing in any configs needed
+   * Create a key generator class via reflection, passing in any configs needed.
+   *
+   * If the class name of key generator is configured through the properties file, i.e., {@code
+   * props}, use the corresponding key generator class; otherwise, use the default key generator
+   * class specified in {@code DataSourceWriteOptions}.
    */
-  public static KeyGenerator createKeyGenerator(String keyGeneratorClass,
-      TypedProperties props) throws IOException {
+  public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    String keyGeneratorClass = props.getString(
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
+        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL()
+    );
     try {
       return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
     } catch (Throwable e) {

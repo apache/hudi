@@ -84,10 +84,7 @@ private[hoodie] object HoodieSparkSqlWriter {
     log.info(s"Registered avro schema : ${schema.toString(true)}")
 
     // Convert to RDD[HoodieRecord]
-    val keyGenerator = DataSourceUtils.createKeyGenerator(
-      parameters(KEYGENERATOR_CLASS_OPT_KEY),
-      toProperties(parameters)
-    )
+    val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
     val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
     val hoodieAllIncomingRecords = genericRecords.map(gr => {
       val orderingVal = DataSourceUtils.getNestedFieldValAsString(
