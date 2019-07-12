@@ -42,12 +42,6 @@ Usage: <main class> [options]
           parameter "--propsFilePath") can also be passed command line using this 
           parameter 
           Default: []
-    --key-generator-class
-      Subclass of com.uber.hoodie.KeyGenerator to generate a HoodieKey from
-      the given avro record. Built in: SimpleKeyGenerator (uses provided field
-      names as recordkey & partitionpath. Nested fields specified via dot
-      notation, e.g: a.b.c)
-      Default: com.uber.hoodie.SimpleKeyGenerator
     --op
       Takes one of these values : UPSERT (default), INSERT (use when input is
       purely new data/inserts to gain speed)
