@@ -27,7 +27,6 @@ import com.beust.jcommander.ParameterException;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.OverwriteWithLatestAvroPayload;
-import com.uber.hoodie.SimpleKeyGenerator;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -180,11 +179,6 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";
-
-    @Parameter(names = {"--key-generator-class"}, description = "Subclass of com.uber.hoodie.KeyGenerator "
-        + "to generate a HoodieKey from the given avro record. Built in: SimpleKeyGenerator (uses "
-        + "provided field names as recordkey & partitionpath. Nested fields specified via dot notation, e.g: a.b.c)")
-    public String keyGeneratorClass = SimpleKeyGenerator.class.getName();
 
     @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off "
         + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value")
