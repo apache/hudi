@@ -338,7 +338,7 @@ speeding up large Spark jobs via upserts using the <a href="#datasource-writer">
 
 <h2 id="deltastreamer">DeltaStreamer</h2>
 
-<p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility (part of hoodie-utilities) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.</p>
+<p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility (part of hoodie-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.</p>
 
 <ul>
   <li>Exactly once ingestion of new events from Kafka, <a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">incremental imports</a> from Sqoop or output of <code class="highlighter-rouge">HiveIncrementalPuller</code> or files under a DFS folder</li>
@@ -350,7 +350,7 @@ speeding up large Spark jobs via upserts using the <a href="#datasource-writer">
 
 <p>Command line options describe capabilities in more detail</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` --help
+<div class="highlighter-rouge"><pre class="highlight"><code>[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-*.jar` --help
 Usage: &lt;main class&gt; [options]
   Options:
     --commit-on-errors
@@ -439,7 +439,7 @@ provided under <code class="highlighter-rouge">hoodie-utilities/src/test/resourc
 
 <p>and then ingest it as follows.</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls hoodie-utilities/target/hoodie-utilities-*-SNAPSHOT.jar` \
+<div class="highlighter-rouge"><pre class="highlight"><code>[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-*.jar` \
   --props file://${PWD}/hoodie-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
   --schemaprovider-class com.uber.hoodie.utilities.schema.SchemaRegistryProvider \
   --source-class com.uber.hoodie.utilities.sources.AvroKafkaSource \
