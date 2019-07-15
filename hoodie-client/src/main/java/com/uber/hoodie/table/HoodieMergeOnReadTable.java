@@ -505,20 +505,18 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
         }).forEach(wStat -> {
           HoodieLogFormat.Writer writer = null;
           String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
+          boolean success = false;
           try {
             writer = HoodieLogFormat.newWriterBuilder().onParentPath(
                 FSUtils.getPartitionPath(this.getMetaClient().getBasePath(), partitionPath))
                 .withFileId(wStat.getFileId()).overBaseCommit(baseCommitTime)
                 .withFs(this.metaClient.getFs())
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-            Long numRollbackBlocks = 0L;
             // generate metadata
             Map<HeaderMetadataType, String> header = generateHeader(commit);
             // if update belongs to an existing log file
             writer = writer.appendBlock(new HoodieCommandBlock(header));
-            numRollbackBlocks++;
-            filesToNumBlocksRollback.put(this.getMetaClient().getFs()
-                .getFileStatus(writer.getLogFile().getPath()), numRollbackBlocks);
+            success = true;
           } catch (IOException | InterruptedException io) {
             throw new HoodieRollbackException(
                 "Failed to rollback for commit " + commit, io);
@@ -526,6 +524,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
             try {
               if (writer != null) {
                 writer.close();
+              }
+              if (success) {
+                // This step is intentionally done after writer is closed. Guarantees that
+                // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
+                // cloud-storage : HUDI-168
+                filesToNumBlocksRollback.put(this.getMetaClient().getFs()
+                    .getFileStatus(writer.getLogFile().getPath()), 1L);
               }
             } catch (IOException io) {
               throw new UncheckedIOException(io);
