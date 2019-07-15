@@ -67,9 +67,17 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
-    this.inputStream = new FSDataInputStream(
-        new BufferedFSInputStream((FSInputStream) fs.open(logFile.getPath(), bufferSize).getWrappedStream(),
-            bufferSize));
+    FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
+    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      this.inputStream = new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(),
+              bufferSize));
+    } else {
+      // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
+      // need to wrap in another BufferedFSInputStream the make bufferSize work?
+      this.inputStream = fsDataInputStream;
+    }
+
     this.logFile = logFile;
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
