@@ -29,40 +29,26 @@
 
   <dependencies>
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.thrift</groupId>
-      <artifactId>libthrift</artifactId>
-      <version>${thrift.version}</version>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-common</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
     <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hadoop-mr</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
-    <!-- Apache commons -->
     <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hive</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-logging</groupId>
+      <artifactId>commons-logging</artifactId>
     </dependency>
 
     <dependency>
@@ -70,40 +56,14 @@
       <artifactId>commons-io</artifactId>
     </dependency>
 
-    <!-- Logging -->
     <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-log4j12</artifactId>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
     </dependency>
 
     <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
     </dependency>
   </dependencies>
 
@@ -129,11 +89,22 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <artifactSet>
+                <includes>
+                  <include>com.uber.hoodie:hoodie-common</include>
+                  <include>com.uber.hoodie:hoodie-hadoop-mr</include>
+                  <include>com.twitter.common:objectsize</include>
+                  <include>commons-logging:commons-logging</include>
+                  <include>commons-io:commons-io</include>
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.esotericsoftware:minlog</include>
+                  <include>commons-codec:commons-codec</include>
+                  <include>com.google.guava:guava</include>
+                  <include>joda-time:joda-time</include>
+                </includes>
+              </artifactSet>
               <relocations>
-                 <relocation>
-                  <pattern>com.beust.</pattern>
-                  <shadedPattern>com.uber.hoodie.com.beust.</shadedPattern>
-                 </relocation>
                  <relocation>
                   <pattern>org.joda.</pattern>
                   <shadedPattern>com.uber.hoodie.org.joda.</shadedPattern>
@@ -143,28 +114,8 @@
                   <shadedPattern>com.uber.hoodie.com.google.</shadedPattern>
                  </relocation>
                  <relocation>
-                   <pattern>org.slf4j.</pattern>
-                   <shadedPattern>com.uber.hoodie.org.slf4j.</shadedPattern>
-                 </relocation>
-                 <relocation>
                    <pattern>org.apache.commons.</pattern>
                    <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.column</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.column</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.format.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.format.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.hadoop.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.hadoop.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.schema.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.schema.</shadedPattern>
                  </relocation>
                  <relocation>
                    <pattern>com.esotericsoftware.kryo.</pattern>
@@ -180,22 +131,6 @@
                  </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
-              <artifactSet>
-                <excludes>
-                  <exclude>log4j:log4j</exclude>
-                  <exclude>org.apache.hadoop:*</exclude>
-                  <exclude>org.apache.hive:*</exclude>
-                  <exclude>org.apache.derby:derby</exclude>
-                  <!--Already a dependency in presto-hive connector-->
-                  <exclude>org.apache.thrift:*</exclude>
-                  <!--Provided by aws-java-sdk-core dependency in presto-hive connector-->
-                  <exclude>org.apache.httpcomponents:*</exclude>
-                  <!--Provided by hive-hadoop2-->
-                  <excude>com.fasterxml.jackson.core:*</excude>
-                  <excude>com.fasterxml.jackson.datatype:jackson-datatype-guava</excude>
-                  <excude>org.apache.parquet:*</excude>
-                </excludes>
-              </artifactSet>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>

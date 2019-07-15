@@ -29,120 +29,35 @@
 
   <dependencies>
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-common</artifactId>
+      <version>${project.version}</version>
     </dependency>
+
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hadoop-mr</artifactId>
+      <version>${project.version}</version>
     </dependency>
+
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hive</artifactId>
+      <version>${project.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-metastore</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-common</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-    </dependency>
+
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
       <version>${thrift.version}</version>
     </dependency>
+
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libfb303</artifactId>
       <version>0.9.3</version>
     </dependency>
 
-    <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-    </dependency>
-
-    <!-- Apache commons -->
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
-    </dependency>
-
-    <!-- Logging -->
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-log4j12</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
-    </dependency>
- 
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hive</artifactId>
-      <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <!-- All other hoodie deps will come from hoodie-hadoop-mr-bundle -->
-          <groupId>com.uber.hoodie</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
   </dependencies>
 
   <build>
@@ -167,6 +82,37 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <artifactSet>
+                <includes>
+                  <!-- stuff needed for syncing -->
+                  <include>com.google.guava:guava</include>
+                  <include>joda-time:joda-time</include>
+                  <include>org.apache.httpcomponents:httpclient</include>
+                  <include>org.apache.httpcomponents:fluent-hc</include>
+                  <include>commons-codec:commons-codec</include>
+                  <include>commons-dbcp:commons-dbcp</include>
+                  <include>commons-lang:commons-lang</include>
+                  <include>commons-pool:commons-pool</include>
+                  <include>commons-io:commons-io</include>
+                  <include>commons-logging:commons-logging</include>
+                  <include>org.apache.parquet:parquet-avro</include>
+                  <include>org.apache.thrift:libthrift</include>
+                  <include>org.apache.thrift:libfb303</include>
+                  <!-- Hudi's own deps -->
+                  <include>com.uber.hoodie:hoodie-common</include>
+                  <include>com.uber.hoodie:hoodie-hadoop-mr</include>
+                  <include>com.uber.hoodie:hoodie-hive</include>
+                  <!-- hive sync specific -->
+                  <include>com.beust:jcommander</include>
+                  <include>com.fasterxml.jackson.core:*</include>
+                  <!-- Just include hive-common, hive-service, hive-metastore and hive-jdbc -->
+                  <include>org.apache.hive:hive-common</include>
+                  <include>org.apache.hive:hive-metastore</include>
+                  <include>org.apache.hive:hive-jdbc</include>
+                  <include>org.apache.hive:hive-service</include>
+
+                </includes>
+              </artifactSet>
               <relocations>
                  <relocation>
                   <pattern>com.beust.</pattern>
@@ -181,39 +127,11 @@
                   <shadedPattern>com.uber.hoodie.com.google.</shadedPattern>
                  </relocation>
                  <relocation>
-                   <pattern>org.slf4j.</pattern>
-                   <shadedPattern>com.uber.hoodie.org.slf4j.</shadedPattern>
-                 </relocation>
-                 <relocation>
                    <pattern>org.apache.commons.</pattern>
                    <shadedPattern>com.uber.hoodie.org.apache.commons.</shadedPattern>
                  </relocation>
-                 <relocation>
-                   <pattern>parquet.column</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.column</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.format.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.format.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.hadoop.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.hadoop.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.schema.</pattern>
-                   <shadedPattern>com.uber.hoodie.parquet.schema.</shadedPattern>
-                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
-              <artifactSet>
-                <excludes>
-                  <exclude>log4j:log4j</exclude>
-                  <exclude>org.apache.hadoop:*</exclude>
-                  <exclude>org.apache.hive:*</exclude>
-                  <exclude>org.apache.derby:derby</exclude>
-                </excludes>
-              </artifactSet>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>

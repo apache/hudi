@@ -476,6 +476,7 @@
         <groupId>log4j</groupId>
         <artifactId>log4j</artifactId>
         <version>${log4j.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <dependency>
@@ -509,17 +510,24 @@
       </dependency>
 
       <dependency>
-        <groupId>org.apache.parquet</groupId>
-        <artifactId>parquet-hadoop</artifactId>
-        <version>${parquet.version}</version>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro-mapred</artifactId>
+        <version>${avro.version}</version>
+        <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.mortbay.jetty</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <dependency>
         <groupId>org.apache.avro</groupId>
-        <artifactId>avro-mapred</artifactId>
+        <artifactId>avro</artifactId>
         <version>${avro.version}</version>
+        <scope>provided</scope>
       </dependency>
-
       <!-- we have to stay at <= 16.0, due to issues with HBase client -->
       <dependency>
         <groupId>com.google.guava</groupId>
@@ -588,29 +596,6 @@
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
         <version>2.6</version>
-      </dependency>
-      <!-- Storage formats -->
-      <!-- Spark parquet version 1.7.0 does not play well with the hive 1.1.0 installed in cluster (which requires twitter parquet 1.5.0) -->
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-hadoop-bundle</artifactId>
-        <version>1.6.0</version>
-      </dependency>
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-hive-bundle</artifactId>
-        <version>1.6.0</version>
-      </dependency>
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-avro</artifactId>
-        <version>1.6.0</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.apache.parquet</groupId>
-        <artifactId>parquet-hive-bundle</artifactId>
-        <version>${parquet.version}</version>
       </dependency>
 
       <dependency>
@@ -717,12 +702,6 @@
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-log4j12</artifactId>
         <version>1.7.5</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-configuration2</artifactId>
-        <version>2.1.1</version>
       </dependency>
 
       <dependency>

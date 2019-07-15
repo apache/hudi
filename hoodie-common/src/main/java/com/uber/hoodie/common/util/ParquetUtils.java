@@ -36,7 +36,6 @@ import java.util.Set;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -74,7 +73,7 @@ public class ParquetUtils {
    */
   public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
     Optional<RecordKeysFilterFunction> filterFunction = Optional.empty();
-    if (CollectionUtils.isNotEmpty(filter)) {
+    if (filter != null && !filter.isEmpty()) {
       filterFunction = Optional.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = new Configuration(configuration);

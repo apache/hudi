@@ -128,6 +128,12 @@
     <dependency>
       <groupId>io.dropwizard.metrics</groupId>
       <artifactId>metrics-graphite</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>com.rabbitmq</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.dropwizard.metrics</groupId>
@@ -137,6 +143,7 @@
       <groupId>com.beust</groupId>
       <artifactId>jcommander</artifactId>
       <version>1.48</version>
+      <scope>test</scope>
     </dependency>
 
     <!-- Parent dependencies -->
@@ -159,11 +166,6 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-hadoop</artifactId>
     </dependency>
 
     <dependency>
@@ -204,12 +206,6 @@
     <dependency>
         <groupId>org.apache.hbase</groupId>
         <artifactId>hbase-client</artifactId>
-    </dependency>
-
-    <dependency>
-        <groupId>org.htrace</groupId>
-        <artifactId>htrace-core</artifactId>
-        <version>3.0.4</version>
     </dependency>
 
     <dependency>

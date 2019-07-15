@@ -14,6 +14,7 @@ target/
 *.war
 *.ear
 *.db
+.java-version
  
 ######################
 # OSX
