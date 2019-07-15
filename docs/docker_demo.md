@@ -25,15 +25,15 @@ The steps have been tested on a Mac laptop
 
 
 ```
-   127.0.0.1 adhoc-1
-   127.0.0.1 adhoc-2
-   127.0.0.1 namenode
-   127.0.0.1 datanode1
-   127.0.0.1 hiveserver
-   127.0.0.1 hivemetastore
-   127.0.0.1 kafkabroker
-   127.0.0.1 sparkmaster
-   127.0.0.1 zookeeper
+127.0.0.1 adhoc-1
+127.0.0.1 adhoc-2
+127.0.0.1 namenode
+127.0.0.1 datanode1
+127.0.0.1 hiveserver
+127.0.0.1 hivemetastore
+127.0.0.1 kafkabroker
+127.0.0.1 sparkmaster
+127.0.0.1 zookeeper
 ```
 
 Also, this has not been tested on some environments like Docker on Windows.
@@ -47,7 +47,7 @@ Also, this has not been tested on some environments like Docker on Windows.
 The first step is to build hudi
 ```
 cd <HUDI_WORKSPACE>
-mvn package -DskipTests
+mvn clean package -DskipTests
 ```
 
 #### Bringing up Demo Cluster
@@ -335,7 +335,7 @@ running in spark-sql
 
 ```
 docker exec -it adhoc-1 /bin/bash
-$SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --master local[2] --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
+$SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE,$HUDI_HADOOP_BUNDLE --master local[2] --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 3G --num-executors 1 --packages com.databricks:spark-avro_2.11:4.0.0  
 ...
 
 Welcome to
@@ -538,7 +538,7 @@ Running the same queries in Spark-SQL:
 
 ```
 docker exec -it adhoc-1 /bin/bash
-bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
+$SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE,$HUDI_HADOOP_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1 --packages com.databricks:spark-avro_2.11:4.0.0  
 
 # Copy On Write Table:
 
@@ -635,9 +635,9 @@ docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
 0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.mode=INCREMENTAL;
 No rows affected (0.009 seconds)
-0: jdbc:hive2://hiveserver:10000>  set hoodie.stock_ticks_cow.consume.max.commits=3;
+0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.max.commits=3;
 No rows affected (0.009 seconds)
-0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.start.timestamp=20180924064621;
+0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.start.timestamp=<FIRST_COMMIT>;
 ```
 
 With the above setting, file-ids that do not have any updates from the commit 20180924065039 is filtered out without scanning.
@@ -645,7 +645,7 @@ Here is the incremental query :
 
 ```
 0: jdbc:hive2://hiveserver:10000>
-0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG' and `_hoodie_commit_time` > '20180924064621';
+0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG' and `_hoodie_commit_time` > '<FIRST_COMMIT>';
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
 +----------------------+---------+----------------------+---------+------------+-----------+--+
@@ -658,7 +658,8 @@ Here is the incremental query :
 ##### Incremental Query with Spark SQL:
 ```
 docker exec -it adhoc-1 /bin/bash
-bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
+$SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE,$HUDI_HADOOP_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1 --packages com.databricks:spark-avro_2.11:4.0.0  
+
 Welcome to
       ____              __
      / __/__  ___ _____/ /__
@@ -673,8 +674,9 @@ Type :help for more information.
 scala> import com.uber.hoodie.DataSourceReadOptions
 import com.uber.hoodie.DataSourceReadOptions
 
-# In the below query, 20180925045257 is the first commit's timestamp
-scala> val hoodieIncViewDF =  spark.read.format("com.uber.hoodie").option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL).option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "20180924064621").load("/user/hive/warehouse/stock_ticks_cow")
+# In the below query, 20180925045257 is the first commit's timestamp; replace with values obtained above
+scala> val firstCommitTime = "<FIRST_COMMIT>"
+scala> val hoodieIncViewDF =  spark.read.format("com.uber.hoodie").option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL).option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, firstCommitTime).load("/user/hive/warehouse/stock_ticks_cow")
 SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
@@ -759,7 +761,7 @@ hoodie:stock_ticks_mor->compactions show all
 
 
 # Execute the compaction. The compaction instant value passed below must be the one displayed in the above "compactions show all" query
-hoodie:stock_ticks_mor->compaction run --compactionInstant  20180924070031 --parallelism 2 --sparkMemory 1G  --schemaFilePath /var/demo/config/schema.avsc --retry 1  
+hoodie:stock_ticks_mor->compaction run --compactionInstant  <COMPACTION_INSTANT_TIME> --parallelism 2 --sparkMemory 1G  --schemaFilePath /var/demo/config/schema.avsc --retry 1  
 ....
 Compaction successfully completed for 20180924070031
 
@@ -837,10 +839,10 @@ No rows affected (0.008 seconds)
 # Max-Commits covers both second batch and compaction commit
 0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_mor.consume.max.commits=3;
 No rows affected (0.007 seconds)
-0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_mor.consume.start.timestamp=20180924064636;
+0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_mor.consume.start.timestamp=<FIRST_COMMIT_TIME>;
 No rows affected (0.013 seconds)
 # Query:
-0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG' and `_hoodie_commit_time` > '20180924064636';
+0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG' and `_hoodie_commit_time` > '<FIRST_COMMIT_TIME>';
 +----------------------+---------+----------------------+---------+------------+-----------+--+
 | _hoodie_commit_time  | symbol  |          ts          | volume  |    open    |   close   |
 +----------------------+---------+----------------------+---------+------------+-----------+--+
@@ -854,7 +856,7 @@ exit
 
 ```
 docker exec -it adhoc-1 /bin/bash
-bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
+$SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE,$HUDI_HADOOP_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1 --packages com.databricks:spark-avro_2.11:4.0.0 
 
 # Read Optimized View
 scala> spark.sql("select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG'").show(100, false)
