@@ -102,15 +102,15 @@ public class HoodieAvroUtils {
     List<Schema.Field> parentFields = new ArrayList<>();
 
     Schema.Field commitTimeField = new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field commitSeqnoField = new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field recordKeyField = new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field partitionPathField = new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema.Field fileNameField = new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
 
     parentFields.add(commitTimeField);
     parentFields.add(commitSeqnoField);
@@ -119,7 +119,7 @@ public class HoodieAvroUtils {
     parentFields.add(fileNameField);
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
-        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), null);
+        Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue());
         for (Map.Entry<String, JsonNode> prop : field.getJsonProps().entrySet()) {
           newField.addProp(prop.getKey(), prop.getValue());
         }
@@ -135,7 +135,7 @@ public class HoodieAvroUtils {
 
   private static Schema initRecordKeySchema() {
     Schema.Field recordKeyField = new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", null);
+        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
     recordKeySchema.setFields(Arrays.asList(recordKeyField));
     return recordKeySchema;
