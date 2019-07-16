@@ -45,6 +45,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -551,5 +552,16 @@ public class FSUtils {
     // FOr non-partitioned table, return only base-path
     return ((partitionPath == null) || (partitionPath.isEmpty())) ? basePath :
         new Path(basePath, partitionPath);
+  }
+
+  /**
+   * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
+   * @param inputStream FSDataInputStream
+   * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
+   */
+  public static boolean isGCSInputStream(FSDataInputStream inputStream) {
+    return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
+        || inputStream.getWrappedStream().getClass().getCanonicalName()
+        .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
   }
 }
