@@ -27,6 +27,7 @@ import com.uber.hoodie.common.table.log.block.HoodieDeleteBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.exception.CorruptedLogFileException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
@@ -234,7 +235,11 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean isBlockCorrupt(int blocksize) throws IOException {
     long currentPos = inputStream.getPos();
     try {
-      inputStream.seek(currentPos + blocksize);
+      if (FSUtils.isGCSInputStream(inputStream)) {
+        inputStream.seek(currentPos + blocksize - 1);
+      } else {
+        inputStream.seek(currentPos + blocksize);
+      }
     } catch (EOFException e) {
       // this is corrupt
       // This seek is required because contract of seek() is different for naked DFSInputStream vs BufferedFSInputStream
