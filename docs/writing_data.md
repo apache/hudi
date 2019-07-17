@@ -10,6 +10,24 @@ summary: In this page, we will discuss some available tools for incrementally in
 In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the [DeltaStreamer](#deltastreamer) tool, as well as 
 speeding up large Spark jobs via upserts using the [Hudi datasource](#datasource-writer). Such datasets can then be [queried](querying_data.html) using various query engines.
 
+
+## Write Operations
+
+Before that, it may be helpful to understand the 3 different write operations provided by Hudi datasource or the delta streamer tool and how best to leverage them. These operations
+can be chosen/changed across each commit/deltacommit issued against the dataset.
+
+
+ - **UPSERT** : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
+ the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
+ This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.
+ - **INSERT** : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
+ for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the dataset can tolerate duplicates, but just 
+ need the transactional writes/incremental pull/storage management capabilities of Hudi.
+ - **BULK_INSERT** : Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for 
+ initial loading/bootstrapping a Hudi dataset at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
+ of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do. 
+
+
 ## DeltaStreamer
 
 The `HoodieDeltaStreamer` utility (part of hoodie-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
@@ -163,6 +181,23 @@ Usage: <main class> [options]
   * --user
        Hive username
 ```
+
+## Deletes 
+
+Hudi supports implementing two types of deletes on data stored in Hudi datasets, by enabling the user to specify a different record payload implementation. 
+
+ - **Soft Deletes** : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
+ This can be simply achieved by ensuring the appropriate fields are nullable in the dataset schema and simply upserting the dataset after setting these fields to null.
+ - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
+ via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `com.uber.hoodie.EmptyHoodieRecordPayload` class that does exactly this.
+ 
+ ```$java
+ writer // writer created from dataframe containing just records to be deleted
+ // specify record_key, partition_key, precombine_fieldkey & usual params
+ .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "com.uber.hoodie.EmptyHoodieRecordPayload")
+ 
+ ```
+
 
 ## Storage Management
 
