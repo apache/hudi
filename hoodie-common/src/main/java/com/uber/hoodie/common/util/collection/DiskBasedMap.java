@@ -56,6 +56,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
+  // Write only file
+  private File writeOnlyFile;
   // Write only OutputStream to be able to ONLY append to the file
   private SizeAwareDataOutputStream writeOnlyFileHandle;
   // FileOutputStream for the file handle to be able to force fsync
@@ -71,10 +73,10 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
   public DiskBasedMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
-    File writeOnlyFileHandle = new File(baseFilePath, UUID.randomUUID().toString());
-    this.filePath = writeOnlyFileHandle.getPath();
-    initFile(writeOnlyFileHandle);
-    this.fileOutputStream = new FileOutputStream(writeOnlyFileHandle, true);
+    this.writeOnlyFile = new File(baseFilePath, UUID.randomUUID().toString());
+    this.filePath = writeOnlyFile.getPath();
+    initFile(writeOnlyFile);
+    this.fileOutputStream = new FileOutputStream(writeOnlyFile, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream);
     this.filePosition = new AtomicLong(0L);
   }
@@ -98,20 +100,20 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     }
   }
 
-  private void initFile(File writeOnlyFileHandle) throws IOException {
+  private void initFile(File writeOnlyFile) throws IOException {
     // delete the file if it exists
-    if (writeOnlyFileHandle.exists()) {
-      writeOnlyFileHandle.delete();
+    if (writeOnlyFile.exists()) {
+      writeOnlyFile.delete();
     }
-    if (!writeOnlyFileHandle.getParentFile().exists()) {
-      writeOnlyFileHandle.getParentFile().mkdir();
+    if (!writeOnlyFile.getParentFile().exists()) {
+      writeOnlyFile.getParentFile().mkdir();
     }
-    writeOnlyFileHandle.createNewFile();
+    writeOnlyFile.createNewFile();
     log.info(
-        "Spilling to file location " + writeOnlyFileHandle.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
+        "Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
             .getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName() + ")");
     // Make sure file is deleted when JVM exits
-    writeOnlyFileHandle.deleteOnExit();
+    writeOnlyFile.deleteOnExit();
     addShutDownHook();
   }
 
@@ -139,8 +141,10 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
               }
             }
           }
+          writeOnlyFile.delete();
         } catch (Exception e) {
-          // fail silently for any sort of exception
+          // delete the file for any sort of exception
+          writeOnlyFile.delete();
         }
       }
     });
