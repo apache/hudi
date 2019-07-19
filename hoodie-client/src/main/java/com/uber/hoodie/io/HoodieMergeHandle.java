@@ -327,16 +327,22 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       }
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
-      writeStatus.getStat().setTotalWriteBytes(fileSizeInBytes);
-      writeStatus.getStat().setFileSizeInBytes(fileSizeInBytes);
-      writeStatus.getStat().setNumWrites(recordsWritten);
-      writeStatus.getStat().setNumDeletes(recordsDeleted);
-      writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
-      writeStatus.getStat().setNumInserts(insertRecordsWritten);
-      writeStatus.getStat().setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+      HoodieWriteStat stat = writeStatus.getStat();
+
+      stat.setTotalWriteBytes(fileSizeInBytes);
+      stat.setFileSizeInBytes(fileSizeInBytes);
+      stat.setNumWrites(recordsWritten);
+      stat.setNumDeletes(recordsDeleted);
+      stat.setNumUpdateWrites(updatedRecordsWritten);
+      stat.setNumInserts(insertRecordsWritten);
+      stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
-      writeStatus.getStat().setRuntimeStats(runtimeStats);
+      stat.setRuntimeStats(runtimeStats);
+
+      logger.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.",
+          stat.getPartitionPath(), stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+
       return writeStatus;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);

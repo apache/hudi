@@ -9,9 +9,8 @@ import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.config.TestSourceConfig;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
@@ -21,34 +20,35 @@ import org.apache.spark.sql.SparkSession;
 
 public abstract class AbstractBaseTestSource extends AvroSource {
 
+  static final int DEFAULT_PARTITION_NUM = 0;
+
   // Static instance, helps with reuse across a test.
-  protected static transient HoodieTestDataGenerator dataGenerator;
+  protected static transient Map<Integer, HoodieTestDataGenerator> dataGeneratorMap = new HashMap<>();
 
   public static void initDataGen() {
-    dataGenerator = new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS);
+    dataGeneratorMap.putIfAbsent(DEFAULT_PARTITION_NUM,
+        new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS));
   }
 
-  public static void initDataGen(TypedProperties props) {
+  public static void initDataGen(TypedProperties props, int partition) {
     try {
       boolean useRocksForTestDataGenKeys = props.getBoolean(TestSourceConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS,
           TestSourceConfig.DEFAULT_USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS);
-      String baseStoreDir = props.getString(TestSourceConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS, null);
-      if (null == baseStoreDir) {
-        baseStoreDir = File.createTempFile("test_data_gen", ".keys").getParent();
-      }
+      String baseStoreDir = props.getString(TestSourceConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS,
+          File.createTempFile("test_data_gen", ".keys").getParent()) + "/" + partition;
       log.info("useRocksForTestDataGenKeys=" + useRocksForTestDataGenKeys + ", BaseStoreDir=" + baseStoreDir);
-      dataGenerator = new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS,
-          useRocksForTestDataGenKeys ? new RocksDBBasedMap<>(baseStoreDir) : new HashMap<>());
+      dataGeneratorMap.put(partition, new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS,
+          useRocksForTestDataGenKeys ? new RocksDBBasedMap<>(baseStoreDir) : new HashMap<>()));
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
   }
 
   public static void resetDataGen() {
-    if (null != dataGenerator) {
+    for (HoodieTestDataGenerator dataGenerator : dataGeneratorMap.values()) {
       dataGenerator.close();
     }
-    dataGenerator = null;
+    dataGeneratorMap.clear();
   }
 
   protected AbstractBaseTestSource(TypedProperties props,
@@ -57,9 +57,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
-  protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime) {
+  protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime,
+      int partition) {
     int maxUniqueKeys = props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP,
         TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
+
+    HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 
     // generate `sourceLimit` number of upserts each time.
     int numExistingKeys = dataGenerator.getNumExistingKeys();
@@ -84,15 +87,14 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     log.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
         + ", Free Memory=" + Runtime.getRuntime().freeMemory());
 
-    List<GenericRecord> records = new ArrayList<>();
     Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
-        .map(AbstractBaseTestSource::toGenericRecord);
+        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts)
-        .map(AbstractBaseTestSource::toGenericRecord);
+        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     return Stream.concat(updateStream, insertStream);
   }
 
-  private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
+  private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
     try {
       Optional<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
       return (GenericRecord) recordOpt.get();

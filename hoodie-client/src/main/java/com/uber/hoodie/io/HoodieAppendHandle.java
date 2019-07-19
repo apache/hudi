@@ -27,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.TableFileSystemView.RealtimeView;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
@@ -247,17 +248,23 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       if (writer != null) {
         writer.close();
       }
-      writeStatus.getStat().setFileId(this.fileId);
-      writeStatus.getStat().setNumWrites(recordsWritten);
-      writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
-      writeStatus.getStat().setNumInserts(insertRecordsWritten);
-      writeStatus.getStat().setNumDeletes(recordsDeleted);
-      writeStatus.getStat().setTotalWriteBytes(estimatedNumberOfBytesWritten);
-      writeStatus.getStat().setFileSizeInBytes(sizeInBytes);
-      writeStatus.getStat().setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+
+      HoodieWriteStat stat = writeStatus.getStat();
+      stat.setFileId(this.fileId);
+      stat.setNumWrites(recordsWritten);
+      stat.setNumUpdateWrites(updatedRecordsWritten);
+      stat.setNumInserts(insertRecordsWritten);
+      stat.setNumDeletes(recordsDeleted);
+      stat.setTotalWriteBytes(estimatedNumberOfBytesWritten);
+      stat.setFileSizeInBytes(sizeInBytes);
+      stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
-      writeStatus.getStat().setRuntimeStats(runtimeStats);
+      stat.setRuntimeStats(runtimeStats);
+
+      logger.info(String.format("AppendHandle for partitionPath %s fileID %s, took %d ms.",
+          stat.getPartitionPath(), stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+
       return writeStatus;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);

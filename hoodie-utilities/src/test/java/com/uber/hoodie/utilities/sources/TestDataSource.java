@@ -40,9 +40,7 @@ public class TestDataSource extends AbstractBaseTestSource {
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    if (null == dataGenerator) {
-      initDataGen(props);
-    }
+    initDataGen();
   }
 
   @Override
@@ -58,7 +56,8 @@ public class TestDataSource extends AbstractBaseTestSource {
       return new InputBatch<>(Optional.empty(), commitTime);
     }
 
-    List<GenericRecord> records = fetchNextBatch(props, (int)sourceLimit, commitTime).collect(Collectors.toList());
+    List<GenericRecord> records = fetchNextBatch(props, (int)sourceLimit, commitTime, DEFAULT_PARTITION_NUM)
+        .collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Optional.of(avroRDD), commitTime);
   }
