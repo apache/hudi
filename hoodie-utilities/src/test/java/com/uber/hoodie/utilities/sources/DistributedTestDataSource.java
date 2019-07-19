@@ -66,14 +66,14 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
     newProps.setProperty(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, maxUniqueRecordsPerPartition);
     int perPartitionSourceLimit = Math.max(1, (int) (sourceLimit / numTestSourcePartitions));
     JavaRDD<GenericRecord> avroRDD = sparkContext.parallelize(IntStream.range(0, numTestSourcePartitions).boxed()
-        .collect(Collectors.toList()), numTestSourcePartitions).mapPartitions(idx -> {
+        .collect(Collectors.toList()), numTestSourcePartitions).mapPartitionsWithIndex((p, idx) -> {
           log.info("Initializing source with newProps=" + newProps);
-          if (null == dataGenerator) {
-            initDataGen(newProps);
+          if (!dataGeneratorMap.containsKey(p)) {
+            initDataGen(newProps, p);
           }
-          Iterator<GenericRecord> itr = fetchNextBatch(newProps, perPartitionSourceLimit, commitTime).iterator();
+          Iterator<GenericRecord> itr = fetchNextBatch(newProps, perPartitionSourceLimit, commitTime, p).iterator();
           return itr;
-        });
+        }, true);
     return new InputBatch<>(Optional.of(avroRDD), commitTime);
   }
 }
