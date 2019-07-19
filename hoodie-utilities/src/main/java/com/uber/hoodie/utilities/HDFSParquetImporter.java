@@ -61,6 +61,7 @@ import scala.Tuple2;
  * Loads data from Parquet Sources
  */
 public class HDFSParquetImporter implements Serializable {
+
   private static volatile Logger log = LogManager.getLogger(HDFSParquetImporter.class);
 
   public static final SimpleDateFormat PARTITION_FORMATTER = new SimpleDateFormat("yyyy/MM/dd");
@@ -87,9 +88,14 @@ public class HDFSParquetImporter implements Serializable {
       System.exit(1);
     }
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
-    dataImporter
-        .dataImport(UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),
-            cfg.retry);
+    JavaSparkContext jssc = UtilHelpers
+        .buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    try {
+      dataImporter.dataImport(jssc, cfg.retry);
+    } finally {
+      jssc.stop();
+    }
+
   }
 
   public int dataImport(JavaSparkContext jsc, int retry) throws Exception {
