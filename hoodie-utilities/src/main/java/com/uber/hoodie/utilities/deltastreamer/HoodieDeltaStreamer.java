@@ -280,7 +280,11 @@ public class HoodieDeltaStreamer implements Serializable {
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName,
         cfg.sparkMaster, additionalSparkConfigs);
-    new HoodieDeltaStreamer(cfg, jssc).sync();
+    try {
+      new HoodieDeltaStreamer(cfg, jssc).sync();
+    } finally {
+      jssc.stop();
+    }
   }
 
   /**
