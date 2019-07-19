@@ -6,6 +6,7 @@ target/
 .DS_Store
  
 *.class
+.java-version
  
 # Package Files #
 *.jar
