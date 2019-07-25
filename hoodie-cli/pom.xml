@@ -29,8 +29,6 @@
   <properties>
     <spring.shell.version>1.2.0.RELEASE</spring.shell.version>
     <jar.mainclass>org.springframework.shell.Bootstrap</jar.mainclass>
-    <log4j.version>1.2.17</log4j.version>
-    <junit.version>4.10</junit.version>
     <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
   </properties>
 
@@ -61,7 +59,7 @@
         <plugin>
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
-          <version>3.2.1</version>
+          <version>${scala-maven-plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -133,23 +131,42 @@
 
 
   <dependencies>
-
+    <!-- Scala -->
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
     </dependency>
 
+    <!-- Hoodie -->
     <dependency>
-      <groupId>org.springframework.shell</groupId>
-      <artifactId>spring-shell</artifactId>
-      <version>${spring.shell.version}</version>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-client</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>de.vandermeer</groupId>
-      <artifactId>asciitable</artifactId>
-      <version>0.2.5</version>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-common</artifactId>
+      <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-hive</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.uber.hoodie</groupId>
+      <artifactId>hoodie-utilities</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
+    </dependency>
+
+    <!-- Spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_2.11</artifactId>
@@ -159,6 +176,24 @@
       <artifactId>spark-sql_2.11</artifactId>
     </dependency>
 
+    <!-- Apache Commons -->
+    <dependency>
+      <groupId>commons-dbcp</groupId>
+      <artifactId>commons-dbcp</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.shell</groupId>
+      <artifactId>spring-shell</artifactId>
+      <version>${spring.shell.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>de.vandermeer</groupId>
+      <artifactId>asciitable</artifactId>
+      <version>0.2.5</version>
+    </dependency>
+
     <dependency>
       <groupId>com.jakewharton.fliptables</groupId>
       <artifactId>fliptables</artifactId>
@@ -166,60 +201,26 @@
     </dependency>
 
     <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-      <version>${log4j.version}</version>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
     </dependency>
 
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hive</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-client</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
+    <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
     </dependency>
-
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
     </dependency>
 
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit-dep</artifactId>
-      <version>${junit.version}</version>
+      <version>${junit-dep.version}</version>
       <scope>test</scope>
     </dependency>
-
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-      <version>2.9.6</version>
-    </dependency>
-    <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-utilities</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
   </dependencies>
 
 </project>
