@@ -115,6 +115,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    */
   public abstract boolean isImplicitWithStorage();
 
+  /**
+   * Each index type should implement it's own logic to release any resources acquired during the process.
+   */
+  public void close() {}
 
   public enum IndexType {
     HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM

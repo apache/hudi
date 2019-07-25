@@ -466,10 +466,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   private JavaRDD<WriteStatus> updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD,
       HoodieTable<T> table, String commitTime) {
+    // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
+    // RDD actions that are performed after updating the index.
+    writeStatusRDD = writeStatusRDD.persist(config.getWriteStatusStorageLevel());
     // Update the index back
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);
     // Trigger the insert and collect statuses
-    statuses = statuses.persist(config.getWriteStatusStorageLevel());
     commitOnAutoCommit(commitTime, statuses, table.getMetaClient().getCommitActionType());
     return statuses;
   }
@@ -974,6 +976,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   public void close() {
     // Stop timeline-server if running
     super.close();
+    // Calling this here releases any resources used by your index, so make sure to finish any related operations
+    // before this point
+    this.index.close();
   }
 
   /**

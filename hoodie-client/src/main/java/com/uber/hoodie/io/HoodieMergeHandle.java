@@ -149,6 +149,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
    * Extract old file path, initialize StorageWriter and WriteStatus
    */
   private void init(String fileId, String partitionPath, HoodieDataFile dataFileToBeMerged) {
+    logger.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
