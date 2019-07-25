@@ -121,13 +121,15 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // Remove 'hoodie-' prefix from path
     if (path.toString().startsWith(HOODIE_SCHEME_PREFIX)) {
       path = new Path(path.toString().replace(HOODIE_SCHEME_PREFIX, ""));
+      this.uri = path.toUri();
+    } else {
+      this.uri = uri;
     }
     this.fileSystem = FSUtils.getFs(path.toString(), conf);
     // Do not need to explicitly initialize the default filesystem, its done already in the above
     // FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
     // fileSystem.setConf(conf);
-    this.uri = uri;
   }
 
   @Override
@@ -861,11 +863,11 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   public Path convertToHoodiePath(Path oldPath) {
-    return convertPathWithScheme(oldPath, getHoodieScheme(fileSystem.getScheme()));
+    return convertPathWithScheme(oldPath, getHoodieScheme(getScheme()));
   }
 
   private Path convertToDefaultPath(Path oldPath) {
-    return convertPathWithScheme(oldPath, fileSystem.getScheme());
+    return convertPathWithScheme(oldPath, getScheme());
   }
 
   private Path convertToLocalPath(Path oldPath) {
