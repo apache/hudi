@@ -57,6 +57,15 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";
   public static final String DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET = "10000000";
 
+  // ***** HBase Index Configs *****
+  public static final String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";
+  public static final String HBASE_ZKPORT_PROP = "hoodie.index.hbase.zkport";
+  public static final String HBASE_ZK_ZNODEPARENT = "hoodie.index.hbase.zknode.path";
+  public static final String HBASE_TABLENAME_PROP = "hoodie.index.hbase.table";
+  public static final String HBASE_GET_BATCH_SIZE_PROP = "hoodie.index.hbase.get.batch.size";
+  public static final String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
+  public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
+
 
   public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL =
       "hoodie.bloom.index.input.storage" + ".level";
@@ -106,6 +115,26 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public Builder bloomFilterFPP(double fpp) {
       props.setProperty(BLOOM_FILTER_FPP, String.valueOf(fpp));
+      return this;
+    }
+
+    public Builder hbaseZkQuorum(String zkString) {
+      props.setProperty(HBASE_ZKQUORUM_PROP, zkString);
+      return this;
+    }
+
+    public Builder hbaseZkPort(int port) {
+      props.setProperty(HBASE_ZKPORT_PROP, String.valueOf(port));
+      return this;
+    }
+
+    public Builder hbaseZkZnodeParent(String zkZnodeParent) {
+      props.setProperty(HBASE_ZK_ZNODEPARENT, zkZnodeParent);
+      return this;
+    }
+
+    public Builder hbaseTableName(String tableName) {
+      props.setProperty(HBASE_TABLENAME_PROP, tableName);
       return this;
     }
 
