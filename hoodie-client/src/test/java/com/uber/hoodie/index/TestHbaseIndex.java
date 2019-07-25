@@ -186,6 +186,40 @@ public class TestHbaseIndex {
   }
 
   @Test
+  public void testTagLocationAndDuplicateUpdate() throws Exception {
+    String newCommitTime = "001";
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+
+    // Load to memory
+    HoodieWriteConfig config = getConfig();
+    HBaseIndex index = new HBaseIndex(config);
+    HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
+    writeClient.startCommit();
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+
+    JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
+    JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords, jsc, hoodieTable);
+    // Duplicate upsert and ensure correctness is maintained
+    writeClient.upsert(writeRecords, newCommitTime);
+    assertNoWriteErrors(writeStatues.collect());
+
+    // Now commit this & update location of records inserted and validate no errors
+    writeClient.commit(newCommitTime, writeStatues);
+    // Now tagLocation for these records, hbaseIndex should tag them correctly
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
+    JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
+    assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 10);
+    assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 10);
+    assertTrue(javaRDD.filter(
+        record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getInstantTime()
+                                                              .equals(newCommitTime))).distinct().count() == 10);
+  }
+
+  @Test
   public void testSimpleTagLocationAndUpdateWithRollback() throws Exception {
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
@@ -357,6 +391,23 @@ public class TestHbaseIndex {
     Assert.assertEquals(10, writeStatusRDD.getNumPartitions());
     Assert.assertEquals(2, hbasePutAccessParallelism);
     Assert.assertEquals(11, hbaseNumPuts);
+  }
+
+  @Test
+  public void testsHBasePutAccessParallelismWithNoInserts() {
+    HoodieWriteConfig config = getConfig();
+    HBaseIndex index = new HBaseIndex(config);
+    final JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(
+        Arrays.asList(
+            getSampleWriteStatus(0, 2),
+            getSampleWriteStatus(0, 1)),
+        10);
+    final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
+    final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
+    final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
+    Assert.assertEquals(10, writeStatusRDD.getNumPartitions());
+    Assert.assertEquals(0, hbasePutAccessParallelism);
+    Assert.assertEquals(0, hbaseNumPuts);
   }
 
   @Test

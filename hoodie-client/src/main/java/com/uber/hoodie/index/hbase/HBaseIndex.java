@@ -83,6 +83,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   private static Logger logger = LogManager.getLogger(HBaseIndex.class);
   private static Connection hbaseConnection = null;
+  private HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = null;
   private float qpsFraction;
   private int maxQpsPerRegionServer;
   /**
@@ -106,6 +107,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     this.qpsFraction = config.getHbaseIndexQPSFraction();
     this.maxQpsPerRegionServer = config.getHbaseIndexMaxQPSPerRegionServer();
     this.putBatchSizeCalculator = new HbasePutBatchSizeCalculator();
+    this.hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
   }
 
   @VisibleForTesting
@@ -132,6 +134,10 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     Configuration hbaseConfig = HBaseConfiguration.create();
     String quorum = config.getHbaseZkQuorum();
     hbaseConfig.set("hbase.zookeeper.quorum", quorum);
+    String zkZnodeParent = config.getHBaseZkZnodeParent();
+    if (zkZnodeParent != null) {
+      hbaseConfig.set("zookeeper.znode.parent", zkZnodeParent);
+    }
     String port = String.valueOf(config.getHbaseZkPort());
     hbaseConfig.set("hbase.zookeeper.property.clientPort", port);
     try {
@@ -156,6 +162,13 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
         }
       }
     });
+  }
+
+  /**
+   * Ensure that any resources used for indexing are released here.
+   */
+  public void close() {
+    this.hBaseIndexQPSResourceAllocator.releaseQPSResources();
   }
 
   private Get generateStatement(String key) throws IOException {
@@ -368,21 +381,13 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, JavaSparkContext jsc,
       HoodieTable<T> hoodieTable) {
     final HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
-    JavaRDD<WriteStatus> writeStatusResultRDD;
     setPutBatchSize(writeStatusRDD, hBaseIndexQPSResourceAllocator, jsc);
-    logger.info("multiPutBatchSize: before puts" + multiPutBatchSize);
+    logger.info("multiPutBatchSize: before hbase puts" + multiPutBatchSize);
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeStatusRDD.mapPartitionsWithIndex(
         updateLocationFunction(), true);
-    // Forcing a spark action so HBase puts are triggered before releasing resources
-    if (this.config.getHBaseIndexShouldComputeQPSDynamically()) {
-      logger.info("writestatus count: " + writeStatusJavaRDD.count());
-      writeStatusResultRDD = writeStatusRDD;
-    } else {
-      writeStatusResultRDD = writeStatusJavaRDD;
-    }
-    // Release QPS resources as HBAse puts are done at this point
-    hBaseIndexQPSResourceAllocator.releaseQPSResources();
-    return writeStatusResultRDD;
+    // caching the index updated status RDD
+    writeStatusJavaRDD = writeStatusJavaRDD.persist(config.getWriteStatusStorageLevel());
+    return writeStatusJavaRDD;
   }
 
   private void setPutBatchSize(JavaRDD<WriteStatus> writeStatusRDD,
@@ -430,7 +435,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD =
         writeStatusRDD.filter(w -> w.getStat().getNumInserts() > 0)
             .mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
-    return insertOnlyWriteStatusRDD.reduce((w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));
+    return insertOnlyWriteStatusRDD.fold(new Tuple2<>(0L, 0), (w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));
   }
 
   public static class HbasePutBatchSizeCalculator implements Serializable {

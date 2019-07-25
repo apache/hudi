@@ -306,6 +306,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_ZKPORT_PROP));
   }
 
+  public String getHBaseZkZnodeParent() {
+    return props.getProperty(HoodieIndexConfig.HBASE_ZK_ZNODEPARENT);
+  }
+
   public String getHbaseTableName() {
     return props.getProperty(HoodieHBaseIndexConfig.HBASE_TABLENAME_PROP);
   }
