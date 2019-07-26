@@ -151,6 +151,8 @@ public class DeltaSync implements Serializable {
    */
   private final HoodieTableType tableType;
 
+  private String lastCheckpointStr;
+
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
       SchemaProvider schemaProvider, HoodieTableType tableType, TypedProperties props,
@@ -258,6 +260,7 @@ public class DeltaSync implements Serializable {
           cfg.storageType, cfg.targetTableName, "archived");
     }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
+    this.lastCheckpointStr = resumeCheckpointStr.orElse(null);
 
     final Optional<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
@@ -288,8 +291,8 @@ public class DeltaSync implements Serializable {
     }
 
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
-      log.info("No new data, nothing to commit.. ");
-      return null;
+      log.info("No new data, return empty rdd.. ");
+      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
     }
 
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
@@ -320,10 +323,15 @@ public class DeltaSync implements Serializable {
       cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
       records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig(),
           writeClient.getTimelineServer());
+    }
 
-      if (records.isEmpty()) {
+    boolean isEmpty = records.isEmpty();
+    if (isEmpty) {
+      if (checkpointStr.equals(lastCheckpointStr)) {
         log.info("No new data, nothing to commit.. ");
         return Optional.empty();
+      } else {
+        log.info("No new data, commit with checkpoint:" + checkpointStr);
       }
     }
 
@@ -365,9 +373,11 @@ public class DeltaSync implements Serializable {
         }
 
         // Sync to hive if enabled
-        Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
-        syncHive();
-        hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+        if (!isEmpty) {
+          Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
+          syncHive();
+          hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+        }
       } else {
         log.info("Commit " + commitTime + " failed!");
         throw new HoodieException("Commit " + commitTime + " failed!");
