@@ -453,14 +453,16 @@ public class DeltaSync implements Serializable {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withProps(props)
-            .withPath(cfg.targetBasePath)
-            .combineInput(cfg.filterDupes, true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .fromProperties(HoodieIndexConfig.newBuilder()
+                    .fromProperties(props)
+                    .withIndexType(HoodieIndex.IndexType.BLOOM).build().getProps())
                 .withPayloadClass(cfg.payloadClassName)
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
+            .withPath(cfg.targetBasePath)
+            .combineInput(cfg.filterDupes, true)
             .forTable(cfg.targetTableName)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withAutoCommit(false);
     if (null != schemaProvider) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
