@@ -5,6 +5,7 @@ sudo: required
 env:
   - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit
   - TEST_SUITE=integration
+install: true
 services:
 - docker
 cache:
