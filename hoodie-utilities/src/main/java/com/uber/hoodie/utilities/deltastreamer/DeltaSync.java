@@ -260,6 +260,10 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           cfg.storageType, cfg.targetTableName, "archived");
     }
+
+    if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
+      resumeCheckpointStr = Optional.of(cfg.checkpoint);
+    }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
     final Optional<JavaRDD<GenericRecord>> avroRDDOptional;
