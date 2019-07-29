@@ -254,6 +254,13 @@ public class HoodieDeltaStreamer implements Serializable {
         + "This flag disables it ")
     public Boolean forceDisableCompaction = false;
 
+    /**
+     * Resume Delta Streamer from this checkpoint.
+     */
+    @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
+    public String checkpoint = null;
+
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
