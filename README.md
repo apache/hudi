@@ -3,6 +3,6 @@ Apache Hudi (pronounced Hoodie) stands for `Hadoop Upserts anD Incrementals`. Hu
 
  * **Read Optimized View** - Provides excellent query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/))
  * **Incremental View** - Provides a change stream with records inserted or updated after a point in time.
- * **Real time View ** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))
+ * **Real time View** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))
 
 For more, head over [here](https://hudi.apache.org)
