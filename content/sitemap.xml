@@ -3,13 +3,13 @@
   
   
   <url>
-    <loc>http://0.0.0.0:4000/strata-talk.html</loc>
+    <loc>http://localhost:4000/strata-talk.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/strata-talk.html</loc>
+    <loc>http://localhost:4000/strata-talk.html</loc>
   </url>
   
   
@@ -20,139 +20,139 @@
   
   
   <url>
-    <loc>http://0.0.0.0:4000/admin_guide.html</loc>
+    <loc>http://localhost:4000/admin_guide.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/community.html</loc>
+    <loc>http://localhost:4000/community.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/comparison.html</loc>
+    <loc>http://localhost:4000/comparison.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/concepts.html</loc>
+    <loc>http://localhost:4000/concepts.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/configurations.html</loc>
+    <loc>http://localhost:4000/configurations.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/contributing.html</loc>
+    <loc>http://localhost:4000/contributing.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/docker_demo.html</loc>
-  </url>
-  
-  
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/gcs_hoodie.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/index.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/migration_guide.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/js/mydoc_scroll.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/news.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/news_archive.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/performance.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/powered_by.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/privacy.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/querying_data.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/quickstart.html</loc>
-  </url>
-  
-  
-  
-  <url>
-    <loc>http://0.0.0.0:4000/s3_hoodie.html</loc>
+    <loc>http://localhost:4000/docker_demo.html</loc>
   </url>
   
   
   
   
   
-  
-  
   <url>
-    <loc>http://0.0.0.0:4000/use_cases.html</loc>
+    <loc>http://localhost:4000/gcs_hoodie.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/writing_data.html</loc>
+    <loc>http://localhost:4000/index.html</loc>
   </url>
   
   
   
   <url>
-    <loc>http://0.0.0.0:4000/feed.xslt.xml</loc>
+    <loc>http://localhost:4000/migration_guide.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/js/mydoc_scroll.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/news.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/news_archive.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/performance.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/powered_by.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/privacy.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/querying_data.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/quickstart.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/s3_hoodie.html</loc>
+  </url>
+  
+  
+  
+  
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/use_cases.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/writing_data.html</loc>
+  </url>
+  
+  
+  
+  <url>
+    <loc>http://localhost:4000/feed.xslt.xml</loc>
   </url>
   
   

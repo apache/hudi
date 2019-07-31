@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -336,6 +336,23 @@
   <p>In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the <a href="#deltastreamer">DeltaStreamer</a> tool, as well as 
 speeding up large Spark jobs via upserts using the <a href="#datasource-writer">Hudi datasource</a>. Such datasets can then be <a href="querying_data.html">queried</a> using various query engines.</p>
 
+<h2 id="write-operations">Write Operations</h2>
+
+<p>Before that, it may be helpful to understand the 3 different write operations provided by Hudi datasource or the delta streamer tool and how best to leverage them. These operations
+can be chosen/changed across each commit/deltacommit issued against the dataset.</p>
+
+<ul>
+  <li><strong>UPSERT</strong> : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
+ the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
+ This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.</li>
+  <li><strong>INSERT</strong> : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
+ for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the dataset can tolerate duplicates, but just 
+ need the transactional writes/incremental pull/storage management capabilities of Hudi.</li>
+  <li><strong>BULK_INSERT</strong> : Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for 
+ initial loading/bootstrapping a Hudi dataset at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
+ of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do.</li>
+</ul>
+
 <h2 id="deltastreamer">DeltaStreamer</h2>
 
 <p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility (part of hoodie-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.</p>
@@ -369,12 +386,6 @@ Usage: &lt;main class&gt; [options]
           parameter "--propsFilePath") can also be passed command line using this 
           parameter 
           Default: []
-    --key-generator-class
-      Subclass of com.uber.hoodie.KeyGenerator to generate a HoodieKey from
-      the given avro record. Built in: SimpleKeyGenerator (uses provided field
-      names as recordkey &amp; partitionpath. Nested fields specified via dot
-      notation, e.g: a.b.c)
-      Default: com.uber.hoodie.SimpleKeyGenerator
     --op
       Takes one of these values : UPSERT (default), INSERT (use when input is
       purely new data/inserts to gain speed)
@@ -497,6 +508,26 @@ Usage: &lt;main class&gt; [options]
 </code></pre>
 </div>
 
+<h2 id="deletes">Deletes</h2>
+
+<p>Hudi supports implementing two types of deletes on data stored in Hudi datasets, by enabling the user to specify a different record payload implementation.</p>
+
+<ul>
+  <li><strong>Soft Deletes</strong> : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
+ This can be simply achieved by ensuring the appropriate fields are nullable in the dataset schema and simply upserting the dataset after setting these fields to null.</li>
+  <li><strong>Hard Deletes</strong> : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
+ via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in <code class="highlighter-rouge">com.uber.hoodie.EmptyHoodieRecordPayload</code> class that does exactly this.</li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code> deleteDF // dataframe containing just records to be deleted
+   .write().format("com.uber.hoodie")
+   .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
+   // specify record_key, partition_key, precombine_fieldkey &amp; usual params
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "com.uber.hoodie.EmptyHoodieRecordPayload")
+ 
+</code></pre>
+</div>
+
 <h2 id="storage-management">Storage Management</h2>
 
 <p>Hudi also performs several key storage management functions on the data stored in a Hudi dataset. A key aspect of storing data on DFS is managing file sizes and counts
@@ -544,6 +575,17 @@ once created cannot be deleted, but simply expanded as explained before.</li>
                   stabilized in a manner consistent with other successful ASF projects. While incubation status is not necessarily a
                   reflection of the completeness or stability of the code, it does indicate that the project has yet to be fully endorsed by the ASF.
                   </p>
+                </div>
+                <div class="col-lg-12 footer">
+                  <div class="ui link list">
+                    <a class="item" rel="external" href="https://incubator.apache.org/"> Apache Incubator </a>
+                    <a class="item" rel="external" href="https://www.apache.org/"> About the ASF </a>
+                    <a class="item" rel="external" href="https://www.apache.org/events/current-event"> Events </a>
+                    <a class="item" rel="external" href="https://www.apache.org/foundation/thanks.html"> Thanks </a>
+                    <a class="item" rel="external" href="https://www.apache.org/foundation/sponsorship.html"> Become a Sponsor </a>
+                    <a class="item" rel="external" href="https://www.apache.org/security/"> Security </a>
+                    <a class="item" rel="external" href="https://www.apache.org/licenses/"> License </a>
+                  </div>
                 </div>
             </div>
 </footer>
