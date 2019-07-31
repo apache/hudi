@@ -191,12 +191,14 @@ Hudi supports implementing two types of deletes on data stored in Hudi datasets,
  - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
  via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `com.uber.hoodie.EmptyHoodieRecordPayload` class that does exactly this.
  
- ```$java
- writer // writer created from dataframe containing just records to be deleted
- // specify record_key, partition_key, precombine_fieldkey & usual params
- .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "com.uber.hoodie.EmptyHoodieRecordPayload")
+```
+ deleteDF // dataframe containing just records to be deleted
+   .write().format("com.uber.hoodie")
+   .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
+   // specify record_key, partition_key, precombine_fieldkey & usual params
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "com.uber.hoodie.EmptyHoodieRecordPayload")
  
- ```
+```
 
 
 ## Storage Management
