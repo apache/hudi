@@ -192,9 +192,9 @@
                   <!--Provided by aws-java-sdk-core dependency in presto-hive connector-->
                   <exclude>org.apache.httpcomponents:*</exclude>
                   <!--Provided by hive-hadoop2-->
-                  <excude>com.fasterxml.jackson.core:*</excude>
-                  <excude>com.fasterxml.jackson.datatype:jackson-datatype-guava</excude>
-                  <excude>org.apache.parquet:*</excude>
+                  <exclude>com.fasterxml.jackson.core:*</exclude>
+                  <exclude>com.fasterxml.jackson.datatype:jackson-datatype-guava</exclude>
+                  <exclude>org.apache.parquet:*</exclude>
                 </excludes>
               </artifactSet>
               <filters>
