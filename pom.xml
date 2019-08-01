@@ -499,6 +499,10 @@
             <groupId>javax.servlet</groupId>
             <artifactId>servlet-api</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
 
@@ -533,6 +537,16 @@
         <artifactId>hadoop-common</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>jdk.tools</groupId>
+            <artifactId>jdk.tools</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -557,12 +571,24 @@
         <artifactId>hadoop-mapreduce-client-core</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-mapreduce-client-common</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.rocksdb</groupId>
@@ -778,42 +804,120 @@
         <artifactId>hive-service</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-shims</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-jdbc</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-serde</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-metastore</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.transaction</groupId>
+            <artifactId>jta</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.transaction</groupId>
+            <artifactId>transaction-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-common</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>${hive.groupid}</groupId>
         <artifactId>hive-exec</artifactId>
         <version>${hive.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -826,8 +930,18 @@
         <artifactId>hadoop-common</artifactId>
         <classifier>tests</classifier>
         <version>${hadoop.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>jdk.tools</groupId>
+            <artifactId>jdk.tools</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
-      <dependency>
+       <dependency>
         <groupId>org.mockito</groupId>
         <artifactId>mockito-all</artifactId>
         <scope>test</scope>
@@ -839,6 +953,13 @@
         <artifactId>kryo</artifactId>
         <version>4.0.0</version>
         <scope>test</scope>
+      </dependency>
+     <!-- Needed for running HiveServer for Tests -->
+      <dependency>
+        <groupId>org.eclipse.jetty.aggregate</groupId>
+        <artifactId>jetty-all</artifactId>
+        <scope>test</scope>
+        <version>7.6.0.v20120127</version>
       </dependency>
     </dependencies>
 

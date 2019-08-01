@@ -88,12 +88,9 @@ This project includes:
   Jackson-core under The Apache Software License, Version 2.0
   jackson-databind under The Apache Software License, Version 2.0
   java-xmlbuilder under Apache License, Version 2.0
-  JavaBeans Activation Framework (JAF) under Common Development and Distribution License (CDDL) v1.0
   JAX-RS provider for JSON content type under The Apache Software License, Version 2.0 or GNU Lesser General Public License (LGPL), Version 2.1
-  JAXB API bundle for GlassFish V3 under CDDL 1.1 or GPL2 w/ CPE
   JAXB RI under CDDL 1.1 or GPL2 w/ CPE
   jcommander under Apache 2.0
-  jdk.tools:jdk.tools under Oracle Binary Code License Agreement for the Java SE
   jersey-client under CDDL 1.1 or GPL2 w/ CPE
   jersey-core under CDDL 1.1 or GPL2 w/ CPE
   jersey-json under CDDL 1.1 or GPL2 w/ CPE
@@ -117,7 +114,6 @@ This project includes:
   SLF4J API Module under MIT License
   SLF4J LOG4J-12 Binding under MIT License
   Snappy for Java under The Apache Software License, Version 2.0
-  Streaming API for XML under GNU General Public Library or COMMON DEVELOPMENT AND DISTRIBUTION LICENSE (CDDL) Version 1.0
   The Netty Project under Apache License, Version 2.0
   Xerces2 Java Parser under The Apache Software License, Version 2.0
   XML Commons External Components XML APIs under The Apache Software License, Version 2.0
