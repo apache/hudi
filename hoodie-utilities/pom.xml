@@ -372,5 +372,11 @@
       <version>3.0.0</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.eclipse.jetty.aggregate</groupId>
+      <artifactId>jetty-all</artifactId>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 </project>

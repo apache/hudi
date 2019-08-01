@@ -192,7 +192,11 @@
       <version>2.21</version>
       <scope>test</scope>
     </dependency>
-
+    <dependency>
+      <groupId>org.eclipse.jetty.aggregate</groupId>
+      <artifactId>jetty-all</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
