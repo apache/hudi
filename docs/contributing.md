@@ -35,6 +35,7 @@ Here's a typical lifecycle of events to contribute to Hudi.
  - [Optional] If you want to get involved, but don't have a project in mind, please check JIRA for small, quick-starters.
  - [Optional] Familiarize yourself with internals of Hudi using content on this page, as well as [wiki](https://cwiki.apache.org/confluence/display/HUDI)
  - Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself. (If you don't have perms to do this, please email the dev mailing list with your JIRA id and a small intro for yourself. We'd be happy to add you as a contributor)
+ - Almost all PRs should be linked to a JIRA. Before you begin work, click "Start Progress" on the JIRA, which tells everyone that you are working on the issue actively.
  - Make your code change
    - Every source file needs to include the Apache license header. Every new dependency needs to
      have an open source license [compatible](https://www.apache.org/legal/resolved.html#criteria) with Apache.
@@ -50,13 +51,13 @@ Here's a typical lifecycle of events to contribute to Hudi.
  - If you don't hear back within 3 days on the PR, please send an email to dev @ mailing list.
  - Address code review comments & keep pushing changes to your fork/branch, which automatically updates the PR
  - Before your change can be merged, it should be squashed into a single commit for cleaner commit history.
-
+ - As courtesy, if you are unable to continue working on a JIRA, please move it back to "OPEN" state and unassign yourself.
 
 ## Releases
 
  - Apache Hudi community plans to do minor version releases every 6 weeks or so.
  - If your contribution merged onto `master` branch after the last release, it will become part of next release.
- - Website changes are regenerated once a week (until automation in place to reflect immediately)
+ - Website changes are regenerated on-demand basis (until automation in place to reflect immediately)
 
 
 ## Accounts and Permissions
