@@ -69,15 +69,10 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
   public static final int HOODIE_RECORD_KEY_COL_POS = 2;
   public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
-  // Track the read column ids and names to be used throughout the execution and lifetime of this task
-  // Needed for Hive on Spark. Our theory is that due to
+  // Hive on Spark queries do not work with RT tables. Our theory is that due to
   // {@link org.apache.hadoop.hive.ql.io.parquet.ProjectionPusher}
   // not handling empty list correctly, the ParquetRecordReaderWrapper ends up adding the same column ids multiple
   // times which ultimately breaks the query.
-  // TODO : Find why RO view works fine but RT doesn't, JIRA: https://issues.apache.org/jira/browse/HUDI-151
-  public static String READ_COLUMN_IDS;
-  public static String READ_COLUMN_NAMES;
-  public static boolean isReadColumnsSet = false;
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
@@ -208,11 +203,6 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
         HOODIE_COMMIT_TIME_COL_POS);
     configuration = addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
         HOODIE_PARTITION_PATH_COL_POS);
-    if (!isReadColumnsSet) {
-      READ_COLUMN_IDS = configuration.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-      READ_COLUMN_NAMES = configuration.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR);
-      isReadColumnsSet = true;
-    }
     return configuration;
   }
 
@@ -239,10 +229,6 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
     Preconditions.checkArgument(split instanceof HoodieRealtimeFileSplit,
         "HoodieRealtimeRecordReader can only work on HoodieRealtimeFileSplit and not with "
             + split);
-
-    // Reset the original column ids and names
-    job.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, READ_COLUMN_IDS);
-    job.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, READ_COLUMN_NAMES);
 
     return new HoodieRealtimeRecordReader((HoodieRealtimeFileSplit) split, job,
         super.getRecordReader(split, job, reporter));
