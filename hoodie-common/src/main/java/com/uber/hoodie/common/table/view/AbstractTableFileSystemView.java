@@ -42,7 +42,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -359,15 +358,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       String partitionPath = formatPartitionKey(partitionStr);
       ensurePartitionLoadedCorrectly(partitionPath);
       return fetchAllStoredFileGroups(partitionPath)
-          .map(fileGroup -> fileGroup.getAllDataFiles()
+          .map(fileGroup -> Option.fromJavaOptional(fileGroup.getAllDataFiles()
               .filter(dataFile ->
                   HoodieTimeline.compareTimestamps(dataFile.getCommitTime(),
                       maxCommitTime,
                       HoodieTimeline.LESSER_OR_EQUAL))
               .filter(df -> !isDataFileDueToPendingCompaction(df))
-              .findFirst())
-          .filter(Optional::isPresent)
-          .map(Optional::get);
+              .findFirst()))
+          .filter(Option::isPresent)
+          .map(Option::get);
     } finally {
       readLock.unlock();
     }
@@ -410,11 +409,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       readLock.lock();
       return fetchAllStoredFileGroups().map(fileGroup -> {
-        return fileGroup.getAllDataFiles()
+        return Option.fromJavaOptional(fileGroup.getAllDataFiles()
             .filter(dataFile -> commitsToReturn.contains(dataFile.getCommitTime())
                 && !isDataFileDueToPendingCompaction(dataFile))
-            .findFirst();
-      }).filter(Optional::isPresent).map(Optional::get);
+            .findFirst());
+      }).filter(Option::isPresent).map(Option::get);
     } finally {
       readLock.unlock();
     }
@@ -477,9 +476,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
               String compactionInstantTime = compactionWithInstantPair.get().getLeft();
               return fileGroup.getLatestFileSliceBefore(compactionInstantTime);
             }
-            return Optional.of(fileSlice);
+            return Option.of(fileSlice);
           })
-          .map(Optional::get);
+          .map(Option::get);
     } finally {
       readLock.unlock();
     }
@@ -512,15 +511,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       ensurePartitionLoadedCorrectly(partition);
       return fetchAllStoredFileGroups(partition)
           .map(fileGroup -> {
-            Optional<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
+            Option<FileSlice> fileSlice = fileGroup.getLatestFileSliceBeforeOrOn(maxInstantTime);
             // if the file-group is under construction, pick the latest before compaction instant time.
             if (fileSlice.isPresent()) {
-              fileSlice = Optional.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
+              fileSlice = Option.of(fetchMergedFileSlice(fileGroup, fileSlice.get()));
             }
             return fileSlice;
           })
-          .filter(Optional::isPresent)
-          .map(Optional::get);
+          .filter(Option::isPresent)
+          .map(Option::get);
     } finally {
       readLock.unlock();
     }
@@ -656,7 +655,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   Stream<FileSlice> fetchLatestFileSliceInRange(List<String> commitsToReturn) {
     return fetchAllStoredFileGroups().map(fileGroup -> fileGroup.getLatestFileSliceInRange(commitsToReturn))
-        .map(Optional::get);
+        .map(Option::get);
   }
 
   /**
@@ -677,13 +676,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   Stream<HoodieDataFile> fetchLatestDataFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
         .map(this::getLatestDataFile)
-        .filter(Optional::isPresent)
-        .map(Optional::get);
+        .filter(Option::isPresent)
+        .map(Option::get);
   }
 
 
-  protected Optional<HoodieDataFile> getLatestDataFile(HoodieFileGroup fileGroup) {
-    return fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst();
+  protected Option<HoodieDataFile> getLatestDataFile(HoodieFileGroup fileGroup) {
+    return Option.fromJavaOptional(
+        fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst());
   }
 
   /**
@@ -692,8 +692,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   Stream<HoodieDataFile> fetchLatestDataFiles() {
     return fetchAllStoredFileGroups()
         .map(this::getLatestDataFile)
-        .filter(Optional::isPresent)
-        .map(Optional::get);
+        .filter(Option::isPresent)
+        .map(Option::get);
   }
 
   /**
@@ -721,8 +721,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   Stream<FileSlice> fetchLatestFileSlices(String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath)
         .map(HoodieFileGroup::getLatestFileSlice)
-        .filter(Optional::isPresent)
-        .map(Optional::get);
+        .filter(Option::isPresent)
+        .map(Option::get);
   }
 
   /**
@@ -735,8 +735,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       String maxCommitTime) {
     return fetchAllStoredFileGroups(partitionPath)
         .map(fileGroup -> fileGroup.getLatestFileSliceBeforeOrOn(maxCommitTime))
-        .filter(Optional::isPresent)
-        .map(Optional::get);
+        .filter(Option::isPresent)
+        .map(Option::get);
   }
 
   /**
@@ -771,7 +771,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     if (compactionOpWithInstant.isPresent()) {
       String compactionInstantTime = compactionOpWithInstant.get().getKey();
       if (fileSlice.getBaseInstantTime().equals(compactionInstantTime)) {
-        Optional<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
+        Option<FileSlice> prevFileSlice = fileGroup.getLatestFileSliceBefore(compactionInstantTime);
         if (prevFileSlice.isPresent()) {
           return mergeCompactionPendingFileSlices(fileSlice, prevFileSlice.get());
         }
@@ -804,7 +804,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   @Override
   public Option<HoodieInstant> getLastInstant() {
-    return Option.fromJavaOptional(getTimeline().lastInstant());
+    return getTimeline().lastInstant();
   }
 
   @Override

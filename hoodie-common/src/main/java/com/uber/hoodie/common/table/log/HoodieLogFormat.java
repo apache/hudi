@@ -21,11 +21,11 @@ package com.uber.hoodie.common.table.log;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -209,7 +209,7 @@ public interface HoodieLogFormat {
 
       if (logVersion == null) {
         log.info("Computing the next log version for " + logFileId + " in " + parentPath);
-        Optional<Pair<Integer, String>> versionAndWriteToken =
+        Option<Pair<Integer, String>> versionAndWriteToken =
             FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
         if (versionAndWriteToken.isPresent()) {
           logVersion = versionAndWriteToken.get().getKey();

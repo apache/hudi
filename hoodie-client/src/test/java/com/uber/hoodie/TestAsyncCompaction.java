@@ -42,6 +42,7 @@ import com.uber.hoodie.common.table.view.FileSystemViewStorageType;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -54,7 +55,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -485,7 +485,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
   private void scheduleCompaction(String compactionInstantTime, HoodieWriteClient client, HoodieWriteConfig cfg)
       throws IOException {
-    client.scheduleCompactionAtInstant(compactionInstantTime, Optional.empty());
+    client.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant instant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().get();
     assertEquals("Last compaction instant must be the one set",
@@ -545,7 +545,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       client.commit(instantTime, statuses);
     }
 
-    Optional<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().reload().getDeltaCommitTimeline()
+    Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().reload().getDeltaCommitTimeline()
         .filterCompletedInstants().lastInstant();
     if (skipCommit && !cfg.shouldAutoCommit()) {
       assertTrue("Delta commit should not be latest instant",

@@ -22,8 +22,8 @@ import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
-import java.util.Optional;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 
@@ -52,7 +52,7 @@ public class IncrSourceHelper {
    * @return begin and end instants
    */
   public static Pair<String, String> calculateBeginAndEndInstants(
-      JavaSparkContext jssc, String srcBasePath, int numInstantsPerFetch, Optional<String> beginInstant,
+      JavaSparkContext jssc, String srcBasePath, int numInstantsPerFetch, Option<String> beginInstant,
       boolean readLatestOnMissingBeginInstant) {
     Preconditions.checkArgument(numInstantsPerFetch > 0, "Make sure the config"
         + " hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
@@ -64,7 +64,7 @@ public class IncrSourceHelper {
 
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (readLatestOnMissingBeginInstant) {
-        Optional<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
+        Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
         return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse("000");
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
@@ -72,8 +72,11 @@ public class IncrSourceHelper {
       }
     });
 
-    Optional<HoodieInstant> nthInstant =
-        activeCommitTimeline.findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y);
+    Option<HoodieInstant> nthInstant = Option.fromJavaOptional(
+        activeCommitTimeline
+            .findInstantsAfter(beginInstantTime, numInstantsPerFetch)
+            .getInstants()
+            .reduce((x, y) -> y));
     return Pair.of(beginInstantTime, nthInstant.map(instant -> instant.getTimestamp()).orElse(beginInstantTime));
   }
 

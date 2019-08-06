@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.DFSPathSelector;
-import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapreduce.AvroKeyInputFormat;
@@ -46,14 +46,14 @@ public class AvroDFSSource extends AvroSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Optional<String> lastCkptStr,
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr,
       long sourceLimit) {
-    Pair<Optional<String>, String> selectPathsWithMaxModificationTime =
+    Pair<Option<String>, String> selectPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
     return selectPathsWithMaxModificationTime.getLeft().map(pathStr -> new InputBatch<>(
-        Optional.of(fromFiles(pathStr)),
+        Option.of(fromFiles(pathStr)),
         selectPathsWithMaxModificationTime.getRight()))
-        .orElseGet(() -> new InputBatch<>(Optional.empty(), selectPathsWithMaxModificationTime.getRight()));
+        .orElseGet(() -> new InputBatch<>(Option.empty(), selectPathsWithMaxModificationTime.getRight()));
   }
 
   private JavaRDD<GenericRecord> fromFiles(String pathStr) {

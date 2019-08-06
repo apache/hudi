@@ -40,7 +40,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
@@ -86,7 +85,7 @@ public class AvroUtils {
         String partitionPath =
             deltaRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
         loadedRecords.add(new HoodieRecord<>(new HoodieKey(key, partitionPath),
-            new HoodieAvroPayload(Optional.of(deltaRecord))));
+            new HoodieAvroPayload(Option.of(deltaRecord))));
       }
       fileReader.close(); // also closes underlying FsInput
     } catch (IOException e) {
@@ -97,7 +96,7 @@ public class AvroUtils {
   }
 
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
-      Optional<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
+      Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
     ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder =
         ImmutableMap.builder();
     int totalDeleted = 0;
@@ -119,7 +118,7 @@ public class AvroUtils {
   }
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
-      Optional<Long> durationInMs, List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {
+      Option<Long> durationInMs, List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {
     ImmutableMap.Builder<String, List<HoodieRollbackMetadata>> commitToStatBuilder = ImmutableMap.builder();
     for (Map.Entry<String, List<HoodieRollbackStat>> commitToStat : commitToStats.entrySet()) {
       commitToStatBuilder.put(commitToStat.getKey(), Arrays.asList(convertRollbackMetadata(startRestoreTime,
@@ -130,7 +129,7 @@ public class AvroUtils {
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime,
-      Optional<Long> durationInMs, List<String> commits, List<HoodieRollbackStat> rollbackStats) {
+      Option<Long> durationInMs, List<String> commits, List<HoodieRollbackStat> rollbackStats) {
     ImmutableMap.Builder<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder =
         ImmutableMap.builder();
     int totalDeleted = 0;
@@ -159,32 +158,32 @@ public class AvroUtils {
         partitionMetadataBuilder.build());
   }
 
-  public static Optional<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload)
+  public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload)
       throws IOException {
     return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
   }
 
-  public static Optional<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata)
+  public static Option<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata)
       throws IOException {
     return serializeAvroMetadata(metadata, HoodieCleanMetadata.class);
   }
 
-  public static Optional<byte[]> serializeSavepointMetadata(HoodieSavepointMetadata metadata)
+  public static Option<byte[]> serializeSavepointMetadata(HoodieSavepointMetadata metadata)
       throws IOException {
     return serializeAvroMetadata(metadata, HoodieSavepointMetadata.class);
   }
 
-  public static Optional<byte[]> serializeRollbackMetadata(
+  public static Option<byte[]> serializeRollbackMetadata(
       HoodieRollbackMetadata rollbackMetadata) throws IOException {
     return serializeAvroMetadata(rollbackMetadata, HoodieRollbackMetadata.class);
   }
 
-  public static Optional<byte[]> serializeRestoreMetadata(
+  public static Option<byte[]> serializeRestoreMetadata(
       HoodieRestoreMetadata restoreMetadata) throws IOException {
     return serializeAvroMetadata(restoreMetadata, HoodieRestoreMetadata.class);
   }
 
-  public static <T extends SpecificRecordBase> Optional<byte[]> serializeAvroMetadata(T metadata,
+  public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata,
       Class<T> clazz) throws IOException {
     DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
     DataFileWriter<T> fileWriter = new DataFileWriter<>(datumWriter);
@@ -192,7 +191,7 @@ public class AvroUtils {
     fileWriter.create(metadata.getSchema(), baos);
     fileWriter.append(metadata);
     fileWriter.flush();
-    return Optional.of(baos.toByteArray());
+    return Option.of(baos.toByteArray());
   }
 
   public static HoodieCompactionPlan deserializeCompactionPlan(byte[] bytes)

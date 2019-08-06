@@ -56,7 +56,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       ) match {
         case Success((true, commitOps)) =>
           log.info(s"Micro batch id=$batchId succeeded"
-          + commitOps.map(commit => s" for commit=$commit").getOrElse(" with no new commits"))
+            + (commitOps.isPresent match {
+                case true => s" for commit=${commitOps.get()}"
+                case _ => s" with no new commits"
+            }))
           Success((true, commitOps))
         case Failure(e) =>
           // clean up persist rdds in the write process
@@ -76,7 +79,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           }
         case Success((false, commitOps)) =>
           log.error(s"Micro batch id=$batchId ended up with errors"
-            + commitOps.map(commit => s" for commit=$commit").getOrElse(""))
+            + (commitOps.isPresent match {
+              case true =>  s" for commit=${commitOps.get()}"
+              case _ => s""
+            }))
           if (ignoreFailedBatch) {
             log.info(s"Ignore the errors and move on streaming as per " +
               s"${DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH_OPT_KEY} configuration")

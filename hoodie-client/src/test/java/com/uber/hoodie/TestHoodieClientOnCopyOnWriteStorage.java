@@ -41,6 +41,7 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -58,7 +59,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -68,7 +68,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Assert;
 import org.junit.Test;
-import scala.Option;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
@@ -283,7 +282,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     numRecords = 100;
     String commitTimeBetweenPrevAndNew = "002";
     updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        Optional.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
         initCommitTime, numRecords, writeFn, isPrepped, true, numRecords, 200, 2);
   }
 
@@ -311,7 +310,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
           recordsInFirstBatch.addAll(fewRecordsForDelete);
           return recordsInFirstBatch;
         };
-    writeBatch(client, newCommitTime, initCommitTime, Optional.empty(), initCommitTime,
+    writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         //unused as genFn uses hard-coded number of inserts/updates/deletes
         -1,
         recordGenFunction, HoodieWriteClient::upsert, true,
@@ -332,7 +331,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
           recordsInSecondBatch.addAll(fewRecordsForUpdate);
           return recordsInSecondBatch;
         };
-    writeBatch(client, newCommitTime, prevCommitTime, Optional.empty(), initCommitTime,
+    writeBatch(client, newCommitTime, prevCommitTime, Option.empty(), initCommitTime,
         100, recordGenFunction, HoodieWriteClient::upsert, true,
         50, 150, 2);
   }

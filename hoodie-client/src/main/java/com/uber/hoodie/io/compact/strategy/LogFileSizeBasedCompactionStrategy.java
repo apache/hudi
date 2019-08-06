@@ -22,11 +22,11 @@ import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -42,7 +42,7 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
   private static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILE_SIZE";
 
   @Override
-  public Map<String, Double> captureMetrics(HoodieWriteConfig config, Optional<HoodieDataFile> dataFile,
+  public Map<String, Double> captureMetrics(HoodieWriteConfig config, Option<HoodieDataFile> dataFile,
       String partitionPath, List<HoodieLogFile> logFiles) {
     Map<String, Double> metrics = super.captureMetrics(config, dataFile, partitionPath, logFiles);
 

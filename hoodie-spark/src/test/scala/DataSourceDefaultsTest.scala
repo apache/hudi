@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-import java.util.Optional
-
-import com.uber.hoodie.common.util.{SchemaTestUtil, TypedProperties}
+import com.uber.hoodie.common.util.{Option, SchemaTestUtil, TypedProperties}
 import com.uber.hoodie.exception.HoodieException
 import com.uber.hoodie.{DataSourceWriteOptions, EmptyHoodieRecordPayload, OverwriteWithLatestAvroPayload, SimpleKeyGenerator, ComplexKeyGenerator}
 import org.apache.avro.generic.GenericRecord
@@ -178,6 +176,6 @@ class DataSourceDefaultsTest extends AssertionsForJUnit {
     // it will provide an empty record
     val combinedPayload12 = emptyPayload1.preCombine(emptyPayload2)
     val combined12 = combinedPayload12.getInsertValue(schema)
-    assertEquals(Optional.empty(), combined12)
+    assertEquals(Option.empty(), combined12)
   }
 }

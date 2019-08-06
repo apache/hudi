@@ -20,6 +20,7 @@ package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
@@ -28,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
@@ -83,7 +83,7 @@ public class HiveIncrPullSource extends AvroSource {
   /**
    * Finds the first commit from source, greater than the target's last commit, and reads it out.
    */
-  private Optional<String> findCommitToPull(Optional<String> latestTargetCommit)
+  private Option<String> findCommitToPull(Option<String> latestTargetCommit)
       throws IOException {
 
     log.info("Looking for commits ");
@@ -99,27 +99,27 @@ public class HiveIncrPullSource extends AvroSource {
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning
-      return Optional.of(commitTimes.get(0));
+      return Option.of(commitTimes.get(0));
     }
 
     for (String commitTime : commitTimes) {
       //TODO(vc): Add an option to delete consumed commits
       if (commitTime.compareTo(latestTargetCommit.get()) > 0) {
-        return Optional.of(commitTime);
+        return Option.of(commitTime);
       }
     }
-    return Optional.empty();
+    return Option.empty();
   }
 
   @Override
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(
-      Optional<String> lastCheckpointStr, long sourceLimit) {
+      Option<String> lastCheckpointStr, long sourceLimit) {
     try {
       // find the source commit to pull
-      Optional<String> commitToPull = findCommitToPull(lastCheckpointStr);
+      Option<String> commitToPull = findCommitToPull(lastCheckpointStr);
 
       if (!commitToPull.isPresent()) {
-        return new InputBatch<>(Optional.empty(),
+        return new InputBatch<>(Option.empty(),
             lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
       }
 
@@ -131,7 +131,7 @@ public class HiveIncrPullSource extends AvroSource {
       JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
           AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
           sparkContext.hadoopConfiguration());
-      return new InputBatch<>(Optional.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
+      return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
     } catch (IOException ioe) {
       throw new HoodieIOException(

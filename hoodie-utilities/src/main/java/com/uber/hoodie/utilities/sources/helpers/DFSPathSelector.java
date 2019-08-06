@@ -20,6 +20,7 @@ package com.uber.hoodie.utilities.sources.helpers;
 
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.ImmutablePair;
 import com.uber.hoodie.common.util.collection.Pair;
@@ -55,8 +56,8 @@ public class DFSPathSelector {
     this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
   }
 
-  public Pair<Optional<String>, String> getNextFilePathsAndMaxModificationTime(
-      Optional<String> lastCheckpointStr, long sourceLimit) {
+  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(
+      Option<String> lastCheckpointStr, long sourceLimit) {
 
     try {
       // obtain all eligible files under root folder.
@@ -97,7 +98,7 @@ public class DFSPathSelector {
 
       // no data to read
       if (filteredFiles.size() == 0) {
-        return new ImmutablePair<>(Optional.empty(),
+        return new ImmutablePair<>(Option.empty(),
                 lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
       }
 
@@ -106,7 +107,7 @@ public class DFSPathSelector {
           .collect(Collectors.joining(","));
 
       return new ImmutablePair<>(
-          Optional.ofNullable(pathStr),
+          Option.ofNullable(pathStr),
           String.valueOf(maxModificationTime));
     } catch (IOException ioe) {
       throw new HoodieIOException(

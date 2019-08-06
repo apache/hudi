@@ -27,6 +27,7 @@ import com.google.common.collect.Maps;
 import com.uber.hoodie.avro.model.HoodieCompactionOperation;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -41,7 +42,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.time.DateUtils;
@@ -259,7 +259,7 @@ public class TestHoodieCompactionStrategy {
           df.getPath(),
           df.getFileId(),
           partitionPath,
-          config.getCompactionStrategy().captureMetrics(config, Optional.of(df), partitionPath, logFiles)));
+          config.getCompactionStrategy().captureMetrics(config, Option.of(df), partitionPath, logFiles)));
     });
     return operations;
   }

@@ -36,6 +36,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.ParquetUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -63,7 +64,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import scala.Option;
 import scala.Tuple2;
 
 public class TestCopyOnWriteTable {
@@ -418,7 +418,7 @@ public class TestCopyOnWriteTable {
     HoodieCopyOnWriteTable.UpsertPartitioner partitioner =
         (HoodieCopyOnWriteTable.UpsertPartitioner) table.getUpsertPartitioner(profile);
     assertEquals("Update record should have gone to the 1 update partiton", 0, partitioner.getPartition(
-        new Tuple2<>(updateRecords.get(0).getKey(), Option.apply(updateRecords.get(0).getCurrentLocation()))));
+        new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))));
     return partitioner;
   }
 

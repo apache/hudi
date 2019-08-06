@@ -22,6 +22,7 @@ import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.ByteArrayOutputStream;
@@ -30,7 +31,6 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import javax.annotation.Nonnull;
 import org.apache.hadoop.fs.FSDataInputStream;
 
@@ -51,9 +51,9 @@ public abstract class HoodieLogBlock {
   // Footer for each log block
   private final Map<HeaderMetadataType, String> logBlockFooter;
   // Location of a log block on disk
-  private final Optional<HoodieLogBlockContentLocation> blockContentLocation;
+  private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
-  private Optional<byte[]> content;
+  private Option<byte[]> content;
   // TODO : change this to just InputStream so this works for any FileSystem
   // create handlers to return specific type of inputstream based on FS
   // input stream corresponding to the log file where this logBlock belongs
@@ -63,8 +63,8 @@ public abstract class HoodieLogBlock {
 
   public HoodieLogBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Optional<HoodieLogBlockContentLocation> blockContentLocation,
-      @Nonnull Optional<byte[]> content,
+      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
+      @Nonnull Option<byte[]> content,
       FSDataInputStream inputStream,
       boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
@@ -92,7 +92,7 @@ public abstract class HoodieLogBlock {
     throw new HoodieException("No implementation was provided");
   }
 
-  public Optional<HoodieLogBlockContentLocation> getBlockContentLocation() {
+  public Option<HoodieLogBlockContentLocation> getBlockContentLocation() {
     return this.blockContentLocation;
   }
 
@@ -104,7 +104,7 @@ public abstract class HoodieLogBlock {
     return logBlockFooter;
   }
 
-  public Optional<byte[]> getContent() {
+  public Option<byte[]> getContent() {
     return content;
   }
 
@@ -245,7 +245,7 @@ public abstract class HoodieLogBlock {
   protected void inflate() throws IOException {
 
     try {
-      content = Optional.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
+      content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
       safeSeek(inputStream, this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
       safeSeek(inputStream, this.getBlockContentLocation().get().getBlockEndPos());
@@ -266,7 +266,7 @@ public abstract class HoodieLogBlock {
    * leaves the heap fragmented
    */
   protected void deflate() {
-    content = Optional.empty();
+    content = Option.empty();
   }
 
   /**

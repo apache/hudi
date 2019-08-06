@@ -18,9 +18,9 @@
 
 package com.uber.hoodie.common.model;
 
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.Stream;
 
@@ -90,12 +90,12 @@ public class FileSlice implements Serializable {
     return fileGroupId;
   }
 
-  public Optional<HoodieDataFile> getDataFile() {
-    return Optional.ofNullable(dataFile);
+  public Option<HoodieDataFile> getDataFile() {
+    return Option.ofNullable(dataFile);
   }
 
-  public Optional<HoodieLogFile> getLatestLogFile() {
-    return logFiles.stream().findFirst();
+  public Option<HoodieLogFile> getLatestLogFile() {
+    return Option.fromJavaOptional(logFiles.stream().findFirst());
   }
 
   /**

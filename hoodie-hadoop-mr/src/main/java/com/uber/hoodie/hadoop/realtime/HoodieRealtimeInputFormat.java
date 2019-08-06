@@ -28,6 +28,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.hadoop.HoodieInputFormat;
@@ -38,7 +39,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -88,8 +88,8 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
     Map<Path, HoodieTableMetaClient> partitionsToMetaClient = partitionsToParquetSplits.keySet()
         .stream().collect(Collectors.toMap(Function.identity(), p -> {
           // find if we have a metaclient already for this partition.
-          Optional<String> matchingBasePath = metaClientMap.keySet().stream()
-              .filter(basePath -> p.toString().startsWith(basePath)).findFirst();
+          Option<String> matchingBasePath = Option.fromJavaOptional(metaClientMap.keySet().stream()
+              .filter(basePath -> p.toString().startsWith(basePath)).findFirst());
           if (matchingBasePath.isPresent()) {
             return metaClientMap.get(matchingBasePath.get());
           }
@@ -116,7 +116,7 @@ public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Conf
 
       try {
         // Both commit and delta-commits are included - pick the latest completed one
-        Optional<HoodieInstant> latestCompletedInstant =
+        Option<HoodieInstant> latestCompletedInstant =
             metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
 
         Stream<FileSlice> latestFileSlices = latestCompletedInstant.map(instant ->

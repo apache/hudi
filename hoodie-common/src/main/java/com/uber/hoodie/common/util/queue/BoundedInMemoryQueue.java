@@ -21,10 +21,10 @@ package com.uber.hoodie.common.util.queue;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.SizeEstimator;
 import com.uber.hoodie.exception.HoodieException;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -65,7 +65,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   // used for sampling records with "RECORD_SAMPLING_RATE" frequency.
   public final AtomicLong samplingRecordCounter = new AtomicLong(-1);
   // internal queue for records.
-  private final LinkedBlockingQueue<Optional<O>> queue = new
+  private final LinkedBlockingQueue<Option<O>> queue = new
       LinkedBlockingQueue<>();
   // maximum amount of memory to be used for queueing records.
   private final long memoryLimit;
@@ -176,7 +176,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     // and record creation to it.
     final O payload = transformFunction.apply(t);
     adjustBufferSizeIfNeeded(payload);
-    queue.put(Optional.of(payload));
+    queue.put(Option.of(payload));
   }
 
   /**
@@ -190,13 +190,13 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
    * Reader interface but never exposed to outside world as this is a single consumer queue.
    * Reading is done through a singleton iterator for this queue.
    */
-  private Optional<O> readNextRecord() {
+  private Option<O> readNextRecord() {
     if (this.isReadDone.get()) {
-      return Optional.empty();
+      return Option.empty();
     }
 
     rateLimiter.release();
-    Optional<O> newRecord = Optional.empty();
+    Option<O> newRecord = Option.empty();
     while (expectMoreRecords()) {
       try {
         throwExceptionIfFailed();
@@ -217,7 +217,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     } else {
       // We are done reading all the records from internal iterator.
       this.isReadDone.set(true);
-      return Optional.empty();
+      return Option.empty();
     }
   }
 
@@ -261,7 +261,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     @Override
     public boolean hasNext() {
       if (this.nextRecord == null) {
-        Optional<O> res = readNextRecord();
+        Option<O> res = readNextRecord();
         this.nextRecord = res.orElse(null);
       }
       return this.nextRecord != null;

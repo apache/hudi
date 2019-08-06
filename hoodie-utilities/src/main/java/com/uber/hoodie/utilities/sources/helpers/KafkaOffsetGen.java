@@ -19,6 +19,7 @@
 package com.uber.hoodie.utilities.sources.helpers;
 
 import com.uber.hoodie.DataSourceUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
 import com.uber.hoodie.utilities.exception.HoodieDeltaStreamerException;
@@ -27,7 +28,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import kafka.common.TopicAndPartition;
 import org.apache.log4j.LogManager;
@@ -189,7 +189,7 @@ public class KafkaOffsetGen {
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
 
-  public OffsetRange[] getNextOffsetRanges(Optional<String> lastCheckpointStr, long sourceLimit) {
+  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit) {
 
     // Obtain current metadata for the topic
     KafkaCluster cluster = new KafkaCluster(ScalaHelpers.toScalaMap(kafkaParams));
@@ -240,7 +240,7 @@ public class KafkaOffsetGen {
   // else return earliest offsets
   private HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkupValidOffsets(
           KafkaCluster cluster,
-          Optional<String> lastCheckpointStr,
+          Option<String> lastCheckpointStr,
           Set<TopicAndPartition> topicPartitions) {
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets =
             CheckpointUtils.strToOffsets(lastCheckpointStr.get());

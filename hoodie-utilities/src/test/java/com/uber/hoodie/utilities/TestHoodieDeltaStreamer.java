@@ -30,6 +30,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.exception.DatasetNotFoundException;
@@ -49,7 +50,6 @@ import com.uber.hoodie.utilities.transform.Transformer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -501,7 +501,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty(TestSourceConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS, "true");
     DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props,
         jsc, sparkSession, null);
-    InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Optional.empty(), 10000000);
+    InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
     batch.getBatch().get().cache();
     long c = batch.getBatch().get().count();
     Assert.assertEquals(1000, c);

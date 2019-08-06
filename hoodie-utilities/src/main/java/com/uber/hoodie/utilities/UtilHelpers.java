@@ -22,6 +22,7 @@ import com.google.common.base.Preconditions;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.DFSPropertiesConfiguration;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -40,7 +41,6 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -185,7 +185,7 @@ public class UtilHelpers {
    * @param parallelism Parallelism
    */
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,
-      String schemaStr, int parallelism, Optional<String> compactionStrategyClass, TypedProperties properties)
+      String schemaStr, int parallelism, Option<String> compactionStrategyClass, TypedProperties properties)
       throws Exception {
     HoodieCompactionConfig compactionConfig =
         compactionStrategyClass.map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)

@@ -25,11 +25,11 @@ import static org.mockito.Mockito.when;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.func.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
 import java.util.List;
-import java.util.Optional;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.After;
 import org.junit.Assert;
@@ -41,7 +41,7 @@ public class TestBoundedInMemoryExecutor {
   private final HoodieTestDataGenerator hoodieTestDataGenerator = new HoodieTestDataGenerator();
   private final String commitTime = HoodieActiveTimeline.createNewCommitTime();
   private SparkBoundedInMemoryExecutor<HoodieRecord,
-      Tuple2<HoodieRecord, Optional<IndexedRecord>>, Integer> executor = null;
+      Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
 
   @After
   public void afterTest() {

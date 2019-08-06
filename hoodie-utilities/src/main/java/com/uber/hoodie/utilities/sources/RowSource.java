@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.RowBasedSchemaProvider;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.util.Optional;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -37,12 +37,12 @@ public abstract class RowSource extends Source<Dataset<Row>> {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.ROW);
   }
 
-  protected abstract Pair<Optional<Dataset<Row>>, String> fetchNextBatch(Optional<String> lastCkptStr,
+  protected abstract Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr,
       long sourceLimit);
 
   @Override
-  protected final InputBatch<Dataset<Row>> fetchNewData(Optional<String> lastCkptStr, long sourceLimit) {
-    Pair<Optional<Dataset<Row>>, String> res = fetchNextBatch(lastCkptStr, sourceLimit);
+  protected final InputBatch<Dataset<Row>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
+    Pair<Option<Dataset<Row>>, String> res = fetchNextBatch(lastCkptStr, sourceLimit);
     return res.getKey().map(dsr -> {
       SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(dsr.schema());
       return new InputBatch<>(res.getKey(), res.getValue(), rowSchemaProvider);

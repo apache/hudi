@@ -60,7 +60,7 @@ public class CompactionOperation implements Serializable {
     this.metrics = metrics;
   }
 
-  public CompactionOperation(java.util.Optional<HoodieDataFile> dataFile, String partitionPath,
+  public CompactionOperation(Option<HoodieDataFile> dataFile, String partitionPath,
       List<HoodieLogFile> logFiles, Map<String, Double> metrics) {
     if (dataFile.isPresent()) {
       this.baseInstantTime = dataFile.get().getCommitTime();

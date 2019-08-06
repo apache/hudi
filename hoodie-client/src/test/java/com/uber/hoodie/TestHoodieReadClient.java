@@ -21,17 +21,16 @@ package com.uber.hoodie;
 import static org.junit.Assert.assertTrue;
 
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Assert;
 import org.junit.Test;
-import scala.Option;
 
 @SuppressWarnings("unchecked")
 /**
@@ -192,7 +191,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
     numRecords = 100;
     String commitTimeBetweenPrevAndNew = "002";
     result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        Optional.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
         initCommitTime, numRecords, updateFn, isPrepped,
         true, numRecords, 200, 2);
     recordRDD =

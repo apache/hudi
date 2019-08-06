@@ -21,6 +21,7 @@ package com.uber.hoodie.hadoop.realtime;
 import com.uber.hoodie.common.table.log.HoodieUnMergedLogRecordScanner;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueProducer;
 import com.uber.hoodie.common.util.queue.FunctionBasedQueueProducer;
@@ -31,7 +32,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -71,7 +71,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader implemen
     // Iterator for consuming records from parquet file
     this.parquetRecordsIterator = new RecordReaderValueIterator<>(this.parquetReader);
     this.executor = new BoundedInMemoryExecutor<>(getMaxCompactionMemoryInBytes(), getParallelProducers(),
-        Optional.empty(), x -> x, new DefaultSizeEstimator<>());
+        Option.empty(), x -> x, new DefaultSizeEstimator<>());
     // Consumer of this record reader
     this.iterator = this.executor.getQueue().iterator();
     this.logRecordScanner = new HoodieUnMergedLogRecordScanner(

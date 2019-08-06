@@ -23,9 +23,9 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -81,7 +81,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
-        Optional<GenericRecord> rec;
+        Option<GenericRecord> rec;
         if (usesCustomPayload) {
           rec = deltaRecordMap.get(key).getData().getInsertValue(getWriterSchema());
         } else {

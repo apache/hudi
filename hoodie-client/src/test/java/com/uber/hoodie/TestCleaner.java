@@ -50,6 +50,7 @@ import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -62,7 +63,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -78,7 +78,6 @@ import org.apache.spark.scheduler.SparkListenerTaskEnd;
 import org.apache.spark.util.AccumulatorV2;
 import org.junit.Assert;
 import org.junit.Test;
-import scala.Option;
 import scala.collection.Iterator;
 
 /**
@@ -214,11 +213,11 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTable table = HoodieTable.getHoodieTable(metadata, getConfig(), jsc);
     for (String partitionPath : dataGen.getPartitionPaths()) {
       TableFileSystemView fsView = table.getFileSystemView();
-      Optional<Boolean> added = fsView.getAllFileGroups(partitionPath).findFirst()
+      Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst()
           .map(fg -> {
             fg.getLatestFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getFileGroupId(), fs));
             return true;
-          });
+          }));
       if (added.isPresent()) {
         // Select only one file-group for compaction
         break;
@@ -229,7 +228,7 @@ public class TestCleaner extends TestHoodieClientBase {
     List<Pair<String, FileSlice>> partitionFileSlicePairs = compactionFileIdToLatestFileSlice.entrySet().stream()
         .map(e -> Pair.of(e.getKey().getPartitionPath(), e.getValue())).collect(Collectors.toList());
     HoodieCompactionPlan compactionPlan =
-        CompactionUtils.buildFromFileSlices(partitionFileSlicePairs, Optional.empty(), Optional.empty());
+        CompactionUtils.buildFromFileSlices(partitionFileSlicePairs, Option.empty(), Option.empty());
     List<String> instantTimes = HoodieTestUtils.monotonicIncreasingCommitTimestamps(9, 1);
     String compactionTime = instantTimes.get(0);
     table.getActiveTimeline().saveToCompactionRequested(
@@ -275,11 +274,11 @@ public class TestCleaner extends TestHoodieClientBase {
           for (HoodieFileGroup fileGroup : fileGroups) {
             if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
               // Ensure latest file-slice selected for compaction is retained
-              Optional<HoodieDataFile> dataFileForCompactionPresent =
-                  fileGroup.getAllDataFiles().filter(df -> {
+              Option<HoodieDataFile> dataFileForCompactionPresent =
+                  Option.fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> {
                     return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId())
                         .getBaseInstantTime().equals(df.getCommitTime());
-                  }).findAny();
+                  }).findAny());
               Assert.assertTrue("Data File selected for compaction is retained",
                   dataFileForCompactionPresent.isPresent());
             } else {
@@ -386,7 +385,7 @@ public class TestCleaner extends TestHoodieClientBase {
         HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
         HoodieTable table1 = HoodieTable.getHoodieTable(metadata, cfg, jsc);
         HoodieTimeline activeTimeline = table1.getCompletedCommitsTimeline();
-        Optional<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
+        Option<HoodieInstant> earliestRetainedCommit = activeTimeline.nthFromLastInstant(maxCommits - 1);
         Set<HoodieInstant> acceptableCommits = activeTimeline.getInstants().collect(Collectors.toSet());
         if (earliestRetainedCommit.isPresent()) {
           acceptableCommits.removeAll(
@@ -503,20 +502,20 @@ public class TestCleaner extends TestHoodieClientBase {
     // Make 3 files, one base file and 2 log files associated with base file
     String file1P0 = HoodieTestUtils.createNewDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, "000");
     String file2P0L0 = HoodieTestUtils
-        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file1P0, Optional.empty());
+        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file1P0, Option.empty());
     String file2P0L1 = HoodieTestUtils
-        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file1P0, Optional.of(2));
+        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file1P0, Option.of(2));
     // make 1 compaction commit
     HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "000");
 
     // Make 4 files, one base file and 3 log files associated with base file
     HoodieTestUtils.createDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0);
     file2P0L0 = HoodieTestUtils
-        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0, Optional.empty());
+        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0, Option.empty());
     file2P0L0 = HoodieTestUtils
-        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0, Optional.of(2));
+        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0, Option.of(2));
     file2P0L0 = HoodieTestUtils
-        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0, Optional.of(3));
+        .createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, "001", file1P0, Option.of(3));
     // make 1 compaction commit
     HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "001");
 
@@ -526,9 +525,9 @@ public class TestCleaner extends TestHoodieClientBase {
         getCleanStat(hoodieCleanStats, DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles().size());
     assertFalse(HoodieTestUtils.doesDataFileExist(basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file1P0));
     assertFalse(
-        HoodieTestUtils.doesLogFileExist(basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file2P0L0, Optional.empty()));
+        HoodieTestUtils.doesLogFileExist(basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file2P0L0, Option.empty()));
     assertFalse(
-        HoodieTestUtils.doesLogFileExist(basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file2P0L0, Optional.of(2)));
+        HoodieTestUtils.doesLogFileExist(basePath, DEFAULT_FIRST_PARTITION_PATH, "000", file2P0L0, Option.of(2)));
   }
 
   /**
@@ -810,9 +809,9 @@ public class TestCleaner extends TestHoodieClientBase {
       final String fileId = HoodieTestUtils.createDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, instants[0],
           fileIds[i]);
       HoodieTestUtils.createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, instants[0],
-          fileId, Optional.empty());
+          fileId, Option.empty());
       HoodieTestUtils.createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, instants[0],
-          fileId, Optional.of(2));
+          fileId, Option.of(2));
       fileIdToLatestInstantBeforeCompaction.put(fileId, instants[0]);
       for (int j = 1; j <= i; j++) {
         if (j == i && j <= maxNumFileIdsForCompaction) {
@@ -830,15 +829,15 @@ public class TestCleaner extends TestHoodieClientBase {
           compactionInstantsToFileSlices.put(compactionInstants[j], slices);
           // Add log-files to simulate delta-commits after pending compaction
           HoodieTestUtils.createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, compactionInstants[j],
-              fileId, Optional.empty());
+              fileId, Option.empty());
           HoodieTestUtils.createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, compactionInstants[j],
-              fileId, Optional.of(2));
+              fileId, Option.of(2));
         } else {
           HoodieTestUtils.createDataFile(basePath, DEFAULT_FIRST_PARTITION_PATH, instants[j], fileId);
           HoodieTestUtils.createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, instants[j], fileId,
-              Optional.empty());
+              Option.empty());
           HoodieTestUtils.createNewLogFile(fs, basePath, DEFAULT_FIRST_PARTITION_PATH, instants[j], fileId,
-              Optional.of(2));
+              Option.of(2));
           fileIdToLatestInstantBeforeCompaction.put(fileId, instants[j]);
         }
       }
@@ -867,9 +866,10 @@ public class TestCleaner extends TestHoodieClientBase {
     expFileIdToPendingCompaction.entrySet().stream().forEach(entry -> {
       String fileId = entry.getKey();
       String baseInstantForCompaction = fileIdToLatestInstantBeforeCompaction.get(fileId);
-      Optional<FileSlice> fileSliceForCompaction =
-          hoodieTable.getRTFileSystemView().getLatestFileSlicesBeforeOrOn(DEFAULT_FIRST_PARTITION_PATH,
-              baseInstantForCompaction, true).filter(fs -> fs.getFileId().equals(fileId)).findFirst();
+      Option<FileSlice> fileSliceForCompaction =
+          Option.fromJavaOptional(
+              hoodieTable.getRTFileSystemView().getLatestFileSlicesBeforeOrOn(DEFAULT_FIRST_PARTITION_PATH,
+              baseInstantForCompaction, true).filter(fs -> fs.getFileId().equals(fileId)).findFirst());
       Assert.assertTrue("Base Instant for Compaction must be preserved", fileSliceForCompaction.isPresent());
       Assert.assertTrue("FileSlice has data-file", fileSliceForCompaction.get().getDataFile().isPresent());
       Assert.assertEquals("FileSlice has log-files", 2,

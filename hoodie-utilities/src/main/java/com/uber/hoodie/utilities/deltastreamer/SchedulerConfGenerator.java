@@ -18,6 +18,7 @@
 package com.uber.hoodie.utilities.deltastreamer;
 
 import com.uber.hoodie.common.model.HoodieTableType;
+import com.uber.hoodie.common.util.Option;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -29,7 +30,6 @@ import org.apache.commons.lang.text.StrSubstitutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
-import scala.Option;
 
 /**
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user
@@ -94,10 +94,14 @@ public class SchedulerConfGenerator {
    * @param cfg Config
    */
   public static Map<String, String> getSparkSchedulingConfigs(HoodieDeltaStreamer.Config cfg) throws Exception {
-    final Option<String> sparkSchedulerMode = new SparkConf().getOption(SPARK_SCHEDULER_MODE_KEY);
+    scala.Option<String> scheduleModeKeyOption = new SparkConf().getOption(SPARK_SCHEDULER_MODE_KEY);
+    final Option<String> sparkSchedulerMode =
+            scheduleModeKeyOption.isDefined()
+            ? Option.of(scheduleModeKeyOption.get())
+            : Option.empty();
 
     Map<String, String> additionalSparkConfigs = new HashMap<>();
-    if (sparkSchedulerMode.isDefined() && "FAIR".equals(sparkSchedulerMode.get())
+    if (sparkSchedulerMode.isPresent() && "FAIR".equals(sparkSchedulerMode.get())
         && cfg.continuousMode && cfg.storageType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       String sparkSchedulingConfFile = generateAndStoreConfig(cfg.deltaSyncSchedulingWeight,
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);

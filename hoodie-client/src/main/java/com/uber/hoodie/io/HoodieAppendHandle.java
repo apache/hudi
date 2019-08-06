@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -148,13 +147,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
     }
   }
 
-  private Optional<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
-    Optional recordMetadata = hoodieRecord.getData().getMetadata();
+  private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
+    Option recordMetadata = hoodieRecord.getData().getMetadata();
     try {
-      Optional<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(originalSchema);
+      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(originalSchema);
       if (avroRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
-        avroRecord = Optional.of(rewriteRecord((GenericRecord) avroRecord.get()));
+        avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId = HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(),
             recordIndex.getAndIncrement());
         HoodieAvroUtils
@@ -183,7 +182,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       logger.error("Error writing record  " + hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
-    return Optional.empty();
+    return Option.empty();
   }
 
   // TODO (NA) - Perform a writerSchema check of current input record with the last writerSchema on log file
@@ -225,8 +224,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   @Override
-  public void write(HoodieRecord record, Optional<IndexedRecord> insertValue) {
-    Optional recordMetadata = record.getData().getMetadata();
+  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
+    Option recordMetadata = record.getData().getMetadata();
     try {
       init(record);
       flushToDiskIfRequired(record);
@@ -278,7 +277,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   private Writer createLogWriter(Option<FileSlice> fileSlice, String baseCommitTime)
       throws IOException, InterruptedException {
-    Optional<HoodieLogFile> latestLogFile = fileSlice.get().getLatestLogFile();
+    Option<HoodieLogFile> latestLogFile = fileSlice.get().getLatestLogFile();
 
     return HoodieLogFormat.newWriterBuilder()
         .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
@@ -294,7 +293,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   private void writeToBuffer(HoodieRecord<T> record) {
     // update the new location of the record, so we know where to find it next
     record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-    Optional<IndexedRecord> indexedRecord = getIndexedRecord(record);
+    Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
       recordList.add(indexedRecord.get());
     } else {

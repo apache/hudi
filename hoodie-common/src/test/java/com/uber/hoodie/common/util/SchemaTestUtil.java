@@ -36,7 +36,6 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -119,7 +118,7 @@ public class SchemaTestUtil {
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
     return new HoodieRecord<>(new HoodieKey(key, partitionPath),
-        new HoodieAvroPayload(Optional.of((GenericRecord) iRecord)));
+        new HoodieAvroPayload(Option.of((GenericRecord) iRecord)));
   }
 
   public static List<IndexedRecord> updateHoodieTestRecords(List<String> oldRecordKeys, List<IndexedRecord> newRecords,
@@ -143,7 +142,7 @@ public class SchemaTestUtil {
     return iRecords
         .stream()
         .map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
-            new HoodieAvroPayload(Optional.of((GenericRecord) r)))).collect(Collectors.toList());
+            new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
   public static List<HoodieRecord> updateHoodieTestRecordsWithoutHoodieMetadata(List<HoodieRecord> oldRecords,
@@ -157,7 +156,7 @@ public class SchemaTestUtil {
             GenericRecord rec = (GenericRecord) r.getData().getInsertValue(schema).get();
             rec.put(fieldNameToUpdate, newValue);
             return new HoodieRecord<>(r.getKey(),
-                new HoodieAvroPayload(Optional.of(rec)));
+                new HoodieAvroPayload(Option.of(rec)));
           } catch (IOException io) {
             throw new HoodieIOException("unable to get data from hoodie record", io);
           }

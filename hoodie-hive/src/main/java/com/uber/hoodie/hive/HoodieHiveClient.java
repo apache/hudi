@@ -29,6 +29,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
@@ -44,7 +45,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.commons.dbcp.ConnectionFactory;
@@ -329,13 +329,13 @@ public class HoodieHiveClient {
           // If this is MOR, depending on whether the latest commit is a delta commit or
           // compaction commit
           // Get a datafile written and get the schema from that file
-          Optional<HoodieInstant> lastCompactionCommit = metaClient.getActiveTimeline()
+          Option<HoodieInstant> lastCompactionCommit = metaClient.getActiveTimeline()
               .getCommitTimeline()
               .filterCompletedInstants()
               .lastInstant();
           LOG.info("Found the last compaction commit as " + lastCompactionCommit);
 
-          Optional<HoodieInstant> lastDeltaCommit;
+          Option<HoodieInstant> lastDeltaCommit;
           if (lastCompactionCommit.isPresent()) {
             lastDeltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline()
                 .filterCompletedInstants()
@@ -394,7 +394,7 @@ public class HoodieHiveClient {
    * Read schema from a data file from the last compaction commit done.
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-  private MessageType readSchemaFromLastCompaction(Optional<HoodieInstant> lastCompactionCommitOpt)
+  private MessageType readSchemaFromLastCompaction(Option<HoodieInstant> lastCompactionCommitOpt)
       throws IOException {
     HoodieInstant lastCompactionCommit = lastCompactionCommitOpt.orElseThrow(
         () -> new HoodieHiveSyncException(
@@ -415,7 +415,7 @@ public class HoodieHiveClient {
    * Read the schema from the log file on path
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-  private MessageType readSchemaFromLogFile(Optional<HoodieInstant> lastCompactionCommitOpt,
+  private MessageType readSchemaFromLogFile(Option<HoodieInstant> lastCompactionCommitOpt,
       Path path) throws IOException {
     MessageType messageType = SchemaUtil.readSchemaFromLogFile(fs, path);
     // Fall back to read the schema from last compaction
@@ -530,11 +530,11 @@ public class HoodieHiveClient {
     return fs;
   }
 
-  public Optional<String> getLastCommitTimeSynced() {
+  public Option<String> getLastCommitTimeSynced() {
     // Get the last commit time from the TBLproperties
     try {
       Table database = client.getTable(syncConfig.databaseName, syncConfig.tableName);
-      return Optional.ofNullable(
+      return Option.ofNullable(
           database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
@@ -556,7 +556,7 @@ public class HoodieHiveClient {
   }
 
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-  List<String> getPartitionsWrittenToSince(Optional<String> lastCommitTimeSynced) {
+  List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + syncConfig.basePath + ",FS :" + fs);
       try {

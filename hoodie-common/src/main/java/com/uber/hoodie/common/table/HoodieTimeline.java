@@ -21,9 +21,9 @@ package com.uber.hoodie.common.table;
 import com.uber.hoodie.common.table.timeline.HoodieDefaultTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.StringUtils;
 import java.io.Serializable;
-import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -147,17 +147,17 @@ public interface HoodieTimeline extends Serializable {
   /**
    * @return first completed instant if available
    */
-  Optional<HoodieInstant> firstInstant();
+  Option<HoodieInstant> firstInstant();
 
   /**
    * @return nth completed instant from the first completed instant
    */
-  Optional<HoodieInstant> nthInstant(int n);
+  Option<HoodieInstant> nthInstant(int n);
 
   /**
    * @return last completed instant if available
    */
-  Optional<HoodieInstant> lastInstant();
+  Option<HoodieInstant> lastInstant();
 
 
   /**
@@ -169,7 +169,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * @return nth completed instant going back from the last completed instant
    */
-  Optional<HoodieInstant> nthFromLastInstant(int n);
+  Option<HoodieInstant> nthFromLastInstant(int n);
 
   /**
    * @return true if the passed instant is present as a completed instant on the timeline
@@ -195,7 +195,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Read the completed instant details
    */
-  Optional<byte[]> getInstantDetails(HoodieInstant instant);
+  Option<byte[]> getInstantDetails(HoodieInstant instant);
 
   /**
    * Helper methods to compare instants

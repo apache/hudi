@@ -49,7 +49,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -208,7 +207,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                       // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
                       // for spark Map operations and collecting them finally in Avro generated classes for storing
                       // into meta files.
-                      Optional<HoodieDataFile> dataFile = s.getDataFile();
+                      Option<HoodieDataFile> dataFile = s.getDataFile();
                       return new CompactionOperation(dataFile, partitionPath, logFiles,
                           config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
                     })

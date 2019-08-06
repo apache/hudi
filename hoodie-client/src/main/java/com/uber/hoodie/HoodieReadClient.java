@@ -18,7 +18,6 @@
 
 package com.uber.hoodie;
 
-import com.google.common.base.Optional;
 import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.common.model.HoodieDataFile;
@@ -28,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.util.CompactionUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -65,13 +65,13 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   private final transient HoodieIndex<T> index;
   private final HoodieTimeline commitTimeline;
   private HoodieTable hoodieTable;
-  private transient Optional<SQLContext> sqlContextOpt;
+  private transient Option<SQLContext> sqlContextOpt;
 
   /**
    * @param basePath path to Hoodie dataset
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath,
-      java.util.Optional<EmbeddedTimelineService> timelineService) {
+      Option<EmbeddedTimelineService> timelineService) {
     this(jsc, HoodieWriteConfig.newBuilder().withPath(basePath)
         // by default we use HoodieBloomIndex
         .withIndexConfig(
@@ -83,7 +83,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    * @param basePath path to Hoodie dataset
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath) {
-    this(jsc, basePath, java.util.Optional.empty());
+    this(jsc, basePath, Option.empty());
   }
 
   /**
@@ -93,21 +93,21 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    */
   public HoodieReadClient(JavaSparkContext jsc, String basePath, SQLContext sqlContext) {
     this(jsc, basePath);
-    this.sqlContextOpt = Optional.of(sqlContext);
+    this.sqlContextOpt = Option.of(sqlContext);
   }
 
   /**
    * @param clientConfig instance of HoodieWriteConfig
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
-    this(jsc, clientConfig, java.util.Optional.empty());
+    this(jsc, clientConfig, Option.empty());
   }
 
   /**
    * @param clientConfig instance of HoodieWriteConfig
    */
   public HoodieReadClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
-      java.util.Optional<EmbeddedTimelineService> timelineService) {
+      Option<EmbeddedTimelineService> timelineService) {
     super(jsc, clientConfig, timelineService);
     final String basePath = clientConfig.getBasePath();
     // Create a Hoodie table which encapsulated the commits and files visible
@@ -115,7 +115,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
     this.hoodieTable = HoodieTable.getHoodieTable(metaClient, clientConfig, jsc);
     this.commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
     this.index = HoodieIndex.createIndex(clientConfig, jsc);
-    this.sqlContextOpt = Optional.absent();
+    this.sqlContextOpt = Option.empty();
   }
 
   /**
@@ -135,13 +135,13 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
     }
   }
 
-  private Optional<String> convertToDataFilePath(Optional<Pair<String, String>> partitionPathFileIDPair) {
+  private Option<String> convertToDataFilePath(Option<Pair<String, String>> partitionPathFileIDPair) {
     if (partitionPathFileIDPair.isPresent()) {
       HoodieDataFile dataFile = hoodieTable.getROFileSystemView()
           .getLatestDataFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
-      return Optional.of(dataFile.getPath());
+      return Option.of(dataFile.getPath());
     } else {
-      return Optional.absent();
+      return Option.empty();
     }
   }
 
@@ -152,9 +152,9 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
    */
   public Dataset<Row> readROView(JavaRDD<HoodieKey> hoodieKeys, int parallelism) {
     assertSqlContext();
-    JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> lookupResultRDD = index
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> lookupResultRDD = index
         .fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
-    JavaPairRDD<HoodieKey, Optional<String>> keyToFileRDD = lookupResultRDD
+    JavaPairRDD<HoodieKey, Option<String>> keyToFileRDD = lookupResultRDD
         .mapToPair(r -> new Tuple2<>(r._1, convertToDataFilePath(r._2)));
     List<String> paths = keyToFileRDD.filter(keyFileTuple -> keyFileTuple._2().isPresent())
         .map(keyFileTuple -> keyFileTuple._2().get()).collect();
@@ -176,12 +176,12 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   }
 
   /**
-   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Optional[FullFilePath]]
+   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Option[FullFilePath]]
    * If the optional FullFilePath value is not present, then the key is not found. If the
    * FullFilePath value is present, it is the path component (without scheme) of the URI underlying
    * file
    */
-  public JavaPairRDD<HoodieKey, Optional<String>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
+  public JavaPairRDD<HoodieKey, Option<String>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
     return index.fetchRecordLocation(hoodieKeys, jsc, hoodieTable);
   }
 

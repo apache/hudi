@@ -21,12 +21,12 @@ package com.uber.hoodie;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Random;
 
 /**
@@ -73,7 +73,7 @@ public class WriteStatus implements Serializable {
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
    * HoodieRecord} before deflation.
    */
-  public void markSuccess(HoodieRecord record, Optional<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
       writtenRecords.add(record);
     }
@@ -90,7 +90,7 @@ public class WriteStatus implements Serializable {
    * @param optionalRecordMetadata optional metadata related to data contained in {@link
    * HoodieRecord} before deflation.
    */
-  public void markFailure(HoodieRecord record, Throwable t, Optional<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
       failedRecords.add(record);

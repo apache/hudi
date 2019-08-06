@@ -20,7 +20,6 @@ package com.uber.hoodie;
 
 import static com.uber.hoodie.common.model.HoodieTestUtils.getDefaultHadoopConf;
 
-import com.google.common.base.Optional;
 import com.uber.hoodie.CompactionAdminClient.ValidationOpResult;
 import com.uber.hoodie.common.model.CompactionOperation;
 import com.uber.hoodie.common.model.HoodieLogFile;
@@ -30,6 +29,7 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.CompactionTestUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -139,7 +139,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     // Now repair
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles = result.stream().flatMap(r ->
         client.getRenamingActionsToAlignWithCompactionOperation(metaClient,
-            compactionInstant, r.getOperation(), Optional.absent()).stream())
+            compactionInstant, r.getOperation(), Option.empty()).stream())
         .map(rn -> {
           try {
             client.renameLogFile(metaClient, rn.getKey(), rn.getValue());
@@ -238,7 +238,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     // Check suggested rename operations
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
         client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1,
-            Optional.absent(), false);
+            Option.empty(), false);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
 
     // Log files belonging to file-slices created because of compaction request must be renamed
@@ -311,7 +311,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     // Check suggested rename operations
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
         client.getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,
-            Optional.absent(), false);
+            Option.empty(), false);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
 
     // Log files belonging to file-slices created because of compaction request must be renamed

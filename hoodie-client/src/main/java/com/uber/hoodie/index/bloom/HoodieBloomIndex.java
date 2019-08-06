@@ -23,13 +23,13 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.MetadataNotFoundException;
@@ -107,7 +107,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   /**
-   * Returns an RDD mapping each HoodieKey with a partitionPath/fileID which contains it. Optional.Empty if the key is
+   * Returns an RDD mapping each HoodieKey with a partitionPath/fileID which contains it. Option.Empty if the key is
    * not found.
    *
    * @param hoodieKeys keys to lookup
@@ -115,7 +115,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
    * @param hoodieTable hoodie table object
    */
   @Override
-  public JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
       JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
     JavaPairRDD<String, String> partitionRecordKeyPairRDD = hoodieKeys
         .mapToPair(key -> new Tuple2<>(key.getPartitionPath(), key.getRecordKey()));
@@ -126,11 +126,11 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     JavaPairRDD<HoodieKey, String> keyHoodieKeyPairRDD = hoodieKeys.mapToPair(key -> new Tuple2<>(key, null));
 
     return keyHoodieKeyPairRDD.leftOuterJoin(recordKeyLocationRDD).mapToPair(keyLoc -> {
-      Optional<Pair<String, String>> partitionPathFileidPair;
+      Option<Pair<String, String>> partitionPathFileidPair;
       if (keyLoc._2._2.isPresent()) {
-        partitionPathFileidPair = Optional.of(Pair.of(keyLoc._1().getPartitionPath(), keyLoc._2._2.get().getFileId()));
+        partitionPathFileidPair = Option.of(Pair.of(keyLoc._1().getPartitionPath(), keyLoc._2._2.get().getFileId()));
       } else {
-        partitionPathFileidPair = Optional.absent();
+        partitionPathFileidPair = Option.empty();
       }
       return new Tuple2<>(keyLoc._1, partitionPathFileidPair);
     });
@@ -233,7 +233,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     List<Pair<String, String>> partitionPathFileIDList = jsc
         .parallelize(partitions, Math.max(partitions.size(), 1))
         .flatMap(partitionPath -> {
-          java.util.Optional<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
+          Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
               .filterCompletedInstants().lastInstant();
           List<Pair<String, String>> filteredFiles = new ArrayList<>();
           if (latestCommitTime.isPresent()) {
@@ -361,7 +361,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   HoodieRecord<T> getTaggedRecord(HoodieRecord<T> inputRecord,
-      org.apache.spark.api.java.Optional<HoodieRecordLocation> location) {
+      Option<HoodieRecordLocation> location) {
     HoodieRecord<T> record = inputRecord;
     if (location.isPresent()) {
       // When you have a record in multiple files in the same partition, then rowKeyRecordPairRDD
@@ -384,7 +384,8 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
         .mapToPair(record -> new Tuple2<>(record.getKey(), record));
     // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
     // so we do left outer join.
-    return keyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD).values().map(v1 -> getTaggedRecord(v1._1, v1._2));
+    return keyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD).values().map(
+        v1 -> getTaggedRecord(v1._1, Option.ofNullable(v1._2.orNull())));
   }
 
   @Override

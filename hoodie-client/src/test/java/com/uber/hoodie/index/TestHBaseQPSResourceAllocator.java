@@ -21,6 +21,7 @@ package com.uber.hoodie.index;
 import com.uber.hoodie.common.HoodieClientTestUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieTestUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieHBaseIndexConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -30,7 +31,6 @@ import com.uber.hoodie.index.hbase.DefaultHBaseQPSResourceAllocator;
 import com.uber.hoodie.index.hbase.HBaseIndex;
 import com.uber.hoodie.index.hbase.HBaseIndexQPSResourceAllocator;
 import java.io.File;
-import java.util.Optional;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -84,7 +84,7 @@ public class TestHBaseQPSResourceAllocator {
 
   @Test
   public void testsDefaultQPSResourceAllocator() {
-    HoodieWriteConfig config = getConfig(Optional.empty());
+    HoodieWriteConfig config = getConfig(Option.empty());
     HBaseIndex index = new HBaseIndex(config);
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     Assert.assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
@@ -95,7 +95,7 @@ public class TestHBaseQPSResourceAllocator {
 
   @Test
   public void testsExplicitDefaultQPSResourceAllocator() {
-    HoodieWriteConfig config = getConfig(Optional.of(HoodieHBaseIndexConfig.DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS));
+    HoodieWriteConfig config = getConfig(Option.of(HoodieHBaseIndexConfig.DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS));
     HBaseIndex index = new HBaseIndex(config);
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     Assert.assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
@@ -106,7 +106,7 @@ public class TestHBaseQPSResourceAllocator {
 
   @Test
   public void testsInvalidQPSResourceAllocator() {
-    HoodieWriteConfig config = getConfig(Optional.of("InvalidResourceAllocatorClassName"));
+    HoodieWriteConfig config = getConfig(Option.of("InvalidResourceAllocatorClassName"));
     HBaseIndex index = new HBaseIndex(config);
     HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = index.createQPSResourceAllocator(config);
     Assert.assertEquals(hBaseIndexQPSResourceAllocator.getClass().getName(),
@@ -115,7 +115,7 @@ public class TestHBaseQPSResourceAllocator {
         hBaseIndexQPSResourceAllocator.acquireQPSResources(config.getHbaseIndexQPSFraction(), 100), 0.0f);
   }
 
-  private HoodieWriteConfig getConfig(Optional<String> resourceAllocatorClass) {
+  private HoodieWriteConfig getConfig(Option<String> resourceAllocatorClass) {
     HoodieHBaseIndexConfig hoodieHBaseIndexConfig = getConfigWithResourceAllocator(resourceAllocatorClass);
     return getConfigBuilder(hoodieHBaseIndexConfig).build();
   }
@@ -132,7 +132,7 @@ public class TestHBaseQPSResourceAllocator {
                        .build());
   }
 
-  private HoodieHBaseIndexConfig getConfigWithResourceAllocator(Optional<String> resourceAllocatorClass) {
+  private HoodieHBaseIndexConfig getConfigWithResourceAllocator(Option<String> resourceAllocatorClass) {
     HoodieHBaseIndexConfig.Builder builder =
         new HoodieHBaseIndexConfig.Builder()
             .hbaseZkPort(Integer.valueOf(hbaseConfig.get("hbase.zookeeper.property.clientPort")))

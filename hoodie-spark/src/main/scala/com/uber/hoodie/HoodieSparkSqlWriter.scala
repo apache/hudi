@@ -18,7 +18,6 @@
 package com.uber.hoodie
 
 import java.util
-import java.util.Optional
 
 import com.uber.hoodie.DataSourceWriteOptions._
 import com.uber.hoodie.common.table.HoodieTableMetaClient
@@ -26,6 +25,7 @@ import com.uber.hoodie.common.util.{FSUtils, TypedProperties}
 import com.uber.hoodie.config.HoodieWriteConfig
 import com.uber.hoodie.exception.HoodieException
 import com.uber.hoodie.hive.{HiveSyncConfig, HiveSyncTool}
+import com.uber.hoodie.common.util.Option
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
@@ -105,7 +105,7 @@ private[hoodie] object HoodieSparkSqlWriter {
     }
     if (mode == SaveMode.Ignore && exists) {
       log.warn(s"hoodie dataset at $basePath already exists. Ignoring & not performing actual writes.")
-      return (true, None)
+      return (true, Option.empty())
     }
     if (mode == SaveMode.Overwrite && exists) {
       log.warn(s"hoodie dataset at $basePath already exists. Deleting existing data & overwriting with new data.")
@@ -136,7 +136,7 @@ private[hoodie] object HoodieSparkSqlWriter {
 
     if (hoodieRecords.isEmpty()) {
       log.info("new batch has no new records, skipping...")
-      return (true, None)
+      return (true, Option.empty())
     }
 
     val commitTime = client.startCommit()
@@ -153,7 +153,7 @@ private[hoodie] object HoodieSparkSqlWriter {
         client.commit(commitTime, writeStatuses)
       } else {
         client.commit(commitTime, writeStatuses,
-          Optional.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+          Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
       }
 
       if (commitSuccess) {
@@ -189,7 +189,7 @@ private[hoodie] object HoodieSparkSqlWriter {
       }
       false
     }
-    (writeSuccessful, Some(commitTime))
+    (writeSuccessful, Option.ofNullable(commitTime))
   }
 
   /**

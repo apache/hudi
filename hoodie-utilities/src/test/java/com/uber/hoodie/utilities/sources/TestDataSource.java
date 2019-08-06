@@ -18,10 +18,10 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
@@ -44,7 +44,7 @@ public class TestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Optional<String> lastCheckpointStr,
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr,
       long sourceLimit) {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
@@ -53,12 +53,12 @@ public class TestDataSource extends AbstractBaseTestSource {
 
     // No new data.
     if (sourceLimit <= 0) {
-      return new InputBatch<>(Optional.empty(), commitTime);
+      return new InputBatch<>(Option.empty(), commitTime);
     }
 
     List<GenericRecord> records = fetchNextBatch(props, (int)sourceLimit, commitTime, DEFAULT_PARTITION_NUM)
         .collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
-    return new InputBatch<>(Optional.of(avroRDD), commitTime);
+    return new InputBatch<>(Option.of(avroRDD), commitTime);
   }
 }

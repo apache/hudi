@@ -18,10 +18,10 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import java.io.Serializable;
-import java.util.Optional;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -60,7 +60,7 @@ public abstract class Source<T> implements Serializable {
     this.sourceType = sourceType;
   }
 
-  protected abstract InputBatch<T> fetchNewData(Optional<String> lastCkptStr, long sourceLimit);
+  protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
   /**
    * Main API called by Hoodie Delta Streamer to fetch records
@@ -68,7 +68,7 @@ public abstract class Source<T> implements Serializable {
    * @param sourceLimit Source Limit
    * @return
    */
-  public final InputBatch<T> fetchNext(Optional<String> lastCkptStr, long sourceLimit) {
+  public final InputBatch<T> fetchNext(Option<String> lastCkptStr, long sourceLimit) {
     InputBatch<T> batch = fetchNewData(lastCkptStr, sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch : new InputBatch<>(batch.getBatch(),

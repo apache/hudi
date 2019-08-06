@@ -30,6 +30,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
 import java.io.File;
@@ -39,7 +40,6 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -137,13 +137,13 @@ public class TestExternalSpillableMap {
     String ikey = ((GenericRecord) inMemoryRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String iPartitionPath = ((GenericRecord) inMemoryRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
     HoodieRecord inMemoryHoodieRecord = new HoodieRecord<>(new HoodieKey(ikey, iPartitionPath),
-        new HoodieAvroPayload(Optional.of((GenericRecord) inMemoryRecord)));
+        new HoodieAvroPayload(Option.of((GenericRecord) inMemoryRecord)));
 
     IndexedRecord onDiskRecord = iRecords.get(99);
     String dkey = ((GenericRecord) onDiskRecord).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     String dPartitionPath = ((GenericRecord) onDiskRecord).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
     HoodieRecord onDiskHoodieRecord = new HoodieRecord<>(new HoodieKey(dkey, dPartitionPath),
-        new HoodieAvroPayload(Optional.of((GenericRecord) onDiskRecord)));
+        new HoodieAvroPayload(Option.of((GenericRecord) onDiskRecord)));
     // assert size
     assert records.size() == 100;
     // get should return the same HoodieKey, same location and same value

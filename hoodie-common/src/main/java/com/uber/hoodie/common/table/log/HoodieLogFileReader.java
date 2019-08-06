@@ -28,6 +28,7 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.CorruptedLogFileException;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieNotSupportedException;
@@ -36,7 +37,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -199,16 +199,16 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
           return HoodieAvroDataBlock.getBlock(content, readerSchema);
         } else {
           return HoodieAvroDataBlock
-              .getBlock(logFile, inputStream, Optional.ofNullable(content), readBlockLazily,
+              .getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
                   contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
         }
       case DELETE_BLOCK:
         return HoodieDeleteBlock
-            .getBlock(logFile, inputStream, Optional.ofNullable(content), readBlockLazily,
+            .getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
                 contentPosition, contentLength, blockEndPos, header, footer);
       case COMMAND_BLOCK:
         return HoodieCommandBlock
-            .getBlock(logFile, inputStream, Optional.ofNullable(content), readBlockLazily,
+            .getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
                 contentPosition, contentLength, blockEndPos, header, footer);
       default:
         throw new HoodieNotSupportedException("Unsupported Block " + blockType);
@@ -227,7 +227,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     byte[] corruptedBytes = HoodieLogBlock
         .readOrSkipContent(inputStream, corruptedBlockSize, readBlockLazily);
     return HoodieCorruptBlock
-        .getBlock(logFile, inputStream, Optional.ofNullable(corruptedBytes), readBlockLazily,
+        .getBlock(logFile, inputStream, Option.ofNullable(corruptedBytes), readBlockLazily,
             contentPosition, corruptedBlockSize, corruptedBlockSize, new HashMap<>(),
             new HashMap<>());
   }

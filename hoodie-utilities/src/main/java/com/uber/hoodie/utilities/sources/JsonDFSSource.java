@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.DFSPathSelector;
-import java.util.Optional;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -41,13 +41,13 @@ public class JsonDFSSource extends JsonSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<String>> fetchNewData(Optional<String> lastCkptStr,
+  protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr,
       long sourceLimit) {
-    Pair<Optional<String>, String> selPathsWithMaxModificationTime =
+    Pair<Option<String>, String> selPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
     return selPathsWithMaxModificationTime.getLeft().map(pathStr -> new InputBatch<>(
-        Optional.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
-        .orElse(new InputBatch<>(Optional.empty(), selPathsWithMaxModificationTime.getRight()));
+        Option.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
+        .orElse(new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
   }
 
   private JavaRDD<String> fromFiles(String pathStr) {
