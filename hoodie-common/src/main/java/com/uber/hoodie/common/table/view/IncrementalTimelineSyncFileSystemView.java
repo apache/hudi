@@ -32,6 +32,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TimelineDiffHelper;
 import com.uber.hoodie.common.util.TimelineDiffHelper.TimelineDiffResult;
 import com.uber.hoodie.common.util.collection.Pair;
@@ -39,7 +40,6 @@ import com.uber.hoodie.exception.HoodieException;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -310,12 +310,12 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
      * the base-path,scheme and authority. Ensure the matching process takes care of this discrepancy.
      */
     Map<String, HoodieDataFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
-        .map(FileSlice::getDataFile).filter(Optional::isPresent).map(Optional::get)
+        .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     //Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
     Map<String, HoodieDataFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
-        .map(FileSlice::getDataFile).filter(Optional::isPresent).map(Optional::get)
+        .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 

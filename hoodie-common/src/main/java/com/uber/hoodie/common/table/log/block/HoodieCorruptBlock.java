@@ -19,9 +19,9 @@
 package com.uber.hoodie.common.table.log.block;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
@@ -30,8 +30,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  private HoodieCorruptBlock(Optional<byte[]> corruptedBytes, FSDataInputStream inputStream,
-      boolean readBlockLazily, Optional<HoodieLogBlockContentLocation> blockContentLocation,
+  private HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream,
+      boolean readBlockLazily, Option<HoodieLogBlockContentLocation> blockContentLocation,
       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, corruptedBytes, inputStream, readBlockLazily);
   }
@@ -53,7 +53,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
 
   public static HoodieLogBlock getBlock(HoodieLogFile logFile,
       FSDataInputStream inputStream,
-      Optional<byte[]> corruptedBytes,
+      Option<byte[]> corruptedBytes,
       boolean readBlockLazily,
       long position,
       long blockSize,
@@ -62,7 +62,7 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
       Map<HeaderMetadataType, String> footer) {
 
     return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily,
-        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
         header, footer);
   }
 }

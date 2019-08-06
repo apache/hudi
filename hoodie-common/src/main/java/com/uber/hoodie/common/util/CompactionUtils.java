@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -55,7 +54,7 @@ public class CompactionUtils {
    * @return Compaction Operation
    */
   public static HoodieCompactionOperation buildFromFileSlice(String partitionPath, FileSlice fileSlice,
-      Optional<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
+      Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionOperation.Builder builder = HoodieCompactionOperation.newBuilder();
     builder.setPartitionPath(partitionPath);
     builder.setFileId(fileSlice.getFileId());
@@ -80,8 +79,8 @@ public class CompactionUtils {
    */
   public static HoodieCompactionPlan buildFromFileSlices(
       List<Pair<String, FileSlice>> partitionFileSlicePairs,
-      Optional<Map<String, String>> extraMetadata,
-      Optional<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
+      Option<Map<String, String>> extraMetadata,
+      Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionPlan.Builder builder = HoodieCompactionPlan.newBuilder();
     extraMetadata.ifPresent(m -> builder.setExtraMetadata(m));
     builder.setOperations(partitionFileSlicePairs.stream().map(pfPair ->

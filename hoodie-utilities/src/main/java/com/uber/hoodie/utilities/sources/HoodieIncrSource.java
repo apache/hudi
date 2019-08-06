@@ -21,13 +21,13 @@ package com.uber.hoodie.utilities.sources;
 import com.uber.hoodie.DataSourceReadOptions;
 import com.uber.hoodie.DataSourceUtils;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.IncrSourceHelper;
 import java.util.Arrays;
-import java.util.Optional;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -79,7 +79,7 @@ public class HoodieIncrSource extends RowSource {
   }
 
   @Override
-  public Pair<Optional<Dataset<Row>>, String> fetchNextBatch(Optional<String> lastCkptStr, long sourceLimit) {
+  public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
 
     DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.HOODIE_SRC_BASE_PATH));
 
@@ -97,15 +97,15 @@ public class HoodieIncrSource extends RowSource {
         Config.DEFAULT_READ_LATEST_INSTANT_ON_MISSING_CKPT);
 
     // Use begin Instant if set and non-empty
-    Optional<String> beginInstant =
-        lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Optional.empty() : lastCkptStr : Optional.empty();
+    Option<String> beginInstant =
+        lastCkptStr.isPresent() ? lastCkptStr.get().isEmpty() ? Option.empty() : lastCkptStr : Option.empty();
 
     Pair<String, String> instantEndpts = IncrSourceHelper.calculateBeginAndEndInstants(sparkContext, srcPath,
         numInstantsPerFetch, beginInstant, readLatestOnMissingCkpt);
 
     if (instantEndpts.getKey().equals(instantEndpts.getValue())) {
       log.warn("Already caught up. Begin Checkpoint was :" + instantEndpts.getKey());
-      return Pair.of(Optional.empty(), instantEndpts.getKey());
+      return Pair.of(Option.empty(), instantEndpts.getKey());
     }
 
     // Do Incr pull. Set end instant if available
@@ -153,6 +153,6 @@ public class HoodieIncrSource extends RowSource {
     final Dataset<Row> src = source.drop(HoodieRecord.HOODIE_META_COLUMNS.stream()
         .filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new));
     //log.info("Final Schema from Source is :" + src.schema());
-    return Pair.of(Optional.of(src), instantEndpts.getRight());
+    return Pair.of(Option.of(src), instantEndpts.getRight());
   }
 }

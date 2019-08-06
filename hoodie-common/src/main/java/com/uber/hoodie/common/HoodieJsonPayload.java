@@ -22,12 +22,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringWriter;
-import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -51,15 +51,15 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema)
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema)
       throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
-  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-    return Optional.of(jsonConverter.convert(getJsonData()));
+    return Option.of(jsonConverter.convert(getJsonData()));
   }
 
   private String getJsonData() throws IOException {

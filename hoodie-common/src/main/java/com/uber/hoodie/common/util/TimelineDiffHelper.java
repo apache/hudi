@@ -24,7 +24,6 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.collection.Pair;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.log4j.LogManager;
@@ -41,8 +40,8 @@ public class TimelineDiffHelper {
     HoodieTimeline oldT = oldTimeline.filterCompletedAndCompactionInstants();
     HoodieTimeline newT = newTimeline.filterCompletedAndCompactionInstants();
 
-    Optional<HoodieInstant> lastSeenInstant = oldT.lastInstant();
-    Optional<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
+    Option<HoodieInstant> lastSeenInstant = oldT.lastInstant();
+    Option<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
 
     if (lastSeenInstant.isPresent() && firstInstantInNewTimeline.isPresent()) {
       if (HoodieTimeline.compareTimestamps(lastSeenInstant.get().getTimestamp(),

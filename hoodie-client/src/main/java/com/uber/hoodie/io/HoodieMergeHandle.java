@@ -30,6 +30,7 @@ import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -41,7 +42,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -120,15 +120,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Optional<IndexedRecord> insertValue) {
+  public void write(HoodieRecord record, Option<IndexedRecord> insertValue) {
     // NO_OP
   }
 
   /**
    * Perform the actual writing of the given record into the backing file.
    */
-  public void write(HoodieRecord record, Optional<IndexedRecord> avroRecord, Optional<Exception> exception) {
-    Optional recordMetadata = record.getData().getMetadata();
+  public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
+    Option recordMetadata = record.getData().getMetadata();
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
@@ -222,15 +222,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     return partitionPath;
   }
 
-  private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, Optional<IndexedRecord> indexedRecord) {
+  private boolean writeUpdateRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
     if (indexedRecord.isPresent()) {
       updatedRecordsWritten++;
     }
     return writeRecord(hoodieRecord, indexedRecord);
   }
 
-  private boolean writeRecord(HoodieRecord<T> hoodieRecord, Optional<IndexedRecord> indexedRecord) {
-    Optional recordMetadata = hoodieRecord.getData().getMetadata();
+  private boolean writeRecord(HoodieRecord<T> hoodieRecord, Option<IndexedRecord> indexedRecord) {
+    Option recordMetadata = hoodieRecord.getData().getMetadata();
     try {
       if (indexedRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
@@ -266,7 +266,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
-        Optional<IndexedRecord> combinedAvroRecord = hoodieRecord.getData()
+        Option<IndexedRecord> combinedAvroRecord = hoodieRecord.getData()
             .combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchema : originalSchema);
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /* ONLY WHEN

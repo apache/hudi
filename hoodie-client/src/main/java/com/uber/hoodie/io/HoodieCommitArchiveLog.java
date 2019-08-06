@@ -43,6 +43,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCommitException;
 import com.uber.hoodie.exception.HoodieException;
@@ -53,7 +54,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.Schema;
@@ -153,12 +153,12 @@ public class HoodieCommitArchiveLog {
     //TODO (na) : Add a way to return actions associated with a timeline and then merge/unify
     // with logic above to avoid Stream.concats
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
-    Optional<HoodieInstant> oldestPendingCompactionInstant =
+    Option<HoodieInstant> oldestPendingCompactionInstant =
         table.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
 
     // We cannot have any holes in the commit timeline. We cannot archive any commits which are
     // made after the first savepoint present.
-    Optional<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
+    Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxCommitsToKeep) {
       // Actually do the commits
       instants = Stream.concat(instants, commitTimeline.getInstants()
@@ -196,12 +196,12 @@ public class HoodieCommitArchiveLog {
     }
 
     // Remove older meta-data from auxiliary path too
-    Optional<HoodieInstant> latestCommitted =
-            archivedInstants.stream()
+    Option<HoodieInstant> latestCommitted =
+            Option.fromJavaOptional(archivedInstants.stream()
                     .filter(i -> {
                       return i.isCompleted()
                               && (i.getAction().equals(COMMIT_ACTION) || (i.getAction().equals(DELTA_COMMIT_ACTION)));
-                    }).max(Comparator.comparing(HoodieInstant::getTimestamp));
+                    }).max(Comparator.comparing(HoodieInstant::getTimestamp)));
     if (latestCommitted.isPresent()) {
       success &= deleteAllInstantsOlderorEqualsInAuxMetaFolder(latestCommitted.get());
     }

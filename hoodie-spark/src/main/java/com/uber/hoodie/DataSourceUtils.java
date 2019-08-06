@@ -22,6 +22,7 @@ import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -39,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
@@ -191,7 +191,7 @@ public class DataSourceUtils {
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
       JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig, Optional<EmbeddedTimelineService> timelineService) throws Exception {
+      HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> timelineService) throws Exception {
     HoodieReadClient client = null;
     try {
       client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
@@ -212,7 +212,7 @@ public class DataSourceUtils {
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc,
                                                      JavaRDD<HoodieRecord> incomingHoodieRecords,
                                                      Map<String, String> parameters,
-                                                     Optional<EmbeddedTimelineService> timelineService)
+                                                     Option<EmbeddedTimelineService> timelineService)
       throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig
         .newBuilder()

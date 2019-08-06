@@ -27,8 +27,8 @@ import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
-import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.Before;
 import org.junit.Rule;
@@ -64,10 +64,10 @@ public class HoodieActiveTimelineTest {
     HoodieInstant instant5 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "9");
 
     timeline = new HoodieActiveTimeline(metaClient);
-    timeline.saveAsComplete(instant1, Optional.empty());
-    timeline.saveAsComplete(instant2, Optional.empty());
-    timeline.saveAsComplete(instant3, Optional.empty());
-    timeline.saveAsComplete(instant4, Optional.empty());
+    timeline.saveAsComplete(instant1, Option.empty());
+    timeline.saveAsComplete(instant2, Option.empty());
+    timeline.saveAsComplete(instant3, Option.empty());
+    timeline.saveAsComplete(instant4, Option.empty());
     timeline.createInflight(instant5);
     timeline = timeline.reload();
 
@@ -90,10 +90,10 @@ public class HoodieActiveTimelineTest {
     timeline = new HoodieActiveTimeline(metaClient);
     assertTrue(timeline.empty());
     assertEquals("", 0, timeline.countInstants());
-    assertEquals("", Optional.empty(), timeline.firstInstant());
-    assertEquals("", Optional.empty(), timeline.nthInstant(5));
-    assertEquals("", Optional.empty(), timeline.nthInstant(-1));
-    assertEquals("", Optional.empty(), timeline.lastInstant());
+    assertEquals("", Option.empty(), timeline.firstInstant());
+    assertEquals("", Option.empty(), timeline.nthInstant(5));
+    assertEquals("", Option.empty(), timeline.nthInstant(-1));
+    assertEquals("", Option.empty(), timeline.lastInstant());
     assertFalse("", timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "01")));
   }
 

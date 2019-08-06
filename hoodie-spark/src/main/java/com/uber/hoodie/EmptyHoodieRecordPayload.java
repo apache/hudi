@@ -19,7 +19,7 @@
 package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import java.util.Optional;
+import com.uber.hoodie.common.util.Option;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -37,12 +37,12 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) {
-    return Optional.empty();
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) {
+    return Option.empty();
   }
 
   @Override
-  public Optional<IndexedRecord> getInsertValue(Schema schema) {
-    return Optional.empty();
+  public Option<IndexedRecord> getInsertValue(Schema schema) {
+    return Option.empty();
   }
 }

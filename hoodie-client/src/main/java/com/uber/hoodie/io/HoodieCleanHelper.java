@@ -29,6 +29,7 @@ import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.SyncableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
@@ -37,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -99,7 +99,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
         FileSlice nextSlice = fileSliceIterator.next();
-        Optional<HoodieDataFile> dataFile = nextSlice.getDataFile();
+        Option<HoodieDataFile> dataFile = nextSlice.getDataFile();
         if (dataFile.isPresent() && savepointedFiles.contains(dataFile.get().getFileName())) {
           // do not clean up a savepoint data file
           continue;
@@ -165,7 +165,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
         // Ensure there are more than 1 version of the file (we only clean old files from updates)
         // i.e always spare the last commit.
         for (FileSlice aSlice : fileSliceList) {
-          Optional<HoodieDataFile> aFile = aSlice.getDataFile();
+          Option<HoodieDataFile> aFile = aSlice.getDataFile();
           String fileCommitTime = aSlice.getBaseInstantTime();
           if (aFile.isPresent() && savepointedFiles.contains(aFile.get().getFileName())) {
             // do not clean up a savepoint data file
@@ -240,8 +240,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
   /**
    * Returns earliest commit to retain based on cleaning policy.
    */
-  public Optional<HoodieInstant> getEarliestCommitToRetain() {
-    Optional<HoodieInstant> earliestCommitToRetain = Optional.empty();
+  public Option<HoodieInstant> getEarliestCommitToRetain() {
+    Option<HoodieInstant> earliestCommitToRetain = Option.empty();
     int commitsRetained = config.getCleanerCommitsRetained();
     if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_COMMITS
         && commitTimeline.countInstants() > commitsRetained) {

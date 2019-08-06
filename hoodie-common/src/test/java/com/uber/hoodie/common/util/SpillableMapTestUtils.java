@@ -26,7 +26,6 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -45,7 +44,7 @@ public class SpillableMapTestUtils {
           String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
           recordKeys.add(key);
           HoodieRecord record = new HoodieRecord<>(new HoodieKey(key, partitionPath),
-              new HoodieAvroPayload(Optional.of((GenericRecord) r)));
+              new HoodieAvroPayload(Option.of((GenericRecord) r)));
           record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));
           records.put(key, record);
         });

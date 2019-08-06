@@ -20,6 +20,7 @@ package com.uber.hoodie.hive;
 
 import com.beust.jcommander.JCommander;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hadoop.HoodieInputFormat;
 import com.uber.hoodie.hadoop.realtime.HoodieRealtimeInputFormat;
@@ -28,7 +29,6 @@ import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import com.uber.hoodie.hive.util.SchemaUtil;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -97,7 +97,7 @@ public class HiveSyncTool {
 
     LOG.info("Schema sync complete. Syncing partitions for " + cfg.tableName);
     // Get the last time we successfully synced partitions
-    Optional<String> lastCommitTimeSynced = Optional.empty();
+    Option<String> lastCommitTimeSynced = Option.empty();
     if (tableExists) {
       lastCommitTimeSynced = hoodieHiveClient.getLastCommitTimeSynced();
     }

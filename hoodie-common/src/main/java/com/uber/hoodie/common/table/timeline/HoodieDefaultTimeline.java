@@ -20,12 +20,12 @@ package com.uber.hoodie.common.table.timeline;
 
 import com.google.common.collect.Sets;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.StringUtils;
 import com.uber.hoodie.exception.HoodieException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -48,12 +48,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 
-  protected transient Function<HoodieInstant, Optional<byte[]>> details;
+  protected transient Function<HoodieInstant, Option<byte[]>> details;
   private List<HoodieInstant> instants;
   private String timelineHash;
 
   public HoodieDefaultTimeline(Stream<HoodieInstant> instants,
-      Function<HoodieInstant, Optional<byte[]>> details) {
+      Function<HoodieInstant, Option<byte[]>> details) {
     this.details = details;
     setInstants(instants.collect(Collectors.toList()));
   }
@@ -149,27 +149,27 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Optional<HoodieInstant> firstInstant() {
-    return instants.stream().findFirst();
+  public Option<HoodieInstant> firstInstant() {
+    return Option.fromJavaOptional(instants.stream().findFirst());
   }
 
   @Override
-  public Optional<HoodieInstant> nthInstant(int n) {
+  public Option<HoodieInstant> nthInstant(int n) {
     if (empty() || n >= countInstants()) {
-      return Optional.empty();
+      return Option.empty();
     }
-    return Optional.of(instants.get(n));
+    return Option.of(instants.get(n));
   }
 
   @Override
-  public Optional<HoodieInstant> lastInstant() {
-    return empty() ? Optional.empty() : nthInstant(countInstants() - 1);
+  public Option<HoodieInstant> lastInstant() {
+    return empty() ? Option.empty() : nthInstant(countInstants() - 1);
   }
 
   @Override
-  public Optional<HoodieInstant> nthFromLastInstant(int n) {
+  public Option<HoodieInstant> nthFromLastInstant(int n) {
     if (countInstants() < n + 1) {
-      return Optional.empty();
+      return Option.empty();
     }
     return nthInstant(countInstants() - 1 - n);
   }
@@ -197,13 +197,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean isBeforeTimelineStarts(String instant) {
-    Optional<HoodieInstant> firstCommit = firstInstant();
+    Option<HoodieInstant> firstCommit = firstInstant();
     return firstCommit.isPresent()
         && HoodieTimeline.compareTimestamps(instant, firstCommit.get().getTimestamp(), LESSER);
   }
 
   @Override
-  public Optional<byte[]> getInstantDetails(HoodieInstant instant) {
+  public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
   }
 

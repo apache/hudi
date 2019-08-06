@@ -19,9 +19,9 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -30,7 +30,7 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
 
   private final byte[] recordBytes;
 
-  public AvroBinaryTestPayload(Optional<GenericRecord> record) {
+  public AvroBinaryTestPayload(Option<GenericRecord> record) {
 
     try {
       if (record.isPresent()) {
@@ -49,13 +49,13 @@ public class AvroBinaryTestPayload implements HoodieRecordPayload {
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
-  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

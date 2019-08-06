@@ -23,11 +23,11 @@ import com.beust.jcommander.Parameter;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -123,7 +123,7 @@ public class HoodieCompactor {
     //Get schema.
     String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
     HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism,
-        Optional.empty(), props);
+        Option.empty(), props);
     JavaRDD<WriteStatus> writeResponse = client.compact(cfg.compactionInstantTime);
     return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
   }
@@ -131,8 +131,8 @@ public class HoodieCompactor {
   private int doSchedule(JavaSparkContext jsc) throws Exception {
     //Get schema.
     HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism,
-        Optional.of(cfg.strategyClassName), props);
-    client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Optional.empty());
+        Option.of(cfg.strategyClassName), props);
+    client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
     return 0;
   }
 }

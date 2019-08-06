@@ -20,9 +20,9 @@ package com.uber.hoodie.common.model;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * A Single Record managed by Hoodie TODO - Make this generic
@@ -119,8 +119,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     return this;
   }
 
-  public Optional<HoodieRecordLocation> getNewLocation() {
-    return Optional.ofNullable(this.newLocation);
+  public Option<HoodieRecordLocation> getNewLocation() {
+    return Option.ofNullable(this.newLocation);
   }
 
   public boolean isCurrentLocationKnown() {

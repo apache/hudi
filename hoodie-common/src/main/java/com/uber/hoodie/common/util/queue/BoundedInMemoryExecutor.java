@@ -20,11 +20,11 @@
 package com.uber.hoodie.common.util.queue;
 
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.SizeEstimator;
 import com.uber.hoodie.exception.HoodieException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorCompletionService;
@@ -52,18 +52,18 @@ public class BoundedInMemoryExecutor<I, O, E> {
   // Producers
   private final List<BoundedInMemoryQueueProducer<I>> producers;
   // Consumer
-  private final Optional<BoundedInMemoryQueueConsumer<O, E>> consumer;
+  private final Option<BoundedInMemoryQueueConsumer<O, E>> consumer;
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes,
       BoundedInMemoryQueueProducer<I> producer,
-      Optional<BoundedInMemoryQueueConsumer<O, E>> consumer,
+      Option<BoundedInMemoryQueueConsumer<O, E>> consumer,
       final Function<I, O> transformFunction) {
     this(bufferLimitInBytes, Arrays.asList(producer), consumer, transformFunction, new DefaultSizeEstimator<>());
   }
 
   public BoundedInMemoryExecutor(final long bufferLimitInBytes,
       List<BoundedInMemoryQueueProducer<I>> producers,
-      Optional<BoundedInMemoryQueueConsumer<O, E>> consumer,
+      Option<BoundedInMemoryQueueConsumer<O, E>> consumer,
       final Function<I, O> transformFunction,
       final SizeEstimator<O> sizeEstimator) {
     this.producers = producers;

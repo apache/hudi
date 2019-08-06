@@ -33,6 +33,7 @@ import com.uber.hoodie.common.table.log.block.HoodieCorruptBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieMemoryConfig;
 import com.uber.hoodie.hive.util.SchemaUtil;
@@ -42,7 +43,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -200,7 +200,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           Integer.valueOf(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
           HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
-        Optional<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
+        Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
         if (allRecords.size() >= limit) {
           break;
         }

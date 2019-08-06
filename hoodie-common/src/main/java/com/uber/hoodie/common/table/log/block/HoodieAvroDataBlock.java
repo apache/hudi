@@ -22,6 +22,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.storage.SizeAwareDataInputStream;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,7 +34,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import javax.annotation.Nonnull;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
@@ -62,7 +62,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
   public HoodieAvroDataBlock(@Nonnull List<IndexedRecord> records,
       @Nonnull Map<HeaderMetadataType, String> header,
       @Nonnull Map<HeaderMetadataType, String> footer) {
-    super(header, footer, Optional.empty(), Optional.empty(), null, false);
+    super(header, footer, Option.empty(), Option.empty(), null, false);
     this.records = records;
     this.schema = Schema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
   }
@@ -72,8 +72,8 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     this(records, header, new HashMap<>());
   }
 
-  private HoodieAvroDataBlock(Optional<byte[]> content, @Nonnull FSDataInputStream inputStream,
-      boolean readBlockLazily, Optional<HoodieLogBlockContentLocation> blockContentLocation,
+  private HoodieAvroDataBlock(Option<byte[]> content, @Nonnull FSDataInputStream inputStream,
+      boolean readBlockLazily, Option<HoodieLogBlockContentLocation> blockContentLocation,
       Schema readerSchema, @Nonnull Map<HeaderMetadataType, String> headers,
       @Nonnull Map<HeaderMetadataType, String> footer) {
     super(headers, footer, blockContentLocation, content, inputStream, readBlockLazily);
@@ -82,7 +82,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
 
   public static HoodieLogBlock getBlock(HoodieLogFile logFile,
       FSDataInputStream inputStream,
-      Optional<byte[]> content,
+      Option<byte[]> content,
       boolean readBlockLazily,
       long position,
       long blockSize,
@@ -92,7 +92,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
       Map<HeaderMetadataType, String> footer) {
 
     return new HoodieAvroDataBlock(content, inputStream, readBlockLazily,
-        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
         readerSchema, header, footer);
 
   }
@@ -230,7 +230,7 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
    * which were written using HoodieLogFormat V1
    */
   public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
-    super(new HashMap<>(), new HashMap<>(), Optional.empty(), Optional.empty(), null, false);
+    super(new HashMap<>(), new HashMap<>(), Option.empty(), Option.empty(), null, false);
     this.records = records;
     this.schema = schema;
   }

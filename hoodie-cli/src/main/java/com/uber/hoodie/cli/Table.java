@@ -18,13 +18,13 @@
 
 package com.uber.hoodie.cli;
 
+import com.uber.hoodie.common.util.Option;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -40,12 +40,12 @@ public class Table implements Iterable<List<String>> {
   private final TableHeader rowHeader;
   // User-specified conversions before rendering
   private final Map<String, Function<Object, String>> fieldNameToConverterMap;
-  // Optional attribute to track sorting field
-  private final Optional<String> orderingFieldNameOptional;
+  // Option attribute to track sorting field
+  private final Option<String> orderingFieldNameOptional;
   // Whether sorting has to be in descending order (by default : optional)
-  private final Optional<Boolean> isDescendingOptional;
+  private final Option<Boolean> isDescendingOptional;
   // Limit the number of entries rendered
-  private final Optional<Integer> limitOptional;
+  private final Option<Integer> limitOptional;
   // Raw list of rows
   private final List<List<Comparable>> rawRows;
   // Flag to determine if all the rows have been added
@@ -55,9 +55,9 @@ public class Table implements Iterable<List<String>> {
 
   public Table(TableHeader rowHeader,
       Map<String, Function<Object, String>> fieldNameToConverterMap,
-      Optional<String> orderingFieldNameOptional,
-      Optional<Boolean> isDescendingOptional,
-      Optional<Integer> limitOptional) {
+      Option<String> orderingFieldNameOptional,
+      Option<Boolean> isDescendingOptional,
+      Option<Integer> limitOptional) {
     this.rowHeader = rowHeader;
     this.fieldNameToConverterMap = fieldNameToConverterMap;
     this.orderingFieldNameOptional = orderingFieldNameOptional;

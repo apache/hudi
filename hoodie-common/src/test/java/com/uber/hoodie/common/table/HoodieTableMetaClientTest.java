@@ -29,8 +29,8 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieArchivedTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
@@ -72,7 +72,7 @@ public class HoodieTableMetaClientTest {
     HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     commitTimeline.createInflight(instant);
-    commitTimeline.saveAsComplete(instant, Optional.of("test-detail".getBytes()));
+    commitTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
     commitTimeline = commitTimeline.reload();
     HoodieInstant completedInstant = HoodieTimeline.getCompletedInstant(instant);
     assertEquals("Commit should be 1 and completed", completedInstant, commitTimeline.getInstants().findFirst().get());
@@ -88,7 +88,7 @@ public class HoodieTableMetaClientTest {
 
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
     activeTimeline.createInflight(instant);
-    activeTimeline.saveAsComplete(instant, Optional.of("test-detail".getBytes()));
+    activeTimeline.saveAsComplete(instant, Option.of("test-detail".getBytes()));
 
     // Commit timeline should not auto-reload every time getActiveCommitTimeline(), it should be cached
     activeTimeline = metaClient.getActiveTimeline();

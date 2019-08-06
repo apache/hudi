@@ -26,7 +26,6 @@ import com.uber.hoodie.common.util.collection.io.storage.SizeAwareDataOutputStre
 import com.uber.hoodie.exception.HoodieCorruptedDataException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.Optional;
 import java.util.zip.CRC32;
 import org.apache.avro.generic.GenericRecord;
 
@@ -116,7 +115,7 @@ public class SpillableMapUtils {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
         new HoodieKey(recKey, partitionPath),
         ReflectionUtils
-            .loadPayload(payloadClazz, new Object[]{Optional.of(rec)}, Optional.class));
+            .loadPayload(payloadClazz, new Object[]{Option.of(rec)}, Option.class));
     return (R) hoodieRecord;
   }
 
@@ -127,7 +126,7 @@ public class SpillableMapUtils {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
         new HoodieKey(recKey, partitionPath),
         ReflectionUtils
-            .loadPayload(payloadClazz, new Object[]{Optional.empty()}, Optional.class));
+            .loadPayload(payloadClazz, new Object[]{Option.empty()}, Option.class));
     return (R) hoodieRecord;
   }
 }

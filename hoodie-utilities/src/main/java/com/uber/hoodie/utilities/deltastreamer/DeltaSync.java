@@ -34,6 +34,7 @@ import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
@@ -55,7 +56,6 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -140,7 +140,7 @@ public class DeltaSync implements Serializable {
   /**
    * Timeline with completed commits
    */
-  private transient Optional<HoodieTimeline> commitTimelineOpt;
+  private transient Option<HoodieTimeline> commitTimelineOpt;
 
   /**
    * Write Client
@@ -192,10 +192,10 @@ public class DeltaSync implements Serializable {
   private void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath);
-      this.commitTimelineOpt = Optional.of(meta.getActiveTimeline().getCommitsTimeline()
+      this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline()
           .filterCompletedInstants());
     } else {
-      this.commitTimelineOpt = Optional.empty();
+      this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           cfg.storageType, cfg.targetTableName, "archived");
     }
@@ -204,8 +204,8 @@ public class DeltaSync implements Serializable {
   /**
    * Run one round of delta sync and return new compaction instant if one got scheduled
    */
-  public Optional<String> syncOnce() throws Exception {
-    Optional<String> scheduledCompaction = Optional.empty();
+  public Option<String> syncOnce() throws Exception {
+    Option<String> scheduledCompaction = Option.empty();
     HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
@@ -238,18 +238,18 @@ public class DeltaSync implements Serializable {
    * Read from Upstream Source and apply transformation if needed
    */
   private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
-      Optional<HoodieTimeline> commitTimelineOpt) throws Exception {
+      Option<HoodieTimeline> commitTimelineOpt) throws Exception {
     // Retrieve the previous round checkpoints, if any
-    Optional<String> resumeCheckpointStr = Optional.empty();
+    Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      Optional<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
+      Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
             commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
         if (cfg.checkpoint != null && !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          resumeCheckpointStr = Optional.of(cfg.checkpoint);
+          resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
-          resumeCheckpointStr = Optional.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
+          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else {
           throw new HoodieDeltaStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
@@ -262,11 +262,11 @@ public class DeltaSync implements Serializable {
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
-      resumeCheckpointStr = Optional.of(cfg.checkpoint);
+      resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
-    final Optional<JavaRDD<GenericRecord>> avroRDDOptional;
+    final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     final SchemaProvider schemaProvider;
     if (transformer != null) {
@@ -275,7 +275,7 @@ public class DeltaSync implements Serializable {
       InputBatch<Dataset<Row>> dataAndCheckpoint = formatAdapter.fetchNewDataInRowFormat(
           resumeCheckpointStr, cfg.sourceLimit);
 
-      Optional<Dataset<Row>> transformed =
+      Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       avroRDDOptional = transformed.map(t ->
@@ -314,12 +314,12 @@ public class DeltaSync implements Serializable {
    * @param records Input Records
    * @param checkpointStr Checkpoint String
    * @param metrics Metrics
-   * @return Optional Compaction instant if one is scheduled
+   * @return Option Compaction instant if one is scheduled
    */
-  private Optional<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
+  private Option<String> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
       HoodieDeltaStreamerMetrics metrics, Timer.Context overallTimerContext) throws Exception {
 
-    Optional<String> scheduledCompactionInstant = Optional.empty();
+    Option<String> scheduledCompactionInstant = Option.empty();
 
     // filter dupes if needed
     if (cfg.filterDupes) {
@@ -330,7 +330,7 @@ public class DeltaSync implements Serializable {
 
       if (records.isEmpty()) {
         log.info("No new data, nothing to commit.. ");
-        return Optional.empty();
+        return Option.empty();
       }
     }
 
@@ -365,13 +365,13 @@ public class DeltaSync implements Serializable {
       }
 
       boolean success = writeClient.commit(commitTime, writeStatusRDD,
-          Optional.of(checkpointCommitMetadata));
+          Option.of(checkpointCommitMetadata));
       if (success) {
         log.info("Commit " + commitTime + " successful!");
 
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
-          scheduledCompactionInstant = writeClient.scheduleCompaction(Optional.of(checkpointCommitMetadata));
+          scheduledCompactionInstant = writeClient.scheduleCompaction(Option.of(checkpointCommitMetadata));
         }
 
         // Sync to hive if enabled

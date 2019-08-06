@@ -22,6 +22,7 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullException;
 import com.uber.hoodie.utilities.exception.HoodieIncrementalPullSQLException;
@@ -34,7 +35,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
-import java.util.Optional;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
@@ -290,7 +290,7 @@ public class HiveIncrementalPuller {
     }
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(fs.getConf(), targetDataPath);
 
-    Optional<HoodieInstant> lastCommit = metadata.getActiveTimeline().getCommitsTimeline()
+    Option<HoodieInstant> lastCommit = metadata.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
     if (lastCommit.isPresent()) {
       return lastCommit.get().getTimestamp();

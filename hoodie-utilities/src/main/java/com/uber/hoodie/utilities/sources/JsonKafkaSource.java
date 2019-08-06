@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.KafkaOffsetGen;
 import com.uber.hoodie.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
-import java.util.Optional;
 import kafka.serializer.StringDecoder;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -48,17 +48,17 @@ public class JsonKafkaSource extends JsonSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<String>> fetchNewData(Optional<String> lastCheckpointStr,
+  protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCheckpointStr,
       long sourceLimit) {
     OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
-      return new InputBatch<>(Optional.empty(),
+      return new InputBatch<>(Option.empty(),
           lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     }
     log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     JavaRDD<String> newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Optional.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
+    return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
   private JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {

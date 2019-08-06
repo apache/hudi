@@ -21,6 +21,7 @@ package com.uber.hoodie.func;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -31,7 +32,6 @@ import com.uber.hoodie.table.HoodieTable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -62,16 +62,16 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload> extend
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
   static class HoodieInsertValueGenResult<T extends HoodieRecord> {
     public T record;
-    public Optional<IndexedRecord> insertValue;
+    public Option<IndexedRecord> insertValue;
     // It caches the exception seen while fetching insert value.
-    public Optional<Exception> exception = Optional.empty();
+    public Option<Exception> exception = Option.empty();
 
     public HoodieInsertValueGenResult(T record, Schema schema) {
       this.record = record;
       try {
         this.insertValue = record.getData().getInsertValue(schema);
       } catch (Exception e) {
-        this.exception = Optional.of(e);
+        this.exception = Option.of(e);
       }
     }
   }

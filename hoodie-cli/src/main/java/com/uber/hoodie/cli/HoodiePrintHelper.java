@@ -19,9 +19,9 @@
 package com.uber.hoodie.cli;
 
 import com.jakewharton.fliptables.FlipTable;
+import com.uber.hoodie.common.util.Option;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 
 /**
@@ -62,9 +62,9 @@ public class HoodiePrintHelper {
     }
 
     Table table = new Table(rowHeader, fieldNameToConverterMap,
-        Optional.ofNullable(sortByField.isEmpty() ? null : sortByField),
-        Optional.ofNullable(isDescending),
-        Optional.ofNullable(limit <= 0 ? null : limit)).addAllRows(rows).flip();
+        Option.ofNullable(sortByField.isEmpty() ? null : sortByField),
+        Option.ofNullable(isDescending),
+        Option.ofNullable(limit <= 0 ? null : limit)).addAllRows(rows).flip();
 
     return HoodiePrintHelper.print(table);
   }

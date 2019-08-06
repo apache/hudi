@@ -30,11 +30,11 @@ import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -79,7 +79,7 @@ public class HoodieSnapshotCopier implements Serializable {
         tableMetadata,
         tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     // Get the latest commit
-    Optional<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getCommitsTimeline()
+    Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().lastInstant();
     if (!latestCommit.isPresent()) {
       logger.warn("No commits present. Nothing to snapshot");

@@ -18,9 +18,9 @@
 
 import com.uber.hoodie.common.TestRawTripPayload;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -28,14 +28,14 @@ import java.util.stream.Collectors;
  */
 public class DataSourceTestUtils {
 
-  public static Optional<String> convertToString(HoodieRecord record) {
+  public static Option<String> convertToString(HoodieRecord record) {
     try {
       String str = ((TestRawTripPayload) record.getData()).getJsonData();
       str = "{" + str.substring(str.indexOf("\"timestamp\":"));
-      return Optional.of(str.replaceAll("}",
+      return Option.of(str.replaceAll("}",
           ", \"partition\": \"" + record.getPartitionPath() + "\"}"));
     } catch (IOException e) {
-      return Optional.empty();
+      return Option.empty();
     }
   }
 
