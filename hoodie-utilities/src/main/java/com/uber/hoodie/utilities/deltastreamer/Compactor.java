@@ -21,10 +21,10 @@ package com.uber.hoodie.utilities.deltastreamer;
 import com.uber.hoodie.HoodieWriteClient;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Optional;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,6 +57,6 @@ public class Compactor implements Serializable {
           + "Errors :" + numWriteErrors);
     }
     // Commit compaction
-    compactionClient.commitCompaction(instant.getTimestamp(), res, Optional.empty());
+    compactionClient.commitCompaction(instant.getTimestamp(), res, Option.empty());
   }
 }

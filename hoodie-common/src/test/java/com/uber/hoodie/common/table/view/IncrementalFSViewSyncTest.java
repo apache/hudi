@@ -47,6 +47,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.File;
@@ -57,7 +58,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -188,7 +188,7 @@ public class IncrementalFSViewSyncTest {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, firstEmptyInstantTs),
-        Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
 
     view.sync();
     Assert.assertTrue(view.getLastInstant().isPresent());
@@ -455,7 +455,7 @@ public class IncrementalFSViewSyncTest {
           Integer.toString(Integer.parseInt(instant) + 1));
     }).collect(Collectors.toList());
 
-    HoodieCleanMetadata cleanMetadata = AvroUtils.convertCleanMetadata(cleanInstant, Optional.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata = AvroUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats);
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant),
         AvroUtils.serializeCleanMetadata(cleanMetadata));
@@ -480,7 +480,7 @@ public class IncrementalFSViewSyncTest {
     rollbacks.add(instant);
 
     HoodieRollbackMetadata rollbackMetadata = AvroUtils
-        .convertRollbackMetadata(rollbackInstant, Optional.empty(), rollbacks, rollbackStats);
+        .convertRollbackMetadata(rollbackInstant, Option.empty(), rollbacks, rollbackStats);
     if (isRestore) {
       HoodieRestoreMetadata metadata = new HoodieRestoreMetadata();
 
@@ -538,7 +538,7 @@ public class IncrementalFSViewSyncTest {
 
     long initialExpTotalFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).sum();
 
-    HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Optional.empty(), Optional.empty());
+    HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(slices, Option.empty(), Option.empty());
     HoodieInstant compactionInstant =
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
@@ -782,7 +782,7 @@ public class IncrementalFSViewSyncTest {
     metaClient.getActiveTimeline().saveAsComplete(
         new HoodieInstant(true, deltaCommit ? HoodieTimeline.DELTA_COMMIT_ACTION : HoodieTimeline.COMMIT_ACTION,
             instant),
-        Optional.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+        Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     // Delete pending compaction if present
     metaClient.getFs().delete(new Path(metaClient.getMetaPath(),
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant).getFileName()));

@@ -2,6 +2,7 @@ package com.uber.hoodie.utilities.sources;
 
 import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.RocksDBBasedMap;
 import com.uber.hoodie.exception.HoodieIOException;
@@ -11,7 +12,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -96,7 +96,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
     try {
-      Optional<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
+      Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
       return (GenericRecord) recordOpt.get();
     } catch (IOException e) {
       return null;

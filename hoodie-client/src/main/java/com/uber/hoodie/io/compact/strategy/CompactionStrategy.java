@@ -24,11 +24,11 @@ import com.uber.hoodie.avro.model.HoodieCompactionPlan;
 import com.uber.hoodie.common.model.HoodieDataFile;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Strategy for compaction. Pluggable implementation to define how compaction should be done. The
@@ -56,7 +56,7 @@ public abstract class CompactionStrategy implements Serializable {
    * @param logFiles - List of log files to compact with the base file
    * @return Map[String, Object] - metrics captured
    */
-  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Optional<HoodieDataFile> dataFile,
+  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Option<HoodieDataFile> dataFile,
         String partitionPath, List<HoodieLogFile> logFiles) {
     Map<String, Double> metrics = Maps.newHashMap();
     Long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();

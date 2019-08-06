@@ -23,6 +23,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Lists;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent;
 import com.uber.hoodie.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
@@ -30,7 +31,6 @@ import com.uber.hoodie.hive.util.SchemaUtil;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.List;
-import java.util.Optional;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.thrift.TException;
 import org.joda.time.DateTime;
@@ -195,7 +195,7 @@ public class HiveSyncToolTest {
     hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig, TestUtil.getHiveConf(),
         TestUtil.fileSystem);
     List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(
-        Optional.of(commitTime1));
+        Option.of(commitTime1));
     assertEquals("We should have one partition written after 100 commit", 1,
         writtenPartitionsSince.size());
     List<Partition> hivePartitions = hiveClient.scanTablePartitions();

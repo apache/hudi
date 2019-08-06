@@ -19,9 +19,9 @@
 package com.uber.hoodie.common.model;
 
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -36,7 +36,7 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   // java serializable
   private final byte [] recordBytes;
 
-  public HoodieAvroPayload(Optional<GenericRecord> record) {
+  public HoodieAvroPayload(Option<GenericRecord> record) {
     try {
       if (record.isPresent()) {
         this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
@@ -54,16 +54,16 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
-  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     if (recordBytes.length == 0) {
-      return Optional.empty();
+      return Option.empty();
     }
-    return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

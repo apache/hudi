@@ -18,10 +18,10 @@
 
 package com.uber.hoodie.common.model;
 
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -50,7 +50,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * @return new combined/merged value to be written back to storage. EMPTY to skip writing this
    * record.
    */
-  Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+  Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException;
 
   /**
@@ -58,7 +58,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * Called when writing a new value for the given HoodieKey, wherein there is no existing record in
    * storage to be combined against. (i.e insert) Return EMPTY to skip writing this record.
    */
-  Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException;
+  Option<IndexedRecord> getInsertValue(Schema schema) throws IOException;
 
   /**
    * This method can be used to extract some metadata from HoodieRecordPayload. The metadata is
@@ -66,7 +66,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * compute some aggregate metrics using the metadata in the context of a write success or
    * failure.
    */
-  default Optional<Map<String, String>> getMetadata() {
-    return Optional.empty();
+  default Option<Map<String, String>> getMetadata() {
+    return Option.empty();
   }
 }

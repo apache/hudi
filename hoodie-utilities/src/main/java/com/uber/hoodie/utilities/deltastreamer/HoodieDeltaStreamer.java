@@ -33,6 +33,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieException;
@@ -46,7 +47,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -385,7 +385,7 @@ public class HoodieDeltaStreamer implements Serializable {
         try {
           while (!isShutdownRequested()) {
             try {
-              Optional<String> scheduledCompactionInstant = deltaSync.syncOnce();
+              Option<String> scheduledCompactionInstant = deltaSync.syncOnce();
               if (scheduledCompactionInstant.isPresent()) {
                 log.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
                 asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION,

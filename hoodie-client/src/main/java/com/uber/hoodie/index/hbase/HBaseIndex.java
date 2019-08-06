@@ -19,7 +19,6 @@
 package com.uber.hoodie.index.hbase;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
@@ -28,6 +27,7 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieIndexConfig;
@@ -125,7 +125,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
       JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
     throw new UnsupportedOperationException("HBase index does not implement check exist");
   }
@@ -301,7 +301,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
           try {
             for (HoodieRecord rec : writeStatus.getWrittenRecords()) {
               if (!writeStatus.isErrored(rec.getKey())) {
-                java.util.Optional<HoodieRecordLocation> loc = rec.getNewLocation();
+                Option<HoodieRecordLocation> loc = rec.getNewLocation();
                 if (loc.isPresent()) {
                   if (rec.getCurrentLocation() != null) {
                     // This is an update, no need to update index

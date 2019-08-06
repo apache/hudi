@@ -34,6 +34,7 @@ import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
@@ -76,7 +77,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
-import scala.Option;
 import scala.Tuple2;
 
 /**
@@ -776,7 +776,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     public int getPartition(Object key) {
       Tuple2<HoodieKey, Option<HoodieRecordLocation>> keyLocation = (Tuple2<HoodieKey,
           Option<HoodieRecordLocation>>) key;
-      if (keyLocation._2().isDefined()) {
+      if (keyLocation._2().isPresent()) {
         HoodieRecordLocation location = keyLocation._2().get();
         return updateLocationToBucket.get(location.getFileId());
       } else {

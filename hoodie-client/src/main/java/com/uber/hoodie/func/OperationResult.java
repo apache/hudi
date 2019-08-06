@@ -18,7 +18,7 @@
 
 package com.uber.hoodie.func;
 
-import com.google.common.base.Optional;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 
 /**
@@ -30,19 +30,19 @@ public class OperationResult<T> implements Serializable {
   private T operation;
   private boolean executed;
   private boolean success;
-  private Optional<Exception> exception;
+  private Option<Exception> exception;
 
   public OperationResult() {
   }
 
-  public OperationResult(T operation, boolean success, Optional<Exception> exception) {
+  public OperationResult(T operation, boolean success, Option<Exception> exception) {
     this.operation = operation;
     this.success = success;
     this.exception = exception;
     this.executed = true;
   }
 
-  public OperationResult(T operation, boolean executed, boolean success, Optional<Exception> exception) {
+  public OperationResult(T operation, boolean executed, boolean success, Option<Exception> exception) {
     this.operation = operation;
     this.success = success;
     this.exception = exception;
@@ -61,7 +61,7 @@ public class OperationResult<T> implements Serializable {
     return executed;
   }
 
-  public Optional<Exception> getException() {
+  public Option<Exception> getException() {
     return exception;
   }
 

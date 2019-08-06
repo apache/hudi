@@ -43,6 +43,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import java.io.File;
 import java.io.IOException;
@@ -51,7 +52,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -137,9 +137,9 @@ public class HoodieTableFileSystemViewTest {
     HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
     HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
 
-    commitTimeline.saveAsComplete(instant1, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant2, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant3, Optional.empty());
+    commitTimeline.saveAsComplete(instant1, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant2, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant3, Option.empty());
 
     refreshFsView();
 
@@ -229,7 +229,7 @@ public class HoodieTableFileSystemViewTest {
     return fsView.getAllFileGroups(partitionPath)
         .map(fileGroup -> fileGroup.getLatestFileSlicesIncludingInflight())
         .filter(fileSliceOpt -> fileSliceOpt.isPresent())
-        .map(Optional::get);
+        .map(Option::get);
   }
 
   /**
@@ -271,9 +271,9 @@ public class HoodieTableFileSystemViewTest {
     HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
     HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
 
-    commitTimeline.saveAsComplete(instant1, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant2, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant3, Optional.empty());
+    commitTimeline.saveAsComplete(instant1, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant2, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant3, Option.empty());
 
     refreshFsView();
     List<FileSlice> fileSlices = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
@@ -282,7 +282,7 @@ public class HoodieTableFileSystemViewTest {
     List<Pair<String, FileSlice>> partitionFileSlicesPairs = new ArrayList<>();
     partitionFileSlicesPairs.add(Pair.of(partitionPath, fileSlices.get(0)));
     HoodieCompactionPlan compactionPlan = CompactionUtils.buildFromFileSlices(partitionFileSlicesPairs,
-        Optional.empty(), Optional.empty());
+        Option.empty(), Option.empty());
     HoodieInstant compactionInstant = null;
     if (isCompactionInFlight) {
       // Create a Data-file but this should be skipped by view
@@ -318,8 +318,8 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/" + partitionPath + "/" + fileName4).createNewFile();
     HoodieInstant deltaInstant4 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime4);
     HoodieInstant deltaInstant5 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime5);
-    commitTimeline.saveAsComplete(deltaInstant4, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant5, Optional.empty());
+    commitTimeline.saveAsComplete(deltaInstant4, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant5, Option.empty());
     refreshFsView();
 
     List<HoodieDataFile> dataFiles = roView.getAllDataFiles(partitionPath).collect(Collectors.toList());
@@ -425,7 +425,7 @@ public class HoodieTableFileSystemViewTest {
     new File(basePath + "/" + partitionPath + "/" + inflightLogFileName).createNewFile();
     // Mark instant as inflight
     commitTimeline.saveToInflight(new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION,
-        inflightDeltaInstantTime), Optional.empty());
+        inflightDeltaInstantTime), Option.empty());
     refreshFsView();
 
     List<FileSlice> allRawFileSlices = getAllRawFileSlices(partitionPath).collect(Collectors.toList());
@@ -501,7 +501,7 @@ public class HoodieTableFileSystemViewTest {
       commitTimeline.deleteCompactionRequested(compactionInstant);
     }
     compactionInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionRequestedTime);
-    commitTimeline.saveAsComplete(compactionInstant, Optional.empty());
+    commitTimeline.saveAsComplete(compactionInstant, Option.empty());
     refreshFsView();
     // populate the cache
     roView.getAllDataFiles(partitionPath);
@@ -509,7 +509,7 @@ public class HoodieTableFileSystemViewTest {
     fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
     log.info("FILESLICE LIST=" + fileSliceList);
     dataFiles = fileSliceList.stream().map(FileSlice::getDataFile)
-        .filter(Optional::isPresent).map(Optional::get).collect(Collectors.toList());
+        .filter(Option::isPresent).map(Option::get).collect(Collectors.toList());
     assertEquals("Expect only one data-files in latest view as there is only one file-group", 1, dataFiles.size());
     assertEquals("Data Filename must match", compactDataFileName, dataFiles.get(0).getFileName());
     assertEquals("Only one latest file-slice in the partition", 1, fileSliceList.size());
@@ -581,7 +581,7 @@ public class HoodieTableFileSystemViewTest {
     // Make this commit safe
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
-    commitTimeline.saveAsComplete(instant1, Optional.empty());
+    commitTimeline.saveAsComplete(instant1, Option.empty());
     refreshFsView();
     assertEquals("", fileName1,
         roView.getLatestDataFiles(partitionPath).filter(dfile -> dfile.getFileId().equals(fileId)).findFirst().get()
@@ -598,7 +598,7 @@ public class HoodieTableFileSystemViewTest {
 
     // Make it safe
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime2);
-    commitTimeline.saveAsComplete(instant2, Optional.empty());
+    commitTimeline.saveAsComplete(instant2, Option.empty());
     refreshFsView();
     assertEquals("", fileName2,
         roView.getLatestDataFiles(partitionPath).filter(dfile -> dfile.getFileId().equals(fileId)).findFirst().get()
@@ -1060,9 +1060,9 @@ public class HoodieTableFileSystemViewTest {
     HoodieInstant deltaInstant2 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime1);
     HoodieInstant deltaInstant3 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime2);
 
-    commitTimeline.saveAsComplete(instant1, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant2, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant3, Optional.empty());
+    commitTimeline.saveAsComplete(instant1, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant2, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant3, Option.empty());
 
     // Now we list all partitions
     FileStatus[] statuses = metaClient.getFs().listStatus(new Path[] {
@@ -1094,7 +1094,7 @@ public class HoodieTableFileSystemViewTest {
     String compactionRequestedTime = "2";
     String compactDataFileName = FSUtils.makeDataFileName(compactionRequestedTime, TEST_WRITE_TOKEN, fileId);
     HoodieCompactionPlan compactionPlan = CompactionUtils.buildFromFileSlices(partitionFileSlicesPairs,
-        Optional.empty(), Optional.empty());
+        Option.empty(), Option.empty());
 
     // Create a Data-file for some of the partitions but this should be skipped by view
     new File(basePath + "/" + partitionPath1 + "/" + compactDataFileName).createNewFile();
@@ -1125,8 +1125,8 @@ public class HoodieTableFileSystemViewTest {
 
     HoodieInstant deltaInstant4 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime4);
     HoodieInstant deltaInstant5 = new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, deltaInstantTime5);
-    commitTimeline.saveAsComplete(deltaInstant4, Optional.empty());
-    commitTimeline.saveAsComplete(deltaInstant5, Optional.empty());
+    commitTimeline.saveAsComplete(deltaInstant4, Option.empty());
+    commitTimeline.saveAsComplete(deltaInstant5, Option.empty());
     refreshFsView();
 
     // Test Data Files

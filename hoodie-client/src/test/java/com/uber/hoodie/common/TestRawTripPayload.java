@@ -23,6 +23,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.avro.MercifulJsonConverter;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,7 +32,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -52,7 +52,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   private int dataSize;
   private boolean isDeleted;
 
-  public TestRawTripPayload(Optional<String> jsonData, String rowKey, String partitionPath, String schemaStr,
+  public TestRawTripPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
       Boolean isDeleted) throws IOException {
     if (jsonData.isPresent()) {
       this.jsonDataCompressed = compressData(jsonData.get());
@@ -64,7 +64,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   public TestRawTripPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-    this(Optional.of(jsonData), rowKey, partitionPath, schemaStr, false);
+    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false);
   }
 
   public TestRawTripPayload(String jsonData) throws IOException {
@@ -87,27 +87,27 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
     return this.getInsertValue(schema);
   }
 
   @Override
-  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     if (isDeleted) {
-      return Optional.empty();
+      return Option.empty();
     } else {
       MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-      return Optional.of(jsonConverter.convert(getJsonData()));
+      return Option.of(jsonConverter.convert(getJsonData()));
     }
   }
 
   @Override
-  public Optional<Map<String, String>> getMetadata() {
+  public Option<Map<String, String>> getMetadata() {
     // Let's assume we want to count the number of input row change events
     // that are processed. Let the time-bucket for this row change event be 1506582000.
     Map<String, String> metadataMap = new HashMap<>();
     metadataMap.put("InputRecordCount_1506582000", "2");
-    return Optional.of(metadataMap);
+    return Option.of(metadataMap);
   }
 
   public String getRowKey() {
@@ -174,7 +174,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
 
     @Override
-    public void markSuccess(HoodieRecord record, Optional<Map<String, String>> recordMetadata) {
+    public void markSuccess(HoodieRecord record, Option<Map<String, String>> recordMetadata) {
       super.markSuccess(record, recordMetadata);
       if (recordMetadata.isPresent()) {
         mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);
@@ -182,7 +182,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
 
     @Override
-    public void markFailure(HoodieRecord record, Throwable t, Optional<Map<String, String>> recordMetadata) {
+    public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> recordMetadata) {
       super.markFailure(record, t, recordMetadata);
       if (recordMetadata.isPresent()) {
         mergeMetadataMaps(recordMetadata.get(), mergedMetadataMap);

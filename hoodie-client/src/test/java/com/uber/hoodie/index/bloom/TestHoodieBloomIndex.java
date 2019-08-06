@@ -25,7 +25,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.uber.hoodie.common.BloomFilter;
 import com.uber.hoodie.common.HoodieClientTestUtils;
@@ -36,6 +35,7 @@ import com.uber.hoodie.common.model.HoodieTestUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -419,11 +419,11 @@ public class TestHoodieBloomIndex {
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
-    JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> taggedRecordRDD = bloomIndex
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> taggedRecordRDD = bloomIndex
         .fetchRecordLocation(keysRDD, jsc, table);
 
     // Should not find any files
-    for (Tuple2<HoodieKey, Optional<Pair<String, String>>> record : taggedRecordRDD.collect()) {
+    for (Tuple2<HoodieKey, Option<Pair<String, String>>> record : taggedRecordRDD.collect()) {
       assertTrue(!record._2.isPresent());
     }
 
@@ -441,7 +441,7 @@ public class TestHoodieBloomIndex {
     taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, jsc, table);
 
     // Check results
-    for (Tuple2<HoodieKey, Optional<Pair<String, String>>> record : taggedRecordRDD.collect()) {
+    for (Tuple2<HoodieKey, Option<Pair<String, String>>> record : taggedRecordRDD.collect()) {
       if (record._1.getRecordKey().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")) {
         assertTrue(record._2.isPresent());
         assertEquals(FSUtils.getFileId(filename1), record._2.get().getRight());

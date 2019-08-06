@@ -39,6 +39,7 @@ import com.uber.hoodie.common.table.view.FileSystemViewStorageConfig;
 import com.uber.hoodie.common.table.view.FileSystemViewStorageType;
 import com.uber.hoodie.common.util.ConsistencyGuardConfig;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieStorageConfig;
@@ -54,7 +55,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -341,7 +341,7 @@ public class TestHoodieClientBase implements Serializable {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
 
-    return writeBatch(client, newCommitTime, initCommitTime, Optional.empty(), initCommitTime,
+    return writeBatch(client, newCommitTime, initCommitTime, Option.empty(), initCommitTime,
         numRecordsInThisCommit, recordGenFunction, writeFn, assertForCommit,
         expRecordsInThisCommit, expRecordsInThisCommit, 1);
   }
@@ -370,7 +370,7 @@ public class TestHoodieClientBase implements Serializable {
       HoodieWriteClient client,
       String newCommitTime,
       String prevCommitTime,
-      Optional<List<String>> commitTimesBetweenPrevAndNew,
+      Option<List<String>> commitTimesBetweenPrevAndNew,
       String initCommitTime,
       int numRecordsInThisCommit,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
@@ -409,7 +409,7 @@ public class TestHoodieClientBase implements Serializable {
       HoodieWriteClient client,
       String newCommitTime,
       String prevCommitTime,
-      Optional<List<String>> commitTimesBetweenPrevAndNew,
+      Option<List<String>> commitTimesBetweenPrevAndNew,
       String initCommitTime,
       int numRecordsInThisCommit,
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,

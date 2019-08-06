@@ -38,7 +38,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -416,8 +415,8 @@ public class FSUtils {
   /**
    * Get the latest log file written from the list of log files passed in
    */
-  public static Optional<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
-    return logFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).findFirst();
+  public static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
+    return Option.fromJavaOptional(logFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).findFirst());
   }
 
   /**
@@ -435,17 +434,17 @@ public class FSUtils {
   /**
    * Get the latest log version for the fileId in the partition path
    */
-  public static Optional<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
+  public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
       final String fileId, final String logFileExtension, final String baseCommitTime)
       throws IOException {
-    Optional<HoodieLogFile> latestLogFile =
+    Option<HoodieLogFile> latestLogFile =
         getLatestLogFile(
             getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
-      return Optional.of(Pair.of(latestLogFile.get().getLogVersion(),
+      return Option.of(Pair.of(latestLogFile.get().getLogVersion(),
           getWriteTokenFromLogPath(latestLogFile.get().getPath())));
     }
-    return Optional.empty();
+    return Option.empty();
   }
 
   /**
@@ -453,7 +452,7 @@ public class FSUtils {
    */
   public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
-    Optional<Pair<Integer, String>>  currentVersionWithWriteToken =
+    Option<Pair<Integer, String>>  currentVersionWithWriteToken =
         getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
     // handle potential overflow
     return (currentVersionWithWriteToken.isPresent()) ? currentVersionWithWriteToken.get().getKey() + 1

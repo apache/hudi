@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.index;
 
-import com.google.common.base.Optional;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIndexException;
@@ -64,10 +64,10 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Optional[partitionPath, fileID]]
+   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Option[partitionPath, fileID]]
    * If the optional is empty, then the key is not found.
    */
-  public abstract JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(
+  public abstract JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(
       JavaRDD<HoodieKey> hoodieKeys, final JavaSparkContext jsc, HoodieTable<T> hoodieTable);
 
   /**

@@ -36,6 +36,7 @@ import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -44,7 +45,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -475,7 +475,8 @@ public class CompactionCommand implements CommandMarker {
   private String getRenamesToBePrinted(List<RenameOpResult> res, Integer limit,
       String sortByField, boolean descending, boolean headerOnly, String operation) {
 
-    Optional<Boolean> result = res.stream().map(r -> r.isExecuted() && r.isSuccess()).reduce(Boolean::logicalAnd);
+    Option<Boolean> result = Option.fromJavaOptional(
+        res.stream().map(r -> r.isExecuted() && r.isSuccess()).reduce(Boolean::logicalAnd));
     if (result.isPresent()) {
       System.out.println("There were some file renames that needed to be done to " + operation);
 

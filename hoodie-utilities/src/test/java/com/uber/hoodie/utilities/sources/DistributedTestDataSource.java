@@ -18,11 +18,11 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
 import com.uber.hoodie.utilities.sources.config.TestSourceConfig;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.avro.generic.GenericRecord;
@@ -46,14 +46,14 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Optional<String> lastCkptStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     int nextCommitNum = lastCkptStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String commitTime = String.format("%05d", nextCommitNum);
     log.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0) {
-      return new InputBatch<>(Optional.empty(), commitTime);
+      return new InputBatch<>(Option.empty(), commitTime);
     }
 
     TypedProperties newProps = new TypedProperties();
@@ -74,6 +74,6 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
           Iterator<GenericRecord> itr = fetchNextBatch(newProps, perPartitionSourceLimit, commitTime, p).iterator();
           return itr;
         }, true);
-    return new InputBatch<>(Optional.of(avroRDD), commitTime);
+    return new InputBatch<>(Option.of(avroRDD), commitTime);
   }
 }

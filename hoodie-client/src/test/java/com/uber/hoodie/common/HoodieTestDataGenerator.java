@@ -31,6 +31,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
@@ -41,7 +42,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -126,7 +126,7 @@ public class HoodieTestDataGenerator {
    */
   public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
-    return new HoodieAvroPayload(Optional.of(rec));
+    return new HoodieAvroPayload(Option.of(rec));
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
@@ -290,7 +290,7 @@ public class HoodieTestDataGenerator {
   }
 
   public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
-    TestRawTripPayload payload = new TestRawTripPayload(Optional.empty(), key.getRecordKey(), key.getPartitionPath(),
+    TestRawTripPayload payload = new TestRawTripPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(),
         null, true);
     return new HoodieRecord(key, payload);
   }

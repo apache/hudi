@@ -18,29 +18,29 @@
 
 package com.uber.hoodie.utilities.sources;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.utilities.schema.SchemaProvider;
-import java.util.Optional;
 
 public class InputBatch<T> {
 
-  private final Optional<T> batch;
+  private final Option<T> batch;
   private final String checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
 
-  public InputBatch(Optional<T> batch, String checkpointForNextBatch,
+  public InputBatch(Option<T> batch, String checkpointForNextBatch,
       SchemaProvider schemaProvider) {
     this.batch = batch;
     this.checkpointForNextBatch = checkpointForNextBatch;
     this.schemaProvider = schemaProvider;
   }
 
-  public InputBatch(Optional<T> batch, String checkpointForNextBatch) {
+  public InputBatch(Option<T> batch, String checkpointForNextBatch) {
     this.batch = batch;
     this.checkpointForNextBatch = checkpointForNextBatch;
     this.schemaProvider = null;
   }
 
-  public Optional<T> getBatch() {
+  public Option<T> getBatch() {
     return batch;
   }
 

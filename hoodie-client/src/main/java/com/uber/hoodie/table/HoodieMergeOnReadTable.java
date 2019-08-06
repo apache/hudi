@@ -42,6 +42,7 @@ import com.uber.hoodie.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieCompactionException;
 import com.uber.hoodie.exception.HoodieException;
@@ -61,7 +62,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileStatus;
@@ -136,7 +136,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   @Override
   public HoodieCompactionPlan scheduleCompaction(JavaSparkContext jsc, String instantTime) {
     logger.info("Checking if compaction needs to be run on " + config.getBasePath());
-    Optional<HoodieInstant> lastCompaction = getActiveTimeline().getCommitTimeline()
+    Option<HoodieInstant> lastCompaction = getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
     String deltaCommitsSinceTs = "0";
     if (lastCompaction.isPresent()) {
@@ -186,11 +186,11 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
     // Atomically un-publish all non-inflight commits
-    Optional<HoodieInstant> commitOrCompactionOption = this.getActiveTimeline()
+    Option<HoodieInstant> commitOrCompactionOption = Option.fromJavaOptional(this.getActiveTimeline()
         .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
             HoodieActiveTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION)).getInstants()
         .filter(i -> commit.equals(i.getTimestamp()))
-        .findFirst();
+        .findFirst());
     HoodieInstant instantToRollback = commitOrCompactionOption.get();
     // Atomically un-publish all non-inflight commits
     if (!instantToRollback.isInflight()) {
@@ -336,12 +336,12 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
   @Override
   protected HoodieRollingStatMetadata getRollingStats() {
     try {
-      Optional<HoodieInstant> lastInstant = this.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
+      Option<HoodieInstant> lastInstant = this.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
           .lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
             this.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        Optional<String> lastRollingStat = Optional.ofNullable(commitMetadata.getExtraMetadata()
+        Option<String> lastRollingStat = Option.ofNullable(commitMetadata.getExtraMetadata()
             .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
         if (lastRollingStat.isPresent()) {
           return HoodieCommitMetadata
@@ -383,13 +383,13 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
         if (!index.canIndexLogFiles()) {
           // TODO : choose last N small files since there can be multiple small files written to a single partition
           // by different spark partitions in a single batch
-          Optional<FileSlice> smallFileSlice = getRTFileSystemView()
+          Option<FileSlice> smallFileSlice = Option.fromJavaOptional(getRTFileSystemView()
               .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false).filter(
                   fileSlice -> fileSlice.getLogFiles().count() < 1
                       && fileSlice.getDataFile().get().getFileSize() < config
                       .getParquetSmallFileLimit()).sorted((FileSlice left, FileSlice right) ->
                   left.getDataFile().get().getFileSize() < right.getDataFile().get().getFileSize()
-                      ? -1 : 1).findFirst();
+                      ? -1 : 1).findFirst());
           if (smallFileSlice.isPresent()) {
             allSmallFileSlices.add(smallFileSlice.get());
           }

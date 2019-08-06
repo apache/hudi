@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import org.apache.avro.Schema;
@@ -73,9 +72,9 @@ public class ParquetUtils {
    * @return Set                  Set of row keys matching candidateRecordKeys
    */
   public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
-    Optional<RecordKeysFilterFunction> filterFunction = Optional.empty();
+    Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (CollectionUtils.isNotEmpty(filter)) {
-      filterFunction = Optional.of(new RecordKeysFilterFunction(filter));
+      filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = new Configuration(configuration);
     conf.addResource(getFs(filePath.toString(), conf).getConf());

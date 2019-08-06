@@ -26,12 +26,12 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieIndexConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex.IndexType;
 import java.util.List;
-import java.util.Optional;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -119,9 +119,9 @@ public class HoodieClientExample {
      * Schedule a compaction and also perform compaction on a MOR dataset
      */
     if (HoodieTableType.valueOf(tableType) == HoodieTableType.MERGE_ON_READ) {
-      Optional<String> instant = client.scheduleCompaction(Optional.empty());
+      Option<String> instant = client.scheduleCompaction(Option.empty());
       JavaRDD<WriteStatus> writeStatues = client.compact(instant.get());
-      client.commitCompaction(instant.get(), writeStatues, Optional.empty());
+      client.commitCompaction(instant.get(), writeStatues, Option.empty());
     }
   }
 

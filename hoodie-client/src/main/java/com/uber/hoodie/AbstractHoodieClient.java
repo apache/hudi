@@ -22,10 +22,10 @@ import com.uber.hoodie.client.embedded.EmbeddedTimelineService;
 import com.uber.hoodie.client.utils.ClientUtils;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Optional;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -50,15 +50,15 @@ public abstract class AbstractHoodieClient implements Serializable {
    * of the cached file-system view. New completed actions will be synced automatically
    * in an incremental fashion.
    */
-  private transient Optional<EmbeddedTimelineService> timelineServer;
+  private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;
 
   protected AbstractHoodieClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
-    this(jsc, clientConfig, Optional.empty());
+    this(jsc, clientConfig, Option.empty());
   }
 
   protected AbstractHoodieClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig,
-      Optional<EmbeddedTimelineService> timelineServer) {
+      Option<EmbeddedTimelineService> timelineServer) {
     this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
     this.jsc = jsc;
     this.basePath = clientConfig.getBasePath();
@@ -82,7 +82,7 @@ public abstract class AbstractHoodieClient implements Serializable {
       timelineServer.get().stop();
     }
 
-    timelineServer = Optional.empty();
+    timelineServer = Option.empty();
     // Reset Storage Config to Client specified config
     if (resetViewStorageConfig) {
       config.resetViewStorageConfig();
@@ -94,7 +94,7 @@ public abstract class AbstractHoodieClient implements Serializable {
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
         logger.info("Starting Timeline service !!");
-        timelineServer = Optional.of(new EmbeddedTimelineService(jsc.hadoopConfiguration(), jsc.getConf(),
+        timelineServer = Option.of(new EmbeddedTimelineService(jsc.hadoopConfiguration(), jsc.getConf(),
             config.getClientSpecifiedViewStorageConfig()));
         try {
           timelineServer.get().startServer();
@@ -116,7 +116,7 @@ public abstract class AbstractHoodieClient implements Serializable {
     return config;
   }
 
-  public Optional<EmbeddedTimelineService> getTimelineServer() {
+  public Option<EmbeddedTimelineService> getTimelineServer() {
     return timelineServer;
   }
 

@@ -22,12 +22,12 @@ import static org.junit.Assert.assertEquals;
 
 import com.uber.hoodie.AvroConversionUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.UtilitiesTestBase;
 import com.uber.hoodie.utilities.deltastreamer.SourceFormatAdapter;
 import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
 import java.io.IOException;
-import java.util.Optional;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
@@ -79,17 +79,17 @@ public class TestDFSSource extends UtilitiesTestBase {
     SourceFormatAdapter jsonSource = new SourceFormatAdapter(jsonDFSSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    assertEquals(Optional.empty(), jsonSource.fetchNewDataInAvroFormat(Optional.empty(), Long.MAX_VALUE).getBatch());
+    assertEquals(Option.empty(), jsonSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     UtilitiesTestBase.Helpers.saveStringsToDFS(
         Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 100)), dfs,
         dfsBasePath + "/jsonFiles/1.json");
-    assertEquals(Optional.empty(), jsonSource.fetchNewDataInAvroFormat(Optional.empty(), 10).getBatch());
+    assertEquals(Option.empty(), jsonSource.fetchNewDataInAvroFormat(Option.empty(), 10).getBatch());
     InputBatch<JavaRDD<GenericRecord>> fetch1 =
-        jsonSource.fetchNewDataInAvroFormat(Optional.empty(), 1000000);
+        jsonSource.fetchNewDataInAvroFormat(Option.empty(), 1000000);
     assertEquals(100, fetch1.getBatch().get().count());
     // Test json -> Row format
     InputBatch<Dataset<Row>> fetch1AsRows =
-        jsonSource.fetchNewDataInRowFormat(Optional.empty(), 1000000);
+        jsonSource.fetchNewDataInRowFormat(Option.empty(), 1000000);
     assertEquals(100, fetch1AsRows.getBatch().get().count());
     // Test Avro -> Row format
     Dataset<Row> fetch1Rows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
@@ -101,12 +101,12 @@ public class TestDFSSource extends UtilitiesTestBase {
         Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 10000)),
         dfs, dfsBasePath + "/jsonFiles/2.json");
     InputBatch<Dataset<Row>> fetch2 = jsonSource.fetchNewDataInRowFormat(
-        Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(10000, fetch2.getBatch().get().count());
 
     // 3. Extract with previous checkpoint => gives same data back (idempotent)
     InputBatch<Dataset<Row>> fetch3 = jsonSource.fetchNewDataInRowFormat(
-        Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(10000, fetch3.getBatch().get().count());
     assertEquals(fetch2.getCheckpointForNextBatch(), fetch3.getCheckpointForNextBatch());
     fetch3.getBatch().get().registerTempTable("test_dfs_table");
@@ -115,7 +115,7 @@ public class TestDFSSource extends UtilitiesTestBase {
 
     // 4. Extract with latest checkpoint => no new data returned
     InputBatch<JavaRDD<GenericRecord>> fetch4 = jsonSource.fetchNewDataInAvroFormat(
-        Optional.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(Optional.empty(), fetch4.getBatch());
+        Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(Option.empty(), fetch4.getBatch());
   }
 }

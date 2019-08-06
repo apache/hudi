@@ -28,13 +28,13 @@ import com.uber.hoodie.common.table.timeline.HoodieDefaultTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.table.view.HoodieTableFileSystemView;
 import com.uber.hoodie.common.util.NumericUtils;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -266,7 +266,7 @@ public class FileSystemViewCommand implements CommandMarker {
     }
 
     HoodieTimeline filteredTimeline = new HoodieDefaultTimeline(instantsStream,
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) metaClient.getActiveTimeline()::getInstantDetails);
     return new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses);
   }
 }

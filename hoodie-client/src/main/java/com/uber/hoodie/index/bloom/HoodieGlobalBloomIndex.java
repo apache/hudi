@@ -25,6 +25,7 @@ import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.table.HoodieTable;
@@ -114,7 +115,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
     // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
     // so we do left outer join.
     return rowKeyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), p._2)))
-        .values().map(value -> getTaggedRecord(value._1, value._2));
+        .values().map(value -> getTaggedRecord(value._1, Option.ofNullable(value._2.orNull())));
   }
 
   @Override

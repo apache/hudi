@@ -20,8 +20,8 @@ package com.uber.hoodie;
 
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.Option;
 import java.io.IOException;
-import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -43,7 +43,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
     super(record, orderingVal);
   }
 
-  public OverwriteWithLatestAvroPayload(Optional<GenericRecord> record) {
+  public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
     this(record.get(), (record1) -> 0); // natural order
   }
 
@@ -58,14 +58,14 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
   }
 
   @Override
-  public Optional<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
       throws IOException {
     // combining strategy here trivially ignores currentValue on disk and writes this record
     return getInsertValue(schema);
   }
 
   @Override
-  public Optional<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Optional.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

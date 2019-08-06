@@ -18,13 +18,13 @@
 
 package com.uber.hoodie.func;
 
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueProducer;
 import com.uber.hoodie.common.util.queue.IteratorBasedQueueProducer;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.function.Function;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
@@ -46,7 +46,7 @@ public class SparkBoundedInMemoryExecutor<I, O, E> extends BoundedInMemoryExecut
       BoundedInMemoryQueueConsumer<O, E> consumer,
       Function<I, O> bufferedIteratorTransform) {
     super(hoodieConfig.getWriteBufferLimitBytes(), producer,
-        Optional.of(consumer), bufferedIteratorTransform);
+        Option.of(consumer), bufferedIteratorTransform);
     this.sparkThreadTaskContext = TaskContext.get();
   }
 

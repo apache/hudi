@@ -20,13 +20,13 @@ package com.uber.hoodie.common.table.timeline;
 
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.hadoop.fs.Path;
@@ -73,7 +73,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details =
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
     this.metaClient = metaClient;
   }
 
@@ -101,8 +101,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   }
 
   @Override
-  public Optional<byte[]> getInstantDetails(HoodieInstant instant) {
-    return Optional.ofNullable(readCommits.get(instant.getTimestamp()));
+  public Option<byte[]> getInstantDetails(HoodieInstant instant) {
+    return Option.ofNullable(readCommits.get(instant.getTimestamp()));
   }
 
   public HoodieArchivedTimeline reload() {

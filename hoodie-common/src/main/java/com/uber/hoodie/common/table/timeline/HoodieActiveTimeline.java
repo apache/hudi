@@ -24,6 +24,7 @@ import com.google.common.collect.Sets;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.exception.HoodieIOException;
 import java.io.IOException;
 import java.io.Serializable;
@@ -31,7 +32,6 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -84,7 +84,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details =
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails;
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
@@ -153,7 +153,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getDeltaCommitTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(DELTA_COMMIT_ACTION),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
   /**
@@ -164,7 +164,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getTimelineOfActions(Set<String> actions) {
     return new HoodieDefaultTimeline(getInstants().filter(s -> actions.contains(s.getAction())),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
 
@@ -173,7 +173,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getCleanerTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(CLEAN_ACTION),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
   /**
@@ -181,7 +181,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getRollbackTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
   /**
@@ -189,7 +189,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getSavePointTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(SAVEPOINT_ACTION),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
   /**
@@ -197,7 +197,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public HoodieTimeline getRestoreTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(RESTORE_ACTION),
-        (Function<HoodieInstant, Optional<byte[]>> & Serializable) this::getInstantDetails);
+        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
   protected Stream<HoodieInstant> filterInstantsByAction(String action) {
@@ -207,10 +207,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public void createInflight(HoodieInstant instant) {
     log.info("Creating a new in-flight instant " + instant);
     // Create the in-flight file
-    createFileInMetaPath(instant.getFileName(), Optional.empty());
+    createFileInMetaPath(instant.getFileName(), Option.empty());
   }
 
-  public void saveAsComplete(HoodieInstant instant, Optional<byte[]> data) {
+  public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
     log.info("Marking instant complete " + instant);
     Preconditions.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
@@ -252,14 +252,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   @Override
-  public Optional<byte[]> getInstantDetails(HoodieInstant instant) {
+  public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaPath(), instant.getFileName());
     return readDataFromPath(detailPath);
   }
 
   /** BEGIN - COMPACTION RELATED META-DATA MANAGEMENT **/
 
-  public Optional<byte[]> getInstantAuxiliaryDetails(HoodieInstant instant) {
+  public Option<byte[]> getInstantAuxiliaryDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
     return readDataFromPath(detailPath);
   }
@@ -276,7 +276,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     HoodieInstant requestedInstant =
         new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, inflightInstant.getTimestamp());
     // Pass empty data since it is read from the corresponding .aux/.compaction instant file
-    transitionState(inflightInstant, requestedInstant, Optional.empty());
+    transitionState(inflightInstant, requestedInstant, Option.empty());
     return requestedInstant;
   }
 
@@ -291,7 +291,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     Preconditions.checkArgument(requestedInstant.isRequested());
     HoodieInstant inflightInstant =
         new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, requestedInstant.getTimestamp());
-    transitionState(requestedInstant, inflightInstant, Optional.empty());
+    transitionState(requestedInstant, inflightInstant, Option.empty());
     return inflightInstant;
   }
 
@@ -302,7 +302,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * @param data            Extra Metadata
    * @return commit instant
    */
-  public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Optional<byte[]> data) {
+  public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
     Preconditions.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     Preconditions.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, COMMIT_ACTION, inflightInstant.getTimestamp());
@@ -310,7 +310,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return commitInstant;
   }
 
-  private void createFileInAuxiliaryFolder(HoodieInstant instant, Optional<byte[]> data) {
+  private void createFileInAuxiliaryFolder(HoodieInstant instant, Option<byte[]> data) {
     Path fullPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
     createFileInPath(fullPath, data);
   }
@@ -320,7 +320,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    **/
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant,
-      Optional<byte[]> data) {
+      Option<byte[]> data) {
     Preconditions.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     Path commitFilePath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
     try {
@@ -354,24 +354,24 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  public void saveToInflight(HoodieInstant instant, Optional<byte[]> content) {
+  public void saveToInflight(HoodieInstant instant, Option<byte[]> content) {
     Preconditions.checkArgument(instant.isInflight());
     createFileInMetaPath(instant.getFileName(), content);
   }
 
-  public void saveToCompactionRequested(HoodieInstant instant, Optional<byte[]> content) {
+  public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content) {
     Preconditions.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content);
   }
 
-  private void createFileInMetaPath(String filename, Optional<byte[]> content) {
+  private void createFileInMetaPath(String filename, Option<byte[]> content) {
     Path fullPath = new Path(metaClient.getMetaPath(), filename);
     createFileInPath(fullPath, content);
   }
 
-  private void createFileInPath(Path fullPath, Optional<byte[]> content) {
+  private void createFileInPath(Path fullPath, Option<byte[]> content) {
     try {
       // If the path does not exist, create it first
       if (!metaClient.getFs().exists(fullPath)) {
@@ -392,9 +392,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private Optional<byte[]> readDataFromPath(Path detailPath) {
+  private Option<byte[]> readDataFromPath(Path detailPath) {
     try (FSDataInputStream is = metaClient.getFs().open(detailPath)) {
-      return Optional.of(IOUtils.toByteArray(is));
+      return Option.of(IOUtils.toByteArray(is));
     } catch (IOException e) {
       throw new HoodieIOException("Could not read commit details from " + detailPath, e);
     }

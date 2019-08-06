@@ -18,12 +18,12 @@
 
 package com.uber.hoodie.index;
 
-import com.google.common.base.Optional;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.table.HoodieTable;
@@ -56,7 +56,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Optional<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
+  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
       JavaSparkContext jsc, HoodieTable<T> hoodieTable) {
     throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
   }
@@ -76,7 +76,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
         for (HoodieRecord record : writeStatus.getWrittenRecords()) {
           if (!writeStatus.isErrored(record.getKey())) {
             HoodieKey key = record.getKey();
-            java.util.Optional<HoodieRecordLocation> newLocation = record.getNewLocation();
+            Option<HoodieRecordLocation> newLocation = record.getNewLocation();
             if (newLocation.isPresent()) {
               recordLocationMap.put(key, newLocation.get());
             } else {

@@ -20,9 +20,9 @@ package com.uber.hoodie.common;
 
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Collects stats about a single partition clean operation
@@ -114,7 +114,7 @@ public class HoodieCleanStat implements Serializable {
       return this;
     }
 
-    public Builder withEarliestCommitRetained(Optional<HoodieInstant> earliestCommitToRetain) {
+    public Builder withEarliestCommitRetained(Option<HoodieInstant> earliestCommitToRetain) {
       this.earliestCommitToRetain = (earliestCommitToRetain.isPresent())
           ? earliestCommitToRetain.get().getTimestamp() : "-1";
       return this;

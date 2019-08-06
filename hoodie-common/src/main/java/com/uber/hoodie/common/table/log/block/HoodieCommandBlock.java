@@ -19,9 +19,9 @@
 package com.uber.hoodie.common.table.log.block;
 
 import com.uber.hoodie.common.model.HoodieLogFile;
+import com.uber.hoodie.common.util.Option;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.hadoop.fs.FSDataInputStream;
 
 /**
@@ -36,11 +36,11 @@ public class HoodieCommandBlock extends HoodieLogBlock {
   }
 
   public HoodieCommandBlock(Map<HeaderMetadataType, String> header) {
-    this(Optional.empty(), null, false, Optional.empty(), header, new HashMap<>());
+    this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
   }
 
-  private HoodieCommandBlock(Optional<byte[]> content, FSDataInputStream inputStream,
-      boolean readBlockLazily, Optional<HoodieLogBlockContentLocation> blockContentLocation,
+  private HoodieCommandBlock(Option<byte[]> content, FSDataInputStream inputStream,
+      boolean readBlockLazily, Option<HoodieLogBlockContentLocation> blockContentLocation,
       Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
     this.type = HoodieCommandBlockTypeEnum.values()[Integer
@@ -63,7 +63,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
 
   public static HoodieLogBlock getBlock(HoodieLogFile logFile,
       FSDataInputStream inputStream,
-      Optional<byte[]> content,
+      Option<byte[]> content,
       boolean readBlockLazily,
       long position,
       long blockSize,
@@ -72,7 +72,7 @@ public class HoodieCommandBlock extends HoodieLogBlock {
       Map<HeaderMetadataType, String> footer) {
 
     return new HoodieCommandBlock(content, inputStream, readBlockLazily,
-        Optional.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)),
         header, footer);
   }
 }

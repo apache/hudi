@@ -21,12 +21,12 @@ package com.uber.hoodie.table;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.util.Option;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import org.apache.spark.api.java.JavaRDD;
-import scala.Option;
 import scala.Tuple2;
 
 /**
@@ -62,7 +62,7 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
 
     Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = taggedRecords
         .mapToPair(record -> new Tuple2<>(
-            new Tuple2<>(record.getPartitionPath(), Option.apply(record.getCurrentLocation())),
+            new Tuple2<>(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())),
             record)).countByKey();
 
     for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts
@@ -75,7 +75,7 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
         partitionPathStatMap.put(partitionPath, new WorkloadStat());
       }
 
-      if (locOption.isDefined()) {
+      if (locOption.isPresent()) {
         // update
         partitionPathStatMap.get(partitionPath).addUpdates(locOption.get(), count);
         globalStat.addUpdates(locOption.get(), count);

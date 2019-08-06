@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 
 import com.uber.hoodie.AvroConversionUtils;
 import com.uber.hoodie.common.HoodieTestDataGenerator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.TypedProperties;
 import com.uber.hoodie.utilities.UtilitiesTestBase;
 import com.uber.hoodie.utilities.deltastreamer.SourceFormatAdapter;
@@ -29,7 +30,6 @@ import com.uber.hoodie.utilities.schema.FilebasedSchemaProvider;
 import com.uber.hoodie.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Optional;
 import kafka.common.TopicAndPartition;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -96,9 +96,9 @@ public class TestKafkaSource extends UtilitiesTestBase {
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    assertEquals(Optional.empty(), kafkaSource.fetchNewDataInAvroFormat(Optional.empty(), Long.MAX_VALUE).getBatch());
+    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Optional.empty(), 900);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
     Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
@@ -108,28 +108,28 @@ public class TestKafkaSource extends UtilitiesTestBase {
     // 2. Produce new data, extract new data
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 1000)));
     InputBatch<Dataset<Row>> fetch2 = kafkaSource.fetchNewDataInRowFormat(
-        Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(1100, fetch2.getBatch().get().count());
 
     // 3. Extract with previous checkpoint => gives same data back (idempotent)
     InputBatch<JavaRDD<GenericRecord>> fetch3 = kafkaSource.fetchNewDataInAvroFormat(
-        Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(fetch2.getBatch().get().count(), fetch3.getBatch().get().count());
     assertEquals(fetch2.getCheckpointForNextBatch(), fetch3.getCheckpointForNextBatch());
     // Same using Row API
     InputBatch<Dataset<Row>> fetch3AsRows =
-        kafkaSource.fetchNewDataInRowFormat(Optional.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(fetch2.getBatch().get().count(), fetch3AsRows.getBatch().get().count());
     assertEquals(fetch2.getCheckpointForNextBatch(), fetch3AsRows.getCheckpointForNextBatch());
 
     // 4. Extract with latest checkpoint => no new data returned
     InputBatch<JavaRDD<GenericRecord>> fetch4 = kafkaSource.fetchNewDataInAvroFormat(
-        Optional.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(Optional.empty(), fetch4.getBatch());
+        Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(Option.empty(), fetch4.getBatch());
     // Same using Row API
     InputBatch<Dataset<Row>> fetch4AsRows =
-        kafkaSource.fetchNewDataInRowFormat(Optional.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
-    assertEquals(Optional.empty(), fetch4AsRows.getBatch());
+        kafkaSource.fetchNewDataInRowFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    assertEquals(Option.empty(), fetch4AsRows.getBatch());
   }
 
 

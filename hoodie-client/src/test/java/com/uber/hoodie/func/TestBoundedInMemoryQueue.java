@@ -26,6 +26,7 @@ import com.uber.hoodie.common.HoodieTestDataGenerator;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.util.DefaultSizeEstimator;
+import com.uber.hoodie.common.util.Option;
 import com.uber.hoodie.common.util.SizeEstimator;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueue;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueProducer;
@@ -38,7 +39,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -94,7 +94,7 @@ public class TestBoundedInMemoryQueue {
     int recordsRead = 0;
     while (queue.iterator().hasNext()) {
       final HoodieRecord originalRecord = originalRecordIterator.next();
-      final Optional<IndexedRecord> originalInsertValue = originalRecord.getData()
+      final Option<IndexedRecord> originalInsertValue = originalRecord.getData()
           .getInsertValue(HoodieTestDataGenerator.avroSchema);
       final HoodieInsertValueGenResult<HoodieRecord> payload = queue.iterator().next();
       // Ensure that record ordering is guaranteed.
@@ -263,7 +263,7 @@ public class TestBoundedInMemoryQueue {
   public void testException() throws Exception {
     final int numRecords = 256;
     final List<HoodieRecord> hoodieRecords = hoodieTestDataGenerator.generateInserts(commitTime, numRecords);
-    final SizeEstimator<Tuple2<HoodieRecord, Optional<IndexedRecord>>> sizeEstimator =
+    final SizeEstimator<Tuple2<HoodieRecord, Option<IndexedRecord>>> sizeEstimator =
         new DefaultSizeEstimator<>();
     // queue memory limit
     HoodieInsertValueGenResult<HoodieRecord> payload = getTransformFunction(HoodieTestDataGenerator.avroSchema)
@@ -274,7 +274,7 @@ public class TestBoundedInMemoryQueue {
     // first let us throw exception from queueIterator reader and test that queueing thread
     // stops and throws
     // correct exception back.
-    BoundedInMemoryQueue<HoodieRecord, Tuple2<HoodieRecord, Optional<IndexedRecord>>> queue1 =
+    BoundedInMemoryQueue<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>> queue1 =
         new BoundedInMemoryQueue(memoryLimitInBytes, getTransformFunction(HoodieTestDataGenerator.avroSchema));
 
     // Produce
@@ -305,7 +305,7 @@ public class TestBoundedInMemoryQueue {
     final Iterator<HoodieRecord> mockHoodieRecordsIterator = mock(Iterator.class);
     when(mockHoodieRecordsIterator.hasNext()).thenReturn(true);
     when(mockHoodieRecordsIterator.next()).thenThrow(expectedException);
-    BoundedInMemoryQueue<HoodieRecord, Tuple2<HoodieRecord, Optional<IndexedRecord>>> queue2 =
+    BoundedInMemoryQueue<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>> queue2 =
         new BoundedInMemoryQueue(memoryLimitInBytes, getTransformFunction(HoodieTestDataGenerator.avroSchema));
 
     // Produce
