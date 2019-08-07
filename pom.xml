@@ -20,10 +20,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.uber.hoodie</groupId>
-  <artifactId>hoodie</artifactId>
+  <groupId>org.apache.hudi</groupId>
+  <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.4.8-SNAPSHOT</version>
+  <version>0.5.0-SNAPSHOT</version>
   <description>Hoodie is a Apache Spark library that provides the ability to efficiently do
     incremental processing on datasets in HDFS
   </description>
@@ -31,21 +31,21 @@
   <name>Hoodie</name>
 
   <modules>
-    <module>hoodie-common</module>
-    <module>hoodie-cli</module>
-    <module>hoodie-client</module>
-    <module>hoodie-hadoop-mr</module>
-    <module>hoodie-hive</module>
-    <module>hoodie-spark</module>
-    <module>hoodie-timeline-service</module>
-    <module>hoodie-utilities</module>
-    <module>packaging/hoodie-hadoop-mr-bundle</module>
-    <module>packaging/hoodie-hive-bundle</module>
-    <module>packaging/hoodie-spark-bundle</module>
-    <module>packaging/hoodie-presto-bundle</module>
-    <module>packaging/hoodie-utilities-bundle</module>
+    <module>hudi-common</module>
+    <module>hudi-cli</module>
+    <module>hudi-client</module>
+    <module>hudi-hadoop-mr</module>
+    <module>hudi-hive</module>
+    <module>hudi-spark</module>
+    <module>hudi-timeline-service</module>
+    <module>hudi-utilities</module>
+    <module>packaging/hudi-hadoop-mr-bundle</module>
+    <module>packaging/hudi-hive-bundle</module>
+    <module>packaging/hudi-spark-bundle</module>
+    <module>packaging/hudi-presto-bundle</module>
+    <module>packaging/hudi-utilities-bundle</module>
     <module>docker/hoodie/hadoop</module>
-    <module>hoodie-integ-test</module>
+    <module>hudi-integ-test</module>
   </modules>
 
   <licenses>
@@ -151,22 +151,22 @@
   </properties>
 
   <scm>
-    <connection>scm:git:git@github.com:uber/hoodie.git</connection>
-    <developerConnection>scm:git:git@github.com:uber/hoodie.git</developerConnection>
-    <url>git@github.com:uber/hoodie.git</url>
+    <connection>scm:git:git@github.com:uber/hudi.git</connection>
+    <developerConnection>scm:git:git@github.com:uber/hudi.git</developerConnection>
+    <url>git@github.com:uber/hudi.git</url>
     <tag>HEAD</tag>
   </scm>
 
   <mailingLists>
     <mailingList>
       <name>User List</name>
-      <post>hoodie-user@googlegroups.com</post>
-      <archive>https://groups.google.com/d/forum/hoodie-user/</archive>
+      <post>hudi-user@googlegroups.com</post>
+      <archive>https://groups.google.com/d/forum/hudi-user/</archive>
     </mailingList>
     <mailingList>
       <name>Developer List</name>
-      <post>hoodie-dev@googlegroups.com</post>
-      <archive>https://groups.google.com/d/forum/hoodie-dev/</archive>
+      <post>hudi-dev@googlegroups.com</post>
+      <archive>https://groups.google.com/d/forum/hudi-dev/</archive>
     </mailingList>
   </mailingLists>
 
@@ -479,7 +479,7 @@
       </dependency>
 
       <dependency>
-        <!-- Used by hoodie-hive -->
+        <!-- Used by hudi-hive -->
         <groupId>joda-time</groupId>
         <artifactId>joda-time</artifactId>
         <version>${joda.version}</version>
@@ -1069,6 +1069,6 @@
 
   <issueManagement>
     <system>GitHub</system>
-    <url>https://github.com/uber/hoodie/issues</url>
+    <url>https://github.org/apache/hudi/issues</url>
   </issueManagement>
 </project>
