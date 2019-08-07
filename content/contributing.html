@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -362,6 +362,7 @@ These instructions have been tested on IntelliJ. We also recommend setting up th
   <li>[Optional] If you want to get involved, but don’t have a project in mind, please check JIRA for small, quick-starters.</li>
   <li>[Optional] Familiarize yourself with internals of Hudi using content on this page, as well as <a href="https://cwiki.apache.org/confluence/display/HUDI">wiki</a></li>
   <li>Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself. (If you don’t have perms to do this, please email the dev mailing list with your JIRA id and a small intro for yourself. We’d be happy to add you as a contributor)</li>
+  <li>Almost all PRs should be linked to a JIRA. Before you begin work, click “Start Progress” on the JIRA, which tells everyone that you are working on the issue actively.</li>
   <li>Make your code change
     <ul>
       <li>Every source file needs to include the Apache license header. Every new dependency needs to
@@ -380,6 +381,7 @@ where you replace HUDI-XXX with the appropriate JIRA issue.</li>
   <li>If you don’t hear back within 3 days on the PR, please send an email to dev @ mailing list.</li>
   <li>Address code review comments &amp; keep pushing changes to your fork/branch, which automatically updates the PR</li>
   <li>Before your change can be merged, it should be squashed into a single commit for cleaner commit history.</li>
+  <li>As courtesy, if you are unable to continue working on a JIRA, please move it back to “OPEN” state and unassign yourself.</li>
 </ul>
 
 <h2 id="releases">Releases</h2>
@@ -387,7 +389,7 @@ where you replace HUDI-XXX with the appropriate JIRA issue.</li>
 <ul>
   <li>Apache Hudi community plans to do minor version releases every 6 weeks or so.</li>
   <li>If your contribution merged onto <code class="highlighter-rouge">master</code> branch after the last release, it will become part of next release.</li>
-  <li>Website changes are regenerated once a week (until automation in place to reflect immediately)</li>
+  <li>Website changes are regenerated on-demand basis (until automation in place to reflect immediately)</li>
 </ul>
 
 <h2 id="accounts-and-permissions">Accounts and Permissions</h2>

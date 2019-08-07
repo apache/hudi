@@ -36,6 +36,20 @@ Here are few ways, you can get involved.
  - Share new ideas/directions to pursue or propose a new HIP
  - Contributing code to the project ([newbie JIRAs](https://issues.apache.org/jira/issues/?jql=project+%3D+HUDI+AND+component+%3D+newbie))
 
+## Become a Committer
+
+We are always looking for strong contributors, who can become [committers](https://www.apache.org/dev/committers.html) on the project. 
+Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.apache.org/foundation/how-it-works.html#pmc-members), after a discussion on their candidacy based on the following criteria (not exclusive/comprehensive).
+
+ - Embodies the ASF model code of [conduct](https://www.apache.org/foundation/policies/conduct.html)
+ - Has made significant technical contributions such as submitting PRs, filing bugs, testing, benchmarking, authoring HIPs, providing feedback/code reviews (+ more).
+ - Has helped the community over a few months, by answering questions on support channels above and triaging issues/jiras.
+ - Demonstrates clear code/design ownership of a component or code area (eg: Delta Streamer, Hive/Presto Integration etc).
+ - Brought thought leadership and new ideas into the project and evangelized them with the community via conference talks, blog posts.
+ - Great citizenship in helping with all peripheral (but very critical) work like site maintenance, wiki/jira cleanups and so on.
+ - Proven commitment to the project by way of upholding all agreed upon processes, conventions and principles of the community.
+
+
 ### Code Contributions
 
 Useful resources for contributing can be found under the "Developers" top menu.
