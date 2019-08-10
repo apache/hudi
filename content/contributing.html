@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -425,14 +425,14 @@ Discussion about contributing code to Hudi happens on the <a href="community.htm
 
 <ul>
   <li><code class="highlighter-rouge">docker</code> : Docker containers used by demo and integration tests. Brings up a mini data ecosystem locally</li>
-  <li><code class="highlighter-rouge">hoodie-cli</code> : CLI to inspect, manage and administer datasets</li>
-  <li><code class="highlighter-rouge">hoodie-client</code> : Spark client library to take a bunch of inserts + updates and apply them to a Hoodie table</li>
-  <li><code class="highlighter-rouge">hoodie-common</code> : Common classes used across modules</li>
-  <li><code class="highlighter-rouge">hoodie-hadoop-mr</code> : InputFormat implementations for ReadOptimized, Incremental, Realtime views</li>
-  <li><code class="highlighter-rouge">hoodie-hive</code> : Manage hive tables off Hudi datasets and houses the HiveSyncTool</li>
-  <li><code class="highlighter-rouge">hoodie-integ-test</code> : Longer running integration test processes</li>
-  <li><code class="highlighter-rouge">hoodie-spark</code> : Spark datasource for writing and reading Hudi datasets. Streaming sink.</li>
-  <li><code class="highlighter-rouge">hoodie-utilities</code> : Houses tools like DeltaStreamer, SnapshotCopier</li>
+  <li><code class="highlighter-rouge">hudi-cli</code> : CLI to inspect, manage and administer datasets</li>
+  <li><code class="highlighter-rouge">hudi-client</code> : Spark client library to take a bunch of inserts + updates and apply them to a Hoodie table</li>
+  <li><code class="highlighter-rouge">hudi-common</code> : Common classes used across modules</li>
+  <li><code class="highlighter-rouge">hudi-hadoop-mr</code> : InputFormat implementations for ReadOptimized, Incremental, Realtime views</li>
+  <li><code class="highlighter-rouge">hudi-hive</code> : Manage hive tables off Hudi datasets and houses the HiveSyncTool</li>
+  <li><code class="highlighter-rouge">hudi-integ-test</code> : Longer running integration test processes</li>
+  <li><code class="highlighter-rouge">hudi-spark</code> : Spark datasource for writing and reading Hudi datasets. Streaming sink.</li>
+  <li><code class="highlighter-rouge">hudi-utilities</code> : Houses tools like DeltaStreamer, SnapshotCopier</li>
   <li><code class="highlighter-rouge">packaging</code> : Poms for building out bundles for easier drop in to Spark, Hive, Presto, Utilities</li>
   <li><code class="highlighter-rouge">style</code>  : Code formatting, checkstyle files</li>
 </ul>

@@ -16,7 +16,7 @@ If you have Hive, Hadoop, Spark installed already & prefer to do it on your own 
 
 ## Download Hudi
 
-Check out [code](https://github.com/apache/incubator-hudi) or download [latest release](https://github.com/apache/incubator-hudi/archive/hoodie-0.4.5.zip) 
+Check out [code](https://github.com/apache/incubator-hudi) or download [latest release](https://github.com/apache/incubator-hudi/archive/hudi-0.4.5.zip) 
 and normally build the maven project, from command line
 
 ```
@@ -68,11 +68,11 @@ export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$P
 
 ### Run HoodieJavaApp
 
-Run __hoodie-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your DFS/local filesystem. Use the wrapper script
+Run __hudi-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your DFS/local filesystem. Use the wrapper script
 to run from command-line
 
 ```
-cd hoodie-spark
+cd hudi-spark
 ./run_hoodie_app.sh --help
 Usage: <main class> [options]
   Options:
@@ -89,7 +89,7 @@ Usage: <main class> [options]
        Default: COPY_ON_WRITE
 ```
 
-The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the `hoodie-spark` module as dependency
+The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the `hudi-spark` module as dependency
 and follow a similar pattern to write/read datasets via the datasource. 
 
 ## Query a Hudi dataset
@@ -107,7 +107,7 @@ bin/hiveserver2 \
   --hiveconf hive.root.logger=INFO,console \
   --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
   --hiveconf hive.stats.autogather=false \
-  --hiveconf hive.aux.jars.path=/path/to/packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar
+  --hiveconf hive.aux.jars.path=/path/to/packaging/hudi-hive-bundle/target/hudi-hive-bundle-0.4.6-SNAPSHOT.jar
 
 ```
 
@@ -117,7 +117,7 @@ It uses an incremental approach by storing the last commit time synced in the TB
 Both [Spark Datasource](writing_data.html#datasource-writer) & [DeltaStreamer](writing_data.html#deltastreamer) have capability to do this, after each write.
 
 ```
-cd hoodie-hive
+cd hudi-hive
 ./run_sync_tool.sh
   --user hive
   --pass hive
@@ -140,7 +140,7 @@ Let's first perform a query on the latest committed snapshot of the table
 ```
 hive> set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
 hive> set hive.stats.autogather=false;
-hive> add jar file:///path/to/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar;
+hive> add jar file:///path/to/hudi-hive-bundle-0.4.6-SNAPSHOT.jar;
 hive> select count(*) from hoodie_test;
 ...
 OK
@@ -155,7 +155,7 @@ Spark is super easy, once you get Hive working as above. Just spin up a Spark Sh
 
 ```
 $ cd $SPARK_INSTALL
-$ spark-shell --jars $HUDI_SRC/packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
+$ spark-shell --jars $HUDI_SRC/packaging/hudi-spark-bundle/target/hudi-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
 
 scala> val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 scala> sqlContext.sql("show tables").show(10000)
@@ -168,7 +168,7 @@ scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
 
 Checkout the 'master' branch on OSS Presto, build it, and place your installation somewhere.
 
-* Copy the hudi/packaging/hoodie-presto-bundle/target/hoodie-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
+* Copy the hudi/packaging/hudi-presto-bundle/target/hudi-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
 * Startup your server and you should be able to query the same Hive table via Presto
 
 ```

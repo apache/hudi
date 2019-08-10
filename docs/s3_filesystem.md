@@ -54,7 +54,7 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
 ```
 
 
-Utilities such as hoodie-cli or deltastreamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
+Utilities such as hudi-cli or deltastreamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
 such variables and then have cli be able to work on datasets stored in s3
 
 ```

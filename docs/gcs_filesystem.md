@@ -22,7 +22,7 @@ Add the required configs in your core-site.xml from where Hudi can fetch them. R
 ```xml
   <property>
     <name>fs.defaultFS</name>
-    <value>gs://hoodie-bucket</value>
+    <value>gs://hudi-bucket</value>
   </property>
 
   <property>

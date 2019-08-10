@@ -27,13 +27,13 @@ In sections, below we will discuss in detail how to access all the 3 views on ea
 
 ## Hive
 
-In order for Hive to recognize Hudi datasets and query correctly, the HiveServer2 needs to be provided with the `hoodie-hadoop-hive-bundle-x.y.z-SNAPSHOT.jar` 
+In order for Hive to recognize Hudi datasets and query correctly, the HiveServer2 needs to be provided with the `hudi-hadoop-mr-bundle-x.y.z-SNAPSHOT.jar` 
 in its [aux jars path](https://www.cloudera.com/documentation/enterprise/5-6-x/topics/cm_mc_hive_udf.html#concept_nc3_mms_lr). This will ensure the input format 
 classes with its dependencies are available for query planning & execution. 
 
 ### Read Optimized table {#hive-ro-view}
 In addition to setup above, for beeline cli access, the `hive.input.format` variable needs to be set to the  fully qualified path name of the 
-inputformat `com.uber.hoodie.hadoop.HoodieInputFormat`. For Tez, additionally the `hive.tez.input.format` needs to be set 
+inputformat `org.apache.hudi.hadoop.HoodieInputFormat`. For Tez, additionally the `hive.tez.input.format` needs to be set 
 to `org.apache.hadoop.hive.ql.io.HiveInputFormat`
 
 ### Real time table {#hive-rt-view}
@@ -85,7 +85,7 @@ Spark provides much easier deployment & management of Hudi jars and bundles into
  - **Hudi DataSource** : Supports Read Optimized, Incremental Pulls similar to how standard datasources (e.g: `spark.read.parquet`) work.
  - **Read as Hive tables** : Supports all three views, including the real time view, relying on the custom Hudi input formats again like Hive.
  
- In general, your spark job needs a dependency to `hoodie-spark` or `hoodie-spark-bundle-x.y.z.jar` needs to be on the class path of driver & executors (hint: use `--jars` argument)
+ In general, your spark job needs a dependency to `hudi-spark` or `hudi-spark-bundle-x.y.z.jar` needs to be on the class path of driver & executors (hint: use `--jars` argument)
  
 ### Read Optimized table {#spark-ro-view}
 
@@ -93,13 +93,13 @@ To read RO table as a Hive table using SparkSQL, simply push a path filter into 
 This method retains Spark built-in optimizations for reading Parquet files like vectorized reading on Hudi tables.
 
 ```
-spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[com.uber.hoodie.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
+spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 ```
 
 If you prefer to glob paths on DFS via the datasource, you can simply do something like below to get a Spark dataframe to work with. 
 
 ```
-Dataset<Row> hoodieROViewDF = spark.read().format("com.uber.hoodie")
+Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 // pass any path glob, can include hudi & non-hudi datasets
 .load("/glob/path/pattern");
 ```
@@ -109,18 +109,18 @@ Currently, real time table can only be queried as a Hive table in Spark. In orde
 to using the Hive Serde to read the data (planning/executions is still Spark). 
 
 ```
-$ spark-shell --jars hoodie-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+$ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'").show()
 ```
 
 ### Incremental Pulling {#spark-incr-pull}
-The `hoodie-spark` module offers the DataSource API, a more elegant way to pull data from Hudi dataset and process it via Spark.
+The `hudi-spark` module offers the DataSource API, a more elegant way to pull data from Hudi dataset and process it via Spark.
 A sample incremental pull, that will obtain all records written since `beginInstantTime`, looks like below.
 
 ```
  Dataset<Row> hoodieIncViewDF = spark.read()
-     .format("com.uber.hoodie")
+     .format("org.apache.hudi")
      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
              DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
@@ -141,4 +141,4 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 ## Presto
 
 Presto is a popular query engine, providing interactive query performance. Hudi RO tables can be queries seamlessly in Presto. 
-This requires the `hoodie-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.
+This requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation.

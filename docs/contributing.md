@@ -86,14 +86,14 @@ Discussion about contributing code to Hudi happens on the [dev@ mailing list](co
 ## Code & Project Structure
 
   * `docker` : Docker containers used by demo and integration tests. Brings up a mini data ecosystem locally
-  * `hoodie-cli` : CLI to inspect, manage and administer datasets
-  * `hoodie-client` : Spark client library to take a bunch of inserts + updates and apply them to a Hoodie table
-  * `hoodie-common` : Common classes used across modules
-  * `hoodie-hadoop-mr` : InputFormat implementations for ReadOptimized, Incremental, Realtime views
-  * `hoodie-hive` : Manage hive tables off Hudi datasets and houses the HiveSyncTool
-  * `hoodie-integ-test` : Longer running integration test processes
-  * `hoodie-spark` : Spark datasource for writing and reading Hudi datasets. Streaming sink.
-  * `hoodie-utilities` : Houses tools like DeltaStreamer, SnapshotCopier
+  * `hudi-cli` : CLI to inspect, manage and administer datasets
+  * `hudi-client` : Spark client library to take a bunch of inserts + updates and apply them to a Hoodie table
+  * `hudi-common` : Common classes used across modules
+  * `hudi-hadoop-mr` : InputFormat implementations for ReadOptimized, Incremental, Realtime views
+  * `hudi-hive` : Manage hive tables off Hudi datasets and houses the HiveSyncTool
+  * `hudi-integ-test` : Longer running integration test processes
+  * `hudi-spark` : Spark datasource for writing and reading Hudi datasets. Streaming sink.
+  * `hudi-utilities` : Houses tools like DeltaStreamer, SnapshotCopier
   * `packaging` : Poms for building out bundles for easier drop in to Spark, Hive, Presto, Utilities
   * `style`  : Code formatting, checkstyle files
 

@@ -484,7 +484,7 @@ automatically initializes the datasets in the file-system if they do not exist y
 <div class="highlighter-rouge"><pre class="highlight"><code>docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 ....
 ....
 2018-09-24 22:20:00 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
@@ -493,7 +493,7 @@ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer
 
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --disable-compaction
+spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider --disable-compaction
 ....
 2018-09-24 22:22:01 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
 2018-09-24 22:22:01 INFO  SparkContext:54 - Successfully stopped SparkContext
@@ -523,13 +523,13 @@ inorder to run Hive queries against those datasets.</p>
 <div class="highlighter-rouge"><pre class="highlight"><code>docker exec -it adhoc-2 /bin/bash
 
 # THis command takes in HIveServer URL and COW Hudi Dataset location in HDFS and sync the HDFS state to Hive
-/var/hoodie/ws/hoodie-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_cow --database default --table stock_ticks_cow
+/var/hoodie/ws/hudi-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_cow --database default --table stock_ticks_cow
 .....
 2018-09-24 22:22:45,568 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(112)) - Sync complete for stock_ticks_cow
 .....
 
 # Now run hive-sync for the second data-set in HDFS using Merge-On-Read (MOR storage)
-/var/hoodie/ws/hoodie-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_mor --database default --table stock_ticks_mor
+/var/hoodie/ws/hudi-hive/run_sync_tool.sh  --jdbc-url jdbc:hive2://hiveserver:10000 --user hive --pass hive --partitioned-by dt --base-path /user/hive/warehouse/stock_ticks_mor --database default --table stock_ticks_mor
 ...
 2018-09-24 22:23:09,171 INFO  [main] hive.HiveSyncTool (HiveSyncTool.java:syncHoodieTable(112)) - Sync complete for stock_ticks_mor
 ...
@@ -760,11 +760,11 @@ partitions, there is no need to run hive-sync</p>
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
 
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
-spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class com.uber.hoodie.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class com.uber.hoodie.utilities.schema.FilebasedSchemaProvider --disable-compaction
+spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider --disable-compaction
 
 exit
 </code></pre>
@@ -990,11 +990,11 @@ Using Scala version 2.11.8 (Java HotSpot(TM) 64-Bit Server VM, Java 1.8.0_181)
 Type in expressions to have them evaluated.
 Type :help for more information.
 
-scala&gt; import com.uber.hoodie.DataSourceReadOptions
-import com.uber.hoodie.DataSourceReadOptions
+scala&gt; import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.DataSourceReadOptions
 
 # In the below query, 20180925045257 is the first commit's timestamp
-scala&gt; val hoodieIncViewDF =  spark.read.format("com.uber.hoodie").option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL).option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "20180924064621").load("/user/hive/warehouse/stock_ticks_cow")
+scala&gt; val hoodieIncViewDF =  spark.read.format("org.apache.hudi").option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL).option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "20180924064621").load("/user/hive/warehouse/stock_ticks_cow")
 SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
 SLF4J: Defaulting to no-operation (NOP) logger implementation
 SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
@@ -1019,20 +1019,20 @@ scala&gt; spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, clo
 Again, You can use Hudi CLI to manually schedule and run compaction</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>docker exec -it adhoc-1 /bin/bash
-root@adhoc-1:/opt#   /var/hoodie/ws/hoodie-cli/hoodie-cli.sh
+root@adhoc-1:/opt#   /var/hoodie/ws/hudi-cli/hudi-cli.sh
 ============================================
 *                                          *
-*     _    _                 _ _           *
-*    | |  | |               | (_)          *
-*    | |__| | ___   ___   __| |_  ___      *
-*    |  __  |/ _ \ / _ \ / _` | |/ _ \     *
-*    | |  | | (_) | (_) | (_| | |  __/     *
-*    |_|  |_|\___/ \___/ \__,_|_|\___|     *
+*     _    _           _   _               *
+*    | |  | |         | | (_)              *
+*    | |__| |       __| |  -               *
+*    |  __  ||   | / _` | ||               *
+*    | |  | ||   || (_| | ||               *
+*    |_|  |_|\___/ \____/ ||               *
 *                                          *
 ============================================
 
 Welcome to Hoodie CLI. Please type help if you are looking for help.
-hoodie-&gt;connect --path /user/hive/warehouse/stock_ticks_mor
+hudi-&gt;connect --path /user/hive/warehouse/stock_ticks_mor
 18/09/24 06:59:34 WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 18/09/24 06:59:35 INFO table.HoodieTableMetaClient: Loading HoodieTableMetaClient from /user/hive/warehouse/stock_ticks_mor
 18/09/24 06:59:35 INFO util.FSUtils: Hadoop Configuration: fs.defaultFS: [hdfs://namenode:8020], Config:[Configuration: core-default.xml, core-site.xml, mapred-default.xml, mapred-site.xml, yarn-default.xml, yarn-site.xml, hdfs-default.xml, hdfs-site.xml], FileSystem: [DFS[DFSClient[clientName=DFSClient_NONMAPREDUCE_-1261652683_11, ugi=root (auth:SIMPLE)]]]
@@ -1224,20 +1224,20 @@ currently use Hadoop (v2.8.4), Hive (v2.3.3) and Spark (v2.3.1) in docker images
 
 <p>To bring down the containers
 <code class="highlighter-rouge">
-$ cd hoodie-integ-test
+$ cd hudi-integ-test
 $ mvn docker-compose:down
 </code></p>
 
 <p>If you want to bring up the docker containers, use
 <code class="highlighter-rouge">
-$ cd hoodie-integ-test
+$ cd hudi-integ-test
 $  mvn docker-compose:up -DdetachedMode=true
 </code></p>
 
 <p>Hudi is a library that is operated in a broader data analytics/ingestion environment
 involving Hadoop, Hive and Spark. Interoperability with all these systems is a key objective for us. We are
-actively adding integration-tests under <strong>hoodie-integ-test/src/test/java</strong> that makes use of this
-docker environment (See <strong>hoodie-integ-test/src/test/java/com/uber/hoodie/integ/ITTestHoodieSanity.java</strong> )</p>
+actively adding integration-tests under <strong>hudi-integ-test/src/test/java</strong> that makes use of this
+docker environment (See <strong>hudi-integ-test/src/test/java/org/apache/hudi/integ/ITTestHoodieSanity.java</strong> )</p>
 
 <h4 id="building-local-docker-containers">Building Local Docker Containers:</h4>
 
@@ -1265,27 +1265,27 @@ run the script
 [INFO] Reactor Summary:
 [INFO]
 [INFO] hoodie ............................................. SUCCESS [  1.709 s]
-[INFO] hoodie-common ...................................... SUCCESS [  9.015 s]
-[INFO] hoodie-hadoop-mr ................................... SUCCESS [  1.108 s]
-[INFO] hoodie-client ...................................... SUCCESS [  4.409 s]
-[INFO] hoodie-hive ........................................ SUCCESS [  0.976 s]
-[INFO] hoodie-spark ....................................... SUCCESS [ 26.522 s]
-[INFO] hoodie-utilities ................................... SUCCESS [ 16.256 s]
-[INFO] hoodie-cli ......................................... SUCCESS [ 11.341 s]
-[INFO] hoodie-hadoop-mr-bundle ............................ SUCCESS [  1.893 s]
-[INFO] hoodie-hive-bundle ................................. SUCCESS [ 14.099 s]
-[INFO] hoodie-spark-bundle ................................ SUCCESS [ 58.252 s]
-[INFO] hoodie-hadoop-docker ............................... SUCCESS [  0.612 s]
-[INFO] hoodie-hadoop-base-docker .......................... SUCCESS [04:04 min]
-[INFO] hoodie-hadoop-namenode-docker ...................... SUCCESS [  6.142 s]
-[INFO] hoodie-hadoop-datanode-docker ...................... SUCCESS [  7.763 s]
-[INFO] hoodie-hadoop-history-docker ....................... SUCCESS [  5.922 s]
-[INFO] hoodie-hadoop-hive-docker .......................... SUCCESS [ 56.152 s]
-[INFO] hoodie-hadoop-sparkbase-docker ..................... SUCCESS [01:18 min]
-[INFO] hoodie-hadoop-sparkmaster-docker ................... SUCCESS [  2.964 s]
-[INFO] hoodie-hadoop-sparkworker-docker ................... SUCCESS [  3.032 s]
-[INFO] hoodie-hadoop-sparkadhoc-docker .................... SUCCESS [  2.764 s]
-[INFO] hoodie-integ-test .................................. SUCCESS [  1.785 s]
+[INFO] hudi-common ...................................... SUCCESS [  9.015 s]
+[INFO] hudi-hadoop-mr ................................... SUCCESS [  1.108 s]
+[INFO] hudi-client ...................................... SUCCESS [  4.409 s]
+[INFO] hudi-hive ........................................ SUCCESS [  0.976 s]
+[INFO] hudi-spark ....................................... SUCCESS [ 26.522 s]
+[INFO] hudi-utilities ................................... SUCCESS [ 16.256 s]
+[INFO] hudi-cli ......................................... SUCCESS [ 11.341 s]
+[INFO] hudi-hadoop-mr-bundle ............................ SUCCESS [  1.893 s]
+[INFO] hudi-hive-bundle ................................. SUCCESS [ 14.099 s]
+[INFO] hudi-spark-bundle ................................ SUCCESS [ 58.252 s]
+[INFO] hudi-hadoop-docker ............................... SUCCESS [  0.612 s]
+[INFO] hudi-hadoop-base-docker .......................... SUCCESS [04:04 min]
+[INFO] hudi-hadoop-namenode-docker ...................... SUCCESS [  6.142 s]
+[INFO] hudi-hadoop-datanode-docker ...................... SUCCESS [  7.763 s]
+[INFO] hudi-hadoop-history-docker ....................... SUCCESS [  5.922 s]
+[INFO] hudi-hadoop-hive-docker .......................... SUCCESS [ 56.152 s]
+[INFO] hudi-hadoop-sparkbase-docker ..................... SUCCESS [01:18 min]
+[INFO] hudi-hadoop-sparkmaster-docker ................... SUCCESS [  2.964 s]
+[INFO] hudi-hadoop-sparkworker-docker ................... SUCCESS [  3.032 s]
+[INFO] hudi-hadoop-sparkadhoc-docker .................... SUCCESS [  2.764 s]
+[INFO] hudi-integ-test .................................. SUCCESS [  1.785 s]
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------

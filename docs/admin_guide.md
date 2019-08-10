@@ -17,7 +17,7 @@ This section provides a glimpse into each of these, with some general guidance o
 
 ## Admin CLI {#admin-cli}
 
-Once hudi has been built, the shell can be fired by via  `cd hoodie-cli && ./hoodie-cli.sh`.
+Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`.
 A hudi dataset resides on DFS, in a location referred to as the **basePath** and we would need this location in order to connect to a Hudi dataset.
 Hudi library effectively manages this dataset internally, using .hoodie subfolder to track all metadata
 
@@ -27,17 +27,17 @@ To initialize a hudi table, use the following command.
 18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
 ============================================
 *                                          *
-*     _    _                 _ _           *
-*    | |  | |               | (_)          *
-*    | |__| | ___   ___   __| |_  ___      *
-*    |  __  |/ _ \ / _ \ / _` | |/ _ \     *
-*    | |  | | (_) | (_) | (_| | |  __/     *
-*    |_|  |_|\___/ \___/ \__,_|_|\___|     *
+*     _    _           _   _               *
+*    | |  | |         | | (_)              *
+*    | |__| |       __| |  -               *
+*    |  __  ||   | / _` | ||               *
+*    | |  | ||   || (_| | ||               *
+*    |_|  |_|\___/ \____/ ||               *
 *                                          *
 ============================================
 
 Welcome to Hoodie CLI. Please type help if you are looking for help.
-hoodie->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tableType COPY_ON_WRITE
+hudi->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tableType COPY_ON_WRITE
 .....
 18/09/06 15:57:15 INFO table.HoodieTableMetaClient: Finished Loading Table of type COPY_ON_WRITE from ...
 ```
