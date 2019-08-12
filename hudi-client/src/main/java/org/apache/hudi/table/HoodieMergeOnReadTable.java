@@ -44,8 +44,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieRollingStat;
-import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
@@ -60,7 +58,6 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -334,27 +331,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     super.finalizeWrite(jsc, instantTs, stats);
   }
 
-  @Override
-  protected HoodieRollingStatMetadata getRollingStats() {
-    try {
-      Option<HoodieInstant> lastInstant = this.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
-          .lastInstant();
-      if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            this.getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
-        Option<String> lastRollingStat = Option.ofNullable(commitMetadata.getExtraMetadata()
-            .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY));
-        if (lastRollingStat.isPresent()) {
-          return HoodieCommitMetadata
-              .fromBytes(lastRollingStat.get().getBytes(), HoodieRollingStatMetadata.class);
-        }
-      }
-      return null;
-    } catch (IOException e) {
-      throw new HoodieException();
-    }
-  }
-
   /**
    * UpsertPartitioner for MergeOnRead table type, this allows auto correction of small parquet
    * files to larger ones without the need for an index in the logFile.
@@ -438,18 +414,6 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
     }
 
     private long getTotalFileSize(String partitionPath, FileSlice fileSlice) {
-      if (rollingStatMetadata != null) {
-        Map<String, HoodieRollingStat> partitionRollingStats =
-            rollingStatMetadata.getPartitionToRollingStats().get(partitionPath);
-        if (partitionRollingStats != null) {
-          HoodieRollingStat rollingStatForFile = partitionRollingStats.get(fileSlice.getFileId());
-          if (rollingStatForFile != null) {
-            long inserts = rollingStatForFile.getInserts();
-            return averageRecordSize * inserts;
-          }
-        }
-      }
-      // In case Rolling Stats is not present, fall back to sizing log files based on heuristics
       if (!fileSlice.getDataFile().isPresent()) {
         return convertLogFilesSizeToExpectedParquetSize(fileSlice.getLogFiles().collect(Collectors.toList()));
       } else {
@@ -506,35 +470,37 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends
         }).forEach(wStat -> {
           Writer writer = null;
           String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
-          boolean success = false;
-          try {
-            writer = HoodieLogFormat.newWriterBuilder().onParentPath(
-                FSUtils.getPartitionPath(this.getMetaClient().getBasePath(), partitionPath))
-                .withFileId(wStat.getFileId()).overBaseCommit(baseCommitTime)
-                .withFs(this.metaClient.getFs())
-                .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
-            // generate metadata
-            Map<HeaderMetadataType, String> header = generateHeader(commit);
-            // if update belongs to an existing log file
-            writer = writer.appendBlock(new HoodieCommandBlock(header));
-            success = true;
-          } catch (IOException | InterruptedException io) {
-            throw new HoodieRollbackException(
-                "Failed to rollback for commit " + commit, io);
-          } finally {
+          if (null != baseCommitTime) {
+            boolean success = false;
             try {
-              if (writer != null) {
-                writer.close();
+              writer = HoodieLogFormat.newWriterBuilder().onParentPath(
+                  FSUtils.getPartitionPath(this.getMetaClient().getBasePath(), partitionPath))
+                  .withFileId(wStat.getFileId()).overBaseCommit(baseCommitTime)
+                  .withFs(this.metaClient.getFs())
+                  .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+              // generate metadata
+              Map<HeaderMetadataType, String> header = generateHeader(commit);
+              // if update belongs to an existing log file
+              writer = writer.appendBlock(new HoodieCommandBlock(header));
+              success = true;
+            } catch (IOException | InterruptedException io) {
+              throw new HoodieRollbackException(
+                  "Failed to rollback for commit " + commit, io);
+            } finally {
+              try {
+                if (writer != null) {
+                  writer.close();
+                }
+                if (success) {
+                  // This step is intentionally done after writer is closed. Guarantees that
+                  // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
+                  // cloud-storage : HUDI-168
+                  filesToNumBlocksRollback.put(this.getMetaClient().getFs()
+                      .getFileStatus(writer.getLogFile().getPath()), 1L);
+                }
+              } catch (IOException io) {
+                throw new UncheckedIOException(io);
               }
-              if (success) {
-                // This step is intentionally done after writer is closed. Guarantees that
-                // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
-                // cloud-storage : HUDI-168
-                filesToNumBlocksRollback.put(this.getMetaClient().getFs()
-                    .getFileStatus(writer.getLogFile().getPath()), 1L);
-              }
-            } catch (IOException io) {
-              throw new UncheckedIOException(io);
             }
           }
         });
