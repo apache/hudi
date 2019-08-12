@@ -17,14 +17,14 @@
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
-    <artifactId>hoodie</artifactId>
-    <groupId>com.uber.hoodie</groupId>
-    <version>0.4.8-SNAPSHOT</version>
+    <artifactId>hudi</artifactId>
+    <groupId>org.apache.hudi</groupId>
+    <version>0.5.0-SNAPSHOT</version>
     <relativePath>../../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hoodie-hadoop-docker</artifactId>
+  <artifactId>hudi-hadoop-docker</artifactId>
   <packaging>pom</packaging>
   <modules>
     <module>base</module>
@@ -40,8 +40,8 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-spark-bundle</artifactId>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-bundle</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

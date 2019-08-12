@@ -17,13 +17,13 @@
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
-    <artifactId>hoodie-hadoop-docker</artifactId>
-    <groupId>com.uber.hoodie</groupId>
-    <version>0.4.8-SNAPSHOT</version>
+    <artifactId>hudi-hadoop-docker</artifactId>
+    <groupId>org.apache.hudi</groupId>
+    <version>0.5.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <packaging>pom</packaging>
-  <artifactId>hoodie-hadoop-hive-docker</artifactId>
+  <artifactId>hudi-hadoop-hive-docker</artifactId>
 
   <description>Base Docker Image with Hoodie</description>
 
@@ -34,8 +34,8 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.uber.hoodie</groupId>
-      <artifactId>hoodie-hadoop-base-docker</artifactId>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hadoop-base-docker</artifactId>
       <version>${project.version}</version>
       <type>pom</type>
       <scope>import</scope>
@@ -52,11 +52,11 @@
             <phase>package</phase>
             <configuration>
               <tasks>
-                <copy file="${project.basedir}/../../../../packaging/hoodie-hadoop-mr-bundle/target/hoodie-hadoop-mr-bundle-${project.version}.jar" tofile="target/hoodie-hadoop-mr-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-${project.version}.jar" tofile="target/hoodie-hive-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hudi-hadoop-mr-bundle/target/hudi-hadoop-mr-bundle-${project.version}.jar" tofile="target/hoodie-hadoop-mr-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hudi-hive-bundle/target/hudi-hive-bundle-${project.version}.jar" tofile="target/hoodie-hive-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hudi-spark-bundle/target/hudi-spark-bundle-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
                 <copy
-                  file="${project.basedir}/../../../../packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-${project.version}.jar"
+                  file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-${project.version}.jar"
                   tofile="target/hoodie-utilities.jar"/>
               </tasks>
             </configuration>
