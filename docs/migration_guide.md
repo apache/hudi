@@ -44,7 +44,7 @@ This tool essentially starts a Spark Job to read the existing parquet dataset an
 #### Option 2
 For huge datasets, this could be as simple as : for partition in [list of partitions in source dataset] {
         val inputDF = spark.read.format("any_input_format").load("partition_path")
-        inputDF.write.format("com.uber.hoodie").option()....save("basePath")
+        inputDF.write.format("org.apache.hudi").option()....save("basePath")
         }      
 
 #### Option 3
@@ -53,9 +53,9 @@ Write your own custom logic of how to load an existing dataset into a Hudi manag
 
 ```
 Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
-fired by via `cd hoodie-cli && ./hoodie-cli.sh`.
+fired by via `cd hudi-cli && ./hudi-cli.sh`.
 
-hoodie->hdfsparquetimport
+hudi->hdfsparquetimport
         --upsert false
         --srcPath /user/parquet/dataset/basepath
         --targetPath

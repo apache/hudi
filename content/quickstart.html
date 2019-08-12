@@ -341,7 +341,7 @@ refer to <a href="migration_guide.html">migration guide</a>.</p>
 
 <h2 id="download-hudi">Download Hudi</h2>
 
-<p>Check out <a href="https://github.com/apache/incubator-hudi">code</a> or download <a href="https://github.com/apache/incubator-hudi/archive/hoodie-0.4.5.zip">latest release</a> 
+<p>Check out <a href="https://github.com/apache/incubator-hudi">code</a> or download <a href="https://github.com/apache/incubator-hudi/archive/hudi-0.4.5.zip">latest release</a> 
 and normally build the maven project, from command line</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>$ mvn clean install -DskipTests -DskipITs
@@ -416,10 +416,10 @@ export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$P
 
 <h3 id="run-hoodiejavaapp">Run HoodieJavaApp</h3>
 
-<p>Run <strong>hoodie-spark/src/test/java/HoodieJavaApp.java</strong> class, to place a two commits (commit 1 =&gt; 100 inserts, commit 2 =&gt; 100 updates to previously inserted 100 records) onto your DFS/local filesystem. Use the wrapper script
+<p>Run <strong>hudi-spark/src/test/java/HoodieJavaApp.java</strong> class, to place a two commits (commit 1 =&gt; 100 inserts, commit 2 =&gt; 100 updates to previously inserted 100 records) onto your DFS/local filesystem. Use the wrapper script
 to run from command-line</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>cd hoodie-spark
+<div class="highlighter-rouge"><pre class="highlight"><code>cd hudi-spark
 ./run_hoodie_app.sh --help
 Usage: &lt;main class&gt; [options]
   Options:
@@ -437,7 +437,7 @@ Usage: &lt;main class&gt; [options]
 </code></pre>
 </div>
 
-<p>The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the <code class="highlighter-rouge">hoodie-spark</code> module as dependency
+<p>The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the <code class="highlighter-rouge">hudi-spark</code> module as dependency
 and follow a similar pattern to write/read datasets via the datasource.</p>
 
 <h2 id="query-a-hudi-dataset">Query a Hudi dataset</h2>
@@ -454,7 +454,7 @@ bin/hiveserver2 \
   --hiveconf hive.root.logger=INFO,console \
   --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
   --hiveconf hive.stats.autogather=false \
-  --hiveconf hive.aux.jars.path=/path/to/packaging/hoodie-hive-bundle/target/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar
+  --hiveconf hive.aux.jars.path=/path/to/packaging/hudi-hive-bundle/target/hudi-hive-bundle-0.4.6-SNAPSHOT.jar
 
 </code></pre>
 </div>
@@ -464,7 +464,7 @@ bin/hiveserver2 \
 It uses an incremental approach by storing the last commit time synced in the TBLPROPERTIES and only syncing the commits from the last sync commit time stored.
 Both <a href="writing_data.html#datasource-writer">Spark Datasource</a> &amp; <a href="writing_data.html#deltastreamer">DeltaStreamer</a> have capability to do this, after each write.</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>cd hoodie-hive
+<div class="highlighter-rouge"><pre class="highlight"><code>cd hudi-hive
 ./run_sync_tool.sh
   --user hive
   --pass hive
@@ -485,7 +485,7 @@ follow <a href="https://cwiki.apache.org/confluence/display/HUDI/Registering+sam
 
 <div class="highlighter-rouge"><pre class="highlight"><code>hive&gt; set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
 hive&gt; set hive.stats.autogather=false;
-hive&gt; add jar file:///path/to/hoodie-hive-bundle-0.4.6-SNAPSHOT.jar;
+hive&gt; add jar file:///path/to/hudi-hive-bundle-0.4.6-SNAPSHOT.jar;
 hive&gt; select count(*) from hoodie_test;
 ...
 OK
@@ -500,7 +500,7 @@ hive&gt;
 <p>Spark is super easy, once you get Hive working as above. Just spin up a Spark Shell as below</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code>$ cd $SPARK_INSTALL
-$ spark-shell --jars $HUDI_SRC/packaging/hoodie-spark-bundle/target/hoodie-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
+$ spark-shell --jars $HUDI_SRC/packaging/hudi-spark-bundle/target/hudi-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
 
 scala&gt; val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 scala&gt; sqlContext.sql("show tables").show(10000)
@@ -515,7 +515,7 @@ scala&gt; sqlContext.sql("select count(*) from hoodie_test").show(10000)
 <p>Checkout the ‘master’ branch on OSS Presto, build it, and place your installation somewhere.</p>
 
 <ul>
-  <li>Copy the hudi/packaging/hoodie-presto-bundle/target/hoodie-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/</li>
+  <li>Copy the hudi/packaging/hudi-presto-bundle/target/hudi-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/</li>
   <li>Startup your server and you should be able to query the same Hive table via Presto</li>
 </ul>
 

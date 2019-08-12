@@ -30,7 +30,7 @@ can be chosen/changed across each commit/deltacommit issued against the dataset.
 
 ## DeltaStreamer
 
-The `HoodieDeltaStreamer` utility (part of hoodie-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
+The `HoodieDeltaStreamer` utility (part of hudi-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.
 
  - Exactly once ingestion of new events from Kafka, [incremental imports](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports) from Sqoop or output of `HiveIncrementalPuller` or files under a DFS folder
  - Support json, avro or a custom record types for the incoming data
@@ -41,7 +41,7 @@ The `HoodieDeltaStreamer` utility (part of hoodie-utilities-bundle) provides the
 Command line options describe capabilities in more detail
 
 ```
-[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-*.jar` --help
+[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: <main class> [options]
   Options:
     --commit-on-errors
@@ -55,7 +55,7 @@ Usage: <main class> [options]
           insert/bulk-insert 
       Default: false
     --help, -h
-    --hoodie-conf
+    --hudi-conf
           Any configuration that can be set in the properties file (using the CLI 
           parameter "--propsFilePath") can also be passed command line using this 
           parameter 
@@ -69,7 +69,7 @@ Usage: <main class> [options]
       subclass of HoodieRecordPayload, that works off a GenericRecord.
       Implement your own, if you want to do something other than overwriting
       existing value
-      Default: com.uber.hoodie.OverwriteWithLatestAvroPayload
+      Default: org.apache.hudi.OverwriteWithLatestAvroPayload
     --props
       path to properties file on localfs or dfs, with configurations for
       Hudi client, schema provider, key generator and data source. For
@@ -78,15 +78,15 @@ Usage: <main class> [options]
       sources, referto individual classes, for supported properties.
       Default: file:///Users/vinoth/bin/hoodie/src/test/resources/delta-streamer-config/dfs-source.properties
     --schemaprovider-class
-      subclass of com.uber.hoodie.utilities.schema.SchemaProvider to attach
+      subclass of org.apache.hudi.utilities.schema.SchemaProvider to attach
       schemas to input & target table data, built in options:
       FilebasedSchemaProvider
-      Default: com.uber.hoodie.utilities.schema.FilebasedSchemaProvider
+      Default: org.apache.hudi.utilities.schema.FilebasedSchemaProvider
     --source-class
-      Subclass of com.uber.hoodie.utilities.sources to read data. Built-in
-      options: com.uber.hoodie.utilities.sources.{JsonDFSSource (default),
+      Subclass of org.apache.hudi.utilities.sources to read data. Built-in
+      options: org.apache.hudi.utilities.sources.{JsonDFSSource (default),
       AvroDFSSource, JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}
-      Default: com.uber.hoodie.utilities.sources.JsonDFSSource
+      Default: org.apache.hudi.utilities.sources.JsonDFSSource
     --source-limit
       Maximum amount of data to read from source. Default: No limit For e.g:
       DFSSource => max bytes to read, KafkaSource => max events to read
@@ -105,15 +105,15 @@ Usage: <main class> [options]
   * --target-table
       name of the target table in Hive
     --transformer-class
-      subclass of com.uber.hoodie.utilities.transform.Transformer. UDF to
+      subclass of org.apache.hudi.utilities.transform.Transformer. UDF to
       transform raw source dataset to a target dataset (conforming to target
       schema) before writing. Default : Not set. E:g -
-      com.uber.hoodie.utilities.transform.SqlQueryBasedTransformer (which
+      org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which
       allows a SQL query template to be passed as a transformation function)
 ```
 
 The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
-provided under `hoodie-utilities/src/test/resources/delta-streamer-config`.
+provided under `hudi-utilities/src/test/resources/delta-streamer-config`.
 
 For e.g: once you have Confluent Kafka, Schema registry up & running, produce some test data using ([impressions.avro](https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html) provided by schema-registry repo)
 
@@ -124,12 +124,12 @@ For e.g: once you have Confluent Kafka, Schema registry up & running, produce so
 and then ingest it as follows.
 
 ```
-[hoodie]$ spark-submit --class com.uber.hoodie.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hoodie-utilities-bundle/target/hoodie-utilities-bundle-*.jar` \
-  --props file://${PWD}/hoodie-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
-  --schemaprovider-class com.uber.hoodie.utilities.schema.SchemaRegistryProvider \
-  --source-class com.uber.hoodie.utilities.sources.AvroKafkaSource \
+[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+  --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
+  --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
-  --target-base-path file:///tmp/hoodie-deltastreamer-op --target-table uber.impressions \
+  --target-base-path file:///tmp/hudi-deltastreamer-op --target-table uber.impressions \
   --op BULK_INSERT
 ```
 
@@ -137,14 +137,14 @@ In some cases, you may want to migrate your existing dataset into Hudi beforehan
 
 ## Datasource Writer
 
-The `hoodie-spark` module offers the DataSource API to write (and also read) any data frame into a Hudi dataset.
+The `hudi-spark` module offers the DataSource API to write (and also read) any data frame into a Hudi dataset.
 Following is how we can upsert a dataframe, while specifying the field names that need to be used
 for `recordKey => _row_key`, `partitionPath => partition` and `precombineKey => timestamp`
 
 
 ```
 inputDF.write()
-       .format("com.uber.hoodie")
+       .format("org.apache.hudi")
        .options(clientOpts) // any of the Hudi client opts can be passed in as well
        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
@@ -158,12 +158,12 @@ inputDF.write()
 
 Both tools above support syncing of the dataset's latest schema to Hive metastore, such that queries can pick up new columns and partitions.
 In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below, 
-once you have built the hoodie-hive module.
+once you have built the hudi-hive module.
 
 ```
-cd hoodie-hive
+cd hudi-hive
 ./run_sync_tool.sh
- [hoodie-hive]$ ./run_sync_tool.sh --help
+ [hudi-hive]$ ./run_sync_tool.sh --help
 Usage: <main class> [options]
   Options:
   * --base-path
@@ -189,14 +189,14 @@ Hudi supports implementing two types of deletes on data stored in Hudi datasets,
  - **Soft Deletes** : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
  This can be simply achieved by ensuring the appropriate fields are nullable in the dataset schema and simply upserting the dataset after setting these fields to null.
  - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
- via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `com.uber.hoodie.EmptyHoodieRecordPayload` class that does exactly this.
+ via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `org.apache.hudi.EmptyHoodieRecordPayload` class that does exactly this.
  
 ```
  deleteDF // dataframe containing just records to be deleted
-   .write().format("com.uber.hoodie")
+   .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "com.uber.hoodie.EmptyHoodieRecordPayload")
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
  
 ```
 

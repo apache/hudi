@@ -41,7 +41,7 @@ Additionally, you can pass down any of the WriteClient level configs directly us
 
 ```
 inputDF.write()
-.format("com.uber.hoodie")
+.format("org.apache.hudi")
 .options(clientOpts) // any of the Hudi client opts can be passed in as well
 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
 .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
@@ -72,7 +72,7 @@ Options useful for writing datasets via `write.format.option(...)`
 we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)</span>
 
 ##### PAYLOAD_CLASS_OPT_KEY {#PAYLOAD_CLASS_OPT_KEY}
-  Property: `hoodie.datasource.write.payload.class`, Default: `com.uber.hoodie.OverwriteWithLatestAvroPayload` <br/>
+  Property: `hoodie.datasource.write.payload.class`, Default: `org.apache.hudi.OverwriteWithLatestAvroPayload` <br/>
   <span style="color:grey">Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. 
   This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective</span>
   
@@ -88,7 +88,7 @@ the dot notation eg: `a.b.c`</span>
 Actual value ontained by invoking .toString()</span>
 
 ##### KEYGENERATOR_CLASS_OPT_KEY {#KEYGENERATOR_CLASS_OPT_KEY}
-  Property: `hoodie.datasource.write.keygenerator.class`, Default: `com.uber.hoodie.SimpleKeyGenerator` <br/>
+  Property: `hoodie.datasource.write.keygenerator.class`, Default: `org.apache.hudi.SimpleKeyGenerator` <br/>
   <span style="color:grey">Key generator class, that implements will extract the key out of incoming `Row` object</span>
   
 ##### COMMIT_METADATA_KEYPREFIX_OPT_KEY {#COMMIT_METADATA_KEYPREFIX_OPT_KEY}
@@ -129,7 +129,7 @@ This is useful to store checkpointing information, in a consistent way with the 
   <span style="color:grey">field in the dataset to use for determining hive partition columns.</span>
   
 ##### HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY {#HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY}
-  Property: `hoodie.datasource.hive_sync.partition_extractor_class`, Default: `com.uber.hoodie.hive.SlashEncodedDayPartitionValueExtractor` <br/>
+  Property: `hoodie.datasource.hive_sync.partition_extractor_class`, Default: `org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor` <br/>
   <span style="color:grey">Class used to extract partition field values into hive partition columns.</span>
   
 ##### HIVE_ASSUME_DATE_PARTITION_OPT_KEY {#HIVE_ASSUME_DATE_PARTITION_OPT_KEY}
@@ -374,7 +374,7 @@ Property: `hoodie.compaction.reverse.log.read` <br/>
 Property: `hoodie.cleaner.parallelism` <br/>
 <span style="color:grey">Increase this if cleaning becomes slow.</span>
 
-##### withCompactionStrategy(compactionStrategy = com.uber.hoodie.io.compact.strategy.LogFileSizeBasedCompactionStrategy) {#withCompactionStrategy} 
+##### withCompactionStrategy(compactionStrategy = org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy) {#withCompactionStrategy} 
 Property: `hoodie.compaction.strategy` <br/>
 <span style="color:grey">Compaction strategy decides which file groups are picked up for compaction during each compaction run. By default. Hudi picks the log file with most accumulated unmerged data</span>
 
@@ -384,9 +384,9 @@ Property: `hoodie.compaction.target.io` <br/>
 
 ##### withTargetPartitionsPerDayBasedCompaction(targetPartitionsPerCompaction = 10) {#withTargetPartitionsPerDayBasedCompaction} 
 Property: `hoodie.compaction.daybased.target` <br/>
-<span style="color:grey">Used by com.uber.hoodie.io.compact.strategy.DayBasedCompactionStrategy to denote the number of latest partitions to compact during a compaction run.</span>    
+<span style="color:grey">Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of latest partitions to compact during a compaction run.</span>    
 
-##### withPayloadClass(payloadClassName = com.uber.hoodie.common.model.HoodieAvroPayload) {#payloadClassName} 
+##### withPayloadClass(payloadClassName = org.apache.hudi.common.model.HoodieAvroPayload) {#payloadClassName} 
 Property: `hoodie.compaction.payload.class` <br/>
 <span style="color:grey">This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.</span>
 

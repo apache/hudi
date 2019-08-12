@@ -345,7 +345,7 @@
 
 <h2 id="admin-cli">Admin CLI</h2>
 
-<p>Once hudi has been built, the shell can be fired by via  <code class="highlighter-rouge">cd hoodie-cli &amp;&amp; ./hoodie-cli.sh</code>.
+<p>Once hudi has been built, the shell can be fired by via  <code class="highlighter-rouge">cd hudi-cli &amp;&amp; ./hudi-cli.sh</code>.
 A hudi dataset resides on DFS, in a location referred to as the <strong>basePath</strong> and we would need this location in order to connect to a Hudi dataset.
 Hudi library effectively manages this dataset internally, using .hoodie subfolder to track all metadata</p>
 
@@ -354,17 +354,17 @@ Hudi library effectively manages this dataset internally, using .hoodie subfolde
 <div class="highlighter-rouge"><pre class="highlight"><code>18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
 ============================================
 *                                          *
-*     _    _                 _ _           *
-*    | |  | |               | (_)          *
-*    | |__| | ___   ___   __| |_  ___      *
-*    |  __  |/ _ \ / _ \ / _` | |/ _ \     *
-*    | |  | | (_) | (_) | (_| | |  __/     *
-*    |_|  |_|\___/ \___/ \__,_|_|\___|     *
+*     _    _           _   _               *
+*    | |  | |         | | (_)              *
+*    | |__| |       __| |  -               *
+*    |  __  ||   | / _` | ||               *
+*    | |  | ||   || (_| | ||               *
+*    |_|  |_|\___/ \____/ ||               *
 *                                          *
 ============================================
 
 Welcome to Hoodie CLI. Please type help if you are looking for help.
-hoodie-&gt;create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tableType COPY_ON_WRITE
+hudi-&gt;create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tableType COPY_ON_WRITE
 .....
 18/09/06 15:57:15 INFO table.HoodieTableMetaClient: Finished Loading Table of type COPY_ON_WRITE from ...
 </code></pre>
