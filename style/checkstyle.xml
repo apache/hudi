@@ -242,5 +242,8 @@
             <property name="exceptionVariableName" value="expected"/>
         </module>
         <module name="CommentsIndentation"/>
+        <module name="IllegalImport">
+            <property name="illegalClasses" value="java.util.Optional, com.google.common.base.Optional" />
+        </module>
     </module>
 </module>
