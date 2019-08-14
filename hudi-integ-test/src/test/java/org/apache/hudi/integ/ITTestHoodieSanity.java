@@ -91,7 +91,14 @@ public class ITTestHoodieSanity extends ITTestBase {
     // Drop Table if it exists
     {
       String[] hiveDropCmd = getHiveConsoleCommand("drop table if exists " + hiveTableName);
-      executeCommandInDocker(HIVESERVER, hiveDropCmd, true);
+      try {
+        executeCommandInDocker(HIVESERVER, hiveDropCmd, true);
+      } catch (AssertionError ex) {
+        // In travis, sometimes, the hivemetastore is not ready even though we wait for the port to be up
+        // Workaround to sleep for 5 secs and retry
+        Thread.sleep(5000);
+        executeCommandInDocker(HIVESERVER, hiveDropCmd, true);
+      }
     }
 
     // Ensure table does not exist

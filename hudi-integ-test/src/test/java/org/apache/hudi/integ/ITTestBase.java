@@ -38,7 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
@@ -52,13 +52,15 @@ public abstract class ITTestBase {
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
   protected static final String HIVESERVER = "/hiveserver";
   protected static final String HOODIE_WS_ROOT = "/var/hoodie/ws";
-  protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hoodie-spark/run_hoodie_app.sh";
+  protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_app.sh";
   protected static final String HUDI_HADOOP_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar";
   protected static final String HUDI_HIVE_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hive-bundle.jar";
   protected static final String HUDI_SPARK_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar";
+  protected static final String HUDI_UTILITIES_BUNDLE =
+      HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-utilities.jar";
   protected static final String HIVE_SERVER_JDBC_URL = "jdbc:hive2://hiveserver:10000";
   // Skip these lines when capturing output from hive
   protected static final Integer SLF4J_WARNING_LINE_COUNT_IN_HIVE_CMD = 9;
@@ -143,6 +145,33 @@ public abstract class ITTestBase {
     }
     cmd.close();
     return callback;
+  }
+
+  protected void executeCommandsInDocker(String containerName, List<String[]> commands) throws Exception {
+    for (String[] cmd : commands) {
+      TestExecStartResultCallback callback = executeCommandInDocker(containerName, cmd, true);
+      String stdout = callback.getStdout().toString();
+      String stderr = callback.getStderr().toString();
+      LOG.info("Got output for (" + Arrays.toString(cmd) + ") :" + stdout);
+      LOG.info("Got error output for (" + Arrays.toString(cmd) + ") :" + stderr);
+    }
+  }
+
+  protected Pair<String, String> executeHiveCommand(String hiveCommand, boolean expectedToSucceed) throws Exception {
+    String[] hiveTableCheck = getHiveConsoleCommand(hiveCommand);
+    TestExecStartResultCallback callback =
+        executeCommandInDocker(HIVESERVER, hiveTableCheck, expectedToSucceed);
+    String stderr = callback.getStderr().toString();
+    String stdout = callback.getStdout().toString();
+    LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") :" + stdout);
+    LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") :" + stderr);
+    return Pair.of(stdout.trim(), stderr.trim());
+  }
+
+  protected void executeHiveCommandWithExpectedOutput(String hiveCommand, String expectedOutput) throws Exception {
+    Pair<String, String> stdOutErrPair = executeHiveCommand(hiveCommand, true);
+    System.out.println("Output : (" + stdOutErrPair.getLeft().replace("\n", ",") + ")");
+    Assert.assertEquals(expectedOutput, stdOutErrPair.getLeft());
   }
 
   public class TestExecStartResultCallback extends ExecStartResultCallback {
