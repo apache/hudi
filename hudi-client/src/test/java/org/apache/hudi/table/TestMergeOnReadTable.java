@@ -1024,11 +1024,27 @@ public class TestMergeOnReadTable {
     statuses = writeClient.insert(recordsRDD, newCommitTime);
     writeClient.commit(newCommitTime, statuses);
 
-    // rollback a successful commit
     // Sleep for small interval (at least 1 second) to force a new rollback start time.
     Thread.sleep(1000);
+
+    // We will test HUDI-204 here. We will simulate rollback happening twice by copying the commit file to local fs
+    // and calling rollback twice
+    final String lastCommitTime = newCommitTime;
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieInstant last =
+        metaClient.getCommitsTimeline().getInstants().filter(instant -> instant.getTimestamp().equals(lastCommitTime))
+            .findFirst().get();
+    String fileName = last.getFileName();
+    // Save the .commit file to local directory.
+    // Rollback will be called twice to test the case where rollback failed first time and retried.
+    // We got the "BaseCommitTime cannot be null" exception before the fix
+    TemporaryFolder folder = new TemporaryFolder();
+    folder.create();
+    File file = folder.newFile();
+    metaClient.getFs().copyToLocalFile(new Path(metaClient.getMetaPath(), fileName), new Path(file.getAbsolutePath()));
     writeClient.rollback(newCommitTime);
-    final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+
+    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     RealtimeView tableRTFileSystemView = table.getRTFileSystemView();
 
@@ -1042,6 +1058,11 @@ public class TestMergeOnReadTable {
           fileSlice.getLogFiles().count() > 0).count();
     }
     Assert.assertTrue(numLogFiles == 0);
+    metaClient.getFs().copyFromLocalFile(new Path(file.getAbsolutePath()),
+        new Path(metaClient.getMetaPath(), fileName));
+    Thread.sleep(1000);
+    // Rollback again to pretend the first rollback failed partially. This should not error our
+    writeClient.rollback(newCommitTime);
   }
 
   @Test
