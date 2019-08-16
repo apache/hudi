@@ -111,7 +111,7 @@ public class HiveIncrementalPuller {
     this.config = config;
     validateConfig(config);
     String templateContent = IOUtils.toString(
-        this.getClass().getResourceAsStream("IncrementalPull.sqltemplate"));
+        this.getClass().getResourceAsStream("IncrementalPull.sqltemplate"), "UTF-8");
     incrementalPullSQLtemplate = new ST(templateContent);
   }
 
