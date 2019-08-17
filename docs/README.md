@@ -26,7 +26,11 @@ To build directly on host OS (\*nix), first you need to install
 - jekyll (`gem install jekyll`)
 - Update bundler `bundle update --bundler`
 
-and then run the following from `docs` folder to serve a local site
+and then run the following commands from `docs` folder to install dependencies
+
+`bundle install`
+
+and serve a local site
 
 `bundle exec jekyll serve`
 
