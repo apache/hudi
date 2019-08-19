@@ -3,3 +3,5 @@ _site
 .jekyll-metadata
 .ruby-version
 .DS_Store
+.bundle/
+.rubydeps

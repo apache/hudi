@@ -82,3 +82,8 @@ description: "Apache Hudi (pronounced “Hoodie”) provides upserts and increme
 
 # needed for sitemap.xml file only
 url: https://github.com/apache/incubator-hudi
+
+# The all languages used
+languages: ['en', 'cn']
+
+plugins: ['jekyll-paginate', 'jekyll-multiple-languages']

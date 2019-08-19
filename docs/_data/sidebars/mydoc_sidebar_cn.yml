@@ -1,0 +1,57 @@
+# This is your sidebar TOC. The sidebar code loops through sections here and provides the appropriate formatting.
+
+entries:
+- title: sidebar
+  product: Latest
+  version: Version
+  folders:
+
+  - title: Getting Started
+    output: web
+    folderitems:
+
+    - title: Quickstart
+      url: /quickstart.html
+      output: web
+
+    - title: 用户案例
+      url: /use_cases.html
+      output: web
+
+    - title: 演讲 & Powered By
+      url: /powered_by.html
+      output: web
+
+    - title: 对比
+      url: /comparison.html
+      output: web
+
+  - title: 文档
+    output: web
+    folderitems:
+
+    - title: 概念
+      url: /concepts.html
+      output: web
+
+    - title: 写入数据
+      url: /writing_data.html
+      output: web
+
+    - title: 查询数据
+      url: /querying_data.html
+      output: web
+
+    - title: 配置
+      url: /configurations.html
+      output: web
+
+    - title: 性能
+      url: /performance.html
+      output: web
+
+    - title: 管理
+      url: /admin_guide.html
+      output: web
+
+
