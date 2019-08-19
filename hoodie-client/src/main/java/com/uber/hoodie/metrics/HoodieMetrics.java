@@ -39,6 +39,7 @@ public class HoodieMetrics {
   public String deltaCommitTimerName = null;
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
+  public String indexLookupTimerName=null;
   private HoodieWriteConfig config = null;
   private String tableName = null;
   private Timer rollbackTimer = null;
@@ -47,6 +48,7 @@ public class HoodieMetrics {
   private Timer deltaCommitTimer = null;
   private Timer finalizeTimer = null;
   private Timer compactionTimer = null;
+  private Timer indexLookupTimer=null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
     this.config = config;
@@ -59,6 +61,7 @@ public class HoodieMetrics {
       this.deltaCommitTimerName = getMetricsName("timer", HoodieTimeline.DELTA_COMMIT_ACTION);
       this.finalizeTimerName = getMetricsName("timer", "finalize");
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
+      this.indexLookupTimerName=getMetricsName("timer","indexLookupTimer");
     }
   }
 
@@ -106,6 +109,13 @@ public class HoodieMetrics {
       deltaCommitTimer = createTimer(deltaCommitTimerName);
     }
     return deltaCommitTimer == null ? null : deltaCommitTimer.time();
+  }
+
+  public Timer.Context getIndexLookupCtx() {
+    if (config.isMetricsOn() && indexLookupTimer == null) {
+      indexLookupTimer = createTimer(indexLookupTimerName);
+    }
+    return indexLookupTimer == null ? null : indexLookupTimer.time();
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs,
@@ -171,6 +181,16 @@ public class HoodieMetrics {
       registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
     }
   }
+
+    public void updateIndexLookupMetircs(long durationInMs, String property, long val) {
+        if (config.isMetricsOn()) {
+            logger.info(String
+                    .format("Sending index lookup metrics (duration=%d, %s=%d)",
+                            durationInMs, property,val));
+            registerGauge(getMetricsName("indexLookup", "duration"), durationInMs);
+            registerGauge(getMetricsName("indexLookup", property), val);
+        }
+    }
 
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
