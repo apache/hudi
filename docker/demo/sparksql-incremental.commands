@@ -1,0 +1,59 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.hudi.DataSourceReadOptions;
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.spark.sql.SaveMode;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.HoodieDataSourceHelpers;
+import org.apache.hadoop.fs.FileSystem;
+
+val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+val beginInstantTime = HoodieDataSourceHelpers.listCommitsSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").get(0)
+val hoodieIncViewDF =  spark.read.format("org.apache.hudi").
+                      option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY, DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, beginInstantTime).
+                      load("/user/hive/warehouse/stock_ticks_cow");
+hoodieIncViewDF.registerTempTable("stock_ticks_cow_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr where  symbol = 'GOOG'").show(100, false);
+
+spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, close from stock_ticks_cow_incr").
+    write.format("org.apache.hudi").
+    option("hoodie.insert.shuffle.parallelism", "2").
+    option("hoodie.upsert.shuffle.parallelism","2").
+    option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_STORAGE_TYPE_OPT_VAL).
+    option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
+    option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "key").
+    option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr").
+    option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(HoodieWriteConfig.TABLE_NAME, "stock_ticks_derived_mor").
+    option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY, "stock_ticks_derived_mor").
+    option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY, "default").
+    option(DataSourceWriteOptions.HIVE_URL_OPT_KEY, "jdbc:hive2://hiveserver:10000").
+    option(DataSourceWriteOptions.HIVE_USER_OPT_KEY, "hive").
+    option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY, "hive").
+    option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY, "true").
+    option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
+    mode(SaveMode.Overwrite).
+    save("/user/hive/warehouse/stock_ticks_derived_mor");
+
+spark.sql("show tables").show(20, false)
+spark.sql("select count(*) from stock_ticks_derived_mor").show(20, false)
+spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
+
+System.exit(0);

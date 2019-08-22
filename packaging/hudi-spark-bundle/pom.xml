@@ -127,6 +127,8 @@
                   <pattern>parquet.schema</pattern>
                   <shadedPattern>org.apache.hudi.parquet.schema</shadedPattern>
                 </relocation>
+                <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
+                <!--
                 <relocation>
                   <pattern>org.apache.hive.jdbc.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hive.jdbc.</shadedPattern>
@@ -159,6 +161,7 @@
                   <pattern>org.apache.hadoop.hive.serde2.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.serde2.</shadedPattern>
                 </relocation>
+                -->
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
@@ -319,6 +322,23 @@
     <!-- Hive - Compile -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-jdbc</artifactId>
+      <version>${hive.version}</version>
+      <classifier>standalone</classifier>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>javax.servlet</groupId>
+          <artifactId>servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <!-- TODO: Reinvestigate PR 633 -->
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
       <scope>compile</scope>
@@ -347,6 +367,7 @@
       <version>${hive.version}</version>
       <scope>compile</scope>
     </dependency>
+    <!-- TODO: Reinvestigate PR 633 -->
 
     <dependency>
       <groupId>org.scalatest</groupId>

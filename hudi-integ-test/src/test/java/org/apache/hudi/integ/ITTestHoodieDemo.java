@@ -21,12 +21,13 @@ package org.apache.hudi.integ;
 import com.google.common.collect.ImmutableList;
 import org.apache.hudi.common.util.collection.Pair;
 import java.util.List;
-import org.junit.Assert;
 import org.junit.Test;
 
 /**
  * Goes through steps described in https://hudi.incubator.apache.org/docker_demo.html
- * Tests only the hive query side
+ *
+ * To run this as a standalone test in the IDE or command line. First bring up the demo setup using
+ * `docker/setup_demo.sh` and then run the test class as you would do normally.
  */
 public class ITTestHoodieDemo extends ITTestBase {
 
@@ -44,167 +45,227 @@ public class ITTestHoodieDemo extends ITTestBase {
   private static String COW_TABLE_NAME = "stock_ticks_cow";
   private static String MOR_TABLE_NAME = "stock_ticks_mor";
 
-  private static String DEMO_CONTAINER_SCRIPT = "/var/hoodie/ws/docker/demo/setup_demo_container.sh";
-  private static String HIVE_SYNC_TOOL = HOODIE_WS_ROOT + "/hudi-hive/run_sync_tool.sh";
+  private static String DEMO_CONTAINER_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/setup_demo_container.sh";
+  private static String MIN_COMMIT_TIME_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/get_min_commit_time.sh";
   private static String HUDI_CLI_TOOL = HOODIE_WS_ROOT + "/hudi-cli/hudi-cli.sh";
-  private static String COMPACTION_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/compaction_commands";
+  private static String COMPACTION_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/compaction.commands";
+  private static String SPARKSQL_BATCH1_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-batch1.commands";
+  private static String SPARKSQL_BATCH2_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-batch2.commands";
+  private static String SPARKSQL_INCREMENTAL_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-incremental.commands";
+  private static String HIVE_TBLCHECK_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-table-check.commands";
+  private static String HIVE_BATCH1_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-batch1.commands";
+  private static String HIVE_BATCH2_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-batch2-after-compaction.commands";
+  private static String HIVE_INCREMENTAL_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-incremental.commands";
+
+
+  private static String HIVE_SYNC_CMD_FMT = " --enable-hive-sync "
+      + " --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000 "
+      + " --hoodie-conf hoodie.datasource.hive_sync.username=hive "
+      + " --hoodie-conf hoodie.datasource.hive_sync.password=hive "
+      + " --hoodie-conf hoodie.datasource.hive_sync.partition_fields=%s "
+      + " --hoodie-conf hoodie.datasource.hive_sync.database=default "
+      + " --hoodie-conf hoodie.datasource.hive_sync.table=%s";
+
 
   @Test
   public void testDemo() throws Exception {
     setupDemo();
+
+    // batch 1
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
-    ingestSecondBatch();
-    testHiveAfterSecondBatch(false, true);
+    testSparkSQLAfterFirstBatch();
+
+    // batch 2
+    ingestSecondBatchAndHiveSync();
+    testHiveAfterSecondBatch();
+    testSparkSQLAfterSecondBatch();
     testIncrementalHiveQuery();
+    testIncrementalSparkSQLQuery();
+
+    // compaction
     scheduleAndRunCompaction();
-    testHiveAfterSecondBatch(true, false);
-    testIncrementalHiveQuery();
+    testHiveAfterSecondBatchAfterCompaction();
+    testIncrementalHiveQueryAfterCompaction();
   }
 
   private void setupDemo() throws Exception {
-    List<String[]> cmds = new ImmutableList.Builder<String[]>()
-        .add(new String[]{"hadoop", "fs", "-mkdir", "-p", HDFS_DATA_DIR})
-        .add(new String[]{"hadoop", "fs", "-copyFromLocal", "-f", INPUT_BATCH_PATH1, HDFS_BATCH_PATH1})
-        .add(new String[]{"/bin/bash", DEMO_CONTAINER_SCRIPT})
+    List<String> cmds = new ImmutableList.Builder<String>()
+        .add("hdfs dfsadmin -safemode wait") // handle NN going into safe mode at times
+        .add("hdfs dfs -mkdir -p " + HDFS_DATA_DIR)
+        .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1)
+        .add("/bin/bash " + DEMO_CONTAINER_SCRIPT)
         .build();
-    executeCommandsInDocker(ADHOC_1_CONTAINER, cmds);
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
-    List<String[]> cmds = new ImmutableList.Builder<String[]>()
-        .add(new String[]{"spark-submit", "--class", "org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer",
-            HUDI_UTILITIES_BUNDLE, "--storage-type", "COPY_ON_WRITE", "--source-class",
-            "org.apache.hudi.utilities.sources.JsonDFSSource", "--source-ordering-field", "ts", "--target-base-path",
-            COW_BASE_PATH, "--target-table", COW_TABLE_NAME, "--props", "/var/demo/config/dfs-source.properties",
-            "--schemaprovider-class", "org.apache.hudi.utilities.schema.FilebasedSchemaProvider"})
-        .add(new String[]{"spark-submit", "--class", "org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer",
-            HUDI_UTILITIES_BUNDLE, "--storage-type", "MERGE_ON_READ", "--source-class",
-            "org.apache.hudi.utilities.sources.JsonDFSSource", "--source-ordering-field", "ts", "--target-base-path",
-            MOR_BASE_PATH, "--target-table", MOR_TABLE_NAME, "--props", "/var/demo/config/dfs-source.properties",
-            "--schemaprovider-class", "org.apache.hudi.utilities.schema.FilebasedSchemaProvider",
-            "--disable-compaction"})
-        .add(new String[]{HIVE_SYNC_TOOL, "--jdbc-url", "jdbc:hive2://hiveserver:10000", "--user", "hive",
-            "--pass", "hive", "--partitioned-by", "dt", "--base-path", COW_BASE_PATH, "--database", "default",
-            "--table", COW_TABLE_NAME})
-        .add(new String[]{HIVE_SYNC_TOOL, "--jdbc-url", "jdbc:hive2://hiveserver:10000", "--user", "hive",
-            "--pass", "hive", "--partitioned-by", "dt", "--base-path", MOR_BASE_PATH, "--database", "default",
-            "--table", MOR_TABLE_NAME})
+    List<String> cmds = new ImmutableList.Builder<String>()
+        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer "
+                + HUDI_UTILITIES_BUNDLE + " --storage-type COPY_ON_WRITE "
+                + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+                + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
+                + " --props /var/demo/config/dfs-source.properties "
+                + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+                + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
+        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer "
+                + HUDI_UTILITIES_BUNDLE + " --storage-type MERGE_ON_READ "
+                + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+                + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
+                + " --props /var/demo/config/dfs-source.properties "
+                + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+                + " --disable-compaction "
+                + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME))
         .build();
 
-    executeCommandsInDocker(ADHOC_1_CONTAINER, cmds);
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
 
   private void testHiveAfterFirstBatch() throws Exception {
-    Pair<String, String> res = executeHiveCommand("show tables", true);
-    Assert.assertTrue(res.getLeft().contains("stock_ticks_cow"));
-    Assert.assertTrue(res.getLeft().contains("stock_ticks_mor"));
-    Assert.assertTrue(res.getLeft().contains("stock_ticks_mor_rt"));
-    executeHiveCommandWithExpectedOutput("show partitions stock_ticks_cow", "dt=2018-08-31");
-    executeHiveCommandWithExpectedOutput("show partitions stock_ticks_mor", "dt=2018-08-31");
-    executeHiveCommandWithExpectedOutput("show partitions stock_ticks_mor_rt", "dt=2018-08-31");
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG'",
-        "GOOG\t2018-08-31 10:29:00");
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG'",
-        "GOOG\t2018-08-31 10:29:00");
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, max(ts) from stock_ticks_mor_rt group by symbol HAVING symbol = 'GOOG'",
-        "GOOG\t2018-08-31 10:29:00");
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG'",
-        "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-            + "GOOG\t2018-08-31 10:29:00\t3391\t1230.1899\t1230.085");
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG'",
-        "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-            + "GOOG\t2018-08-31 10:29:00\t3391\t1230.1899\t1230.085");
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG'",
-        "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-            + "GOOG\t2018-08-31 10:29:00\t3391\t1230.1899\t1230.085");
+    Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_TBLCHECK_COMMANDS);
+    assertStdOutContains(stdOutErrPair, "| stock_ticks_cow     |");
+    assertStdOutContains(stdOutErrPair, "| stock_ticks_mor     |");
+    assertStdOutContains(stdOutErrPair, "| stock_ticks_mor_rt  |");
+
+    assertStdOutContains(stdOutErrPair,
+        "|   partition    |\n"
+        + "+----------------+\n"
+        + "| dt=2018-08-31  |\n"
+        + "+----------------+\n", 3);
+
+    stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
+    assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n"
+        + "+---------+----------------------+\n"
+        + "| GOOG    | 2018-08-31 10:29:00  |\n", 3);
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |          ts          | volume  |    open    |   close   |\n"
+        + "+---------+----------------------+---------+------------+-----------+\n"
+        + "| GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |\n"
+        + "| GOOG    | 2018-08-31 10:29:00  | 3391    | 1230.1899  | 1230.085  |\n", 3);
   }
 
-  private void ingestSecondBatch() throws Exception {
-    List<String[]> cmds = new ImmutableList.Builder<String[]>()
-        .add(new String[]{"hadoop", "fs", "-copyFromLocal", "-f", INPUT_BATCH_PATH2, HDFS_BATCH_PATH2})
-        .add(new String[]{"spark-submit", "--class", "org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer",
-            HUDI_UTILITIES_BUNDLE, "--storage-type", "COPY_ON_WRITE", "--source-class",
-            "org.apache.hudi.utilities.sources.JsonDFSSource", "--source-ordering-field", "ts", "--target-base-path",
-            COW_BASE_PATH, "--target-table", COW_TABLE_NAME, "--props", "/var/demo/config/dfs-source.properties",
-            "--schemaprovider-class", "org.apache.hudi.utilities.schema.FilebasedSchemaProvider"})
-        .add(new String[]{"spark-submit", "--class", "org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer",
-            HUDI_UTILITIES_BUNDLE, "--storage-type", "MERGE_ON_READ", "--source-class",
-            "org.apache.hudi.utilities.sources.JsonDFSSource", "--source-ordering-field", "ts", "--target-base-path",
-            MOR_BASE_PATH, "--target-table", MOR_TABLE_NAME, "--props", "/var/demo/config/dfs-source.properties",
-            "--schemaprovider-class", "org.apache.hudi.utilities.schema.FilebasedSchemaProvider",
-            "--disable-compaction"})
+  private void testSparkSQLAfterFirstBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH1_COMMANDS, true);
+    assertStdOutContains(stdOutErrPair,
+        "|default |stock_ticks_cow   |false      |\n"
+        + "|default |stock_ticks_mor    |false      |\n"
+        + "|default |stock_ticks_mor_rt |false      |");
+    assertStdOutContains(stdOutErrPair,
+        "+------+-------------------+\n"
+        + "|GOOG  |2018-08-31 10:29:00|\n"
+        + "+------+-------------------+", 3);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 3);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:29:00|3391  |1230.1899|1230.085|", 3);
+  }
+
+  private void ingestSecondBatchAndHiveSync() throws Exception {
+    List<String> cmds = new ImmutableList.Builder<String>()
+        .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH2 + " " + HDFS_BATCH_PATH2)
+        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer "
+                + HUDI_UTILITIES_BUNDLE + " --storage-type COPY_ON_WRITE "
+                + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+                + " --target-base-path " + COW_BASE_PATH + " --target-table " + COW_TABLE_NAME
+                + " --props /var/demo/config/dfs-source.properties "
+                + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+                + String.format(HIVE_SYNC_CMD_FMT, "dt", COW_TABLE_NAME))
+        .add("spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer "
+                + HUDI_UTILITIES_BUNDLE + " --storage-type MERGE_ON_READ "
+                + " --source-class org.apache.hudi.utilities.sources.JsonDFSSource --source-ordering-field ts "
+                + " --target-base-path " + MOR_BASE_PATH + " --target-table " + MOR_TABLE_NAME
+                + " --props /var/demo/config/dfs-source.properties "
+                + " --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider "
+                + " --disable-compaction "
+                + String.format(HIVE_SYNC_CMD_FMT, "dt", MOR_TABLE_NAME))
         .build();
-    executeCommandsInDocker(ADHOC_1_CONTAINER, cmds);
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
 
-  private void testHiveAfterSecondBatch(boolean hasCompactionRan, boolean testCOWTable) throws Exception {
+  private void testHiveAfterSecondBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |         _c1          |\n"
+        + "+---------+----------------------+\n"
+        + "| GOOG    | 2018-08-31 10:29:00  |\n");
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |         _c1          |\n"
+        + "+---------+----------------------+\n"
+        + "| GOOG    | 2018-08-31 10:59:00  |\n", 2);
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |          ts          | volume  |    open    |   close   |\n"
+            + "+---------+----------------------+---------+------------+-----------+\n"
+            + "| GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |\n"
+            + "| GOOG    | 2018-08-31 10:29:00  | 3391    | 1230.1899  | 1230.085  |\n");
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |          ts          | volume  |    open    |   close   |\n"
+        + "+---------+----------------------+---------+------------+-----------+\n"
+        + "| GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |\n"
+        + "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |\n", 2);
+  }
 
-    if (testCOWTable) {
-      executeHiveCommandWithExpectedOutput(
-          "select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG'",
-          "GOOG\t2018-08-31 10:59:00");
-    }
+  private void testHiveAfterSecondBatchAfterCompaction() throws Exception {
+    Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH2_COMMANDS);
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |         _c1          |\n"
+        + "+---------+----------------------+\n"
+        + "| GOOG    | 2018-08-31 10:59:00  |", 2);
+    assertStdOutContains(stdOutErrPair, "| symbol  |          ts          | volume  |    open    |   close   |\n"
+        + "+---------+----------------------+---------+------------+-----------+\n"
+        + "| GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |\n"
+        + "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |", 2);
+  }
 
-    if (hasCompactionRan) {
-      executeHiveCommandWithExpectedOutput(
-          "select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG'",
-          "GOOG\t2018-08-31 10:59:00");
-    } else {
-      executeHiveCommandWithExpectedOutput(
-          "select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG'",
-          "GOOG\t2018-08-31 10:29:00");
-    }
+  private void testSparkSQLAfterSecondBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH2_COMMANDS, true);
+    assertStdOutContains(stdOutErrPair,
+        "+------+-------------------+\n"
+        + "|GOOG  |2018-08-31 10:59:00|\n"
+        + "+------+-------------------+", 2);
 
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, max(ts) from stock_ticks_mor_rt group by symbol HAVING symbol = 'GOOG'",
-        "GOOG\t2018-08-31 10:59:00");
-
-    if (testCOWTable) {
-      executeHiveCommandWithExpectedOutput(
-          "select symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG'",
-          "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-              + "GOOG\t2018-08-31 10:59:00\t9021\t1227.1993\t1227.215");
-    }
-
-    if (hasCompactionRan) {
-      executeHiveCommandWithExpectedOutput(
-          "select symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG'",
-          "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-              + "GOOG\t2018-08-31 10:59:00\t9021\t1227.1993\t1227.215");
-    } else {
-      executeHiveCommandWithExpectedOutput(
-          "select symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG'",
-          "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-              + "GOOG\t2018-08-31 10:29:00\t3391\t1230.1899\t1230.085");
-    }
-    executeHiveCommandWithExpectedOutput(
-        "select symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG'",
-        "GOOG\t2018-08-31 09:59:00\t6330\t1230.5\t1230.02\n"
-            + "GOOG\t2018-08-31 10:59:00\t9021\t1227.1993\t1227.215");
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 3);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 2);
+    assertStdOutContains(stdOutErrPair,
+        "+------+-------------------+\n"
+        + "|GOOG  |2018-08-31 10:29:00|\n"
+        + "+------+-------------------+");
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:29:00|3391  |1230.1899|1230.085|");
   }
 
   private void testIncrementalHiveQuery() throws Exception {
-    Pair<String, String> stdoutErr = executeHiveCommand("select min(`_hoodie_commit_time`) from stock_ticks_cow", true);
-    String minInstantTimeForCOW = stdoutErr.getLeft();
-    executeHiveCommandWithExpectedOutput("set hoodie.stock_ticks_cow.consume.mode=INCREMENTAL; "
-            + "set hoodie.stock_ticks_cow.consume.max.commits=3; set hoodie.stock_ticks_cow.consume.start.timestamp="
-            + minInstantTimeForCOW
-            + "; select symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG' "
-            + "and `_hoodie_commit_time` > '" + minInstantTimeForCOW + "';",
-        "GOOG\t2018-08-31 10:59:00\t9021\t1227.1993\t1227.215");
+    String minCommitTime = executeCommandStringInDocker(ADHOC_2_CONTAINER, MIN_COMMIT_TIME_SCRIPT, true)
+        .getStdout().toString();
+    Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_INCREMENTAL_COMMANDS,
+        "min.commit.time=" + minCommitTime +"`");
+    assertStdOutContains(stdOutErrPair, "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |");
+  }
+
+  private void testIncrementalHiveQueryAfterCompaction() throws Exception {
+    String minCommitTime = executeCommandStringInDocker(ADHOC_2_CONTAINER, MIN_COMMIT_TIME_SCRIPT, true)
+        .getStdout().toString();
+    Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_INCREMENTAL_COMMANDS,
+        "min.commit.time=" + minCommitTime +"`");
+    assertStdOutContains(stdOutErrPair,
+        "| symbol  |          ts          | volume  |    open    |   close   |\n"
+        + "+---------+----------------------+---------+------------+-----------+\n"
+        + "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |");
+  }
+
+  private void testIncrementalSparkSQLQuery() throws Exception {
+    Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|");
+    assertStdOutContains(stdOutErrPair,
+        "|default |stock_ticks_cow           |false      |\n"
+        + "|default |stock_ticks_derived_mor   |false      |\n"
+        + "|default |stock_ticks_derived_mor_rt|false      |\n"
+        + "|default |stock_ticks_mor           |false      |\n"
+        + "|default |stock_ticks_mor_rt        |false      |\n"
+        + "|        |stock_ticks_cow_incr      |true       |");
+    assertStdOutContains(stdOutErrPair,
+        "|count(1)|\n"
+        + "+--------+\n"
+        + "|99     |", 2);
   }
 
   private void scheduleAndRunCompaction() throws Exception {
-    List<String[]> cmds = new ImmutableList.Builder<String[]>()
-        .add(new String[]{HUDI_CLI_TOOL, "--cmdfile", COMPACTION_COMMANDS})
-        .build();
-    executeCommandsInDocker(ADHOC_1_CONTAINER, cmds);
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + COMPACTION_COMMANDS, true);
   }
 }

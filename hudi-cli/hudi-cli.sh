@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-HUDI_JAR=`ls $DIR/target/hudi-cli-*-SNAPSHOT.jar | grep -v source | grep -v javadoc`
+HOODIE_JAR=`ls $DIR/target/hudi-cli-*-SNAPSHOT.jar | grep -v source | grep -v javadoc`
 if [ -z "$HADOOP_CONF_DIR" ]; then
   echo "setting hadoop conf dir"
   HADOOP_CONF_DIR="/etc/hadoop/conf"
