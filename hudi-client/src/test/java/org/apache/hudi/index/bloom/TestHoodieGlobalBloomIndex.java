@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -49,18 +49,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import scala.Tuple2;
 
-public class TestHoodieGlobalBloomIndex {
+public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
-  private JavaSparkContext jsc = null;
-  private String basePath = null;
-  private transient FileSystem fs;
   private String schemaStr;
   private Schema schema;
 
@@ -68,14 +63,9 @@ public class TestHoodieGlobalBloomIndex {
   }
 
   @Before
-  public void init() throws IOException {
-    // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieGlobalBloomIndex"));
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    basePath = folder.getRoot().getAbsolutePath();
-    fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+  public void setUp() throws Exception {
+    initSparkContexts("TestHoodieGlobalBloomIndex");
+    initTempFolderAndPath();
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
@@ -83,13 +73,9 @@ public class TestHoodieGlobalBloomIndex {
   }
 
   @After
-  public void clean() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
+  public void tearDown() throws Exception {
+    cleanupSparkContexts();
+    cleanupTempFolderAndPath();
   }
 
   @Test

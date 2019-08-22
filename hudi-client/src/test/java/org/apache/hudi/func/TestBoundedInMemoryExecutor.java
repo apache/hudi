@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -33,28 +34,28 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.func.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import scala.Tuple2;
 
-public class TestBoundedInMemoryExecutor {
+public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
-  private final HoodieTestDataGenerator hoodieTestDataGenerator = new HoodieTestDataGenerator();
   private final String commitTime = HoodieActiveTimeline.createNewCommitTime();
-  private SparkBoundedInMemoryExecutor<HoodieRecord,
-      Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
+
+  @Before
+  public void setUp() throws Exception {
+    initTestDataGenerator();
+  }
 
   @After
-  public void afterTest() {
-    if (this.executor != null) {
-      this.executor.shutdownNow();
-      this.executor = null;
-    }
+  public void tearDown() throws Exception {
+    cleanupTestDataGenerator();
   }
 
   @Test
   public void testExecutor() throws Exception {
 
-    final List<HoodieRecord> hoodieRecords = hoodieTestDataGenerator.generateInserts(commitTime, 100);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, 100);
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
@@ -78,12 +79,20 @@ public class TestBoundedInMemoryExecutor {
           }
         };
 
-    executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig,
-        hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.avroSchema));
-    int result = executor.execute();
-    // It should buffer and write 100 records
-    Assert.assertEquals(result, 100);
-    // There should be no remaining records in the buffer
-    Assert.assertFalse(executor.isRemaining());
+    SparkBoundedInMemoryExecutor<HoodieRecord,
+        Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
+    try {
+      executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig,
+          hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.avroSchema));
+      int result = executor.execute();
+      // It should buffer and write 100 records
+      Assert.assertEquals(result, 100);
+      // There should be no remaining records in the buffer
+      Assert.assertFalse(executor.isRemaining());
+    } finally {
+      if (executor != null) {
+        executor.shutdownNow();
+      }
+    }
   }
 }

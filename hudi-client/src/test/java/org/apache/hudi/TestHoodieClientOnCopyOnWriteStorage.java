@@ -27,7 +27,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -66,15 +65,30 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
-  @Override
-  public void tearDown() throws IOException {
-    super.tearDown();
+  @Before
+  public void setUp() throws Exception {
+    initTempFolderAndPath();
+    initSparkContexts();
+    initTestDataGenerator();
+    initFileSystem();
+    initTableType();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    cleanupTableType();
+    cleanupTestDataGenerator();
+    cleanupSparkContexts();
+    cleanupFileSystem();
+    cleanupTempFolderAndPath();
   }
 
   /**
@@ -137,19 +151,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       boolean isPrepped) throws Exception {
     // Set autoCommit false
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
 
-    String prevCommitTime = "000";
-    String newCommitTime = "001";
-    int numRecords = 200;
-    JavaRDD<WriteStatus> result =
-        insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, writeFn, isPrepped, false, numRecords);
+      String prevCommitTime = "000";
+      String newCommitTime = "001";
+      int numRecords = 200;
+      JavaRDD<WriteStatus> result =
+          insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, writeFn, isPrepped, false,
+              numRecords);
 
-    assertFalse("If Autocommit is false, then commit should not be made automatically",
-        HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
-    assertTrue("Commit should succeed", client.commit(newCommitTime, result));
-    assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+      assertFalse("If Autocommit is false, then commit should not be made automatically",
+          HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+      assertTrue("Commit should succeed", client.commit(newCommitTime, result));
+      assertTrue("After explicit commit, commit file should be created",
+          HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
+    }
   }
 
   /**
@@ -215,15 +231,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     assertNodupesWithinPartition(dedupedRecs);
 
     // Perform write-action and check
-    HoodieWriteClient client = getHoodieWriteClient(
-        getConfigBuilder().combineInput(true, true).build(), false);
-    client.startCommitWithTime(newCommitTime);
-    List<WriteStatus> statuses = writeFn.apply(client, records, newCommitTime).collect();
-    assertNoWriteErrors(statuses);
-    assertEquals(2, statuses.size());
-    assertNodupesWithinPartition(
-        statuses.stream().map(WriteStatus::getWrittenRecords)
-            .flatMap(Collection::stream).collect(Collectors.toList()));
+    try (HoodieWriteClient client = getHoodieWriteClient(
+        getConfigBuilder().combineInput(true, true).build(), false);) {
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> statuses = writeFn.apply(client, records, newCommitTime).collect();
+      assertNoWriteErrors(statuses);
+      assertEquals(2, statuses.size());
+      assertNodupesWithinPartition(
+          statuses.stream().map(WriteStatus::getWrittenRecords)
+              .flatMap(Collection::stream).collect(Collectors.toList()));
+    }
   }
 
   /**
@@ -534,42 +551,43 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   public void testCommitWritesRelativePaths() throws Exception {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-    HoodieWriteClient client = getHoodieWriteClient(cfg);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      HoodieTable table = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
 
-    String commitTime = "000";
-    client.startCommitWithTime(commitTime);
+      String commitTime = "000";
+      client.startCommitWithTime(commitTime);
 
-    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-    JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
+      JavaRDD<WriteStatus> result = client.bulkInsert(writeRecords, commitTime);
 
-    assertTrue("Commit should succeed", client.commit(commitTime, result));
-    assertTrue("After explicit commit, commit file should be created",
-        HoodieTestUtils.doesCommitExist(basePath, commitTime));
+      assertTrue("Commit should succeed", client.commit(commitTime, result));
+      assertTrue("After explicit commit, commit file should be created",
+          HoodieTestUtils.doesCommitExist(basePath, commitTime));
 
-    // Get parquet file paths from commit metadata
-    String actionType = metaClient.getCommitActionType();
-    HoodieInstant commitInstant = new HoodieInstant(false, actionType, commitTime);
-    HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
-    String basePath = table.getMetaClient().getBasePath();
-    Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
+      // Get parquet file paths from commit metadata
+      String actionType = metaClient.getCommitActionType();
+      HoodieInstant commitInstant = new HoodieInstant(false, actionType, commitTime);
+      HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+          .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
+      String basePath = table.getMetaClient().getBasePath();
+      Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
 
-    // Read from commit file
-    String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
-    FileInputStream inputStream = new FileInputStream(filename);
-    String everything = FileIOUtils.readAsUTFString(inputStream);
-    HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-    HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
-    inputStream.close();
+      // Read from commit file
+      String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
+      FileInputStream inputStream = new FileInputStream(filename);
+      String everything = FileIOUtils.readAsUTFString(inputStream);
+      HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
+      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
+      inputStream.close();
 
-    // Compare values in both to make sure they are equal.
-    for (String pathName : paths.values()) {
-      assertTrue(commitPathNames.contains(pathName));
+      // Compare values in both to make sure they are equal.
+      for (String pathName : paths.values()) {
+        assertTrue(commitPathNames.contains(pathName));
+      }
     }
   }
 

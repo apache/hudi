@@ -23,7 +23,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.Sets;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,14 +31,10 @@ import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -52,59 +47,20 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestHoodieCommitArchiveLog {
+public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
-  //NOTE : Be careful in using DFS (FileSystem.class) vs LocalFs(RawLocalFileSystem.class)
-  //The implementation and gurantees of many API's differ, for example check rename(src,dst)
-  // We need to use DFS here instead of LocalFs since the FsDataInputStream.getWrappedStream() returns a
-  // FsDataInputStream instead of a InputStream and thus throws java.lang.ClassCastException:
-  // org.apache.hadoop.fs.FSDataInputStream cannot be cast to org.apache.hadoop.fs.FSInputStream
-  private static MiniDFSCluster dfsCluster;
-  private static DistributedFileSystem dfs;
-  private static HdfsTestService hdfsTestService;
-  private String basePath;
   private Configuration hadoopConf;
-  private JavaSparkContext jsc = null;
-
-  @AfterClass
-  public static void cleanUp() throws Exception {
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
-    // same JVM
-    FileSystem.closeAll();
-
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-      dfsCluster.shutdown();
-    }
-  }
-
-  @BeforeClass
-  public static void setUpDFS() throws IOException {
-    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
-    // same JVM
-    FileSystem.closeAll();
-    if (hdfsTestService == null) {
-      hdfsTestService = new HdfsTestService();
-      dfsCluster = hdfsTestService.start(true);
-      // Create a temp folder as the base path
-      dfs = dfsCluster.getFileSystem();
-    }
-  }
 
   @Before
   public void init() throws Exception {
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieCommitArchiveLog"));
-    basePath = folder.getRoot().getAbsolutePath();
+    initDFS();
+
+    initTempFolderAndPath();
+    initSparkContexts("TestHoodieCommitArchiveLog");
     hadoopConf = dfs.getConf();
     jsc.hadoopConfiguration().addResource(dfs.getConf());
     dfs.mkdirs(new Path(basePath));
@@ -112,13 +68,11 @@ public class TestHoodieCommitArchiveLog {
   }
 
   @After
-  public void clean() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
+  public void clean() throws IOException {
+    cleanupDFS();
+
+    cleanupTempFolderAndPath();
+    cleanupSparkContexts();
   }
 
   @Test
