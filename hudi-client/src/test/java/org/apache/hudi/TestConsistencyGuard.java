@@ -21,36 +21,27 @@ package org.apache.hudi;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.util.ConsistencyGuard;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.FailSafeConsistencyGuard;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestConsistencyGuard {
-  private String basePath;
-  protected transient FileSystem fs;
+public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Before
   public void setup() throws IOException {
-    TemporaryFolder testFolder = new TemporaryFolder();
-    testFolder.create();
-    basePath = testFolder.getRoot().getAbsolutePath();
-    fs = FSUtils.getFs(basePath, new Configuration());
-    if (fs instanceof LocalFileSystem) {
-      LocalFileSystem lfs = (LocalFileSystem) fs;
-      // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
-      // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
-      // So, for the tests, we enforce checksum verification to circumvent the problem
-      lfs.setVerifyChecksum(true);
-    }
+    initTempFolderAndPath();
+    initFileSystemWithDefaultConfiguration();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    cleanupFileSystem();
+    cleanupTempFolderAndPath();
   }
 
   @Test

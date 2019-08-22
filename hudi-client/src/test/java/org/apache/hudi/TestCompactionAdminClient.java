@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,15 +50,19 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   private CompactionAdminClient client;
 
   @Before
-  public void init() throws IOException {
-    super.init();
+  public void setUp() throws Exception {
+    initTempFolderAndPath();
+    initSparkContexts();
     metaClient = HoodieTestUtils.initTableType(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(jsc, basePath);
   }
 
-  @Override
-  public void tearDown() throws IOException {
-    super.tearDown();
+  @After
+  public void tearDown() throws Exception {
+    client.close();
+    metaClient = null;
+    cleanupSparkContexts();
+    cleanupTempFolderAndPath();
   }
 
   @Test
@@ -114,8 +119,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   public void testRepairCompactionPlan() throws Exception {
     int numEntriesPerInstant = 10;
     CompactionTestUtils
-        .setupAndValidateCompactionOperations(metaClient,false, numEntriesPerInstant, numEntriesPerInstant,
-        numEntriesPerInstant, numEntriesPerInstant);
+        .setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant, numEntriesPerInstant,
+            numEntriesPerInstant, numEntriesPerInstant);
     // THere are delta-commits after compaction instant
     validateRepair("000", "001", numEntriesPerInstant, 2 * numEntriesPerInstant);
     // THere are delta-commits after compaction instant
@@ -172,8 +177,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
 
   /**
    * Enssure compaction plan is valid
+   *
    * @param compactionInstant Compaction Instant
-   * @throws Exception
    */
   private void ensureValidCompactionPlan(String compactionInstant) throws Exception {
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
@@ -282,8 +287,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).forEach(fs -> {
           Assert.assertFalse("No Data file must be present", fs.getDataFile().isPresent());
-          Assert.assertTrue("No Log Files", fs.getLogFiles().count() == 0);
-        });
+          Assert.assertTrue("No Log Files", fs.getLogFiles().count() == 0); });
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =

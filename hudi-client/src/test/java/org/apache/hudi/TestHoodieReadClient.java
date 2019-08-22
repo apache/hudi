@@ -20,7 +20,6 @@ package org.apache.hudi;
 
 import static org.junit.Assert.assertTrue;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -29,7 +28,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 @SuppressWarnings("unchecked")
@@ -38,9 +39,22 @@ import org.junit.Test;
  */
 public class TestHoodieReadClient extends TestHoodieClientBase {
 
-  @Override
-  public void tearDown() throws IOException {
-    super.tearDown();
+  @Before
+  public void setUp() throws Exception {
+    initTempFolderAndPath();
+    initTestDataGenerator();
+    initSparkContexts();
+    initFileSystem();
+    initTableType();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    cleanupTableType();
+    cleanupTestDataGenerator();
+    cleanupSparkContexts();
+    cleanupFileSystem();
+    cleanupTempFolderAndPath();
   }
 
   /**
@@ -88,28 +102,30 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    */
   private void testReadFilterExist(HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn) throws Exception {
-    HoodieWriteClient writeClient = getHoodieWriteClient(config);
-    String newCommitTime = writeClient.startCommit();
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+    try (HoodieWriteClient writeClient = getHoodieWriteClient(config);
+        HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());) {
+      String newCommitTime = writeClient.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
 
-    HoodieReadClient readClient = getHoodieReadClient(config.getBasePath());
-    JavaRDD<HoodieRecord> filteredRDD = readClient.filterExists(recordsRDD);
+      JavaRDD<HoodieRecord> filteredRDD = readClient.filterExists(recordsRDD);
 
-    // Should not find any files
-    assertTrue(filteredRDD.collect().size() == 100);
+      // Should not find any files
+      assertTrue(filteredRDD.collect().size() == 100);
 
-    JavaRDD<HoodieRecord> smallRecordsRDD = jsc.parallelize(records.subList(0, 75), 1);
-    // We create three parquet file, each having one record. (3 different partitions)
-    List<WriteStatus> statuses = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime).collect();
-    // Verify there are no errors
-    assertNoWriteErrors(statuses);
+      JavaRDD<HoodieRecord> smallRecordsRDD = jsc.parallelize(records.subList(0, 75), 1);
+      // We create three parquet file, each having one record. (3 different partitions)
+      List<WriteStatus> statuses = writeFn.apply(writeClient, smallRecordsRDD, newCommitTime).collect();
+      // Verify there are no errors
+      assertNoWriteErrors(statuses);
 
-    readClient = getHoodieReadClient(config.getBasePath());
-    filteredRDD = readClient.filterExists(recordsRDD);
-    List<HoodieRecord> result = filteredRDD.collect();
-    // Check results
-    Assert.assertEquals(25, result.size());
+      try (HoodieReadClient anotherReadClient = getHoodieReadClient(config.getBasePath());) {
+        filteredRDD = anotherReadClient.filterExists(recordsRDD);
+        List<HoodieRecord> result = filteredRDD.collect();
+        // Check results
+        Assert.assertEquals(25, result.size());
+      }
+    }
   }
 
   /**
@@ -165,43 +181,44 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> updateFn,
       boolean isPrepped)
       throws Exception {
-    HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
-    //Write 1 (only inserts)
-    String newCommitTime = "001";
-    String initCommitTime = "000";
-    int numRecords = 200;
-    JavaRDD<WriteStatus> result =
-        insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, insertFn, isPrepped,
-            true, numRecords);
-    // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
-    // since they have been modified in the DAG
-    JavaRDD<HoodieRecord> recordRDD =
-        jsc.parallelize(
-            result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
-                .map(record -> new HoodieRecord(record.getKey(), null))
-                .collect(Collectors.toList()));
-    // Should have 100 records in table (check using Index), all in locations marked at commit
-    HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
-    List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
-    checkTaggedRecords(taggedRecords, newCommitTime);
+    try (HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);) {
+      //Write 1 (only inserts)
+      String newCommitTime = "001";
+      String initCommitTime = "000";
+      int numRecords = 200;
+      JavaRDD<WriteStatus> result =
+          insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, insertFn, isPrepped,
+              true, numRecords);
+      // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
+      // since they have been modified in the DAG
+      JavaRDD<HoodieRecord> recordRDD =
+          jsc.parallelize(
+              result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+                  .map(record -> new HoodieRecord(record.getKey(), null))
+                  .collect(Collectors.toList()));
+      // Should have 100 records in table (check using Index), all in locations marked at commit
+      HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
+      List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
+      checkTaggedRecords(taggedRecords, newCommitTime);
 
-    // Write 2 (updates)
-    String prevCommitTime = newCommitTime;
-    newCommitTime = "004";
-    numRecords = 100;
-    String commitTimeBetweenPrevAndNew = "002";
-    result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
-        initCommitTime, numRecords, updateFn, isPrepped,
-        true, numRecords, 200, 2);
-    recordRDD =
-        jsc.parallelize(
-            result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
-                .map(record -> new HoodieRecord(record.getKey(), null))
-                .collect(Collectors.toList()));
-    // Index should be able to locate all updates in correct locations.
-    readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
-    taggedRecords = readClient.tagLocation(recordRDD).collect();
-    checkTaggedRecords(taggedRecords, newCommitTime);
+      // Write 2 (updates)
+      String prevCommitTime = newCommitTime;
+      newCommitTime = "004";
+      numRecords = 100;
+      String commitTimeBetweenPrevAndNew = "002";
+      result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+          Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
+          initCommitTime, numRecords, updateFn, isPrepped,
+          true, numRecords, 200, 2);
+      recordRDD =
+          jsc.parallelize(
+              result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+                  .map(record -> new HoodieRecord(record.getKey(), null))
+                  .collect(Collectors.toList()));
+      // Index should be able to locate all updates in correct locations.
+      readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
+      taggedRecords = readClient.tagLocation(recordRDD).collect();
+      checkTaggedRecords(taggedRecords, newCommitTime);
+    }
   }
 }

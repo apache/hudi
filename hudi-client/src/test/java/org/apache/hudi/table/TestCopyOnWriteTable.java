@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.BloomFilter;
 import org.apache.hudi.common.HoodieClientTestUtils;
@@ -58,33 +59,30 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import scala.Tuple2;
 
-public class TestCopyOnWriteTable {
+public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
   protected static Logger log = LogManager.getLogger(TestCopyOnWriteTable.class);
 
-  private String basePath = null;
-  private transient JavaSparkContext jsc = null;
-
   @Before
-  public void init() throws Exception {
+  public void setUp() throws Exception {
+    initSparkContexts("TestCopyOnWriteTable");
+    initTempFolderAndPath();
+    initTableType();
+    initTestDataGenerator();
+  }
 
-    // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestCopyOnWriteTable"));
-
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    this.basePath = folder.getRoot().getAbsolutePath();
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
-
+  @After
+  public void tearDown() throws Exception {
+    cleanupSparkContexts();
+    cleanupTempFolderAndPath();
+    cleanupTableType();
+    cleanupTestDataGenerator();
   }
 
   @Test
@@ -208,7 +206,7 @@ public class TestCopyOnWriteTable {
     List<WriteStatus> statuses =
         jsc.parallelize(Arrays.asList(1)).map(x -> {
           return newTable.handleUpdate(newCommitTime, updatedRecord1.getCurrentLocation().getFileId(),
-                  updatedRecords.iterator());
+              updatedRecords.iterator());
         }).flatMap(x -> HoodieClientTestUtils.collectStatuses(x).iterator()).collect();
 
     // Check the updated file
@@ -439,7 +437,7 @@ public class TestCopyOnWriteTable {
     final String testPartitionPath = "2016/09/26";
     // Inserts + Updates .. Check updates go together & inserts subsplit, after expanding
     // smallest file
-    UpsertPartitioner partitioner = getUpsertPartitioner(1000 * 1024, 400, 100, 800 * 1024,testPartitionPath,
+    UpsertPartitioner partitioner = getUpsertPartitioner(1000 * 1024, 400, 100, 800 * 1024, testPartitionPath,
         false);
     List<HoodieCopyOnWriteTable.InsertBucket> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
@@ -479,12 +477,11 @@ public class TestCopyOnWriteTable {
     HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     final HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
     String commitTime = "000";
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
-    final List<HoodieRecord> inserts = dataGenerator.generateInsertsWithHoodieAvroPayload(commitTime, 100);
+    final List<HoodieRecord> inserts = dataGen.generateInsertsWithHoodieAvroPayload(commitTime, 100);
     final List<List<WriteStatus>> ws = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return table.handleInsert(commitTime, UUID.randomUUID().toString(), inserts.iterator());
-    }).map(x -> (List<WriteStatus>)HoodieClientTestUtils.collectStatuses(x)).collect();
+    }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
@@ -492,11 +489,11 @@ public class TestCopyOnWriteTable {
     final HoodieCopyOnWriteTable table2 = new HoodieCopyOnWriteTable(config, jsc);
 
     final List<HoodieRecord> updates =
-        dataGenerator.generateUpdatesWithHoodieAvroPayload(commitTime, writeStatus.getWrittenRecords());
+        dataGen.generateUpdatesWithHoodieAvroPayload(commitTime, writeStatus.getWrittenRecords());
 
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       return table2.handleUpdate("001", fileId, updates.iterator());
-    }).map(x -> (List<WriteStatus>)HoodieClientTestUtils.collectStatuses(x)).collect();
+    }).map(x -> (List<WriteStatus>) HoodieClientTestUtils.collectStatuses(x)).collect();
   }
 
   @After

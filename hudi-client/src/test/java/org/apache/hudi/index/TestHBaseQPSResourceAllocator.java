@@ -18,12 +18,10 @@
 
 package org.apache.hudi.index;
 
-import java.io.File;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
-import org.apache.hudi.common.HoodieClientTestUtils;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
@@ -33,53 +31,39 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
 import org.apache.hudi.index.hbase.HBaseIndex;
 import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestHBaseQPSResourceAllocator {
-  private static JavaSparkContext jsc = null;
+public class TestHBaseQPSResourceAllocator extends HoodieClientTestHarness {
+
   private static String tableName = "test_table";
-  private String basePath = null;
-  private static HBaseTestingUtility utility;
-  private static Configuration hbaseConfig;
+  private HBaseTestingUtility utility;
+  private Configuration hbaseConfig;
   private static String QPS_TEST_SUFFIX_PATH = "qps_test_suffix";
 
-  @AfterClass
-  public static void clean() {
-    if (jsc != null) {
-      jsc.stop();
-    }
-  }
-
-  @BeforeClass
-  public static void init() throws Exception {
+  @Before
+  public void setUp() throws Exception {
     utility = new HBaseTestingUtility();
     utility.startMiniCluster();
     hbaseConfig = utility.getConnection().getConfiguration();
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestQPSResourceAllocator"));
+    initSparkContexts("TestQPSResourceAllocator");
+
+    initTempFolderAndPath();
+    basePath = folder.getRoot().getAbsolutePath() + QPS_TEST_SUFFIX_PATH;
+    // Initialize table
+    initTableType();
   }
 
   @After
-  public void clear() {
-    if (basePath != null) {
-      new File(basePath).delete();
+  public void tearDown() throws Exception {
+    cleanupSparkContexts();
+    cleanupTempFolderAndPath();
+    cleanupTableType();
+    if (utility != null) {
+      utility.shutdownMiniCluster();
     }
-  }
-
-  @Before
-  public void before() throws Exception {
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    basePath = folder.getRoot().getAbsolutePath() + QPS_TEST_SUFFIX_PATH;
-    // Initialize table
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
   }
 
   @Test
@@ -122,14 +106,14 @@ public class TestHBaseQPSResourceAllocator {
 
   private HoodieWriteConfig.Builder getConfigBuilder(HoodieHBaseIndexConfig hoodieHBaseIndexConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-               .withParallelism(1, 1).withCompactionConfig(
-                   HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withInlineCompaction(false)
-                       .build()).withAutoCommit(false)
-               .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
-               .forTable("test-trip-table").withIndexConfig(
-                   HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)
-                       .withHBaseIndexConfig(hoodieHBaseIndexConfig)
-                       .build());
+        .withParallelism(1, 1).withCompactionConfig(
+            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withInlineCompaction(false)
+                .build()).withAutoCommit(false)
+        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .forTable("test-trip-table").withIndexConfig(
+            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)
+                .withHBaseIndexConfig(hoodieHBaseIndexConfig)
+                .build());
   }
 
   private HoodieHBaseIndexConfig getConfigWithResourceAllocator(Option<String> resourceAllocatorClass) {

@@ -35,7 +35,7 @@ import org.apache.spark.api.java.JavaSparkContext;
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs)
  * Also, manages embedded timeline-server if enabled.
  */
-public abstract class AbstractHoodieClient implements Serializable {
+public abstract class AbstractHoodieClient implements Serializable, AutoCloseable {
 
   private static final Logger logger = LogManager.getLogger(AbstractHoodieClient.class);
 
