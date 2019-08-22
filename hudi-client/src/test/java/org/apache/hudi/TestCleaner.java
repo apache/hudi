@@ -72,7 +72,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerTaskEnd;
 import org.apache.spark.util.AccumulatorV2;
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import scala.collection.Iterator;
 
@@ -84,9 +86,22 @@ public class TestCleaner extends TestHoodieClientBase {
   private static final int BIG_BATCH_INSERT_SIZE = 500;
   private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
 
-  @Override
-  public void tearDown() throws IOException {
-    super.tearDown();
+  @Before
+  public void setUp() throws Exception {
+    initTempFolderAndPath();
+    initSparkContexts();
+    initTestDataGenerator();
+    initFileSystem();
+    initTableType();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    cleanupTableType();
+    cleanupSparkContexts();
+    cleanupTestDataGenerator();
+    cleanupFileSystem();
+    cleanupTempFolderAndPath();
   }
 
   /**
@@ -194,108 +209,110 @@ public class TestCleaner extends TestHoodieClientBase {
         .withFinalizeWriteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
-    HoodieWriteClient client = getHoodieWriteClient(cfg);
+    try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
 
-    final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
-        generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
+      final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
+          generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
 
-    final Function2<List<HoodieRecord>, String, Integer> recordUpsertGenWrappedFunction =
-        generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateUniqueUpdates);
+      final Function2<List<HoodieRecord>, String, Integer> recordUpsertGenWrappedFunction =
+          generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateUniqueUpdates);
 
-    insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn);
+      insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn);
 
-    Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, getConfig(), jsc);
-    for (String partitionPath : dataGen.getPartitionPaths()) {
-      TableFileSystemView fsView = table.getFileSystemView();
-      Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst()
-          .map(fg -> {
-            fg.getLatestFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getFileGroupId(), fs));
-            return true;
-          }));
-      if (added.isPresent()) {
-        // Select only one file-group for compaction
-        break;
-      }
-    }
-
-    // Create workload with selected file-slices
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = compactionFileIdToLatestFileSlice.entrySet().stream()
-        .map(e -> Pair.of(e.getKey().getPartitionPath(), e.getValue())).collect(Collectors.toList());
-    HoodieCompactionPlan compactionPlan =
-        CompactionUtils.buildFromFileSlices(partitionFileSlicePairs, Option.empty(), Option.empty());
-    List<String> instantTimes = HoodieTestUtils.monotonicIncreasingCommitTimestamps(9, 1);
-    String compactionTime = instantTimes.get(0);
-    table.getActiveTimeline().saveToCompactionRequested(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
-        AvroUtils.serializeCompactionPlan(compactionPlan));
-
-    instantTimes = instantTimes.subList(1, instantTimes.size());
-    // Keep doing some writes and clean inline. Make sure we have expected number of files
-    // remaining.
-    for (String newInstantTime : instantTimes) {
-      try {
-        client.startCommitWithTime(newInstantTime);
-        List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newInstantTime, 100);
-
-        List<WriteStatus> statuses =
-            upsertFn.apply(client, jsc.parallelize(records, 1), newInstantTime).collect();
-        // Verify there are no errors
-        assertNoWriteErrors(statuses);
-
-        metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-        table = HoodieTable.getHoodieTable(metadata, getConfig(), jsc);
-        HoodieTimeline timeline = table.getMetaClient().getCommitsTimeline();
-
+      Map<HoodieFileGroupId, FileSlice> compactionFileIdToLatestFileSlice = new HashMap<>();
+      HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      HoodieTable table = HoodieTable.getHoodieTable(metadata, getConfig(), jsc);
+      for (String partitionPath : dataGen.getPartitionPaths()) {
         TableFileSystemView fsView = table.getFileSystemView();
-        // Need to ensure the following
-        for (String partitionPath : dataGen.getPartitionPaths()) {
-          // compute all the versions of all files, from time 0
-          HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
-          for (HoodieInstant entry : timeline.getInstants().collect(Collectors.toList())) {
-            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(timeline.getInstantDetails(entry).get(), HoodieCommitMetadata.class);
-
-            for (HoodieWriteStat wstat : commitMetadata.getWriteStats(partitionPath)) {
-              if (!fileIdToVersions.containsKey(wstat.getFileId())) {
-                fileIdToVersions.put(wstat.getFileId(), new TreeSet<>());
-              }
-              fileIdToVersions.get(wstat.getFileId()).add(FSUtils.getCommitTime(new Path(wstat.getPath()).getName()));
-            }
-          }
-
-          List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
-
-          for (HoodieFileGroup fileGroup : fileGroups) {
-            if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
-              // Ensure latest file-slice selected for compaction is retained
-              Option<HoodieDataFile> dataFileForCompactionPresent =
-                  Option.fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> {
-                    return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId())
-                        .getBaseInstantTime().equals(df.getCommitTime());
-                  }).findAny());
-              Assert.assertTrue("Data File selected for compaction is retained",
-                  dataFileForCompactionPresent.isPresent());
-            } else {
-              // file has no more than max versions
-              String fileId = fileGroup.getFileGroupId().getFileId();
-              List<HoodieDataFile> dataFiles = fileGroup.getAllDataFiles().collect(Collectors.toList());
-
-              assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
-                  dataFiles.size() <= maxVersions);
-
-              // Each file, has the latest N versions (i.e cleaning gets rid of older versions)
-              List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
-              for (int i = 0; i < dataFiles.size(); i++) {
-                assertEquals("File " + fileId + " does not have latest versions on commits" + commitedVersions,
-                    Iterables.get(dataFiles, i).getCommitTime(), commitedVersions.get(commitedVersions.size() - 1 - i));
-              }
-            }
-          }
+        Option<Boolean> added = Option.fromJavaOptional(fsView.getAllFileGroups(partitionPath).findFirst()
+            .map(fg -> {
+              fg.getLatestFileSlice().map(fs -> compactionFileIdToLatestFileSlice.put(fg.getFileGroupId(), fs));
+              return true;
+            }));
+        if (added.isPresent()) {
+          // Select only one file-group for compaction
+          break;
         }
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
+      }
+
+      // Create workload with selected file-slices
+      List<Pair<String, FileSlice>> partitionFileSlicePairs = compactionFileIdToLatestFileSlice.entrySet().stream()
+          .map(e -> Pair.of(e.getKey().getPartitionPath(), e.getValue())).collect(Collectors.toList());
+      HoodieCompactionPlan compactionPlan =
+          CompactionUtils.buildFromFileSlices(partitionFileSlicePairs, Option.empty(), Option.empty());
+      List<String> instantTimes = HoodieTestUtils.monotonicIncreasingCommitTimestamps(9, 1);
+      String compactionTime = instantTimes.get(0);
+      table.getActiveTimeline().saveToCompactionRequested(
+          new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
+          AvroUtils.serializeCompactionPlan(compactionPlan));
+
+      instantTimes = instantTimes.subList(1, instantTimes.size());
+      // Keep doing some writes and clean inline. Make sure we have expected number of files
+      // remaining.
+      for (String newInstantTime : instantTimes) {
+        try {
+          client.startCommitWithTime(newInstantTime);
+          List<HoodieRecord> records = recordUpsertGenWrappedFunction.apply(newInstantTime, 100);
+
+          List<WriteStatus> statuses =
+              upsertFn.apply(client, jsc.parallelize(records, 1), newInstantTime).collect();
+          // Verify there are no errors
+          assertNoWriteErrors(statuses);
+
+          metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+          table = HoodieTable.getHoodieTable(metadata, getConfig(), jsc);
+          HoodieTimeline timeline = table.getMetaClient().getCommitsTimeline();
+
+          TableFileSystemView fsView = table.getFileSystemView();
+          // Need to ensure the following
+          for (String partitionPath : dataGen.getPartitionPaths()) {
+            // compute all the versions of all files, from time 0
+            HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
+            for (HoodieInstant entry : timeline.getInstants().collect(Collectors.toList())) {
+              HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                  .fromBytes(timeline.getInstantDetails(entry).get(), HoodieCommitMetadata.class);
+
+              for (HoodieWriteStat wstat : commitMetadata.getWriteStats(partitionPath)) {
+                if (!fileIdToVersions.containsKey(wstat.getFileId())) {
+                  fileIdToVersions.put(wstat.getFileId(), new TreeSet<>());
+                }
+                fileIdToVersions.get(wstat.getFileId()).add(FSUtils.getCommitTime(new Path(wstat.getPath()).getName()));
+              }
+            }
+
+            List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
+
+            for (HoodieFileGroup fileGroup : fileGroups) {
+              if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
+                // Ensure latest file-slice selected for compaction is retained
+                Option<HoodieDataFile> dataFileForCompactionPresent =
+                    Option.fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> {
+                      return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId())
+                          .getBaseInstantTime().equals(df.getCommitTime());
+                    }).findAny());
+                Assert.assertTrue("Data File selected for compaction is retained",
+                    dataFileForCompactionPresent.isPresent());
+              } else {
+                // file has no more than max versions
+                String fileId = fileGroup.getFileGroupId().getFileId();
+                List<HoodieDataFile> dataFiles = fileGroup.getAllDataFiles().collect(Collectors.toList());
+
+                assertTrue("fileId " + fileId + " has more than " + maxVersions + " versions",
+                    dataFiles.size() <= maxVersions);
+
+                // Each file, has the latest N versions (i.e cleaning gets rid of older versions)
+                List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
+                for (int i = 0; i < dataFiles.size(); i++) {
+                  assertEquals("File " + fileId + " does not have latest versions on commits" + commitedVersions,
+                      Iterables.get(dataFiles, i).getCommitTime(),
+                      commitedVersions.get(commitedVersions.size() - 1 - i));
+                }
+              }
+            }
+          }
+        } catch (IOException ioe) {
+          throw new RuntimeException(ioe);
+        }
       }
     }
   }

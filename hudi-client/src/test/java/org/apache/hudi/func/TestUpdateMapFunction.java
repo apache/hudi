@@ -20,8 +20,6 @@ package org.apache.hudi.func;
 
 import static org.junit.Assert.fail;
 
-import java.io.File;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -29,8 +27,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -45,37 +43,24 @@ import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestUpdateMapFunction implements Serializable {
-
-  private String basePath = null;
-  private transient JavaSparkContext jsc = null;
+public class TestUpdateMapFunction extends HoodieClientTestHarness {
 
   @Before
-  public void init() throws Exception {
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    this.basePath = folder.getRoot().getAbsolutePath();
+  public void setUp() throws Exception {
+    initTempFolderAndPath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
-    // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestUpdateMapFunction"));
+    initSparkContexts("TestUpdateMapFunction");
   }
 
   @After
-  public void clean() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
+  public void tearDown() throws Exception {
+    cleanupTempFolderAndPath();
+    cleanupSparkContexts();
   }
 
   @Test

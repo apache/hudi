@@ -21,15 +21,12 @@ package org.apache.hudi.io;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
-import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -46,56 +43,36 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
-import org.apache.hudi.io.compact.HoodieCompactor;
-import org.apache.hudi.io.compact.HoodieRealtimeTableCompactor;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestHoodieCompactor {
+public class TestHoodieCompactor extends HoodieClientTestHarness {
 
-  private transient JavaSparkContext jsc = null;
-  private String basePath = null;
-  private HoodieCompactor compactor;
-  private transient HoodieTestDataGenerator dataGen = null;
-  private transient FileSystem fs;
-  private Configuration hadoopConf;
   private HoodieWriteClient writeClient;
+  private Configuration hadoopConf;
 
   @Before
-  public void init() throws IOException {
+  public void setUp() throws Exception {
     // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieCompactor"));
+    initSparkContexts("TestHoodieCompactor");
 
     // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    basePath = folder.getRoot().getAbsolutePath();
+    initTempFolderAndPath();
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath, hadoopConf);
     HoodieTestUtils.initTableType(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
-
-    dataGen = new HoodieTestDataGenerator();
-    compactor = new HoodieRealtimeTableCompactor();
+    initTestDataGenerator();
   }
 
   @After
-  public void clean() {
-    if (null != writeClient) {
-      writeClient.close();
-      writeClient = null;
-    }
-
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
+  public void tearDown() throws Exception {
+    cleanupFileSystem();
+    cleanupTestDataGenerator();
+    cleanupTempFolderAndPath();
+    cleanupSparkContexts();
   }
 
   private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
@@ -137,74 +114,81 @@ public class TestHoodieCompactor {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = getConfig();
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    HoodieWriteClient writeClient = getWriteClient(config);
+    try (HoodieWriteClient writeClient = getWriteClient(config);) {
 
-    String newCommitTime = writeClient.startCommit();
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-    writeClient.insert(recordsRDD, newCommitTime).collect();
+      String newCommitTime = writeClient.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
 
-    String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
-    JavaRDD<WriteStatus> result =
-        table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
-    assertTrue("If there is nothing to compact, result will be empty", result.isEmpty());
+      String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+      JavaRDD<WriteStatus> result =
+          table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
+      assertTrue("If there is nothing to compact, result will be empty", result.isEmpty());
+    }
   }
 
   @Test
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
-    HoodieWriteClient writeClient = getWriteClient(config);
-    String newCommitTime = "100";
-    writeClient.startCommitWithTime(newCommitTime);
+    try (HoodieWriteClient writeClient = getWriteClient(config);) {
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
 
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
-    JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
-    List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      List<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime).collect();
 
-    // Update all the 100 records
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      // Update all the 100 records
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
-    newCommitTime = "101";
-    writeClient.startCommitWithTime(newCommitTime);
+      newCommitTime = "101";
+      writeClient.startCommitWithTime(newCommitTime);
 
-    List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
-    JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
-    HoodieIndex index = new HoodieBloomIndex<>(config);
-    updatedRecords = index.tagLocation(updatedRecordsRDD, jsc, table).collect();
+      List<HoodieRecord> updatedRecords = dataGen.generateUpdates(newCommitTime, records);
+      JavaRDD<HoodieRecord> updatedRecordsRDD = jsc.parallelize(updatedRecords, 1);
+      HoodieIndex index = new HoodieBloomIndex<>(config);
+      updatedRecords = index.tagLocation(updatedRecordsRDD, jsc, table).collect();
 
-    // Write them to corresponding avro logfiles
-    HoodieTestUtils
-        .writeRecordsToLogFiles(fs, metaClient.getBasePath(), HoodieTestDataGenerator.avroSchemaWithMetadataFields,
-            updatedRecords);
+      // Write them to corresponding avro logfiles
+      HoodieTestUtils
+          .writeRecordsToLogFiles(fs, metaClient.getBasePath(), HoodieTestDataGenerator.avroSchemaWithMetadataFields,
+              updatedRecords);
 
-    // Verify that all data file has one log file
-    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    for (String partitionPath : dataGen.getPartitionPaths()) {
-      List<FileSlice> groupedLogFiles = table.getRTFileSystemView().getLatestFileSlices(partitionPath)
-          .collect(Collectors.toList());
-      for (FileSlice fileSlice : groupedLogFiles) {
-        assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
+      // Verify that all data file has one log file
+      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        List<FileSlice> groupedLogFiles = table.getRTFileSystemView().getLatestFileSlices(partitionPath)
+            .collect(Collectors.toList());
+        for (FileSlice fileSlice : groupedLogFiles) {
+          assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
+        }
+      }
+
+      // Do a compaction
+      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      table = HoodieTable.getHoodieTable(metaClient, config, jsc);
+
+      String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+      JavaRDD<WriteStatus> result =
+          table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
+
+      // Verify that all partition paths are present in the WriteStatus result
+      for (String partitionPath : dataGen.getPartitionPaths()) {
+        List<WriteStatus> writeStatuses = result.collect();
+        assertTrue(writeStatuses.stream()
+            .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath))
+            .count() > 0);
       }
     }
+  }
 
-    // Do a compaction
-    metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-
-    String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
-    JavaRDD<WriteStatus> result =
-        table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
-
-    // Verify that all partition paths are present in the WriteStatus result
-    for (String partitionPath : dataGen.getPartitionPaths()) {
-      List<WriteStatus> writeStatuses = result.collect();
-      assertTrue(writeStatuses.stream()
-          .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath))
-          .count() > 0);
-    }
+  @Override
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 
   // TODO - after modifying HoodieReadClient to support realtime tables - add more tests to make

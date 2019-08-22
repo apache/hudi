@@ -28,14 +28,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -55,23 +54,20 @@ import org.junit.Before;
 import org.junit.Test;
 import scala.Tuple2;
 
-public class TestBoundedInMemoryQueue {
+public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
-  private final HoodieTestDataGenerator hoodieTestDataGenerator = new HoodieTestDataGenerator();
   private final String commitTime = HoodieActiveTimeline.createNewCommitTime();
-  private ExecutorService executorService = null;
 
   @Before
-  public void beforeTest() {
-    this.executorService = Executors.newFixedThreadPool(2);
+  public void setUp() throws Exception {
+    initTestDataGenerator();
+    initExecutorServiceWithFixedThreadPool(2);
   }
 
   @After
-  public void afterTest() {
-    if (this.executorService != null) {
-      this.executorService.shutdownNow();
-      this.executorService = null;
-    }
+  public void tearDown() throws Exception {
+    cleanupTestDataGenerator();
+    cleanupExecutorService();
   }
 
   // Test to ensure that we are reading all records from queue iterator in the same order
@@ -80,7 +76,7 @@ public class TestBoundedInMemoryQueue {
   @Test(timeout = 60000)
   public void testRecordReading() throws Exception {
     final int numRecords = 128;
-    final List<HoodieRecord> hoodieRecords = hoodieTestDataGenerator.generateInserts(commitTime, numRecords);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, numRecords);
     final BoundedInMemoryQueue<HoodieRecord, HoodieInsertValueGenResult<HoodieRecord>> queue =
         new BoundedInMemoryQueue(FileIOUtils.KB, getTransformFunction(HoodieTestDataGenerator.avroSchema));
     // Produce
@@ -128,7 +124,7 @@ public class TestBoundedInMemoryQueue {
     Map<String, Tuple2<Integer, Integer>> keyToProducerAndIndexMap = new HashMap<>();
 
     for (int i = 0; i < numProducers; i++) {
-      List<HoodieRecord> pRecs = hoodieTestDataGenerator.generateInserts(commitTime, numRecords);
+      List<HoodieRecord> pRecs = dataGen.generateInserts(commitTime, numRecords);
       int j = 0;
       for (HoodieRecord r : pRecs) {
         Assert.assertTrue(!keyToProducerAndIndexMap.containsKey(r.getRecordKey()));
@@ -211,7 +207,7 @@ public class TestBoundedInMemoryQueue {
   @Test(timeout = 60000)
   public void testMemoryLimitForBuffering() throws Exception {
     final int numRecords = 128;
-    final List<HoodieRecord> hoodieRecords = hoodieTestDataGenerator.generateInserts(commitTime, numRecords);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, numRecords);
     // maximum number of records to keep in memory.
     final int recordLimit = 5;
     final SizeEstimator<HoodieInsertValueGenResult<HoodieRecord>> sizeEstimator =
@@ -262,7 +258,7 @@ public class TestBoundedInMemoryQueue {
   @Test(timeout = 60000)
   public void testException() throws Exception {
     final int numRecords = 256;
-    final List<HoodieRecord> hoodieRecords = hoodieTestDataGenerator.generateInserts(commitTime, numRecords);
+    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(commitTime, numRecords);
     final SizeEstimator<Tuple2<HoodieRecord, Option<IndexedRecord>>> sizeEstimator =
         new DefaultSizeEstimator<>();
     // queue memory limit

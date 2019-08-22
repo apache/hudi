@@ -22,9 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieClientTestUtils;
@@ -40,7 +37,6 @@ import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload.MetadataMergeWriteStatus;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
@@ -49,7 +45,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
-import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -61,26 +56,14 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SQLContext;
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
-import org.junit.rules.TemporaryFolder;
 
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests
  */
-public class TestHoodieClientBase implements Serializable {
+public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
-
-  protected transient JavaSparkContext jsc = null;
-  protected transient SQLContext sqlContext;
-  protected transient FileSystem fs;
-  protected String basePath = null;
-  protected TemporaryFolder folder = null;
-  protected transient HoodieTestDataGenerator dataGen = null;
 
   private HoodieWriteClient writeClient;
   private HoodieReadClient readClient;
@@ -120,61 +103,6 @@ public class TestHoodieClientBase implements Serializable {
     }
   }
 
-  @Before
-  public void init() throws IOException {
-    // Initialize a local spark env
-    jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest("TestHoodieClient"));
-    jsc.setLogLevel("ERROR");
-
-    //SQLContext stuff
-    sqlContext = new SQLContext(jsc);
-
-    folder = new TemporaryFolder();
-    folder.create();
-    basePath = folder.getRoot().getAbsolutePath();
-
-    fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
-    if (fs instanceof LocalFileSystem) {
-      LocalFileSystem lfs = (LocalFileSystem) fs;
-      // With LocalFileSystem, with checksum disabled, fs.open() returns an inputStream which is FSInputStream
-      // This causes ClassCastExceptions in LogRecordScanner (and potentially other places) calling fs.open
-      // So, for the tests, we enforce checksum verification to circumvent the problem
-      lfs.setVerifyChecksum(true);
-    }
-    HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, getTableType());
-    dataGen = new HoodieTestDataGenerator();
-  }
-
-  @After
-  /**
-   * Properly release resources at end of each test
-   */
-  public void tearDown() throws IOException {
-    closeWriteClient();
-    closeReadClient();
-
-    if (null != sqlContext) {
-      logger.info("Clearing sql context cache of spark-session used in previous test-case");
-      sqlContext.clearCache();
-    }
-
-    if (null != jsc) {
-      logger.info("Closing spark context used in previous test-case");
-      jsc.close();
-    }
-
-    // Create a temp folder as the base path
-    if (null != folder) {
-      logger.info("Explicitly removing workspace used in previously run test-case");
-      folder.delete();
-    }
-
-    if (null != fs) {
-      logger.warn("Closing file-system instance used in previous test-run");
-      fs.close();
-    }
-  }
-
   /**
    * Get Default HoodieWriteConfig for tests
    *
@@ -200,8 +128,8 @@ public class TestHoodieClientBase implements Serializable {
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(
-          FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
-              .build());
+            FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
+                .build());
   }
 
   protected HoodieTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
@@ -469,16 +397,6 @@ public class TestHoodieClientBase implements Serializable {
     return result;
   }
 
-  @After
-  public void clean() {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
-  }
-
   /**
    * Get Cleaner state corresponding to a partition path
    *
@@ -537,7 +455,4 @@ public class TestHoodieClientBase implements Serializable {
     R apply(T1 v1, T2 v2, T3 v3) throws IOException;
   }
 
-  protected HoodieTableType getTableType() {
-    return HoodieTableType.COPY_ON_WRITE;
-  }
 }
