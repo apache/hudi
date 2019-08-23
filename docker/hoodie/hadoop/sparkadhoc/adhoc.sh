@@ -24,8 +24,10 @@
 
 
 export SPARK_HOME=/opt/spark
+export PRESTO_CLI_CMD="/usr/local/bin/presto --server presto-coordinator-1"
 
 date
 echo "SPARK HOME is : $SPARK_HOME"
+echo "PRESTO CLI CMD is : $PRESTO_CLI_CMD"
 
 tail -f /dev/null
