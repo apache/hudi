@@ -21,10 +21,16 @@ ARG HIVE_VERSION=2.3.3
 ARG SPARK_VERSION=2.3.1
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
 
+ARG PRESTO_VERSION=0.217
 COPY adhoc.sh /opt/spark
 
 ENV SPARK_WORKER_WEBUI_PORT 8081
 ENV SPARK_WORKER_LOG /spark/logs
 ENV SPARK_MASTER "spark://spark-master:7077"
+ENV PRESTO_VERSION ${PRESTO_VERSION}
 
+RUN set -x \
+    ## presto-client
+    && wget -q -O /usr/local/bin/presto https://repo1.maven.org/maven2/com/facebook/presto/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar \
+    && chmod +x /usr/local/bin/presto
 CMD ["/bin/bash", "/opt/spark/adhoc.sh"]
