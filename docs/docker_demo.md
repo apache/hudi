@@ -76,7 +76,9 @@ Creating hivemetastore             ... done
 Creating historyserver             ... done
 Creating hiveserver                ... done
 Creating datanode1                 ... done
+Creating presto-coordinator-1      ... done
 Creating sparkmaster               ... done
+Creating presto-worker-1           ... done
 Creating adhoc-1                   ... done
 Creating adhoc-2                   ... done
 Creating spark-worker-1            ... done
@@ -427,6 +429,96 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 
 ```
 
+#### Step 4 (c): Run Presto Queries
+
+Here are the Presto queries for similar Hive and Spark queries. Currently, Hudi does not support Presto queries on realtime views.
+
+```
+docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
+presto> show catalogs;
+  Catalog
+-----------
+ hive
+ jmx
+ localfile
+ system
+(4 rows)
+
+Query 20190817_134851_00000_j8rcz, FINISHED, 1 node
+Splits: 19 total, 19 done (100.00%)
+0:04 [0 rows, 0B] [0 rows/s, 0B/s]
+
+presto> use hive.default;
+USE
+presto:default> show tables;
+       Table
+--------------------
+ stock_ticks_cow
+ stock_ticks_mor
+ stock_ticks_mor_rt
+(3 rows)
+
+Query 20190822_181000_00001_segyw, FINISHED, 2 nodes
+Splits: 19 total, 19 done (100.00%)
+0:05 [3 rows, 99B] [0 rows/s, 18B/s]
+
+
+# COPY-ON-WRITE Queries:
+=========================
+
+
+presto:default> select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1
+--------+---------------------
+ GOOG   | 2018-08-31 10:29:00
+(1 row)
+
+Query 20190822_181011_00002_segyw, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0:12 [197 rows, 613B] [16 rows/s, 50B/s]
+
+presto:default> select "_hoodie_commit_time", symbol, ts, volume, open, close from stock_ticks_cow where symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
+---------------------+--------+---------------------+--------+-----------+----------
+ 20190822180221      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
+ 20190822180221      | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085
+(2 rows)
+
+Query 20190822_181141_00003_segyw, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0:02 [197 rows, 613B] [109 rows/s, 341B/s]
+
+
+# Merge-On-Read Queries:
+==========================
+
+Lets run similar queries against M-O-R dataset. 
+
+# Run against ReadOptimized View. Notice that the latest timestamp is 10:29
+presto:default> select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1
+--------+---------------------
+ GOOG   | 2018-08-31 10:29:00
+(1 row)
+
+Query 20190822_181158_00004_segyw, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0:02 [197 rows, 613B] [110 rows/s, 343B/s]
+
+
+presto:default>  select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
+---------------------+--------+---------------------+--------+-----------+----------
+ 20190822180250      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
+ 20190822180250      | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085
+(2 rows)
+
+Query 20190822_181256_00006_segyw, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0:02 [197 rows, 613B] [92 rows/s, 286B/s]
+
+presto:default> exit
+```
 
 #### Step 5: Upload second batch to Kafka and run DeltaStreamer to ingest
 
@@ -599,6 +691,70 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 exit
 exit
 ```
+
+#### Step 6(c): Run Presto Queries
+
+Running the same queries on Presto for ReadOptimized views. 
+
+
+```
+docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
+presto> use hive.default;
+USE
+
+# Copy On Write Table:
+
+presto:default>select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1
+--------+---------------------
+ GOOG   | 2018-08-31 10:59:00
+(1 row)
+
+Query 20190822_181530_00007_segyw, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0:02 [197 rows, 613B] [125 rows/s, 389B/s]
+
+presto:default>select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
+---------------------+--------+---------------------+--------+-----------+----------
+ 20190822180221      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
+ 20190822181433      | GOOG   | 2018-08-31 10:59:00 |   9021 | 1227.1993 | 1227.215
+(2 rows)
+
+Query 20190822_181545_00008_segyw, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0:02 [197 rows, 613B] [106 rows/s, 332B/s]
+
+As you can notice, the above queries now reflect the changes that came as part of ingesting second batch.
+
+
+# Merge On Read Table:
+
+# Read Optimized View
+presto:default> select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
+ symbol |        _col1
+--------+---------------------
+ GOOG   | 2018-08-31 10:29:00
+(1 row)
+
+Query 20190822_181602_00009_segyw, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0:01 [197 rows, 613B] [139 rows/s, 435B/s]
+
+presto:default>select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
+---------------------+--------+---------------------+--------+-----------+----------
+ 20190822180250      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
+ 20190822180250      | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085
+(2 rows)
+
+Query 20190822_181615_00010_segyw, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0:01 [197 rows, 613B] [154 rows/s, 480B/s]
+
+presto:default> exit
+```
+
 
 #### Step 7 : Incremental Query for COPY-ON-WRITE Table
 
@@ -850,7 +1006,7 @@ exit
 exit
 ```
 
-##### Read Optimized and Realtime Views for MOR with Spark-SQL after compaction
+##### Step 10: Read Optimized and Realtime Views for MOR with Spark-SQL after compaction
 
 ```
 docker exec -it adhoc-1 /bin/bash
@@ -888,6 +1044,39 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 | 20180924064636       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924070031       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
 +----------------------+---------+----------------------+---------+------------+-----------+--+
+```
+
+##### Step 11:  Presto queries over Read Optimized View on MOR dataset after compaction
+
+```
+docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
+presto> use hive.default;
+USE
+
+# Read Optimized View
+resto:default> select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
+  symbol |        _col1
+--------+---------------------
+ GOOG   | 2018-08-31 10:59:00
+(1 row)
+
+Query 20190822_182319_00011_segyw, FINISHED, 1 node
+Splits: 49 total, 49 done (100.00%)
+0:01 [197 rows, 613B] [133 rows/s, 414B/s]
+
+presto:default> select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';
+ _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
+---------------------+--------+---------------------+--------+-----------+----------
+ 20190822180250      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
+ 20190822181944      | GOOG   | 2018-08-31 10:59:00 |   9021 | 1227.1993 | 1227.215
+(2 rows)
+
+Query 20190822_182333_00012_segyw, FINISHED, 1 node
+Splits: 17 total, 17 done (100.00%)
+0:02 [197 rows, 613B] [98 rows/s, 307B/s]
+
+presto:default>
+
 ```
 
 
