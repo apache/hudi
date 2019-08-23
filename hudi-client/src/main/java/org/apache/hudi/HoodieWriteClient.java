@@ -101,6 +101,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final transient HoodieIndex<T> index;
   private transient Timer.Context writeContext = null;
   private transient Timer.Context compactionTimer;
+  private transient Timer.Context indexLookupContext=null;
 
   /**
    * @param jsc
@@ -152,9 +153,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(
         createMetaClient(true), config, jsc);
-
+    indexLookupContext=metrics.getIndexLookupCtx();
     JavaRDD<HoodieRecord<T>> recordsWithLocation = index.tagLocation(hoodieRecords, jsc, table);
-    return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
+    recordsWithLocation=recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
+    metrics.updateIndexLookupMetircs(metrics.getDurationInMs(indexLookupContext.stop()),"numIndexedRecords",recordsWithLocation.count());
+    indexLookupContext=null;
+    return recordsWithLocation;
   }
 
   /**
@@ -168,7 +172,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
           config.shouldCombineBeforeUpsert(), records, config.getUpsertShuffleParallelism());
 
       // perform index loop up to get existing location of records
+      indexLookupContext=metrics.getIndexLookupCtx();
       JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table);
+      metrics.updateIndexLookupMetircs(metrics.getDurationInMs(indexLookupContext.stop()),"numIndexedRecords",taggedRecords.count());
+      indexLookupContext=null;
       return upsertRecordsInternal(taggedRecords, commitTime, table, true);
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
@@ -468,8 +475,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     writeStatusRDD = writeStatusRDD.persist(config.getWriteStatusStorageLevel());
+    indexLookupContext=metrics.getIndexLookupCtx();
     // Update the index back
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);
+    metrics.updateIndexLookupMetircs(metrics.getDurationInMs(indexLookupContext.stop()),"numRecordsInIndexUpdated",statuses.count());
+    indexLookupContext=null;
     // Trigger the insert and collect statuses
     commitOnAutoCommit(commitTime, statuses, table.getMetaClient().getCommitActionType());
     return statuses;
