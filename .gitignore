@@ -15,6 +15,7 @@ target/
 *.war
 *.ear
 *.db
+*.patch 
  
 ######################
 # OSX
@@ -74,5 +75,4 @@ dependency-reduced-pom.xml
 #######################################
 # Docker
 #######################################
-hoodie-integ-test/compose_env
-
+hudi-integ-test/compose_env
