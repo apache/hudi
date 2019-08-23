@@ -18,7 +18,7 @@
 
 package org.apache.hudi.integ;
 
-import java.util.Arrays;
+import org.apache.hudi.common.util.collection.Pair;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -34,17 +34,6 @@ public class ITTestHoodieSanity extends ITTestBase {
   }
 
   @Test
-  public void testRunEcho() throws Exception {
-    String[] cmd = new String[]{"echo", "Happy Testing"};
-    TestExecStartResultCallback callback = executeCommandInDocker(ADHOC_1_CONTAINER,
-        cmd, true);
-    String stdout = callback.getStdout().toString();
-    String stderr = callback.getStderr().toString();
-    LOG.info("Got output for (" + Arrays.toString(cmd) + ") :" + stdout);
-    LOG.info("Got error output for (" + Arrays.toString(cmd) + ") :" + stderr);
-  }
-
-  @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with single partition key
    * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count
@@ -53,6 +42,7 @@ public class ITTestHoodieSanity extends ITTestBase {
   public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_single_partition_key_cow_test";
     testRunHoodieJavaAppOnCOWTable(hiveTableName, PartitionType.SINGLE_KEY_PARTITIONED);
+    executeHiveCommand("drop table if exists " + hiveTableName);
   }
 
   @Test
@@ -64,6 +54,7 @@ public class ITTestHoodieSanity extends ITTestBase {
   public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_multi_partition_key_cow_test";
     testRunHoodieJavaAppOnCOWTable(hiveTableName, PartitionType.MULTI_KEYS_PARTITIONED);
+    executeHiveCommand("drop table if exists " + hiveTableName);
   }
 
   @Test
@@ -75,6 +66,7 @@ public class ITTestHoodieSanity extends ITTestBase {
   public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_non_partition_key_cow_test";
     testRunHoodieJavaAppOnCOWTable(hiveTableName, PartitionType.NON_PARTITIONED);
+    executeHiveCommand("drop table if exists " + hiveTableName);
   }
 
   /**
@@ -89,109 +81,54 @@ public class ITTestHoodieSanity extends ITTestBase {
     String hdfsUrl = "hdfs://namenode" + hdfsPath;
 
     // Drop Table if it exists
-    {
-      String[] hiveDropCmd = getHiveConsoleCommand("drop table if exists " + hiveTableName);
-      executeCommandInDocker(HIVESERVER, hiveDropCmd, true);
+    String hiveDropCmd = "drop table if exists " + hiveTableName;
+    try {
+      executeHiveCommand(hiveDropCmd);
+    } catch (AssertionError ex) {
+      // In travis, sometimes, the hivemetastore is not ready even though we wait for the port to be up
+      // Workaround to sleep for 5 secs and retry
+      Thread.sleep(5000);
+      executeHiveCommand(hiveDropCmd);
     }
 
     // Ensure table does not exist
-    {
-      String[] hiveTableCheck = getHiveConsoleCommand("show tables like '" + hiveTableName + "'");
-      TestExecStartResultCallback callback =
-          executeCommandInDocker(HIVESERVER, hiveTableCheck, true);
-      String stderr = callback.getStderr().toString();
-      String stdout = callback.getStdout().toString();
-      LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") :" + stdout);
-      LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") :" + stderr);
-      Assert.assertTrue("Result :" + callback.getStdout().toString(), stdout.trim().isEmpty());
-    }
+    Pair<String, String> stdOutErr = executeHiveCommand("show tables like '" + hiveTableName + "'");
+    Assert.assertTrue("Dropped table " + hiveTableName + " exists!", stdOutErr.getLeft().isEmpty());
 
     // Run Hoodie Java App
-    {
-      String[] cmd = null;
-      if (partitionType == PartitionType.SINGLE_KEY_PARTITIONED) {
-        cmd = new String[]{
-            HOODIE_JAVA_APP,
-            "--hive-sync",
-            "--table-path", hdfsUrl,
-            "--hive-url", HIVE_SERVER_JDBC_URL,
-            "--hive-table", hiveTableName
-        };
-      } else if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
-        cmd = new String[]{
-            HOODIE_JAVA_APP,
-            "--hive-sync",
-            "--table-path", hdfsUrl,
-            "--hive-url", HIVE_SERVER_JDBC_URL,
-            "--use-multi-partition-keys",
-            "--hive-table", hiveTableName
-        };
-      } else {
-        cmd = new String[]{
-            HOODIE_JAVA_APP,
-            "--hive-sync",
-            "--table-path", hdfsUrl,
-            "--hive-url", HIVE_SERVER_JDBC_URL,
-            "--non-partitioned",
-            "--hive-table", hiveTableName
-        };
-      }
-      TestExecStartResultCallback callback = executeCommandInDocker(ADHOC_1_CONTAINER,
-          cmd, true);
-      String stdout = callback.getStdout().toString().trim();
-      String stderr = callback.getStderr().toString().trim();
-      LOG.info("Got output for (" + Arrays.toString(cmd) + ") :" + stdout);
-      LOG.info("Got error output for (" + Arrays.toString(cmd) + ") :" + stderr);
+    String cmd;
+    if (partitionType == PartitionType.SINGLE_KEY_PARTITIONED) {
+      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl
+          + " --hive-url " + HIVE_SERVER_JDBC_URL + " --hive-table " + hiveTableName;
+    } else if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
+      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl
+          + " --hive-url " + HIVE_SERVER_JDBC_URL + " --hive-table " + hiveTableName
+          + " --use-multi-partition-keys";
+    } else {
+      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl
+          + " --hive-url " + HIVE_SERVER_JDBC_URL + " --hive-table " + hiveTableName
+          + " --non-partitioned";
     }
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, cmd, true);
 
     // Ensure table does exist
-    {
-      String[] hiveTableCheck = getHiveConsoleCommand("show tables like '" + hiveTableName + "'");
-      TestExecStartResultCallback callback =
-          executeCommandInDocker(HIVESERVER, hiveTableCheck, true);
-      String stderr = callback.getStderr().toString().trim();
-      String stdout = callback.getStdout().toString().trim();
-      LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stdout + ")");
-      LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stderr + ")");
-      Assert.assertEquals("Table exists", hiveTableName, stdout);
-    }
+    stdOutErr = executeHiveCommand("show tables like '" + hiveTableName + "'");
+    Assert.assertEquals("Table exists", hiveTableName, stdOutErr.getLeft());
 
     // Ensure row count is 100 (without duplicates)
-    {
-      String[] hiveTableCheck = getHiveConsoleCommand("select count(1) from " + hiveTableName);
-      TestExecStartResultCallback callback =
-          executeCommandInDocker(ADHOC_1_CONTAINER, hiveTableCheck, true);
-      String stderr = callback.getStderr().toString().trim();
-      String stdout = callback.getStdout().toString().trim();
-      LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stdout + ")");
-      LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stderr + ")");
-      Assert.assertEquals("Expecting 100 rows to be present in the new table", 100,
-          Integer.parseInt(stdout.trim()));
-    }
+    stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName);
+    Assert.assertEquals("Expecting 100 rows to be present in the new table", 100,
+        Integer.parseInt(stdOutErr.getLeft().trim()));
 
     // Make the HDFS dataset non-hoodie and run the same query
     // Checks for interoperability with non-hoodie tables
-    {
-      // Delete Hoodie directory to make it non-hoodie dataset
-      String[] cmd = new String[]{
-          "hadoop", "fs", "-rm", "-r", hdfsPath + "/.hoodie"
-      };
-      TestExecStartResultCallback callback =
-          executeCommandInDocker(ADHOC_1_CONTAINER, cmd, true);
-      String stderr = callback.getStderr().toString().trim();
-      String stdout = callback.getStdout().toString().trim();
-      LOG.info("Got output for (" + Arrays.toString(cmd) + ") : (" + stdout + ")");
-      LOG.info("Got error output for (" + Arrays.toString(cmd) + ") : (" + stderr + ")");
 
-      // Run the count query again. Without Hoodie, all versions are included. So we get a wrong count
-      String[] hiveTableCheck = getHiveConsoleCommand("select count(1) from " + hiveTableName);
-      callback = executeCommandInDocker(ADHOC_1_CONTAINER, hiveTableCheck, true);
-      stderr = callback.getStderr().toString().trim();
-      stdout = callback.getStdout().toString().trim();
-      LOG.info("Got output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stdout + ")");
-      LOG.info("Got error output for (" + Arrays.toString(hiveTableCheck) + ") : (" + stderr + ")");
-      Assert.assertEquals("Expecting 200 rows to be present in the new table", 200,
-          Integer.parseInt(stdout.trim()));
-    }
+    // Delete Hoodie directory to make it non-hoodie dataset
+    executeCommandStringInDocker(ADHOC_1_CONTAINER, "hdfs dfs -rm -r " + hdfsPath + "/.hoodie", true);
+
+    // Run the count query again. Without Hoodie, all versions are included. So we get a wrong count
+    stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName);
+    Assert.assertEquals("Expecting 200 rows to be present in the new table", 200,
+        Integer.parseInt(stdOutErr.getLeft().trim()));
   }
 }

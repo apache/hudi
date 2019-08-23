@@ -217,12 +217,23 @@ public class CompactionCommand implements CommandMarker {
       final String sparkMemory,
       @CliOption(key = "retry", unspecifiedDefaultValue = "1", help = "Number of retries")
       final String retry,
-      @CliOption(key = "compactionInstant", mandatory = true, help = "Base path for the target hoodie dataset")
-      final String compactionInstantTime) throws Exception {
+      @CliOption(key = "compactionInstant", mandatory = false, help = "Base path for the target hoodie dataset")
+          String compactionInstantTime) throws Exception {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
     if (HoodieCLI.tableMetadata.getTableType() == HoodieTableType.MERGE_ON_READ) {
+      if (null == compactionInstantTime) {
+        // pick outstanding one with lowest timestamp
+        Option<String> firstPendingInstant = HoodieCLI.tableMetadata.reloadActiveTimeline()
+            .filterCompletedAndCompactionInstants().filter(instant -> instant.getAction()
+                .equals(HoodieTimeline.COMPACTION_ACTION)).firstInstant().map(HoodieInstant::getTimestamp);
+        if (!firstPendingInstant.isPresent()) {
+          return "NO PENDING COMPACTION TO RUN";
+        }
+        compactionInstantTime = firstPendingInstant.get();
+      }
+
       String sparkPropertiesPath = Utils.getDefaultPropertiesFile(
           scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);

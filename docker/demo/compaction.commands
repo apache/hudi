@@ -1,0 +1,5 @@
+connect --path /user/hive/warehouse/stock_ticks_mor
+compactions show all
+compaction schedule
+compaction run --parallelism 2 --sparkMemory 1G  --schemaFilePath /var/demo/config/schema.avsc --retry 1 
+

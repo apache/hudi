@@ -9,32 +9,57 @@
   <artifactId>hudi-integ-test</artifactId>
   <modelVersion>4.0.0</modelVersion>
   <dependencies>
-    <dependency>
-      <groupId>org.glassfish.jersey.connectors</groupId>
-      <artifactId>jersey-apache-connector</artifactId>
-      <version>2.17</version>
-    </dependency>
+    <!-- Glassfish -->
+    <!-- needs to be at top -->
     <dependency>
       <groupId>org.glassfish.jersey.core</groupId>
       <artifactId>jersey-server</artifactId>
-      <version>2.17</version>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.jersey.connectors</groupId>
+      <artifactId>jersey-apache-connector</artifactId>
     </dependency>
     <dependency>
       <groupId>org.glassfish.jersey.containers</groupId>
       <artifactId>jersey-container-servlet-core</artifactId>
-      <version>2.17</version>
     </dependency>
+
+    <!-- Docker-Java - Test-->
+    <!-- needs to be at top to force javax.ws version -->
+    <dependency>
+      <groupId>com.github.docker-java</groupId>
+      <artifactId>docker-java</artifactId>
+      <version>3.1.2</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark</artifactId>
       <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.glassfish.**</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-log4j12</artifactId>
+    </dependency>
+
+    <!-- Hoodie - Import -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hadoop-sparkworker-docker</artifactId>
+      <version>${project.version}</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+
+    <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
@@ -44,68 +69,45 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.awaitility</groupId>
-      <artifactId>awaitility</artifactId>
-      <version>3.1.2</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.glassfish.**</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
+
+    <!-- Fasterxml - Test-->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-guava</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <version>3.1.2</version>
+      <scope>test</scope>
+    </dependency>
+
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>20.0</version>
       <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
-      <version>2.6.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>2.6.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-guava</artifactId>
-      <version>2.9.4</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.github.docker-java</groupId>
-      <artifactId>docker-java</artifactId>
-      <version>3.1.0-rc-3</version>
-      <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.glassfish.**</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-sparkworker-docker</artifactId>
-      <version>${project.version}</version>
-      <type>pom</type>
-      <scope>import</scope>
-    </dependency>
+
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -150,10 +152,23 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>2.22.0</version>
+        <configuration>
+          <includes>
+            <include>**/ITT*.java</include>
+          </includes>
+        </configuration>
         <executions>
           <execution>
+            <phase>integration-test</phase>
             <goals>
               <goal>integration-test</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>verify</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>verify</goal>
             </goals>
           </execution>
         </executions>
@@ -179,7 +194,7 @@
           </execution>
           <execution>
             <id>down</id>
-            <phase>integration-test</phase>
+            <phase>post-integration-test</phase>
             <goals>
               <goal>down</goal>
             </goals>
