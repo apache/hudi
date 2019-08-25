@@ -41,11 +41,6 @@
       <id>libs-release</id>
       <url>https://repo.spring.io/libs-release/</url>
     </repository>
-    <repository>
-      <id>scala-tools.org</id>
-      <name>Scala-tools Maven2 Repository</name>
-      <url>https://scala-tools.org/repo-releases</url>
-    </repository>
   </repositories>
 
   <build>
