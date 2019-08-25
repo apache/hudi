@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
 import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;

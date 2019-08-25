@@ -203,6 +203,12 @@
       <artifactId>avro</artifactId>
     </dependency>
 
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+    </dependency>
+
     <!-- Spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -218,12 +224,7 @@
       <groupId>com.databricks</groupId>
       <artifactId>spark-avro_2.11</artifactId>
       <version>4.0.0</version>
-    </dependency>
-
-    <!-- Apache Commons -->
-    <dependency>
-      <groupId>org.apache.commons</groupId>
-      <artifactId>commons-configuration2</artifactId>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Hadoop -->
@@ -293,8 +294,7 @@
 
     <dependency>
       <groupId>junit</groupId>
-      <artifactId>junit-dep</artifactId>
-      <version>${junit-dep.version}</version>
+      <artifactId>junit</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

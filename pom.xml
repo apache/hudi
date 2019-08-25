@@ -147,6 +147,7 @@
     <scalatest.version>3.0.1</scalatest.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
     <thrift.version>0.12.0</thrift.version>
+    <jetty.version>7.6.0.v20120127</jetty.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <notice.dir>${project.basedir}</notice.dir>
@@ -524,7 +525,7 @@
         <groupId>org.eclipse.jetty.aggregate</groupId>
         <artifactId>jetty-all</artifactId>
         <scope>test</scope>
-        <version>7.6.0.v20120127</version>
+        <version>${jetty.version}</version>
       </dependency>
 
       <!-- Avro -->
@@ -544,34 +545,6 @@
         <groupId>org.apache.parquet</groupId>
         <artifactId>parquet-avro</artifactId>
         <version>${parquet.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.parquet</groupId>
-        <artifactId>parquet-hadoop</artifactId>
-        <version>${parquet.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.parquet</groupId>
-        <artifactId>parquet-hive-bundle</artifactId>
-        <version>${parquet.version}</version>
-      </dependency>
-
-      <!-- Parquet (Twitter) -->
-      <!-- Spark parquet version 1.7.0 does not play well with the hive 1.1.0 installed in cluster (which requires twitter parquet 1.5.0) -->
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-hadoop-bundle</artifactId>
-        <version>1.6.0</version>
-      </dependency>
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-hive-bundle</artifactId>
-        <version>1.6.0</version>
-      </dependency>
-      <dependency>
-        <groupId>com.twitter</groupId>
-        <artifactId>parquet-avro</artifactId>
-        <version>1.6.0</version>
       </dependency>
 
       <!-- Spark -->
@@ -674,11 +647,6 @@
         <groupId>commons-pool</groupId>
         <artifactId>commons-pool</artifactId>
         <version>1.4</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-configuration2</artifactId>
-        <version>2.1.1</version>
       </dependency>
 
       <!-- Httpcomponents -->

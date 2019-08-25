@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io;
 
-import com.beust.jcommander.internal.Maps;
+import com.google.common.collect.Maps;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;

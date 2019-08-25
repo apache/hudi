@@ -25,7 +25,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import java.util.List;
 import java.util.Map;
-import parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageType;
 
 /**
  * Represents the schema difference between the storage schema and hive table schema
