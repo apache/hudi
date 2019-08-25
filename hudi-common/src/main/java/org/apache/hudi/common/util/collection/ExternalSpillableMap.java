@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util.collection;
 
-import com.twitter.common.objectsize.ObjectSizeCalculator;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -30,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;

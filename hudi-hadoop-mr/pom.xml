@@ -49,26 +49,10 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- Parquet (Twitter) -->
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-hadoop-bundle</artifactId>
-    </dependency>
-
     <!-- Apache Commons -->
     <dependency>
       <groupId>commons-logging</groupId>
       <artifactId>commons-logging</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter.common</groupId>
-      <artifactId>objectsize</artifactId>
-      <version>0.0.12</version>
     </dependency>
 
     <!-- Hadoop -->
@@ -110,12 +94,6 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo</artifactId>
       <scope>test</scope>
     </dependency>
 

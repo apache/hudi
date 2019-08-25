@@ -25,6 +25,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-hadoop-mr-bundle</artifactId>
+  <packaging>jar</packaging>
 
   <dependencies>
     <!-- Hoodie -->
@@ -58,16 +59,6 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- Parquet (Twitter) -->
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-hadoop-bundle</artifactId>
-    </dependency>
-
     <!-- Apache Commons -->
     <dependency>
       <groupId>commons-logging</groupId>
@@ -80,12 +71,6 @@
     <dependency>
       <groupId>commons-codec</groupId>
       <artifactId>commons-codec</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.twitter.common</groupId>
-      <artifactId>objectsize</artifactId>
-      <version>0.0.12</version>
     </dependency>
 
     <!-- Hadoop -->
@@ -239,15 +224,16 @@
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
-                  <include>com.twitter:parquet-avro</include>
-                  <include>com.twitter:parquet-hadoop-bundle</include>
-                  <include>com.twitter.common:objectsize</include>
                   <include>commons-logging:commons-logging</include>
                   <include>commons-io:commons-io</include>
+                  <include>commons-lang:commons-lang</include>
+                  <include>commons-pool:commons-pool</include>
+                  <include>commons-codec:commons-codec</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
                   <include>commons-codec:commons-codec</include>
+                  <include>org.apache.parquet:parquet-avro</include>
                 </includes>
               </artifactSet>
               <filters>

@@ -166,6 +166,11 @@
       <artifactId>log4j</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+    </dependency>
+
     <!-- Spark -->
     <dependency>
       <groupId>org.apache.spark</groupId>
@@ -189,12 +194,6 @@
     </dependency>
 
     <dependency>
-      <groupId>de.vandermeer</groupId>
-      <artifactId>asciitable</artifactId>
-      <version>0.2.5</version>
-    </dependency>
-
-    <dependency>
       <groupId>com.jakewharton.fliptables</groupId>
       <artifactId>fliptables</artifactId>
       <version>1.0.2</version>
@@ -213,13 +212,6 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit-dep</artifactId>
-      <version>${junit-dep.version}</version>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

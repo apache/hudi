@@ -75,11 +75,22 @@
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
                   <include>com.beust:jcommander</include>
+
+                  <include>io.javalin:javalin</include>
+                  <include>org.jetbrains.kotlin:*</include>
+                  <include>org.eclipse.jetty:*</include>
+                  <include>org.eclipse.jetty.websocket:*</include>
+                  <include>org.rocksdb:rocksdbjni</include>
+                  <include>org.apache.httpcomponents:httpclient</include>
+                  <include>org.apache.httpcomponents:fluent-hc</include>
+                  <include>org.antlr:stringtemplate</include>
+                  <include>commons-io:commons-io</include>
+                  <include>commons-logging:commons-logging</include>
+                  <include>org.apache.parquet:parquet-avro</include>
+
                   <include>com.twitter:bijection-avro_2.11</include>
                   <include>com.twitter:bijection-core_2.11</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>com.twitter:parquet-avro</include>
-                  <include>com.twitter.common:objectsize</include>
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
@@ -262,10 +273,6 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-hadoop</artifactId>
     </dependency>
 
     <!-- Spark -->
