@@ -111,13 +111,6 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- Twitter -->
-    <dependency>
-      <groupId>com.twitter.common</groupId>
-      <artifactId>objectsize</artifactId>
-      <version>0.0.12</version>
-    </dependency>
-
     <!-- Apache Commons -->
     <dependency>
       <groupId>commons-codec</groupId>
@@ -154,7 +147,12 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <classifier>tests</classifier>
+      <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+  </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
@@ -173,11 +171,6 @@
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo</artifactId>
-      <scope>test</scope>
-    </dependency>
     <dependency>
       <groupId>com.esotericsoftware</groupId>
       <artifactId>kryo-shaded</artifactId>

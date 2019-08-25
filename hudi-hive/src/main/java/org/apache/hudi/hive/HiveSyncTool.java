@@ -36,9 +36,9 @@ import org.apache.hudi.hadoop.realtime.HoodieRealtimeInputFormat;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.hive.util.SchemaUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import parquet.schema.MessageType;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.parquet.schema.MessageType;
 
 
 /**
@@ -52,7 +52,7 @@ import parquet.schema.MessageType;
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
+  private static Logger LOG = LogManager.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
   public static final String SUFFIX_REALTIME_TABLE = "_rt";
   private final HiveSyncConfig cfg;

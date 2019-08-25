@@ -18,8 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
-import com.beust.jcommander.internal.Maps;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.Maps;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,12 +50,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.hive.util.SchemaUtil;
+import org.apache.parquet.avro.AvroSchemaConverter;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
-import parquet.avro.AvroSchemaConverter;
 import scala.Tuple2;
 import scala.Tuple3;
 

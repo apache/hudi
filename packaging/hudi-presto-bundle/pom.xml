@@ -50,12 +50,6 @@
       <artifactId>slf4j-log4j12</artifactId>
     </dependency>
 
-    <!-- Parquet (Twitter) -->
-    <dependency>
-      <groupId>com.twitter</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
     <!-- Thrift -->
     <dependency>
       <groupId>org.apache.thrift</groupId>

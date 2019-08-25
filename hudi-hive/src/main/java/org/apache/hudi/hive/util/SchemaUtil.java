@@ -36,14 +36,15 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.DecimalMetadata;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.PrimitiveType;
+import org.apache.parquet.schema.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import parquet.schema.DecimalMetadata;
-import parquet.schema.GroupType;
-import parquet.schema.MessageType;
-import parquet.schema.OriginalType;
-import parquet.schema.PrimitiveType;
-import parquet.schema.Type;
 
 /**
  * Schema Utilities
@@ -439,6 +440,7 @@ public class SchemaUtil {
 
   /**
    * Read the schema from the log file on path
+   * @return
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   public static MessageType readSchemaFromLogFile(FileSystem fs, Path path) throws IOException {
@@ -452,7 +454,7 @@ public class SchemaUtil {
     }
     reader.close();
     if (lastBlock != null) {
-      return new parquet.avro.AvroSchemaConverter().convert(lastBlock.getSchema());
+      return new AvroSchemaConverter().convert(lastBlock.getSchema());
     }
     return null;
   }
