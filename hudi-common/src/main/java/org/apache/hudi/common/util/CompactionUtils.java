@@ -151,14 +151,15 @@ public class CompactionUtils {
       return getPendingCompactionOperations(instantPlanPair.getKey(), instantPlanPair.getValue());
     }).forEach(pair -> {
       // Defensive check to ensure a single-fileId does not have more than one pending compaction with different
-      // params. If we find a full dub we assume it is caused by eventual nature of the move operation on some DFSs.
+      // file slices. If we find a full duplicate we assume it is caused by eventual nature of the move operation
+      // on some DFSs.
       if (fgIdToPendingCompactionWithInstantMap.containsKey(pair.getKey())) {
         HoodieCompactionOperation operation = pair.getValue().getValue();
         HoodieCompactionOperation anotherOperation =
             fgIdToPendingCompactionWithInstantMap.get(pair.getKey()).getValue();
 
         if (!operation.equals(anotherOperation)) {
-          String msg = "Hoodie File Id (" + pair.getKey() + ") has more thant 1 pending compactions. Instants: "
+          String msg = "Hudi File Id (" + pair.getKey() + ") has more than 1 pending compactions. Instants: "
               + pair.getValue() + ", " + fgIdToPendingCompactionWithInstantMap.get(pair.getKey());
           throw new IllegalStateException(msg);
         }
