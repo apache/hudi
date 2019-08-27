@@ -107,7 +107,9 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @param sqlContext
     */
   def getKeyCount(file: String, sqlContext: org.apache.spark.sql.SQLContext) = {
-    println(getRowKeyDF(file).collect().length)
+    val keyCount = getRowKeyDF(file).collect().length
+    println(keyCount)
+    keyCount
   }
 
 
@@ -128,7 +130,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
       .collect().count(r => !bf.mightContain(r.getString(0)))
     val totalCount = getKeyCount(file, sqlContext)
-    s"totalCount: ${totalCount}, foundCount: ${foundCount}"
+    println(s"totalCount: $totalCount, foundCount: $foundCount")
     totalCount == foundCount
   }
 

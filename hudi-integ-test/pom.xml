@@ -56,7 +56,6 @@
       <artifactId>hudi-hadoop-sparkworker-docker</artifactId>
       <version>${project.version}</version>
       <type>pom</type>
-      <scope>import</scope>
     </dependency>
 
     <!-- Hoodie - Test -->
@@ -130,6 +129,7 @@
       <plugin>
         <artifactId>exec-maven-plugin</artifactId>
         <groupId>org.codehaus.mojo</groupId>
+        <version>1.6.0</version>
         <executions>
           <execution><!-- setup HUDI_WS variable in docker compose env file -->
             <id>Setup HUDI_WS</id>
