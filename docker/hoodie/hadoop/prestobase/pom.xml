@@ -33,15 +33,17 @@
     <checkstyle.skip>true</checkstyle.skip>
   </properties>
 
-  <dependencies>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-base-docker</artifactId>
-      <version>${project.version}</version>
-      <type>pom</type>
-      <scope>import</scope>
-    </dependency>
-  </dependencies>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.apache.hudi</groupId>
+        <artifactId>hudi-hadoop-base-docker</artifactId>
+        <version>${project.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
     <plugins>

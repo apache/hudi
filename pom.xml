@@ -159,6 +159,7 @@
     <skipTests>false</skipTests>
     <skipITs>${skipTests}</skipITs>
     <skipUTs>${skipTests}</skipUTs>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
   <scm>
@@ -253,7 +254,7 @@
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
           <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
-          <configLocation>style/scalastyle-config.xml</configLocation>
+          <configLocation>${maven.multiModuleProjectDirectory}/style/scalastyle-config.xml</configLocation>
           <outputEncoding>UTF-8</outputEncoding>
         </configuration>
         <executions>
@@ -302,8 +303,6 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <skip>${skipUTs}</skip>
-          <!-- Sets the VM argument line used when unit tests are run. -->
-          <argLine>${surefireArgLine}</argLine>
           <systemPropertyVariables>
             <log4j.configuration>
               ${surefire-log4j.file}
