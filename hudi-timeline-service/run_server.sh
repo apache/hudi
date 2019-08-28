@@ -10,5 +10,5 @@ if [ -z "$HADOOP_CONF_DIR" ]; then
 fi
 
 OTHER_JARS=`ls -1 $DIR/target/lib/*jar | grep -v '*avro*-1.' | tr '\n' ':'`
-echo "Running command : java -cp $DIR/target/:${HADOOP_CONF_DIR}:$HOODIE_JAR:$OTHER_JARS com.uber.hoodie.timeline.service.TimelineService $@"
-java -Xmx4G -cp $DIR/target/test-classes/:${HADOOP_CONF_DIR}:$HOODIE_JAR:$OTHER_JARS com.uber.hoodie.timeline.service.TimelineService "$@"
+echo "Running command : java -cp $DIR/target/:${HADOOP_CONF_DIR}:$HOODIE_JAR:$OTHER_JARS org.apache.hudi.timeline.service.TimelineService $@"
+java -Xmx4G -cp $DIR/target/test-classes/:${HADOOP_CONF_DIR}:$HOODIE_JAR:$OTHER_JARS org.apache.hudi.timeline.service.TimelineService "$@"
