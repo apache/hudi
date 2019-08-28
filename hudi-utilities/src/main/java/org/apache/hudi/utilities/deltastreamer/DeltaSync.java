@@ -24,7 +24,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import com.codahale.metrics.Timer;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.Function;
@@ -282,9 +282,14 @@ public class DeltaSync implements Serializable {
           AvroConversionUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
       );
       // Use Transformed Row's schema if not overridden
+      // Use Transformed Row's schema if not overridden. If target schema is not specified
+      // default to RowBasedSchemaProvider
       schemaProvider =
-          this.schemaProvider == null ? transformed.map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
-              .orElse(dataAndCheckpoint.getSchemaProvider()) : this.schemaProvider;
+          this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null
+              ? transformed
+              .map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
+              .orElse(dataAndCheckpoint.getSchemaProvider())
+              : this.schemaProvider;
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
@@ -472,7 +477,7 @@ public class DeltaSync implements Serializable {
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withAutoCommit(false);
-    if (null != schemaProvider) {
+    if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
     }
 
@@ -487,7 +492,12 @@ public class DeltaSync implements Serializable {
   private void registerAvroSchemas(SchemaProvider schemaProvider) {
     // register the schemas, so that shuffle does not serialize the full schemas
     if (null != schemaProvider) {
-      List<Schema> schemas = Arrays.asList(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+      List<Schema> schemas = new ArrayList<>();
+      schemas.add(schemaProvider.getSourceSchema());
+      if (schemaProvider.getTargetSchema() != null) {
+        schemas.add(schemaProvider.getTargetSchema());
+      }
+
       log.info("Registering Schema :" + schemas);
       jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
