@@ -22,7 +22,6 @@ This project includes:
   Apache Avro Mapred API under The Apache Software License, Version 2.0
   Apache Calcite Avatica under Apache License, Version 2.0
   Apache Calcite Avatica Metrics under Apache License, Version 2.0
-  Apache Commons Collections under Apache License, Version 2.0
   Apache Commons IO under Apache License, Version 2.0
   Apache Commons Logging under The Apache Software License, Version 2.0
   Apache Curator under The Apache Software License, Version 2.0
@@ -48,21 +47,13 @@ This project includes:
   Apache Log4j SLF4J Binding under The Apache Software License, Version 2.0
   Apache Log4j Web under The Apache Software License, Version 2.0
   Apache Parquet Avro under The Apache Software License, Version 2.0
-  Apache Parquet Avro (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Column under The Apache Software License, Version 2.0
-  Apache Parquet Column (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Common under The Apache Software License, Version 2.0
-  Apache Parquet Common (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Encodings under The Apache Software License, Version 2.0
-  Apache Parquet Encodings (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Format (Incubating) under The Apache Software License, Version 2.0
-  Apache Parquet Generator (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Hadoop under The Apache Software License, Version 2.0
-  Apache Parquet Hadoop (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Hadoop Bundle under The Apache Software License, Version 2.0
-  Apache Parquet Hadoop Bundle (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Jackson under The Apache Software License, Version 2.0
-  Apache Parquet Jackson (Incubating) under The Apache Software License, Version 2.0
   Apache Thrift under The Apache Software License, Version 2.0
   Apache Twill API under The Apache Software License, Version 2.0
   Apache Twill common library under The Apache Software License, Version 2.0
@@ -80,10 +71,10 @@ This project includes:
   Calcite Core under Apache License, Version 2.0
   Calcite Druid under Apache License, Version 2.0
   Calcite Linq4j under Apache License, Version 2.0
-  com.twitter.common:objectsize under Apache License, Version 2.0
   Commons BeanUtils Core under The Apache Software License, Version 2.0
   Commons CLI under The Apache Software License, Version 2.0
   Commons Codec under The Apache Software License, Version 2.0
+  Commons Collections under The Apache Software License, Version 2.0
   Commons Compiler under New BSD License
   Commons Compress under The Apache Software License, Version 2.0
   Commons Configuration under The Apache Software License, Version 2.0
@@ -155,11 +146,11 @@ This project includes:
   Hive Shims Scheduler under The Apache Software License, Version 2.0
   Hive Storage API under Apache License, Version 2.0
   Hive Vector-Code-Gen Utilities under The Apache Software License, Version 2.0
-  hoodie-common under Apache License, Version 2.0
-  hoodie-hadoop-mr under Apache License, Version 2.0
-  hoodie-hadoop-mr-bundle under Apache License, Version 2.0
   htrace-core under The Apache Software License, Version 2.0
   HttpClient under Apache License
+  hudi-common under Apache License, Version 2.0
+  hudi-hadoop-mr under Apache License, Version 2.0
+  hudi-hadoop-mr-bundle under Apache License, Version 2.0
   Jackson under The Apache Software License, Version 2.0
   Jackson Integration for Metrics under Apache License 2.0
   Jackson-annotations under The Apache Software License, Version 2.0
@@ -200,6 +191,7 @@ This project includes:
   JTA 1.1 under The Apache Software License, Version 2.0
   JUnit under Common Public License Version 1.0
   JVM Integration for Metrics under Apache License 2.0
+  Kryo under New BSD License
   Kryo Shaded under 3-Clause BSD License
   leveldbjni-all under The BSD 3-Clause License
   Metrics Core under Apache License 2.0
@@ -213,6 +205,7 @@ This project includes:
   org.pentaho:pentaho-aggdesigner-algorithm under Apache License, Version 2.0
   ParaNamer Core under BSD
   Protocol Buffer Java API under New BSD license
+  ReflectASM under New BSD License
   RocksDB JNI under Apache License 2.0 or GNU General Public License, version 2
   Servlet Specification 2.5 API under CDDL 1.0
   Servlet Specification API under Apache License Version 2.0

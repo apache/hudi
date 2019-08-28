@@ -23,7 +23,6 @@ This project includes:
   Apache Calcite Avatica under Apache License, Version 2.0
   Apache Calcite Avatica Metrics under Apache License, Version 2.0
   Apache Commons Collections under Apache License, Version 2.0
-  Apache Commons Configuration under Apache License, Version 2.0
   Apache Commons IO under Apache License, Version 2.0
   Apache Commons Logging under The Apache Software License, Version 2.0
   Apache Curator under The Apache Software License, Version 2.0
@@ -38,6 +37,7 @@ This project includes:
   Apache Hadoop HDFS under Apache License, Version 2.0
   Apache HBase - Annotations under Apache License, Version 2.0
   Apache HBase - Client under Apache License, Version 2.0
+  Apache HBase - Common under Apache License, Version 2.0
   Apache HBase - Protocol under Apache License, Version 2.0
   Apache HttpClient under Apache License, Version 2.0
   Apache HttpCore under Apache License, Version 2.0
@@ -49,21 +49,13 @@ This project includes:
   Apache Log4j SLF4J Binding under The Apache Software License, Version 2.0
   Apache Log4j Web under The Apache Software License, Version 2.0
   Apache Parquet Avro under The Apache Software License, Version 2.0
-  Apache Parquet Avro (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Column under The Apache Software License, Version 2.0
-  Apache Parquet Column (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Common under The Apache Software License, Version 2.0
-  Apache Parquet Common (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Encodings under The Apache Software License, Version 2.0
-  Apache Parquet Encodings (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Format (Incubating) under The Apache Software License, Version 2.0
-  Apache Parquet Generator (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Hadoop under The Apache Software License, Version 2.0
-  Apache Parquet Hadoop (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Hadoop Bundle under The Apache Software License, Version 2.0
-  Apache Parquet Hadoop Bundle (Incubating) under The Apache Software License, Version 2.0
   Apache Parquet Jackson under The Apache Software License, Version 2.0
-  Apache Parquet Jackson (Incubating) under The Apache Software License, Version 2.0
   Apache Thrift under The Apache Software License, Version 2.0
   Apache Twill API under The Apache Software License, Version 2.0
   Apache Twill common library under The Apache Software License, Version 2.0
@@ -81,7 +73,6 @@ This project includes:
   Calcite Core under Apache License, Version 2.0
   Calcite Druid under Apache License, Version 2.0
   Calcite Linq4j under Apache License, Version 2.0
-  com.twitter.common:objectsize under Apache License, Version 2.0
   Commons BeanUtils Core under The Apache Software License, Version 2.0
   Commons CLI under The Apache Software License, Version 2.0
   Commons Codec under The Apache Software License, Version 2.0
@@ -156,19 +147,16 @@ This project includes:
   Hive Shims Scheduler under The Apache Software License, Version 2.0
   Hive Storage API under Apache License, Version 2.0
   Hive Vector-Code-Gen Utilities under The Apache Software License, Version 2.0
-  hoodie-client under Apache License, Version 2.0
-  hoodie-common under Apache License, Version 2.0
-  hoodie-hadoop-base-docker under Apache License, Version 2.0
-  hoodie-hadoop-docker under Apache License, Version 2.0
-  hoodie-hadoop-hive-docker under Apache License, Version 2.0
-  hoodie-hadoop-mr under Apache License, Version 2.0
-  hoodie-hadoop-sparkbase-docker under Apache License, Version 2.0
-  hoodie-hive under Apache License, Version 2.0
-  hoodie-spark under Apache License, Version 2.0
-  hoodie-spark-bundle under Apache License, Version 2.0
-  hoodie-timeline-service under Apache License, Version 2.0
   htrace-core under The Apache Software License, Version 2.0
   HttpClient under Apache License
+  hudi-client under Apache License, Version 2.0
+  hudi-common under Apache License, Version 2.0
+  hudi-hadoop-mr under Apache License, Version 2.0
+  hudi-hadoop-sparkbase-docker under Apache License, Version 2.0
+  hudi-hive under Apache License, Version 2.0
+  hudi-spark under Apache License, Version 2.0
+  hudi-spark-bundle under Apache License, Version 2.0
+  hudi-timeline-service under Apache License, Version 2.0
   IntelliJ IDEA Annotations under The Apache Software License, Version 2.0
   Jackson under The Apache Software License, Version 2.0
   Jackson Integration for Metrics under Apache License 2.0
@@ -219,6 +207,7 @@ This project includes:
   Jetty Server under Apache Software License - Version 2.0 or Eclipse Public License - Version 1.0
   Jetty SSLEngine under Apache License Version 2
   Jetty Utilities under Apache Software License - Version 2.0 or Eclipse Public License - Version 1.0
+  JLine under The BSD License
   Joda-Time under Apache 2
   Joni under MIT License
   JPam under The Apache Software License, Version 2.0
