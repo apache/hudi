@@ -2,7 +2,7 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #Ensure we pick the right jar even for hive11 builds
-HOODIE_JAR=`ls -c $DIR/target/hoodie-timeline-*.jar | grep -v test | head -1`
+HOODIE_JAR=`ls -c $DIR/target/hudi-timeline-*.jar | grep -v test | head -1`
 
 if [ -z "$HADOOP_CONF_DIR" ]; then
   echo "setting hadoop conf dir"
