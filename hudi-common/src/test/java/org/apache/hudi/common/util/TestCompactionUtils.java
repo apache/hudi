@@ -162,7 +162,22 @@ public class TestCompactionUtils {
     HoodieCompactionPlan plan2 = createCompactionPlan(metaClient, "002", "003", 0, false, false);
     scheduleCompaction(metaClient, "001", plan1);
     scheduleCompaction(metaClient, "003", plan2);
-    // schedule same plan again so that there will be duplicates
+    // schedule similar plan again so that there will be duplicates
+    plan1.getOperations().get(0).setDataFilePath("bla");
+    scheduleCompaction(metaClient, "005", plan1);
+    metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
+    Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> res =
+        CompactionUtils.getAllPendingCompactionOperations(metaClient);
+  }
+
+  @Test
+  public void testGetAllPendingCompactionOperationsWithFullDupFileId() throws IOException {
+    // Case where there is duplicate fileIds in compaction requests
+    HoodieCompactionPlan plan1 = createCompactionPlan(metaClient, "000", "001", 10, true, true);
+    HoodieCompactionPlan plan2 = createCompactionPlan(metaClient, "002", "003", 0, false, false);
+    scheduleCompaction(metaClient, "001", plan1);
+    scheduleCompaction(metaClient, "003", plan2);
+    // schedule same plan again so that there will be duplicates. It should not fail as it is a full duplicate
     scheduleCompaction(metaClient, "005", plan1);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> res =
