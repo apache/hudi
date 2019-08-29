@@ -53,7 +53,7 @@ public class TestDataSource extends AbstractBaseTestSource {
 
     // No new data.
     if (sourceLimit <= 0) {
-      return new InputBatch<>(Option.empty(), commitTime);
+      return new InputBatch<>(Option.empty(), lastCheckpointStr.orElse(null));
     }
 
     List<GenericRecord> records = fetchNextBatch(props, (int)sourceLimit, commitTime, DEFAULT_PARTITION_NUM)
