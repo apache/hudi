@@ -207,6 +207,7 @@ This project includes:
   hudi-presto-bundle under Apache License, Version 2.0
   hudi-spark under Apache License, Version 2.0
   hudi-spark-bundle under Apache License, Version 2.0
+  hudi-timeline-server-bundle under Apache License, Version 2.0
   hudi-timeline-service under Apache License, Version 2.0
   hudi-utilities under Apache License, Version 2.0
   hudi-utilities-bundle under Apache License, Version 2.0
@@ -329,10 +330,10 @@ This project includes:
   org.jetbrains.kotlin:kotlin-stdlib-common under The Apache License, Version 2.0
   org.jetbrains.kotlin:kotlin-stdlib-jdk7 under The Apache License, Version 2.0
   org.jetbrains.kotlin:kotlin-stdlib-jdk8 under The Apache License, Version 2.0
-  org.pentaho:pentaho-aggdesigner-algorithm under Apache License, Version 2.0
   oro under Apache License, Version 2.0
   OSGi resource locator bundle - used by various API providers that rely on META-INF/services mechanism to locate providers. under CDDL + GPLv2 with classpath exception
   ParaNamer Core under BSD
+  Pentaho Aggregate Designer Algorithm under Apache 2
   Protocol Buffer Java API under New BSD license
   Py4J under The New BSD License
   pyrolite under MIT License
