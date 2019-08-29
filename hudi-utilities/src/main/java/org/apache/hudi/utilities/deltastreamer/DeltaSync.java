@@ -316,7 +316,7 @@ public class DeltaSync implements Serializable {
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) gr.get(cfg.sourceOrderingField));
+          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField));
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
