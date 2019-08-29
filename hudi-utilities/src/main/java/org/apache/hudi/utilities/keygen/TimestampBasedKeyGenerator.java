@@ -24,7 +24,10 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.TimeZone;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.SimpleKeyGenerator;
@@ -48,6 +51,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   private final String outputDateFormat;
 
+  private final List<String> fields;
 
   /**
    * Supported configs
@@ -79,6 +83,9 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
           config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.inputDateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
     }
+
+    fields = Stream.of(recordKeyField.split(","))
+        .map(String::trim).collect(Collectors.toList());
   }
 
   @Override
@@ -102,7 +109,12 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
             "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
 
-      return new HoodieKey(DataSourceUtils.getNestedFieldValAsString(record, recordKeyField),
+      return new HoodieKey(
+          fields.stream()
+              .map(
+                  recordKeyField ->
+                      DataSourceUtils.getNestedFieldValAsString(record, recordKeyField))
+              .collect(Collectors.joining(".")),
           partitionPathFormat.format(new Date(unixTime * 1000)));
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException(
