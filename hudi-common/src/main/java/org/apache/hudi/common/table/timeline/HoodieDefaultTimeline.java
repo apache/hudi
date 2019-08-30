@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import static java.util.Collections.reverse;
+
 import com.google.common.collect.Sets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -192,6 +194,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public Stream<HoodieInstant> getInstants() {
+    return instants.stream();
+  }
+
+  @Override
+  public Stream<HoodieInstant> getReverseOrderedInstants() {
+    List<HoodieInstant> instants = getInstants().collect(Collectors.toList());
+    reverse(instants);
     return instants.stream();
   }
 

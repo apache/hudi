@@ -188,6 +188,12 @@ public interface HoodieTimeline extends Serializable {
   Stream<HoodieInstant> getInstants();
 
   /**
+   * @return Get the stream of completed instants in reverse order
+   * TODO Change code references to getInstants() that reverse the instants later on to use this method instead.
+   */
+  Stream<HoodieInstant> getReverseOrderedInstants();
+
+  /**
    * @return true if the passed in instant is before the first completed instant in the timeline
    */
   boolean isBeforeTimelineStarts(String ts);
