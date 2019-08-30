@@ -25,6 +25,8 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.collect.Lists;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.util.Option;
@@ -39,9 +41,24 @@ import org.apache.parquet.schema.Types;
 import org.joda.time.DateTime;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 @SuppressWarnings("ConstantConditions")
+@RunWith(Parameterized.class)
 public class HiveSyncToolTest {
+
+  // Test sync tool using both jdbc and metastore client
+  private boolean useJdbc;
+
+  public HiveSyncToolTest(Boolean useJdbc) {
+    this.useJdbc = useJdbc;
+  }
+
+  @Parameterized.Parameters(name = "UseJdbc")
+  public static Collection<Boolean[]> data() {
+    return Arrays.asList(new Boolean[][]{{false}, {true}});
+  }
 
   @Before
   public void setUp() throws IOException, InterruptedException, URISyntaxException {
@@ -146,6 +163,7 @@ public class HiveSyncToolTest {
 
   @Test
   public void testBasicSync() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
     String commitTime = "100";
     TestUtil.createCOWDataset(commitTime, 5);
     HoodieHiveClient hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
@@ -168,6 +186,7 @@ public class HiveSyncToolTest {
 
   @Test
   public void testSyncIncremental() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
     String commitTime1 = "100";
     TestUtil.createCOWDataset(commitTime1, 5);
     HoodieHiveClient hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
@@ -211,6 +230,7 @@ public class HiveSyncToolTest {
 
   @Test
   public void testSyncIncrementalWithSchemaEvolution() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
     String commitTime1 = "100";
     TestUtil.createCOWDataset(commitTime1, 5);
     HoodieHiveClient hiveClient = new HoodieHiveClient(TestUtil.hiveSyncConfig,
@@ -247,6 +267,7 @@ public class HiveSyncToolTest {
 
   @Test
   public void testSyncMergeOnRead() throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
     String commitTime = "100";
     String deltaCommitTime = "101";
     TestUtil.createMORDataset(commitTime, deltaCommitTime, 5);
@@ -295,6 +316,7 @@ public class HiveSyncToolTest {
   @Test
   public void testSyncMergeOnReadRT()
       throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
     String commitTime = "100";
     String deltaCommitTime = "101";
     String roTablename = TestUtil.hiveSyncConfig.tableName;
@@ -350,6 +372,7 @@ public class HiveSyncToolTest {
   @Test
   public void testMultiPartitionKeySync()
       throws Exception {
+    TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
     String commitTime = "100";
     TestUtil.createCOWDataset(commitTime, 5);
 
