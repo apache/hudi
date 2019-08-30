@@ -333,7 +333,13 @@ public class TestHoodieMergeHandle {
     // handling
     Assert.assertEquals((long) statuses.stream()
         .map(status -> status.getStat().getNumInserts()).reduce((a,b) -> a + b).get(), 100);
-
+    // Verify all records have location set
+    statuses.forEach(writeStatus -> {
+      writeStatus.getWrittenRecords().forEach(r -> {
+        // Ensure New Location is set
+        Assert.assertTrue(r.getNewLocation().isPresent());
+      });
+    });
   }
 
   private Dataset<Row> getRecords() {
@@ -366,6 +372,18 @@ public class TestHoodieMergeHandle {
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withBulkInsertParallelism(2);
+        .withBulkInsertParallelism(2)
+        .withWriteStatusClass(TestWriteStatus.class);
+  }
+
+  /**
+   * Overridden so that we can capture and inspect all success records
+   */
+  public static class TestWriteStatus extends WriteStatus {
+
+    public TestWriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+      // Track Success Records
+      super(true, failureFraction);
+    }
   }
 }

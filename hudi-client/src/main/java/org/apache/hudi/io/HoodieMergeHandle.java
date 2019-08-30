@@ -207,9 +207,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       partitionPath = record.getPartitionPath();
-      keyToNewRecords.put(record.getRecordKey(), record);
       // update the new location of the record, so we know where to find it next
       record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      //NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
+      keyToNewRecords.put(record.getRecordKey(), record);
     }
     logger.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
