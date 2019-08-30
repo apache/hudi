@@ -202,9 +202,9 @@
           </execution>
         </executions>
         <configuration>
-          <noticeTemplate>file://${maven.multiModuleProjectDirectory}/release/config/NOTICE.template</noticeTemplate>
+          <noticeTemplate>${maven.multiModuleProjectDirectory}/release/config/NOTICE.template</noticeTemplate>
           <licenseMapping>
-            <param>file://${maven.multiModuleProjectDirectory}/release/config/license-mappings.xml</param>
+            <param>${maven.multiModuleProjectDirectory}/release/config/license-mappings.xml</param>
           </licenseMapping>
           <outputDir>${notice.dir}</outputDir>
           <fileName>${notice.file}</fileName>
