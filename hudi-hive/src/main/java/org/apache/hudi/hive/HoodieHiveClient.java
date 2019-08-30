@@ -29,7 +29,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +42,8 @@ import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
+import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hive.jdbc.HiveDriver;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -86,6 +90,7 @@ public class HoodieHiveClient {
   private FileSystem fs;
   private Connection connection;
   private HoodieTimeline activeTimeline;
+  private HiveConf configuration;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     this.syncConfig = cfg;
@@ -93,8 +98,13 @@ public class HoodieHiveClient {
     this.metaClient = new HoodieTableMetaClient(fs.getConf(), cfg.basePath, true);
     this.tableType = metaClient.getTableType();
 
-    LOG.info("Creating hive connection " + cfg.jdbcUrl);
-    createHiveConnection();
+    this.configuration = configuration;
+    // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
+    // disable jdbc and depend on metastore client for all hive registrations
+    if (cfg.useJdbc) {
+      LOG.info("Creating hive connection " + cfg.jdbcUrl);
+      createHiveConnection();
+    }
     try {
       this.client = new HiveMetaStoreClient(configuration);
     } catch (MetaException e) {
@@ -269,32 +279,59 @@ public class HoodieHiveClient {
    * Get the table schema
    */
   public Map<String, String> getTableSchema() {
-    if (!doesTableExist()) {
-      throw new IllegalArgumentException(
-          "Failed to get schema for table " + syncConfig.tableName + " does not exist");
-    }
-    Map<String, String> schema = Maps.newHashMap();
-    ResultSet result = null;
-    try {
-      DatabaseMetaData databaseMetaData = connection.getMetaData();
-      result = databaseMetaData
-          .getColumns(null, syncConfig.databaseName, syncConfig.tableName, null);
-      while (result.next()) {
-        String columnName = result.getString(4);
-        String columnType = result.getString(6);
-        if ("DECIMAL".equals(columnType)) {
-          int columnSize = result.getInt("COLUMN_SIZE");
-          int decimalDigits = result.getInt("DECIMAL_DIGITS");
-          columnType += String.format("(%s,%s)", columnSize, decimalDigits);
-        }
-        schema.put(columnName, columnType);
+    if (syncConfig.useJdbc) {
+      if (!doesTableExist()) {
+        throw new IllegalArgumentException(
+            "Failed to get schema for table " + syncConfig.tableName + " does not exist");
       }
+      Map<String, String> schema = Maps.newHashMap();
+      ResultSet result = null;
+      try {
+        DatabaseMetaData databaseMetaData = connection.getMetaData();
+        result = databaseMetaData
+            .getColumns(null, syncConfig.databaseName, syncConfig.tableName, null);
+        while (result.next()) {
+          String columnName = result.getString(4);
+          String columnType = result.getString(6);
+          if ("DECIMAL".equals(columnType)) {
+            int columnSize = result.getInt("COLUMN_SIZE");
+            int decimalDigits = result.getInt("DECIMAL_DIGITS");
+            columnType += String.format("(%s,%s)", columnSize, decimalDigits);
+          }
+          schema.put(columnName, columnType);
+        }
+        return schema;
+      } catch (SQLException e) {
+        throw new HoodieHiveSyncException("Failed to get table schema for " + syncConfig.tableName,
+            e);
+      } finally {
+        closeQuietly(result, null);
+      }
+    } else {
+      return getTableSchemaUsingMetastoreClient();
+    }
+  }
+
+  public Map<String, String> getTableSchemaUsingMetastoreClient() {
+    try {
+      // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
+      // get the Schema of the table.
+      final long start = System.currentTimeMillis();
+      Table table = this.client.getTable(syncConfig.databaseName, syncConfig.tableName);
+      Map<String, String> partitionKeysMap = table.getPartitionKeys().stream()
+          .collect(Collectors.toMap(f -> f.getName(), f -> f.getType().toUpperCase()));
+
+      Map<String, String> columnsMap = table.getSd().getCols().stream()
+          .collect(Collectors.toMap(f -> f.getName(), f -> f.getType().toUpperCase()));
+
+      Map<String, String> schema = new HashMap<>();
+      schema.putAll(columnsMap);
+      schema.putAll(partitionKeysMap);
+      final long end = System.currentTimeMillis();
+      LOG.info(String.format("Time taken to getTableSchema: %s ms", (end - start)));
       return schema;
-    } catch (SQLException e) {
-      throw new HoodieHiveSyncException("Failed to get table schema for " + syncConfig.tableName,
-          e);
-    } finally {
-      closeQuietly(result, null);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get table schema for : " + syncConfig.tableName, e);
     }
   }
 
@@ -455,17 +492,69 @@ public class HoodieHiveClient {
    * @param s SQL to execute
    */
   public void updateHiveSQL(String s) {
-    Statement stmt = null;
-    try {
-      stmt = connection.createStatement();
-      LOG.info("Executing SQL " + s);
-      stmt.execute(s);
-    } catch (SQLException e) {
-      throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
-    } finally {
-      closeQuietly(null, stmt);
+    if (syncConfig.useJdbc) {
+      Statement stmt = null;
+      try {
+        stmt = connection.createStatement();
+        LOG.info("Executing SQL " + s);
+        stmt.execute(s);
+      } catch (SQLException e) {
+        throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
+      } finally {
+        closeQuietly(null, stmt);
+      }
+    } else {
+      updateHiveSQLUsingHiveDriver(s);
     }
   }
+
+  /**
+   * Execute a update in hive using Hive Driver
+   *
+   * @param sql SQL statement to execute
+   */
+  public CommandProcessorResponse updateHiveSQLUsingHiveDriver(String sql) throws HoodieHiveSyncException {
+    List<CommandProcessorResponse> responses = updateHiveSQLs(Arrays.asList(sql));
+    return responses.get(responses.size() - 1);
+  }
+
+  private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) throws HoodieHiveSyncException {
+    SessionState ss = null;
+    org.apache.hadoop.hive.ql.Driver hiveDriver = null;
+    List<CommandProcessorResponse> responses = new ArrayList<>();
+    try {
+      final long startTime = System.currentTimeMillis();
+      ss = SessionState.start(configuration);
+      hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
+      final long endTime = System.currentTimeMillis();
+      LOG.info(String.format("Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
+      for (String sql : sqls) {
+        final long start = System.currentTimeMillis();
+        responses.add(hiveDriver.run(sql));
+        final long end = System.currentTimeMillis();
+        LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, (end - start)));
+      }
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed in executing SQL", e);
+    } finally {
+      if (ss != null) {
+        try {
+          ss.close();
+        } catch (IOException ie) {
+          LOG.error("Error while closing SessionState", ie);
+        }
+      }
+      if (hiveDriver != null) {
+        try {
+          hiveDriver.close();
+        } catch (Exception e) {
+          LOG.error("Error while closing hiveDriver", e);
+        }
+      }
+    }
+    return responses;
+  }
+
 
 
   private void createHiveConnection() {
@@ -505,6 +594,11 @@ public class HoodieHiveClient {
       if (stmt != null) {
         stmt.close();
       }
+    } catch (SQLException e) {
+      LOG.error("Could not close the statement opened ", e);
+    }
+
+    try {
       if (resultSet != null) {
         resultSet.close();
       }
@@ -544,6 +638,7 @@ public class HoodieHiveClient {
       }
       if (client != null) {
         client.close();
+        client = null;
       }
     } catch (SQLException e) {
       LOG.error("Could not close connection ", e);
