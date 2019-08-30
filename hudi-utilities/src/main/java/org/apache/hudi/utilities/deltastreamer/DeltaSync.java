@@ -22,11 +22,13 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 import com.codahale.metrics.Timer;
+import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -281,6 +283,7 @@ public class DeltaSync implements Serializable {
       avroRDDOptional = transformed.map(t ->
           AvroConversionUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
       );
+
       // Use Transformed Row's schema if not overridden
       // Use Transformed Row's schema if not overridden. If target schema is not specified
       // default to RowBasedSchemaProvider
@@ -299,9 +302,15 @@ public class DeltaSync implements Serializable {
       schemaProvider = dataAndCheckpoint.getSchemaProvider();
     }
 
-    if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
-      log.info("No new data, nothing to commit.. ");
+    if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
+      log.info("No new data, source checkpoint has not changed. Nothing to commit."
+          + "Old checkpoint=(" + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
       return null;
+    }
+
+    if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
+      log.info("No new data, perform empty commit.");
+      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
     }
 
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
@@ -332,12 +341,9 @@ public class DeltaSync implements Serializable {
       cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
       records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig(),
           writeClient.getTimelineServer());
-
-      if (records.isEmpty()) {
-        log.info("No new data, nothing to commit.. ");
-        return Option.empty();
-      }
     }
+
+    boolean isEmpty = records.isEmpty();
 
     String commitTime = startCommit();
     log.info("Starting commit  : " + commitTime);
@@ -379,10 +385,12 @@ public class DeltaSync implements Serializable {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.of(checkpointCommitMetadata));
         }
 
-        // Sync to hive if enabled
-        Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
-        syncHive();
-        hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+        if (!isEmpty) {
+          // Sync to hive if enabled
+          Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
+          syncHive();
+          hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+        }
       } else {
         log.info("Commit " + commitTime + " failed!");
         throw new HoodieException("Commit " + commitTime + " failed!");
@@ -467,7 +475,6 @@ public class DeltaSync implements Serializable {
   private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
-            .withProps(props)
             .withPath(cfg.targetBasePath)
             .combineInput(cfg.filterDupes, true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -476,12 +483,21 @@ public class DeltaSync implements Serializable {
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withAutoCommit(false);
+            .withAutoCommit(false)
+            .withProps(props);
+
     if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
     }
+    HoodieWriteConfig config = builder.build();
 
-    return builder.build();
+    // Validate what deltastreamer assumes of write-config to be really safe
+    Preconditions.checkArgument(config.isInlineCompaction() == cfg.isInlineCompactionEnabled());
+    Preconditions.checkArgument(!config.shouldAutoCommit());
+    Preconditions.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes);
+    Preconditions.checkArgument(config.shouldCombineBeforeUpsert());
+
+    return config;
   }
 
   /**

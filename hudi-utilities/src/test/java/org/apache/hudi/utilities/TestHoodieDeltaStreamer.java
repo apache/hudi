@@ -81,6 +81,7 @@ import org.junit.Test;
  * upserts, inserts. Check counts at the end.
  */
 public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
+
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static volatile Logger log = LogManager.getLogger(TestHoodieDeltaStreamer.class);
@@ -156,6 +157,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   static class TestHelpers {
+
+    static HoodieDeltaStreamer.Config makeDropAllConfig(String basePath, Operation op) {
+      return makeConfig(basePath, op, DropAllTransformer.class.getName());
+    }
+
     static HoodieDeltaStreamer.Config makeConfig(String basePath, Operation op) {
       return makeConfig(basePath, op, TripsWithDistanceTransformer.class.getName());
     }
@@ -392,9 +398,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
    * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline
    * The first step involves using a SQL template to transform a source
    * TEST-DATA-SOURCE  ============================> HUDI TABLE 1   ===============>  HUDI TABLE 2
-   *                   (incr-pull with transform)                     (incr-pull)
+   *                    (incr-pull with transform)                     (incr-pull)
    * Hudi Table 1 is synced with Hive.
-   * @throws Exception
    */
   @Test
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline() throws Exception {
@@ -491,6 +496,29 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
     assertEquals(1000, counts.get(0).getLong(1));
     assertEquals(1000, counts.get(1).getLong(1));
+
+    // Test with empty commits
+    HoodieTableMetaClient mClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), datasetBasePath, true);
+    HoodieInstant lastFinished =
+        mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(datasetBasePath, Operation.UPSERT);
+    cfg2.filterDupes = true;
+    cfg2.sourceLimit = 2000;
+    cfg2.operation = Operation.UPSERT;
+    cfg2.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
+    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg2, jsc);
+    ds2.sync();
+    mClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), datasetBasePath, true);
+    HoodieInstant newLastFinished =
+        mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    Assert.assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), lastFinished.getTimestamp(),
+        HoodieTimeline.GREATER));
+
+    // Ensure it is empty
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+        mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
+    System.out.println("New Commit Metadata=" + commitMetadata);
+    Assert.assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
   }
 
   @Test
@@ -513,7 +541,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static class DistanceUDF implements UDF4<Double, Double, Double, Double, Double> {
 
     /**
-     *
      * Taken from https://stackoverflow.com/questions/3694380/calculating-distance-between-two-points-using-latitude-
      * longitude-what-am-i-doi
      * Calculate distance between two points in latitude and longitude taking
@@ -522,6 +549,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
      *
      * lat1, lon1 Start point lat2, lon2 End point el1 Start altitude in meters
      * el2 End altitude in meters
+     *
      * @returns Distance in Meters
      */
     @Override
@@ -564,6 +592,19 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     public TestGenerator(TypedProperties props) {
       super(props);
+    }
+  }
+
+  /**
+   * Return empty dataset
+   */
+  public static class DropAllTransformer implements Transformer {
+
+    @Override
+    public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+        TypedProperties properties) {
+      System.out.println("DropAllTransformer called !!");
+      return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }
 }

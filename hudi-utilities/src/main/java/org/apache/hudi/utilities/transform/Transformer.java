@@ -33,11 +33,11 @@ public interface Transformer {
    * Transform source RDD to target RDD
    *
    * @param jsc JavaSparkContext
-   * @param rowDataset Source DataSet
    * @param sparkSession Spark Session
+   * @param rowDataset Source DataSet
    * @param properties Config properties
    * @return Transformed Dataset
    */
-  Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession,
+  Dataset apply(JavaSparkContext jsc, SparkSession sparkSession,
       Dataset<Row> rowDataset, TypedProperties properties);
 }
