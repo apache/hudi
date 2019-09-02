@@ -176,12 +176,6 @@
       <artifactId>spark-sql_2.11</artifactId>
     </dependency>
 
-    <!-- Apache Commons -->
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-
     <dependency>
       <groupId>org.springframework.shell</groupId>
       <artifactId>spring-shell</artifactId>

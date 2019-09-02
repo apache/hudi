@@ -49,12 +49,6 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
-    <!-- Apache Commons -->
-    <dependency>
-      <groupId>commons-logging</groupId>
-      <artifactId>commons-logging</artifactId>
-    </dependency>
-
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>

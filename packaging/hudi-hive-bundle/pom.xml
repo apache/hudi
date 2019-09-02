@@ -23,135 +23,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-
   <artifactId>hudi-hive-bundle</artifactId>
   <packaging>jar</packaging>
 
-  <dependencies>
-    <!-- Hoodie -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr-bundle</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hive</artifactId>
-      <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <!-- All other hoodie deps will come from hoodie-hadoop-mr-bundle -->
-          <groupId>org.apache.hudi</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
-    <!-- Logging -->
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-log4j12</artifactId>
-    </dependency>
-
-    <!-- Thrift -->
-    <dependency>
-      <groupId>org.apache.thrift</groupId>
-      <artifactId>libthrift</artifactId>
-      <version>${thrift.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.thrift</groupId>
-      <artifactId>libfb303</artifactId>
-      <version>0.9.3</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>joda-time</groupId>
-      <artifactId>joda-time</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-    </dependency>
-
-    <!-- Apache Commons -->
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
-    </dependency>
-
-    <!-- Httpcomponents -->
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-    </dependency>
-
-    <!-- Hadoop -->
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-
-    <!-- Hive -->
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-metastore</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-common</artifactId>
-    </dependency>
-  </dependencies>
+  <properties>
+    <checkstyle.skip>true</checkstyle.skip>
+    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
+    <notice.file>HUDI_NOTICE.txt</notice.file>
+  </properties>
 
   <build>
-    <resources>
-       <resource>
-         <directory>src/main/resources</directory>
-       </resource>
-     </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.rat</groupId>
@@ -160,7 +41,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4</version>
+        <version>${maven-shade-plugin.version}</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -169,53 +50,22 @@
             </goals>
             <configuration>
               <createSourcesJar>true</createSourcesJar>
-              <relocations>
-                 <relocation>
-                  <pattern>com.beust.</pattern>
-                  <shadedPattern>org.apache.hudi.com.beust.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                  <pattern>org.joda.</pattern>
-                  <shadedPattern>org.apache.hudi.org.joda.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                  <pattern>com.google.</pattern>
-                  <shadedPattern>org.apache.hudi.com.google.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.slf4j.</pattern>
-                   <shadedPattern>org.apache.hudi.org.slf4j.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.apache.commons.</pattern>
-                   <shadedPattern>org.apache.hudi.org.apache.commons.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.column</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.column</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.format.</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.format.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.hadoop.</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.hadoop.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.schema.</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.schema.</shadedPattern>
-                 </relocation>
-              </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
+              </dependencyReducedPomLocation>
               <artifactSet>
-                <excludes>
-                  <exclude>log4j:log4j</exclude>
-                  <exclude>org.apache.hadoop:*</exclude>
-                  <exclude>org.apache.hive:*</exclude>
-                  <exclude>org.apache.derby:derby</exclude>
-                </excludes>
+                <includes>
+                  <include>org.apache.hudi:hudi-common</include>
+                  <include>org.apache.hudi:hudi-hadoop-mr</include>
+                  <include>org.apache.hudi:hudi-hive</include>
+
+                  <include>com.beust:jcommander</include>
+                  <include>org.apache.parquet:parquet-avro</include>
+                  <include>com.esotericsoftware:kryo-shaded</include>
+                  <include>org.objenesis:objenesis</include>
+                  <include>com.esotericsoftware:minlog</include>
+                </includes>
               </artifactSet>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
@@ -235,11 +85,32 @@
         </executions>
       </plugin>
     </plugins>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>src/test/resources</directory>
+      </resource>
+    </resources>
   </build>
 
-  <properties>
-    <checkstyle.skip>true</checkstyle.skip>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-    <notice.file>HUDI_NOTICE.txt</notice.file>
-  </properties>
+  <dependencies>
+    <!-- Hoodie -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hadoop-mr-bundle</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hive</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
 </project>

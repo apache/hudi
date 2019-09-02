@@ -30,7 +30,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.commons.io.FileUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -86,7 +85,7 @@ public class RocksDBDAO {
   private void init() throws HoodieException {
     try {
       log.info("DELETING RocksDB persisted at " + rocksDBBasePath);
-      FileUtils.deleteDirectory(new File(rocksDBBasePath));
+      FileIOUtils.deleteDirectory(new File(rocksDBBasePath));
 
       managedHandlesMap = new ConcurrentHashMap<>();
       managedDescriptorMap = new ConcurrentHashMap<>();
@@ -103,7 +102,7 @@ public class RocksDBDAO {
       });
       final List<ColumnFamilyDescriptor> managedColumnFamilies = loadManagedColumnFamilies(dbOptions);
       final List<ColumnFamilyHandle> managedHandles = new ArrayList<>();
-      FileUtils.forceMkdir(new File(rocksDBBasePath));
+      FileIOUtils.mkdir(new File(rocksDBBasePath));
       rocksDB = RocksDB.open(dbOptions, rocksDBBasePath, managedColumnFamilies, managedHandles);
 
       Preconditions.checkArgument(managedHandles.size() == managedColumnFamilies.size(),
@@ -450,7 +449,7 @@ public class RocksDBDAO {
       managedDescriptorMap.clear();
       getRocksDB().close();
       try {
-        FileUtils.deleteDirectory(new File(rocksDBBasePath));
+        FileIOUtils.deleteDirectory(new File(rocksDBBasePath));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }

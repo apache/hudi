@@ -19,12 +19,12 @@
 package org.apache.hudi.common;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import javax.xml.bind.DatatypeConverter;
-import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.hadoop.util.bloom.Key;
 import org.apache.hadoop.util.hash.Hash;
 import org.apache.hudi.exception.HoodieIndexException;

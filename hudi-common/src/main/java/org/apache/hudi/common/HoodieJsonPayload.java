@@ -23,15 +23,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.commons.io.IOUtils;
 import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
@@ -87,9 +86,7 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   private String unCompressData(byte[] data) throws IOException {
     InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data));
     try {
-      StringWriter sw = new StringWriter(dataSize);
-      IOUtils.copy(iis, sw);
-      return sw.toString();
+      return FileIOUtils.readAsUTFString(iis, dataSize);
     } finally {
       iis.close();
     }

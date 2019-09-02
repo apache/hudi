@@ -23,8 +23,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -35,6 +33,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.DatasetNotFoundException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Given a path is a part of - Hoodie dataset = accepts ONLY the latest version of each path -
@@ -48,7 +48,7 @@ import org.apache.hudi.exception.HoodieException;
  */
 public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
-  public static final Log LOG = LogFactory.getLog(HoodieROTablePathFilter.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
 
   /**
    * Its quite common, to have all files from a given partition path be passed into accept(), cache

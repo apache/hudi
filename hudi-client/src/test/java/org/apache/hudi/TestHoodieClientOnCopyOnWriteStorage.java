@@ -38,7 +38,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
@@ -55,6 +54,7 @@ import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -562,9 +562,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     // Read from commit file
     String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
     FileInputStream inputStream = new FileInputStream(filename);
-    String everything = IOUtils.toString(inputStream, "UTF-8");
-    HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything.toString(),
-        HoodieCommitMetadata.class);
+    String everything = FileIOUtils.readAsUTFString(inputStream);
+    HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
     HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
     inputStream.close();
 
@@ -600,7 +599,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     // Read from commit file
     String filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
     FileInputStream inputStream = new FileInputStream(filename);
-    String everything = IOUtils.toString(inputStream, "UTF-8");
+    String everything = FileIOUtils.readAsUTFString(inputStream);
     HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything.toString(),
         HoodieCommitMetadata.class);
     HoodieRollingStatMetadata rollingStatMetadata = HoodieCommitMetadata.fromJsonString(metadata.getExtraMetadata()
@@ -629,7 +628,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     // Read from commit file
     filename = HoodieTestUtils.getCommitFilePath(basePath, commitTime);
     inputStream = new FileInputStream(filename);
-    everything = IOUtils.toString(inputStream, "UTF-8");
+    everything = FileIOUtils.readAsUTFString(inputStream);
     metadata = HoodieCommitMetadata.fromJsonString(everything.toString(), HoodieCommitMetadata.class);
     rollingStatMetadata = HoodieCommitMetadata.fromJsonString(metadata.getExtraMetadata()
         .get(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY), HoodieRollingStatMetadata.class);

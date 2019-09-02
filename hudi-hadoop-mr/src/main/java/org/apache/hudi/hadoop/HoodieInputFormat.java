@@ -24,8 +24,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -49,6 +47,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.DatasetNotFoundException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidDatasetException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the
@@ -59,7 +59,7 @@ import org.apache.hudi.exception.InvalidDatasetException;
 @UseFileSplitsFromInputFormat
 public class HoodieInputFormat extends MapredParquetInputFormat implements Configurable {
 
-  public static final Log LOG = LogFactory.getLog(HoodieInputFormat.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieInputFormat.class);
 
   protected Configuration conf;
 

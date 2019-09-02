@@ -23,141 +23,16 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-
   <artifactId>hudi-hadoop-mr-bundle</artifactId>
   <packaging>jar</packaging>
 
-  <dependencies>
-    <!-- Hoodie -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-mr</artifactId>
-      <version>${project.version}</version>
-      <exclusions>
-        <exclusion>
-          <!-- other hoodie deps will come from hoodie-hive-bundle -->
-          <groupId>org.apache.hudi</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-    </dependency>
-
-    <!-- Parquet -->
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
-
-    <!-- Apache Commons -->
-    <dependency>
-      <groupId>commons-logging</groupId>
-      <artifactId>commons-logging</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-codec</groupId>
-      <artifactId>commons-codec</artifactId>
-    </dependency>
-
-    <!-- Hadoop -->
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-mapreduce-client-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-mapreduce-client-common</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-    </dependency>
-
-    <!-- Hive -->
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>commons-logging</groupId>
-          <artifactId>commons-logging</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-exec</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-shims</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-serde</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-metastore</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-common</artifactId>
-      <version>${hive.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.esotericsoftware</groupId>
-      <artifactId>kryo</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-  </dependencies>
+  <properties>
+    <checkstyle.skip>true</checkstyle.skip>
+    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
+    <notice.file>HUDI_NOTICE.txt</notice.file>
+  </properties>
 
   <build>
-    <resources>
-      <resource>
-        <directory>src/main/resources</directory>
-      </resource>
-    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.rat</groupId>
@@ -166,7 +41,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4</version>
+        <version>${maven-shade-plugin.version}</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -177,65 +52,33 @@
               <createSourcesJar>true</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
-              <relocations>
-                 <relocation>
-                   <pattern>parquet.avro</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.avro</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.column</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.column</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.format.</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.format.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.hadoop.</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.hadoop.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>parquet.schema</pattern>
-                   <shadedPattern>org.apache.hudi.parquet.schema</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.apache.commons.</pattern>
-                   <shadedPattern>org.apache.hudi.org.apache.commons.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.apache.commons.codec.</pattern>
-                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>com.esotericsoftware.kryo.</pattern>
-                   <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>org.objenesis.</pattern>
-                   <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                 </relocation>
-                 <relocation>
-                   <pattern>com.esotericsoftware.minlog.</pattern>
-                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-                 </relocation>
-              </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
               <artifactSet>
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
-                  <include>commons-logging:commons-logging</include>
-                  <include>commons-io:commons-io</include>
-                  <include>commons-lang:commons-lang</include>
-                  <include>commons-pool:commons-pool</include>
-                  <include>commons-codec:commons-codec</include>
+
+                  <include>org.apache.parquet:parquet-avro</include>
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
-                  <include>commons-codec:commons-codec</include>
-                  <include>org.apache.parquet:parquet-avro</include>
                 </includes>
               </artifactSet>
+              <relocations>
+
+                <relocation>
+                  <pattern>com.esotericsoftware.kryo.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.objenesis.</pattern>
+                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.esotericsoftware.minlog.</pattern>
+                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+              </relocations>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
@@ -255,11 +98,34 @@
         </executions>
       </plugin>
     </plugins>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>src/test/resources</directory>
+      </resource>
+    </resources>
   </build>
 
-  <properties>
-    <checkstyle.skip>true</checkstyle.skip>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-    <notice.file>HUDI_NOTICE.txt</notice.file>
-  </properties>
+  <dependencies>
+    <!-- Hoodie -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hadoop-mr</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
+    </dependency>
+  </dependencies>
 </project>

@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -61,6 +60,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hive.util.HiveTestService;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -153,7 +153,7 @@ public class TestUtil {
   static void createCOWDataset(String commitTime, int numberOfPartitions)
       throws IOException, InitializationError, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
-    FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
+    FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient
         .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
             hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
@@ -169,7 +169,7 @@ public class TestUtil {
   static void createMORDataset(String commitTime, String deltaCommitTime, int numberOfPartitions)
       throws IOException, InitializationError, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
-    FileUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
+    FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
     HoodieTableMetaClient
         .initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
             hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());

@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
@@ -44,6 +43,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -78,7 +78,7 @@ public class TestHoodieGlobalBloomIndex {
     fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     // We have some records to be tagged (two different partitions)
-    schemaStr = IOUtils.toString(getClass().getResourceAsStream("/exampleSchema.txt"), "UTF-8");
+    schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
   }
 

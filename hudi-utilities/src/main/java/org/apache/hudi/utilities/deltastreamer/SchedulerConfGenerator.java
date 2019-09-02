@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.commons.lang.text.StrSubstitutor;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
@@ -44,47 +43,26 @@ public class SchedulerConfGenerator {
   public static final String SPARK_SCHEDULER_MODE_KEY = "spark.scheduler.mode";
   public static final String SPARK_SCHEDULER_ALLOCATION_FILE_KEY = "spark.scheduler.allocation.file";
 
-
-  private static final String DELTASYNC_POOL_KEY = "deltasync_pool";
-  private static final String COMPACT_POOL_KEY = "compact_pool";
-  private static final String DELTASYNC_POLICY_KEY = "deltasync_policy";
-  private static final String COMPACT_POLICY_KEY = "compact_policy";
-  private static final String DELTASYNC_WEIGHT_KEY = "deltasync_weight";
-  private static final String DELTASYNC_MINSHARE_KEY = "deltasync_minshare";
-  private static final String COMPACT_WEIGHT_KEY = "compact_weight";
-  private static final String COMPACT_MINSHARE_KEY = "compact_minshare";
-
   private static String SPARK_SCHEDULING_PATTERN =
       "<?xml version=\"1.0\"?>\n"
           + "<allocations>\n"
-          + "  <pool name=\"%(deltasync_pool)\">\n"
-          + "    <schedulingMode>%(deltasync_policy)</schedulingMode>\n"
-          + "    <weight>%(deltasync_weight)</weight>\n"
-          + "    <minShare>%(deltasync_minshare)</minShare>\n"
+          + "  <pool name=\"%s\">\n"
+          + "    <schedulingMode>%s</schedulingMode>\n"
+          + "    <weight>%s</weight>\n"
+          + "    <minShare>%s</minShare>\n"
           + "  </pool>\n"
-          + "  <pool name=\"%(compact_pool)\">\n"
-          + "    <schedulingMode>%(compact_policy)</schedulingMode>\n"
-          + "    <weight>%(compact_weight)</weight>\n"
-          + "    <minShare>%(compact_minshare)</minShare>\n"
+          + "  <pool name=\"%s\">\n"
+          + "    <schedulingMode>%s</schedulingMode>\n"
+          + "    <weight>%s</weight>\n"
+          + "    <minShare>%s</minShare>\n"
           + "  </pool>\n"
           + "</allocations>";
 
   private static String generateConfig(Integer deltaSyncWeight, Integer compactionWeight, Integer deltaSyncMinShare,
       Integer compactionMinShare) {
-    Map<String, String> schedulingProps = new HashMap<>();
-    schedulingProps.put(DELTASYNC_POOL_KEY, DELTASYNC_POOL_NAME);
-    schedulingProps.put(COMPACT_POOL_KEY, COMPACT_POOL_NAME);
-    schedulingProps.put(DELTASYNC_POLICY_KEY, "FAIR");
-    schedulingProps.put(COMPACT_POLICY_KEY, "FAIR");
-    schedulingProps.put(DELTASYNC_WEIGHT_KEY, deltaSyncWeight.toString());
-    schedulingProps.put(DELTASYNC_MINSHARE_KEY, deltaSyncMinShare.toString());
-    schedulingProps.put(COMPACT_WEIGHT_KEY, compactionWeight.toString());
-    schedulingProps.put(COMPACT_MINSHARE_KEY, compactionMinShare.toString());
-
-    StrSubstitutor sub = new StrSubstitutor(schedulingProps, "%(", ")");
-    String xmlString = sub.replace(SPARK_SCHEDULING_PATTERN);
-    log.info("Scheduling Configurations generated. Config=\n" + xmlString);
-    return xmlString;
+    return String.format(SPARK_SCHEDULING_PATTERN,
+        DELTASYNC_POOL_NAME, "FAIR", deltaSyncWeight.toString(), deltaSyncMinShare.toString(),
+        COMPACT_POOL_NAME, "FAIR", compactionWeight.toString(), compactionMinShare.toString());
   }
 
 

@@ -31,8 +31,6 @@ import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
@@ -53,6 +51,8 @@ import org.apache.hudi.common.util.LogReaderUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.schema.MessageType;
@@ -82,7 +82,8 @@ public abstract class AbstractRealtimeRecordReader {
   // Default file path prefix for spillable file
   public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
 
-  public static final Log LOG = LogFactory.getLog(AbstractRealtimeRecordReader.class);
+  private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
+
   protected final HoodieRealtimeFileSplit split;
   protected final JobConf jobConf;
   private final MessageType baseFileSchema;

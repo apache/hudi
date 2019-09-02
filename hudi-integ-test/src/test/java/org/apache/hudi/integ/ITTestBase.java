@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -215,6 +216,19 @@ public abstract class ITTestBase {
     return Pair.of(callback.getStdout().toString(), callback.getStderr().toString());
   }
 
+  private void saveUpLogs() {
+    try {
+      // save up the Hive log files for introspection
+      String hiveLogStr = executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log", true)
+          .getStdout().toString();
+      String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
+      FileIOUtils.writeStringToFile(hiveLogStr, filePath);
+      LOG.info("Hive log saved up at  : " + filePath);
+    } catch (Exception e) {
+      LOG.error("Unable to save up logs..", e);
+    }
+  }
+
   void assertStdOutContains(Pair<String, String> stdOutErr, String expectedOutput) {
     assertStdOutContains(stdOutErr, expectedOutput, 1);
   }
@@ -233,7 +247,12 @@ public abstract class ITTestBase {
         lastIndex += expectedOutput.length();
       }
     }
-   Assert.assertEquals("Did not find output the expected number of times", times, count);
+
+    if (times != count) {
+      saveUpLogs();
+    }
+
+    Assert.assertEquals("Did not find output the expected number of times", times, count);
   }
 
   public class TestExecStartResultCallback extends ExecStartResultCallback {
