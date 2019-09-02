@@ -20,7 +20,6 @@ package org.apache.hudi.common.util.collection;
 
 import java.io.Serializable;
 import java.util.Map;
-import org.apache.commons.lang.builder.CompareToBuilder;
 
 /**
  * (NOTE: Adapted from Apache commons-lang3)
@@ -57,7 +56,7 @@ public abstract class Pair<L, R> implements Map.Entry<L, R>, Comparable<Pair<L, 
    * @return a pair formed from the two parameters, not null
    */
   public static <L, R> Pair<L, R> of(final L left, final R right) {
-    return new ImmutablePair<L, R>(left, right);
+    return new ImmutablePair<>(left, right);
   }
 
   //-----------------------------------------------------------------------
@@ -117,8 +116,20 @@ public abstract class Pair<L, R> implements Map.Entry<L, R>, Comparable<Pair<L, 
    */
   @Override
   public int compareTo(final Pair<L, R> other) {
-    return new CompareToBuilder().append(getLeft(), other.getLeft())
-        .append(getRight(), other.getRight()).toComparison();
+
+    checkComparable(this);
+    checkComparable(other);
+
+    Comparable thisLeft = (Comparable) getLeft();
+    Comparable thisRight = (Comparable) getRight();
+    Comparable otherLeft = (Comparable) other.getLeft();
+    Comparable otherRight = (Comparable) other.getRight();
+
+    if (thisLeft.compareTo(otherLeft) == 0) {
+      return thisRight.compareTo(otherRight);
+    } else {
+      return thisLeft.compareTo(otherLeft);
+    }
   }
 
   /**
@@ -178,4 +189,9 @@ public abstract class Pair<L, R> implements Map.Entry<L, R>, Comparable<Pair<L, 
     return String.format(format, getLeft(), getRight());
   }
 
+  private void checkComparable(Pair<L, R> pair) {
+    if (!(pair.getLeft() instanceof Comparable) || !(pair.getRight() instanceof Comparable)) {
+      throw new IllegalArgumentException("Elements of Pair must implement Comparable :" + pair);
+    }
+  }
 }

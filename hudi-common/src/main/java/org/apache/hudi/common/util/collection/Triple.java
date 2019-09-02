@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util.collection;
 
 import java.io.Serializable;
-import org.apache.commons.lang.builder.CompareToBuilder;
 
 /**
  * (NOTE: Adapted from Apache commons-lang3)
@@ -96,9 +95,17 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
    */
   @Override
   public int compareTo(final Triple<L, M, R> other) {
-    return new CompareToBuilder().append(getLeft(), other.getLeft())
-        .append(getMiddle(), other.getMiddle())
-        .append(getRight(), other.getRight()).toComparison();
+    checkComparable(this);
+    checkComparable(other);
+
+    Comparable thisLeft = (Comparable) getLeft();
+    Comparable otherLeft = (Comparable) other.getLeft();
+
+    if (thisLeft.compareTo(otherLeft) == 0) {
+      return Pair.of(getMiddle(), getRight()).compareTo(Pair.of(other.getMiddle(), other.getRight()));
+    } else {
+      return thisLeft.compareTo(otherLeft);
+    }
   }
 
   /**
@@ -160,5 +167,11 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
     return String.format(format, getLeft(), getMiddle(), getRight());
   }
 
+  private void checkComparable(Triple<L, M, R> triplet) {
+    if (!(triplet.getLeft() instanceof Comparable) || !(triplet.getMiddle() instanceof Comparable)
+        || !(triplet.getRight() instanceof Comparable)) {
+      throw new IllegalArgumentException("Elements of Triple must implement Comparable :" + triplet);
+    }
+  }
 }
 

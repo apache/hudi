@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.time.DateUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -161,11 +160,12 @@ public class TestHoodieCompactionStrategy {
     SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd");
     Date today = new Date();
     String currentDay = format.format(today);
-    String currentDayMinus1 = format.format(DateUtils.addDays(today, -1));
-    String currentDayMinus2 = format.format(DateUtils.addDays(today, -2));
-    String currentDayMinus3 = format.format(DateUtils.addDays(today, -3));
-    String currentDayPlus1 = format.format(DateUtils.addDays(today, 1));
-    String currentDayPlus5 = format.format(DateUtils.addDays(today, 5));
+
+    String currentDayMinus1 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(-1));
+    String currentDayMinus2 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(-2));
+    String currentDayMinus3 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(-3));
+    String currentDayPlus1 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(1));
+    String currentDayPlus5 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(5));
 
     Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder()
         .put(120 * MB, currentDay)
@@ -208,11 +208,12 @@ public class TestHoodieCompactionStrategy {
     SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd");
     Date today = new Date();
     String currentDay = format.format(today);
-    String currentDayMinus1 = format.format(DateUtils.addDays(today, -1));
-    String currentDayMinus2 = format.format(DateUtils.addDays(today, -2));
-    String currentDayMinus3 = format.format(DateUtils.addDays(today, -3));
-    String currentDayPlus1 = format.format(DateUtils.addDays(today, 1));
-    String currentDayPlus5 = format.format(DateUtils.addDays(today, 5));
+
+    String currentDayMinus1 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(-1));
+    String currentDayMinus2 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(-2));
+    String currentDayMinus3 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(-3));
+    String currentDayPlus1 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(1));
+    String currentDayPlus5 = format.format(BoundedPartitionAwareCompactionStrategy.getDateAtOffsetFromToday(5));
 
     Map<Long, String> keyToPartitionMap = new ImmutableMap.Builder()
         .put(120 * MB, currentDay)

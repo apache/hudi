@@ -138,12 +138,6 @@
       <artifactId>jackson-module-scala_2.11</artifactId>
     </dependency>
 
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro-mapred</artifactId>
-    </dependency>
-
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>

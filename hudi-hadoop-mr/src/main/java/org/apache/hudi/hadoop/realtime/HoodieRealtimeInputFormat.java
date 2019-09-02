@@ -29,8 +29,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -56,6 +54,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Input Format, that provides a real-time view of data in a Hoodie dataset
@@ -63,7 +63,7 @@ import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 @UseFileSplitsFromInputFormat
 public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Configurable {
 
-  public static final Log LOG = LogFactory.getLog(HoodieRealtimeInputFormat.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormat.class);
 
   // These positions have to be deterministic across all tables
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
