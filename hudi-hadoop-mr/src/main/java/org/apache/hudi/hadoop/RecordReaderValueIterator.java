@@ -21,10 +21,10 @@ package org.apache.hudi.hadoop;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Provides Iterator Interface to iterate value entries read from record reader
@@ -34,7 +34,7 @@ import org.apache.hudi.exception.HoodieException;
  */
 public class RecordReaderValueIterator<K, V> implements Iterator<V> {
 
-  public static final Log LOG = LogFactory.getLog(RecordReaderValueIterator.class);
+  private static final transient Logger LOG = LogManager.getLogger(RecordReaderValueIterator.class);
 
   private final RecordReader<K, V> reader;
   private V nextVal = null;

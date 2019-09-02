@@ -19,11 +19,10 @@
 package org.apache.hudi.cli.utils;
 
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import javax.sql.DataSource;
-import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.joda.time.DateTime;
 
@@ -42,17 +41,8 @@ public class HiveUtil {
   private static Connection connection;
 
   private static Connection getConnection(String jdbcUrl, String user, String pass) throws SQLException {
-    DataSource ds = getDatasource(jdbcUrl, user, pass);
-    return ds.getConnection();
-  }
-
-  private static DataSource getDatasource(String jdbcUrl, String user, String pass) {
-    BasicDataSource ds = new BasicDataSource();
-    ds.setDriverClassName(driverName);
-    ds.setUrl(jdbcUrl);
-    ds.setUsername(user);
-    ds.setPassword(pass);
-    return ds;
+    connection = DriverManager.getConnection(jdbcUrl, user, pass);
+    return connection;
   }
 
   public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String dbName, String user, String pass)

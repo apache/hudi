@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.WriteStatus;
@@ -39,6 +38,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
@@ -151,7 +151,7 @@ public class TestUpdateMapFunction implements Serializable {
 
   private HoodieWriteConfig makeHoodieClientConfig(String schema) throws Exception {
     // Prepare the AvroParquetIO
-    String schemaStr = IOUtils.toString(getClass().getResourceAsStream(schema), "UTF-8");
+    String schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream(schema));
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr).build();
   }
 }

@@ -25,15 +25,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
-import javax.sql.DataSource;
-import org.apache.commons.dbcp.BasicDataSource;
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -41,6 +39,7 @@ import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
@@ -110,8 +109,8 @@ public class HiveIncrementalPuller {
   public HiveIncrementalPuller(Config config) throws IOException {
     this.config = config;
     validateConfig(config);
-    String templateContent = IOUtils.toString(
-        this.getClass().getResourceAsStream("IncrementalPull.sqltemplate"), "UTF-8");
+    String templateContent = FileIOUtils.readAsUTFString(
+        this.getClass().getResourceAsStream("IncrementalPull.sqltemplate"));
     incrementalPullSQLtemplate = new ST(templateContent);
   }
 
@@ -344,20 +343,11 @@ public class HiveIncrementalPuller {
 
   private Connection getConnection() throws SQLException {
     if (connection == null) {
-      DataSource ds = getDatasource();
-      log.info("Getting Hive Connection from Datasource " + ds);
-      this.connection = ds.getConnection();
+      log.info("Getting Hive Connection to " + config.hiveJDBCUrl);
+      this.connection = DriverManager.getConnection(config.hiveJDBCUrl, config.hiveUsername, config.hivePassword);
+
     }
     return connection;
-  }
-
-  private DataSource getDatasource() {
-    BasicDataSource ds = new BasicDataSource();
-    ds.setDriverClassName(driverName);
-    ds.setUrl(config.hiveJDBCUrl);
-    ds.setUsername(config.hiveUsername);
-    ds.setPassword(config.hivePassword);
-    return ds;
   }
 
   public static void main(String[] args) throws IOException {

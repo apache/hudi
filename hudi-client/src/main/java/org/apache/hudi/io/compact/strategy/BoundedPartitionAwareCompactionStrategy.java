@@ -18,13 +18,14 @@
 
 package org.apache.hudi.io.compact.strategy;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.time.DateUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,8 +46,8 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // The earliest partition to compact - current day minus the target partitions limit
-    String earliestPartitionPathToCompact = dateFormat.format(DateUtils.addDays(new Date(), -1 * writeConfig
-            .getTargetPartitionsPerDayBasedCompaction()));
+    String earliestPartitionPathToCompact = dateFormat.format(
+        getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Filter out all partitions greater than earliestPartitionPathToCompact
     List<HoodieCompactionOperation> eligibleCompactionOperations = operations.stream()
         .collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet().stream()
@@ -61,13 +62,20 @@ public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionS
   @Override
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
     // The earliest partition to compact - current day minus the target partitions limit
-    String earliestPartitionPathToCompact = dateFormat.format(DateUtils.addDays(new Date(), -1 * writeConfig
-        .getTargetPartitionsPerDayBasedCompaction()));
+    String earliestPartitionPathToCompact = dateFormat.format(
+        getDateAtOffsetFromToday(-1 * writeConfig.getTargetPartitionsPerDayBasedCompaction()));
     // Get all partitions and sort them
     List<String> filteredPartitionPaths = partitionPaths.stream().map(partition -> partition.replace("/", "-"))
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
         .filter(e -> comparator.compare(earliestPartitionPathToCompact, e) >= 0)
         .collect(Collectors.toList());
     return filteredPartitionPaths;
+  }
+
+  @VisibleForTesting
+  public static Date getDateAtOffsetFromToday(int offset) {
+    Calendar calendar = Calendar.getInstance();
+    calendar.add(Calendar.DATE, offset);
+    return calendar.getTime();
   }
 }

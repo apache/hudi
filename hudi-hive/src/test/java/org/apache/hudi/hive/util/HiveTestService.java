@@ -28,7 +28,6 @@ import java.net.SocketException;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -41,6 +40,7 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TProcessor;
@@ -95,7 +95,7 @@ public class HiveTestService {
     if (clean) {
       LOG.info("Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
       File file = new File(localHiveLocation);
-      FileUtils.deleteDirectory(file);
+      FileIOUtils.deleteDirectory(file);
     }
 
     HiveConf serverConf = configureHive(hadoopConf, localHiveLocation);

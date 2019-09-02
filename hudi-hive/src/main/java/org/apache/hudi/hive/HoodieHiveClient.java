@@ -24,7 +24,7 @@ import com.google.common.collect.Maps;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -33,9 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.commons.dbcp.BasicDataSource;
-import org.apache.commons.dbcp.ConnectionFactory;
-import org.apache.commons.dbcp.DriverConnectionFactory;
+import jline.internal.Log;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -57,13 +55,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidDatasetException;
 import org.apache.hudi.hive.util.SchemaUtil;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("ConstantConditions")
 public class HoodieHiveClient {
@@ -80,7 +78,7 @@ public class HoodieHiveClient {
     }
   }
 
-  private static Logger LOG = LoggerFactory.getLogger(HoodieHiveClient.class);
+  private static Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final HoodieTableMetaClient metaClient;
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;
@@ -473,20 +471,18 @@ public class HoodieHiveClient {
 
   private void createHiveConnection() {
     if (connection == null) {
-      BasicDataSource ds = new HiveDataSource();
-      ds.setDriverClassName(HiveDriver.class.getCanonicalName());
-      ds.setUrl(getHiveJdbcUrlWithDefaultDBName());
-      if (syncConfig.hiveUser != null) {
-        ds.setUsername(syncConfig.hiveUser);
-        ds.setPassword(syncConfig.hivePass);
-      }
-      LOG.info("Getting Hive Connection from Datasource " + ds);
       try {
-        this.connection = ds.getConnection();
-        LOG.info("Successfully got Hive Connection from Datasource " + ds);
+        Class.forName(HiveDriver.class.getCanonicalName());
+      } catch (ClassNotFoundException e) {
+        Log.error("Unable to load Hive driver class", e);
+        return;
+      }
+
+      try {
+        this.connection = DriverManager.getConnection(syncConfig.jdbcUrl, syncConfig.hiveUser, syncConfig.hivePass);
+        LOG.info("Successfully established Hive connection to  " + syncConfig.jdbcUrl);
       } catch (SQLException e) {
-        throw new HoodieHiveSyncException(
-            "Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
+        throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
       }
     }
   }
@@ -625,56 +621,6 @@ public class HoodieHiveClient {
 
     static PartitionEvent newPartitionUpdateEvent(String storagePartition) {
       return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
-    }
-  }
-
-  /**
-   * There is a bug in BasicDataSource implementation (dbcp-1.4) which does not allow custom version of Driver (needed
-   * to talk to older version of HiveServer2 including CDH-5x). This is fixed in dbcp-2x but we are using dbcp1.4.
-   * Adding a workaround here. TODO: varadarb We need to investigate moving to dbcp-2x
-   */
-  protected class HiveDataSource extends BasicDataSource {
-
-    protected ConnectionFactory createConnectionFactory() throws SQLException {
-      try {
-        Driver driver = HiveDriver.class.newInstance();
-        // Can't test without a validationQuery
-        if (validationQuery == null) {
-          setTestOnBorrow(false);
-          setTestOnReturn(false);
-          setTestWhileIdle(false);
-        }
-
-        // Set up the driver connection factory we will use
-        String user = username;
-        if (user != null) {
-          connectionProperties.put("user", user);
-        } else {
-          log("DBCP DataSource configured without a 'username'");
-        }
-
-        String pwd = password;
-        if (pwd != null) {
-          connectionProperties.put("password", pwd);
-        } else {
-          log("DBCP DataSource configured without a 'password'");
-        }
-
-        ConnectionFactory driverConnectionFactory = new DriverConnectionFactory(driver, url, connectionProperties);
-        return driverConnectionFactory;
-      } catch (Throwable x) {
-        LOG.warn("Got exception trying to instantiate connection factory. Trying default instantiation", x);
-        return super.createConnectionFactory();
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "HiveDataSource{"
-          + "driverClassName='" + driverClassName + '\''
-          + ", driverClassLoader=" + driverClassLoader
-          + ", url='" + url + '\''
-          + '}';
     }
   }
 }
