@@ -55,10 +55,6 @@ public class TestMultiFS extends HoodieClientTestHarness {
   @Before
   public void setUp() throws Exception {
     initSparkContexts();
-    jsc.getConf().setAppName("hoodie-client-example");
-    jsc.getConf().setMaster("local[1]");
-    jsc.getConf().set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
-    jsc.getConf().set("spark.kryoserializer.buffer.max", "512m");
     initDFS();
     initTestDataGenerator();
   }
