@@ -680,6 +680,11 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       List<HoodieFileGroup> fileGroups = ((HoodieTableFileSystemView) rtView).getAllFileGroups().collect(Collectors
           .toList());
       assertTrue(fileGroups.isEmpty());
+
+      // make sure there are no log files remaining
+      assertTrue(((HoodieTableFileSystemView) rtView).getAllFileGroups().filter(fileGroup -> fileGroup
+          .getAllRawFileSlices().filter(f -> f.getLogFiles().count() == 0).count() == 0).count() == 0L);
+
     }
   }
 
