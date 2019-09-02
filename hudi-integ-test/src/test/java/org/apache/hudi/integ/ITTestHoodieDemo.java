@@ -19,8 +19,8 @@
 package org.apache.hudi.integ;
 
 import com.google.common.collect.ImmutableList;
-import org.apache.hudi.common.util.collection.Pair;
 import java.util.List;
+import org.apache.hudi.common.util.collection.Pair;
 import org.junit.Test;
 
 /**

@@ -259,6 +259,7 @@
         </module>
         <module name="CommentsIndentation"/>
         <module name="IllegalImport">
+            <property name="illegalPkgs" value="org.apache.commons" />
             <property name="illegalClasses" value="java.util.Optional, com.google.common.base.Optional" />
         </module>
     </module>

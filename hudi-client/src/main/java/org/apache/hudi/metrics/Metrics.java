@@ -22,7 +22,6 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.io.Closeables;
 import java.io.Closeable;
-import org.apache.commons.configuration.ConfigurationException;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
@@ -37,9 +36,9 @@ public class Metrics {
   private static volatile boolean initialized = false;
   private static Metrics metrics = null;
   private final MetricRegistry registry;
-  private MetricsReporter reporter = null;
+  private MetricsReporter reporter;
 
-  private Metrics(HoodieWriteConfig metricConfig) throws ConfigurationException {
+  private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
 
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
@@ -72,7 +71,7 @@ public class Metrics {
     }
     try {
       metrics = new Metrics(metricConfig);
-    } catch (ConfigurationException e) {
+    } catch (Exception e) {
       throw new HoodieException(e);
     }
     initialized = true;

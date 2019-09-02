@@ -23,45 +23,17 @@
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-
-  <groupId>org.apache.hudi</groupId>
   <artifactId>hudi-spark-bundle</artifactId>
   <packaging>jar</packaging>
 
   <properties>
-    <log4j.version>1.2.17</log4j.version>
-    <junit.version>4.10</junit.version>
     <checkstyle.skip>true</checkstyle.skip>
     <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
     <notice.file>HUDI_NOTICE.txt</notice.file>
   </properties>
 
   <build>
-     <resources>
-       <resource>
-         <directory>src/main/resources</directory>
-       </resource>
-     </resources>
      <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>copy-dependencies</id>
-            <phase>prepare-package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/lib</outputDirectory>
-              <overWriteReleases>true</overWriteReleases>
-              <overWriteSnapshots>true</overWriteSnapshots>
-              <overWriteIfNewer>true</overWriteIfNewer>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
       <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
@@ -69,7 +41,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.4</version>
+        <version>${maven-shade-plugin.version}</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -78,54 +50,82 @@
             </goals>
             <configuration>
               <createSourcesJar>true</createSourcesJar>
+              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
+              </dependencyReducedPomLocation>
+              <artifactSet>
+                <includes>
+                  <include>org.apache.hudi:hudi-common</include>
+                  <include>org.apache.hudi:hudi-client</include>
+                  <include>org.apache.hudi:hudi-spark</include>
+                  <include>org.apache.hudi:hudi-hive</include>
+                  <include>org.apache.hudi:hudi-hadoop-mr</include>
+                  <include>org.apache.hudi:hudi-timeline-service</include>
+
+                  <include>com.beust:jcommander</include>
+                  <include>io.javalin:javalin</include>
+                  <!-- Spark only has mortbay jetty -->
+                  <include>org.eclipse.jetty:*</include>
+                  <include>org.eclipse.jetty.websocket:*</include>
+                  <include>org.jetbrains.kotlin:*</include>
+                  <include>org.rocksdb:rocksdbjni</include>
+                  <include>org.apache.httpcomponents:httpclient</include>
+                  <include>org.apache.httpcomponents:fluent-hc</include>
+                  <include>org.antlr:stringtemplate</include>
+                  <include>org.apache.parquet:parquet-avro</include>
+
+                  <include>com.twitter:bijection-avro_2.11</include>
+                  <include>com.twitter:bijection-core_2.11</include>
+                  <include>io.dropwizard.metrics:metrics-core</include>
+                  <include>io.dropwizard.metrics:metrics-graphite</include>
+                  <include>com.yammer.metrics:metrics-core</include>
+
+                  <include>org.apache.hive:hive-common</include>
+                  <include>org.apache.hive:hive-service</include>
+                  <include>org.apache.hive:hive-service-rpc</include>
+                  <include>org.apache.hive:hive-metastore</include>
+                  <include>org.apache.hive:hive-jdbc</include>
+                </includes>
+              </artifactSet>
               <relocations>
                 <relocation>
-                  <pattern>com.beust.</pattern>
-                  <shadedPattern>org.apache.hudi.com.beust.</shadedPattern>
+                  <pattern>com.beust.jcommander.</pattern>
+                  <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.joda.</pattern>
-                  <shadedPattern>org.apache.hudi.org.joda.</shadedPattern>
+                  <pattern>org.apache.hive.jdbc.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.google.</pattern>
-                  <shadedPattern>org.apache.hudi.com.google.</shadedPattern>
+                  <pattern>org.apache.hadoop.hive.metastore.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.metastore.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.slf4j.</pattern>
-                  <shadedPattern>org.apache.hudi.org.slf4j.</shadedPattern>
+                  <pattern>org.apache.hive.common.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.</shadedPattern>
-                  <excludes>
-                    <exclude>com.databricks.spark.**</exclude>
-                    <exclude>org.apache.avro.**</exclude>
-                    <exclude>org.apache.derby.**</exclude>
-                    <exclude>org.apache.hadoop.**</exclude>
-                    <exclude>org.apache.hive.**</exclude>
-                    <exclude>org.apache.hudi.**</exclude>
-                    <exclude>org.apache.logging.log4j.**</exclude>
-                    <exclude>org.apache.log4j.**</exclude>
-                    <exclude>org.apache.spark.**</exclude>
-                    <exclude>org.apache.thrift.**</exclude>
-                  </excludes>
+                  <pattern>org.apache.hadoop.hive.common.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>parquet.column</pattern>
-                  <shadedPattern>org.apache.hudi.parquet.column</shadedPattern>
+                  <pattern>org.apache.hadoop.hive.conf.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.conf.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>parquet.format.</pattern>
-                  <shadedPattern>org.apache.hudi.parquet.format.</shadedPattern>
+                  <pattern>org.apache.hive.service.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>parquet.hadoop.</pattern>
-                  <shadedPattern>org.apache.hudi.parquet.hadoop.</shadedPattern>
+                  <pattern>org.apache.hadoop.hive.service.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>parquet.schema</pattern>
-                  <shadedPattern>org.apache.hudi.parquet.schema</shadedPattern>
+                  <pattern>com.codahale.metrics.</pattern>
+                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.codec.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
                 <!--
@@ -162,35 +162,8 @@
                   <shadedPattern>org.apache.hudi.org.apache.hadoop_hive.serde2.</shadedPattern>
                 </relocation>
                 -->
-                <relocation>
-                  <pattern>com.esotericsoftware.kryo.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.kryo.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.objenesis.</pattern>
-                  <shadedPattern>org.apache.hudi.org.objenesis.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.esotericsoftware.minlog.</pattern>
-                  <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
-                </relocation>
               </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-              <artifactSet>
-                <excludes>
-                  <exclude>com.databricks:spark-avro_2.11</exclude>
-                  <exclude>log4j:*</exclude>
-                  <exclude>org.apache.avro:*</exclude>
-                  <exclude>org.apache.derby:derby</exclude>
-                  <exclude>org.apache.hadoop:*</exclude>
-                  <exclude>org.apache.hbase:*</exclude>
-                  <!-- Just include hive-common, hive-serde, hive-service, hive-metastore and hive-jdbc -->
-                  <exclude>org.apache.hive:hive-exec</exclude>
-                  <exclude>org.apache.hive:hive-shims</exclude>
-                  <exclude>org.apache.spark:*</exclude>
-                </excludes>
-              </artifactSet>
-              <filters>
+             <filters>
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
@@ -209,25 +182,26 @@
         </executions>
       </plugin>
     </plugins>
+     <resources>
+       <resource>
+         <directory>src/main/resources</directory>
+       </resource>
+       <resource>
+         <directory>src/test/resources</directory>
+       </resource>
+     </resources>
   </build>
 
   <dependencies>
-    <!-- Scala -->
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala.version}</version>
-    </dependency>
-
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client</artifactId>
+      <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
+      <artifactId>hudi-client</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -246,117 +220,42 @@
       <version>${project.version}</version>
     </dependency>
 
-    <!-- Logging -->
+    <!-- Parquet -->
     <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-      <version>${log4j.version}</version>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>compile</scope>
     </dependency>
 
-    <!-- Fasterxml -->
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-annotations</artifactId>
-    </dependency>
-
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-    </dependency>
-
-    <!-- Spark -->
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-core_2.11</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-sql_2.11</artifactId>
-    </dependency>
-
-    <!-- Spark (Packages) -->
-    <dependency>
-      <groupId>com.databricks</groupId>
-      <artifactId>spark-avro_2.11</artifactId>
-      <version>4.0.0</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.beust</groupId>
-      <artifactId>jcommander</artifactId>
-    </dependency>
-
-    <!-- Apache Commons -->
-    <dependency>
-      <groupId>commons-codec</groupId>
-      <artifactId>commons-codec</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-dbcp</groupId>
-      <artifactId>commons-dbcp</artifactId>
-    </dependency>
-
-    <!-- Hadoop -->
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
-    <!-- Hive - Compile -->
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
-      <classifier>standalone</classifier>
-      <exclusions>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>servlet-api</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <!-- TODO: Reinvestigate PR 633 -->
+    <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
       <scope>compile</scope>
     </dependency>
+
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service-rpc</artifactId>
+      <version>${hive.version}</version>
+      <scope>compile</scope>
+    </dependency>
+
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
       <scope>compile</scope>
     </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-serde</artifactId>
-      <version>${hive.version}</version>
-      <scope>compile</scope>
-    </dependency>
+
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
       <scope>compile</scope>
     </dependency>
+
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-common</artifactId>
@@ -364,13 +263,6 @@
       <scope>compile</scope>
     </dependency>
     <!-- TODO: Reinvestigate PR 633 -->
-
-    <dependency>
-      <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
-      <version>${scalatest.version}</version>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 </project>
 

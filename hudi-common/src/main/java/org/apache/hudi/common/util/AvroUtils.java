@@ -20,28 +20,20 @@ package org.apache.hudi.common.util;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
 import org.apache.avro.file.SeekableByteArrayInput;
-import org.apache.avro.file.SeekableInput;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
-import org.apache.avro.mapred.FsInput;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -52,48 +44,8 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.exception.HoodieIOException;
 
 public class AvroUtils {
-
-  public static List<HoodieRecord<HoodieAvroPayload>> loadFromFiles(FileSystem fs,
-      List<String> deltaFilePaths, Schema expectedSchema) {
-    List<HoodieRecord<HoodieAvroPayload>> loadedRecords = Lists.newArrayList();
-    deltaFilePaths.forEach(s -> {
-      List<HoodieRecord<HoodieAvroPayload>> records = loadFromFile(fs, s, expectedSchema);
-      loadedRecords.addAll(records);
-    });
-    return loadedRecords;
-  }
-
-  public static List<HoodieRecord<HoodieAvroPayload>> loadFromFile(FileSystem fs,
-      String deltaFilePath, Schema expectedSchema) {
-    List<HoodieRecord<HoodieAvroPayload>> loadedRecords = Lists.newArrayList();
-    Path path = new Path(deltaFilePath);
-    try {
-      SeekableInput input = new FsInput(path, fs.getConf());
-      GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>();
-      // Set the expected schema to be the current schema to account for schema evolution
-      reader.setExpected(expectedSchema);
-
-      FileReader<GenericRecord> fileReader = DataFileReader.openReader(input, reader);
-      for (GenericRecord deltaRecord : fileReader) {
-        String key = deltaRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-        String partitionPath =
-            deltaRecord.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-        loadedRecords.add(new HoodieRecord<>(new HoodieKey(key, partitionPath),
-            new HoodieAvroPayload(Option.of(deltaRecord))));
-      }
-      fileReader.close(); // also closes underlying FsInput
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not read avro records from path " + deltaFilePath,
-          e);
-    }
-    return loadedRecords;
-  }
 
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
       Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {

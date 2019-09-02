@@ -30,11 +30,11 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.zookeeper.server.NIOServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnLog;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A Zookeeper minicluster service implementation.
@@ -52,7 +52,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ZookeeperTestService {
 
-  private static final Logger logger = LoggerFactory.getLogger(ZookeeperTestService.class);
+  private static final Logger logger = LogManager.getLogger(ZookeeperTestService.class);
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;

@@ -27,7 +27,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.commons.codec.binary.Hex;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -68,7 +67,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     } catch (NoSuchAlgorithmException nse) {
       throw new HoodieException(nse);
     }
-    this.timelineHash = new String(Hex.encodeHex(md.digest()));
+
+    this.timelineHash = StringUtils.toHexString(md.digest());
   }
 
   /**

@@ -131,6 +131,8 @@
   <properties>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
     <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
+    <maven-shade-plugin.version>3.1.1</maven-shade-plugin.version>
+
     <fasterxml.version>2.6.7</fasterxml.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.8.1</parquet.version>
@@ -164,24 +166,11 @@
   </properties>
 
   <scm>
-    <connection>scm:git:git@github.com:uber/hudi.git</connection>
-    <developerConnection>scm:git:git@github.com:uber/hudi.git</developerConnection>
-    <url>git@github.com:uber/hudi.git</url>
+    <connection>scm:git:git@github.com:apache/incubator-hudi.git</connection>
+    <developerConnection>scm:git:git@github.com:apache/incubator-hudi.git</developerConnection>
+    <url>git@github.com:apache/incubator-hudi.git</url>
     <tag>HEAD</tag>
   </scm>
-
-  <mailingLists>
-    <mailingList>
-      <name>User List</name>
-      <post>hudi-user@googlegroups.com</post>
-      <archive>https://groups.google.com/d/forum/hudi-user/</archive>
-    </mailingList>
-    <mailingList>
-      <name>Developer List</name>
-      <post>hudi-dev@googlegroups.com</post>
-      <archive>https://groups.google.com/d/forum/hudi-dev/</archive>
-    </mailingList>
-  </mailingLists>
 
   <build>
     <plugins>
@@ -459,16 +448,6 @@
         <artifactId>log4j</artifactId>
         <version>${log4j.version}</version>
       </dependency>
-      <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-api</artifactId>
-        <version>${slf4j.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-log4j12</artifactId>
-        <version>${slf4j.version}</version>
-      </dependency>
 
       <!-- Fasterxml -->
       <dependency>
@@ -526,11 +505,7 @@
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
         <version>${avro.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.avro</groupId>
-        <artifactId>avro-mapred</artifactId>
-        <version>${avro.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Parquet -->
@@ -538,6 +513,7 @@
         <groupId>org.apache.parquet</groupId>
         <artifactId>parquet-avro</artifactId>
         <version>${parquet.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Spark -->
@@ -608,38 +584,6 @@
         <groupId>org.rocksdb</groupId>
         <artifactId>rocksdbjni</artifactId>
         <version>5.17.2</version>
-      </dependency>
-
-      <!-- Apache Commons -->
-      <dependency>
-        <groupId>commons-codec</groupId>
-        <artifactId>commons-codec</artifactId>
-        <version>1.4</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-io</groupId>
-        <artifactId>commons-io</artifactId>
-        <version>2.6</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-lang</groupId>
-        <artifactId>commons-lang</artifactId>
-        <version>2.6</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-logging</groupId>
-        <artifactId>commons-logging</artifactId>
-        <version>1.2</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-dbcp</groupId>
-        <artifactId>commons-dbcp</artifactId>
-        <version>1.4</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-pool</groupId>
-        <artifactId>commons-pool</artifactId>
-        <version>1.4</version>
       </dependency>
 
       <!-- Httpcomponents -->

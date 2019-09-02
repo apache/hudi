@@ -23,7 +23,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import org.apache.commons.configuration.ConfigurationException;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.junit.Before;
 import org.junit.Test;
@@ -33,7 +32,7 @@ public class TestHoodieMetrics {
   private HoodieMetrics metrics = null;
 
   @Before
-  public void start() throws ConfigurationException {
+  public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);

@@ -107,7 +107,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
         log.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
       }
       return false;
-    }, "Timed out waiting for filles to become visible");
+    }, "Timed out waiting for files to become visible");
   }
 
   /**
