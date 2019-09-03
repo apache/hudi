@@ -65,9 +65,6 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
 
-  private HoodieWriteClient writeClient;
-  private HoodieReadClient readClient;
-
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
     return getHoodieWriteClient(cfg, false);
   }
@@ -78,29 +75,11 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
       HoodieIndex index) {
-    closeWriteClient();
-    writeClient = new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
-    return writeClient;
+    return new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
   }
 
   protected HoodieReadClient getHoodieReadClient(String basePath) {
-    closeReadClient();
-    readClient = new HoodieReadClient(jsc, basePath);
-    return readClient;
-  }
-
-  private void closeWriteClient() {
-    if (null != writeClient) {
-      writeClient.close();
-      writeClient = null;
-    }
-  }
-
-  private void closeReadClient() {
-    if (null != readClient) {
-      readClient.close();
-      readClient = null;
-    }
+    return new HoodieReadClient(jsc, basePath);
   }
 
   /**
