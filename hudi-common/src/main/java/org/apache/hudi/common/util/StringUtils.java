@@ -62,7 +62,7 @@ public class StringUtils {
     return sb.toString();
   }
 
-  public static boolean isEmpty(String str) {
+  public static boolean isNullOrEmpty(String str) {
     return str == null || str.length() == 0;
   }
 }

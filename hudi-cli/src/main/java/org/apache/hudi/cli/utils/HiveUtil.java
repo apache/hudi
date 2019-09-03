@@ -38,11 +38,8 @@ public class HiveUtil {
     }
   }
 
-  private static Connection connection;
-
   private static Connection getConnection(String jdbcUrl, String user, String pass) throws SQLException {
-    connection = DriverManager.getConnection(jdbcUrl, user, pass);
-    return connection;
+    return DriverManager.getConnection(jdbcUrl, user, pass);
   }
 
   public static long countRecords(String jdbcUrl, HoodieTableMetaClient source, String dbName, String user, String pass)
