@@ -173,6 +173,7 @@
                     <!-- Use this jar's NOTICE and license file -->
                     <exclude>META-INF/NOTICE*</exclude>
                     <exclude>META-INF/LICENSE*</exclude>
+                    <exclude>META-INF/services/javax.*</exclude>
                   </excludes>
                 </filter>
               </filters>

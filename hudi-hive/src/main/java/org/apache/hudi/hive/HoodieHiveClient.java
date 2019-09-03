@@ -33,7 +33,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import jline.internal.Log;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -474,7 +473,7 @@ public class HoodieHiveClient {
       try {
         Class.forName(HiveDriver.class.getCanonicalName());
       } catch (ClassNotFoundException e) {
-        Log.error("Unable to load Hive driver class", e);
+        LOG.error("Unable to load Hive driver class", e);
         return;
       }
 

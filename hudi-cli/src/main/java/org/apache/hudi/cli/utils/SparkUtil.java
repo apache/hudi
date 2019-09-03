@@ -43,7 +43,7 @@ public class SparkUtil {
     SparkLauncher sparkLauncher = new SparkLauncher().setAppResource(currentJar)
         .setMainClass(SparkMain.class.getName());
 
-    if (!StringUtils.isEmpty(propertiesFile)) {
+    if (!StringUtils.isNullOrEmpty(propertiesFile)) {
       sparkLauncher.setPropertiesFile(propertiesFile);
     }
 
