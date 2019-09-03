@@ -54,8 +54,13 @@ public class UpgradePayloadFromUberToApache implements Serializable {
   }
 
   public void run() throws IOException {
-    BufferedReader reader = new BufferedReader(new FileReader(cfg.inputPath));
-    String basePath = reader.readLine();
+    String basePath = null;
+    try (BufferedReader reader = new BufferedReader(new FileReader(cfg.inputPath))) {
+      basePath = reader.readLine();
+    } catch (IOException e) {
+      logger.error("Read from path: " + cfg.inputPath + " error.", e);
+    }
+
     while (basePath != null) {
       basePath = basePath.trim();
       if (!basePath.startsWith("#")) {
