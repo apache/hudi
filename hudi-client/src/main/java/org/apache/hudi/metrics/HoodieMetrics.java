@@ -39,6 +39,7 @@ public class HoodieMetrics {
   public String deltaCommitTimerName = null;
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
+  public String indexTimerName = null;
   private HoodieWriteConfig config = null;
   private String tableName = null;
   private Timer rollbackTimer = null;
@@ -47,6 +48,7 @@ public class HoodieMetrics {
   private Timer deltaCommitTimer = null;
   private Timer finalizeTimer = null;
   private Timer compactionTimer = null;
+  private Timer indexTimer = null;
 
   public HoodieMetrics(HoodieWriteConfig config, String tableName) {
     this.config = config;
@@ -59,6 +61,7 @@ public class HoodieMetrics {
       this.deltaCommitTimerName = getMetricsName("timer", HoodieTimeline.DELTA_COMMIT_ACTION);
       this.finalizeTimerName = getMetricsName("timer", "finalize");
       this.compactionTimerName = getMetricsName("timer", HoodieTimeline.COMPACTION_ACTION);
+      this.indexTimerName = getMetricsName("timer", "index");
     }
   }
 
@@ -106,6 +109,13 @@ public class HoodieMetrics {
       deltaCommitTimer = createTimer(deltaCommitTimerName);
     }
     return deltaCommitTimer == null ? null : deltaCommitTimer.time();
+  }
+
+  public Timer.Context getIndexCtx() {
+    if (config.isMetricsOn() && indexTimer == null) {
+      indexTimer = createTimer(indexTimerName);
+    }
+    return indexTimer == null ? null : indexTimer.time();
   }
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs,
@@ -169,6 +179,15 @@ public class HoodieMetrics {
               durationInMs, numFilesFinalized));
       Metrics.registerGauge(getMetricsName("finalize", "duration"), durationInMs);
       Metrics.registerGauge(getMetricsName("finalize", "numFilesFinalized"), numFilesFinalized);
+    }
+  }
+
+  public void updateIndexMetrics(final String action,final long durationInMs) {
+    if (config.isMetricsOn()) {
+      logger.info(String
+          .format("Sending index metrics (%s.duration, %d)",action, durationInMs));
+      Metrics.registerGauge(getMetricsName("index", String.format("%s.duration", action)),
+          durationInMs);
     }
   }
 
