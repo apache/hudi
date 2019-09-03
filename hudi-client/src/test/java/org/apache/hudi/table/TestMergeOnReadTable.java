@@ -78,8 +78,6 @@ import org.junit.rules.TemporaryFolder;
 
 public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
-  private HoodieWriteClient writeClient;
-
   @Before
   public void init() throws IOException {
     initDFS();
@@ -100,11 +98,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    if (null != writeClient) {
-      writeClient.close();
-    }
-    writeClient = new HoodieWriteClient(jsc, config);
-    return writeClient;
+    return new HoodieWriteClient(jsc, config);
   }
 
   @Test
