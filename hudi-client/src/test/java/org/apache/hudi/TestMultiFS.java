@@ -49,7 +49,6 @@ public class TestMultiFS extends HoodieClientTestHarness {
   private static Logger logger = LogManager.getLogger(TestMultiFS.class);
   private String tablePath = "file:///tmp/hoodie/sample-table";
   protected String tableName = "hoodie_rt";
-  private HoodieWriteClient hdfsWriteClient;
   private String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
   @Before
@@ -67,11 +66,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
   }
 
   private HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig config) throws Exception {
-    if (null != hdfsWriteClient) {
-      hdfsWriteClient.close();
-    }
-    hdfsWriteClient = new HoodieWriteClient(jsc, config);
-    return hdfsWriteClient;
+    return new HoodieWriteClient(jsc, config);
   }
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {

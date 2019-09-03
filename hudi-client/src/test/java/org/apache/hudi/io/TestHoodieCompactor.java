@@ -51,7 +51,6 @@ import org.junit.Test;
 
 public class TestHoodieCompactor extends HoodieClientTestHarness {
 
-  private HoodieWriteClient writeClient;
   private Configuration hadoopConf;
 
   @Before
@@ -76,11 +75,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   }
 
   private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    if (null != writeClient) {
-      writeClient.close();
-    }
-    writeClient = new HoodieWriteClient(jsc, config);
-    return writeClient;
+    return new HoodieWriteClient(jsc, config);
   }
 
   private HoodieWriteConfig getConfig() {

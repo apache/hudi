@@ -53,8 +53,6 @@ import org.junit.Test;
 @SuppressWarnings("unchecked")
 public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
-  private HoodieWriteClient writeClient;
-
   @Before
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieMergeHandle");
@@ -74,11 +72,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   }
 
   private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    if (null != writeClient) {
-      writeClient.close();
-    }
-    writeClient = new HoodieWriteClient(jsc, config);
-    return writeClient;
+    return new HoodieWriteClient(jsc, config);
   }
 
   @Test

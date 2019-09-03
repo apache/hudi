@@ -76,7 +76,6 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
   private static String tableName = "test_table";
-  private HoodieWriteClient writeClient;
 
   public TestHbaseIndex() throws Exception {
   }
@@ -112,22 +111,13 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
 
   @After
   public void tearDown() throws Exception {
-    if (null != writeClient) {
-      writeClient.close();
-      writeClient = null;
-    }
-
     cleanupSparkContexts();
     cleanupTempFolderAndPath();
     cleanupTestDataGenerator();
   }
 
   private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
-    if (null != writeClient) {
-      writeClient.close();
-    }
-    writeClient = new HoodieWriteClient(jsc, config);
-    return writeClient;
+    return new HoodieWriteClient(jsc, config);
   }
 
   @Test
