@@ -1,3 +1,107 @@
+Release 0.5.0-incubating
+------------------------------------
+
+### Highlights
+ * First Apache Incubating Release
+ * Package Renames from com.uber.hoodie to org.apache.hudi (See https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi)
+ * Complete Redo of Hudi Jar bundling
+ * Bug fixes in query side integration, DeltaStreamer, compaction, rollbacks, restore
+
+
+### Full PR List
+
+  * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers
+  * **Bhavani Sudha Saktheeswaran** [HUDI-164] Fixes incorrect averageBytesPerRecord
+  * **Balaji Varadarajan** [HUDI-243] Rename HoodieInputFormat and HoodieRealtimeInputFormat to HoodieParquetInputFormat and HoodieParquetRealtimeInputFormat
+  * **Vinoth Chandar** [HUDI-143] Excluding javax.* from utilities and spark bundles
+  * **vinoth chandar** [HUDI-159] Redesigning bundles for lighter-weight integrations
+  * **Mehrotra** Fix logging in HoodieSparkSqlWriter
+  * **leesf** [hotfix] fix typo
+  * **leesf** [HUDI-236] Failed to close stream
+  * **Alex Filipchik** Support nested ordering fields
+  * **leesf** [HUDI-230] Add missing Apache License in some files
+  * **Balaji Varadarajan** [HUDI-227] : DeltaStreamer Improvements : Commit empty input batch with progressing checkpoints and allow users to override configs through properties. Original PR : PR-805 and PR-806 (#863)
+  * **Balaji Varadarajan** HUDI-170 Updating hoodie record before inserting it into ExternalSpillableMap (#866)
+  * **leesf** [HUDI-229] Fix mvn notice:generate issue in windows
+  * **leesf** [HUDI-225] Create Hudi Timeline Server Fat Jar
+  * **Balaji Varadarajan** HUDI-124 : Exclude jdk.tools from hadoop-common and update Notice files (#858)
+  * **leesf** [hotfix] change hoodie-timeline-*.jar to hudi-timeline-*.jar
+  * **leesf** [HUDI-222] Rename main class path to org.apache.hudi.timeline.service.TimelineService in run_server.sh
+  * **Alex Filipchik** Fixed unit test
+  * **Alex Filipchik** Addressing comments
+  * **Alex Filipchik** Ignore duplicate of a compaction file
+  * **Alexander Filipchik** [HUDI-223] Adding a way to infer target schema from the dataset after the transformation (#854)
+  * **Vinoth Chandar** [HUDI-159] Precursor cleanup to reduce build warnings
+  * **Balaji Varadarajan** HUDI-128 Preparing POM for release and snapshot builds (#851)
+  * **vinoth chandar** [HUDI-159]: Pom cleanup and removal of com.twitter.parquet
+  * **vinoth chandar** [HUDI-68] Pom cleanup & demo automation (#846)
+  * **Bhavani Sudha Saktheeswaran** [HUDI-82] Adds Presto integration in Docker demo (#847)
+  * **leesf** HUDI-212: Specify Charset to UTF-8 for IOUtils.toString (#837)
+  * **vinoyang** [HUDI-205] Let checkstyle ban Java and Guava Optional instead of using Option provided by Hudi (#834)
+  * **Balaji Varadarajan** HUDI-204 : Make MOR rollback idempotent and disable using rolling stats for small file selection (#833)
+  * **Nishith Agarwal** Adding GPG Keys
+  * **Balaji Varadarajan** HUDI-123 Rename code packages/constants to org.apache.hudi (#830)
+  * **yanghua** [HUDI-153] Use com.uber.hoodie.common.util.Option instead of Java and Guava Optional
+  * **garyli1019** HUDI-171 delete tmp file in addShutDownHook
+  * **Balaji Varadarajan** HUDI-149 - Remove platform dependencies and update NOTICE plugin
+  * **n3nash** - Adding HoodieCombineHiveInputFormat for COW tables (#811)
+  * **n3nash** - Fix realtime queries by removing COLUMN_ID and COLUMN_NAME cache in inputformat (#814)
+  * **venkatr** Cache RDD to avoid recomputing data ingestion. Return result RDD after updating index so that this step is not skipped by chained actions on the same RDD
+  * **Balaji Varadarajan** HUDI-197 Hive Sync and othe CLIs using bundle picking sources jar instead of binary jar
+  * **vinothchandar** HUDI-178 : Add keys for vinoth to KEYS file
+  * **Anbu Cheeralan** Update Keys with anchee@apache.org
+  * **Luke Zhu** Fix typo in hoodie-presto-bundle (#818)
+  * **Balaji Varadarajan** Generate Source Jars for bundle packages (#810)
+  * **Vinoth Chandar** HUDI-92 : Making deltastreamer with DistributedTestSource also run locally
+  * **vinoyang** [HUDI-181] Fix the Bold markdown grammar issue of README file (#808)
+  * **eisig** HUDI-175 - add an option to   manually override the DeltaStreamer checkpoint (#798)
+  * **Balaji Varadarajan** Add balaji gpg key to KEYS file
+  * **Balaji Varadarajan** Allow HoodieWrapperFileSystem to wrap other proxy file-system implementations with no getScheme implementation (#793)
+  * **Balaji Varadarajan** HUDI-140 : GCS: Log File Reading not working due to difference in seek() behavior for EOF
+  * **eisig** add jssc.stop() (#797)
+  * **n3nash** Fixing default value for avro 1.7 which assumes NULL value instead of a jsonnode that is null (#792)
+  * **Balaji Varadarajan** HUDI-168 Ensure getFileStatus calls for files getting written is done after close() is called (#788)
+  * **eisig** fix HoodieLogFileReader (#787)
+  * **Balaji Varadarajan** HUDI-162 : File System view must be built with correct timeline actions
+  * **Balaji Varadarajan** HUDI-138 - Meta Files handling also need to support consistency guard
+  * **Yihua Guo** [HUDI-161] Remove --key-generator-class CLI arg in HoodieDeltaStreamer and use key generator class specified in datasource properties. (#781)
+  * **Ho Tien Vu** Fixed TableNotFoundException when write with structured streaming (#778)
+  * **Thinking Chen** when column type is decimal, should add precision and scale (#753)
+  * **Balaji Varadarajan** Fixing bugs found during running hoodie demo (#760)
+  * **Ho Tien Vu** Added preemptive check for 'spark.scheduler.mode'
+  * **Jaimin Shah** adding support for complex keys (#728)
+  * **Ron Barabash** Adding support for optional skipping single archiving failures
+  * **Balaji Varadarajan** Reword confusing message and reducing the severity level
+  * **Balaji Varadarajan** Add maprfs to storage schemes
+  * **Balaji Varadarajan** Ensure TableMetaClient and FileSystem instances have exclusive copy of Configuration
+  * **Balaji Varadarajan** HUDI-70 : Making DeltaStreamer run in continuous mode with concurrent compaction
+  * **Balaji Varadarajan** Disable Notice Plugin
+  * **Balaji Varadarajan** HUDI-148 Small File selection logic for MOR must skip fileIds selected for pending compaction correctly
+  * **vinoth chandar** Update README.md
+  * **Nishith Agarwal** Reading baseCommitTime from the latest file slice as opposed to the tagged record value
+  * **Nishith Agarwal** - Ugrading to Hive 2.x - Eliminating in-memory deltaRecordsMap - Use writerSchema to generate generic record needed by custom payloads - changes to make tests work with hive 2.x
+  * **Balaji Varadarajan** All Opened hoodie clients in tests needs to be closed TestMergeOnReadTable must use embedded timeline server
+  * **Balaji Varadarajan** TestMergeOnReadTable must use embedded timeline server
+  * **Balaji Varadarajan** Turn on embedded server for all client tests
+  * **Balaji Varadarajan** Ensure log files are consistently ordered when scanning
+  * **Vinoth Chandar** Introduce HoodieReadHandle abstraction into index
+  * **Balaji Varadarajan** Close Hoodie Clients which are opened to properly shutdown embedded timeline service
+  * **Balaji Varadarajan** HUDI-147 Compaction Inflight Rollback not deleting Marker directory
+  * **Balaji Varadarajan** HUDI-125 : Change License for all source files and update RAT configurations
+  * **Balaji Varadarajan** Changes related to Licensing work 1. Go through dependencies list one round to ensure compliance. Generated current NOTICE list in all submodules (other apache projects like flink does this).    To be on conservative side regarding licensing, NOTICE.txt lists all dependencies including transitive. Pending Compliance questions reported in https://issues.apache.org/jira/browse/LEGAL-461 2. Automate generating NOTICE.txt files to allow future package compliance issues be identified early as part of code-review process. 3. Added NOTICE.txt and LICENSE.txt to all HUDI jars
+  * **guanjianhui** exlude fasterxml and parquet  from presto bundle
+  * **guanjianhui** set codehaus.jackson modules to the same version 1.9.13
+  * **Balaji Varadarajan** Auto generated Slack Channel Notifications setup
+  * **Balaji Varadarajan** Replace Non-Compliant dnl.utils package with Apache 2.0 licensed alternative
+  * **Balaji Varadarajan** LogFile comparator must handle log file names without write token for backwards compatibility
+  * **Thinking** fix spark-shell add jar problem
+  * **Vinoth Chandar** Move depedency repos to https urls
+  * **Vinoth Chandar** Create hoodie-utilities-bundle to host the shaded jar
+  * **Vinoth Chandar** Turn off noisy test
+  * **Vinoth Chandar** Add support for maven deploy plugin to make snapshot releases
+  * **guanjianhui** fix maven pom
+  * **Balaji Varadarajan** HUDI-139 Compaction running twice due to duplicate "map" transformation while finalizing compaction
+
 Release 0.4.7
 ------------------------------------
 
