@@ -38,7 +38,7 @@ import scala.collection.mutable.ListBuffer
 
 private[hudi] object HoodieSparkSqlWriter {
 
-  private val log = LogManager.getLogger("HoodieSparkSQLWriter")
+  private val log = LogManager.getLogger(getClass)
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
