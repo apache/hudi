@@ -250,7 +250,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   /**
    * Helper to convert file-status to data-files
    *
-   * @param statuses List of Fole-Status
+   * @param statuses List of File-Status
    */
   private Stream<HoodieDataFile> convertFileStatusesToDataFiles(FileStatus[] statuses) {
     Predicate<FileStatus> roFilePredicate = fileStatus ->
