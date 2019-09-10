@@ -42,32 +42,12 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 /**
  * Test Cases for rollback of snapshots and commits
  */
 public class TestClientRollback extends TestHoodieClientBase {
-
-  @Before
-  public void setUp() throws Exception {
-    initTempFolderAndPath();
-    initTestDataGenerator();
-    initSparkContexts();
-    initFileSystem();
-    initTableType();
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    cleanupTableType();
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
-    cleanupTempFolderAndPath();
-  }
 
   /**
    * Test case for rollback-savepoint interaction

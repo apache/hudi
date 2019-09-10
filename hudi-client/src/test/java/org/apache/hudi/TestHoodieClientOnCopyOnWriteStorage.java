@@ -65,31 +65,11 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
-
-  @Before
-  public void setUp() throws Exception {
-    initTempFolderAndPath();
-    initSparkContexts();
-    initTestDataGenerator();
-    initFileSystem();
-    initTableType();
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    cleanupTableType();
-    cleanupTestDataGenerator();
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupTempFolderAndPath();
-  }
 
   /**
    * Test Auto Commit behavior for HoodieWriteClient insert API

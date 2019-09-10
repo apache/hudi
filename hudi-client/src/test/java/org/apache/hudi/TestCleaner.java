@@ -72,9 +72,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerTaskEnd;
 import org.apache.spark.util.AccumulatorV2;
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 import scala.collection.Iterator;
 
@@ -85,24 +83,6 @@ public class TestCleaner extends TestHoodieClientBase {
 
   private static final int BIG_BATCH_INSERT_SIZE = 500;
   private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
-
-  @Before
-  public void setUp() throws Exception {
-    initTempFolderAndPath();
-    initSparkContexts();
-    initTestDataGenerator();
-    initFileSystem();
-    initTableType();
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    cleanupTableType();
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
-    cleanupTempFolderAndPath();
-  }
 
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests

@@ -56,7 +56,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 
 /**
  * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests
@@ -64,6 +66,16 @@ import org.junit.Assert;
 public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   protected static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
+
+  @Before
+  public void setUp() throws Exception {
+    initResourceGroupForHoodieClientTests();
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    cleanupResourceGroupForHoodieClientTests();
+  }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
     return getHoodieWriteClient(cfg, false);
