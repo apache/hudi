@@ -4,73 +4,65 @@ keywords: hudi, data ingestion, etl, real time, use cases
 sidebar: mydoc_sidebar
 permalink: use_cases.html
 toc: false
-summary: "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
+summary: "以下是一些使用Hudi的示例，说明了加快处理速度和提高效率的好处"
 
 ---
 
 
 
-## Near Real-Time Ingestion
+## 近实时摄取
 
-Ingesting data from external sources like (event logs, databases, external sources) into a [Hadoop Data Lake](http://martinfowler.com/bliki/DataLake.html) is a well known problem.
-In most (if not all) Hadoop deployments, it is unfortunately solved in a piecemeal fashion, using a medley of ingestion tools,
-even though this data is arguably the most valuable for the entire organization.
-
-
-For RDBMS ingestion, Hudi provides __faster loads via Upserts__, as opposed costly & inefficient bulk loads. For e.g, you can read the MySQL BIN log or [Sqoop Incremental Import](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports) and apply them to an
-equivalent Hudi table on DFS. This would be much faster/efficient than a [bulk merge job](https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457)
-or [complicated handcrafted merge workflows](http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/)
+将外部源(如事件日志、数据库、外部源)的数据摄取到[Hadoop数据湖](http://martinfowler.com/bliki/DataLake.html)是一个众所周知的问题。
+尽管这些数据对整个组织来说是最有价值的，但不幸的是，在大多数(如果不是全部)Hadoop部署中都使用零散的方式解决，即使用多个不同的摄取工具。
 
 
-For NoSQL datastores like [Cassandra](http://cassandra.apache.org/) / [Voldemort](http://www.project-voldemort.com/voldemort/) / [HBase](https://hbase.apache.org/), even moderately big installations store billions of rows.
-It goes without saying that __full bulk loads are simply infeasible__ and more efficient approaches are needed if ingestion is to keep up with the typically high update volumes.
+对于RDBMS摄取，Hudi提供__通过更新插入达到更快加载__，而不是昂贵且低效的批量加载。例如，您可以读取MySQL BIN日志或[Sqoop增量导入](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports)并将其应用于
+DFS上的等效Hudi表。这比[批量合并任务](https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457)及[复杂的手工合并工作流](http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/)更快/更有效率。
 
 
-Even for immutable data sources like [Kafka](kafka.apache.org) , Hudi helps __enforces a minimum file size on HDFS__, which improves NameNode health by solving one of the [age old problems in Hadoop land](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/) in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.
-
-Across all sources, Hudi adds the much needed ability to atomically publish new data to consumers via notion of commits, shielding them from partial ingestion failures
-
-
-## Near Real-time Analytics
-
-Typically, real-time [datamarts](https://en.wikipedia.org/wiki/Data_mart) are powered by specialized analytical stores such as [Druid](http://druid.io/) or [Memsql](http://www.memsql.com/) or [even OpenTSDB](http://opentsdb.net/) .
-This is absolutely perfect for lower scale ([relative to Hadoop installations like this](https://blog.twitter.com/2015/hadoop-filesystem-at-twitter)) data, that needs sub-second query responses such as system monitoring or interactive real-time analysis.
-But, typically these systems end up getting abused for less interactive queries also since data on Hadoop is intolerably stale. This leads to under utilization & wasteful hardware/license costs.
+对于NoSQL数据存储，如[Cassandra](http://cassandra.apache.org/) / [Voldemort](http://www.project-voldemort.com/voldemort/) / [HBase](https://hbase.apache.org/)，即使是中等规模大小也会存储数十亿行。
+毫无疑问， __全量加载不可行__，如果摄取需要跟上较高的更新量，那么则需要更有效的方法。
 
 
-On the other hand, interactive SQL solutions on Hadoop such as Presto & SparkSQL excel in __queries that finish within few seconds__.
-By bringing __data freshness to a few minutes__, Hudi can provide a much efficient alternative, as well unlock real-time analytics on __several magnitudes larger datasets__ stored in DFS.
-Also, Hudi has no external dependencies (like a dedicated HBase cluster, purely used for real-time analytics) and thus enables faster analytics on much fresher analytics, without increasing the operational overhead.
+即使对于像[Kafka](kafka.apache.org)这样的不可变数据源，Hudi也可以 __强制在HDFS上使用最小文件大小__, 这采取了综合方式解决[Hadoop中的一个老问题](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/)来改善NameNode的健康状况。这对事件流来说更为重要，因为它通常具有较高容量(例如：点击流)，如果管理不当，可能会对Hadoop群集造成严重损害。
+
+在所有源中，通过`提交`这一概念，Hudi增加了以原子方式向消费者发布新数据的功能，这种功能十分必要。
+
+## 近实时分析
+
+通常，实时[数据集市](https://en.wikipedia.org/wiki/Data_mart)由专业(实时)数据分析存储提供支持，例如[Druid](http://druid.io/)或[Memsql](http://www.memsql.com/)或[OpenTSDB](http://opentsdb.net/)。
+这对于较小规模的数据量来说绝对是完美的([相比于这样安装Hadoop](https://blog.twitter.com/2015/hadoop-filesystem-at-twitter))，这种情况需要在亚秒级响应查询，例如系统监控或交互式实时分析。
+但是，由于Hadoop上的数据太陈旧了，通常这些系统会被滥用于非交互式查询，这导致利用率不足和硬件/许可证成本的浪费。
+
+另一方面，Hadoop上的交互式SQL解决方案(如Presto和SparkSQL)表现出色，在__几秒钟内完成查询__。
+通过将__数据新鲜度提高到几分钟__，Hudi可以提供一个更有效的替代方案，并支持存储在DFS中的__数量级更大的数据集__的实时分析。
+此外，Hudi没有外部依赖(如专用于实时分析的HBase集群)，因此可以在更新的分析上实现更快的分析，而不会增加操作开销。
 
 
-## Incremental Processing Pipelines
+## 增量处理管道
 
-One fundamental ability Hadoop provides is to build a chain of datasets derived from each other via DAGs expressed as workflows.
-Workflows often depend on new data being output by multiple upstream workflows and traditionally, availability of new data is indicated by a new DFS Folder/Hive Partition.
-Let's take a concrete example to illustrate this. An upstream workflow `U` can create a Hive partition for every hour, with data for that hour (event_time) at the end of each hour (processing_time), providing effective freshness of 1 hour.
-Then, a downstream workflow `D`, kicks off immediately after `U` finishes, and does its own processing for the next hour, increasing the effective latency to 2 hours.
+Hadoop提供的一个基本能力是构建一系列数据集，这些数据集通过表示为工作流的DAG相互派生。
+工作流通常取决于多个上游工作流输出的新数据，新数据的可用性传统上由新的DFS文件夹/Hive分区指示。
+让我们举一个具体的例子来说明这点。上游工作流`U`可以每小时创建一个Hive分区，在每小时结束时(processing_time)使用该小时的数据(event_time)，提供1小时的有效新鲜度。
+然后，下游工作流`D`在`U`结束后立即启动，并在下一个小时内自行处理，将有效延迟时间增加到2小时。
 
-The above paradigm simply ignores late arriving data i.e when `processing_time` and `event_time` drift apart.
-Unfortunately, in today's post-mobile & pre-IoT world, __late data from intermittently connected mobile devices & sensors are the norm, not an anomaly__.
-In such cases, the only remedy to guarantee correctness is to [reprocess the last few hours](https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data) worth of data,
-over and over again each hour, which can significantly hurt the efficiency across the entire ecosystem. For e.g; imagine reprocessing TBs worth of data every hour across hundreds of workflows.
+上面的示例忽略了迟到的数据，即`processing_time`和`event_time`分开时。
+不幸的是，在今天的后移动和前物联网世界中，__来自间歇性连接的移动设备和传感器的延迟数据是常态，而不是异常__。
+在这种情况下，保证正确性的唯一补救措施是[重新处理最后几个小时](https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data)的数据，
+每小时一遍又一遍，这可能会严重影响整个生态系统的效率。例如; 试想一下，在数百个工作流中每小时重新处理TB数据。
 
+Hudi通过以单个记录为粒度的方式(而不是文件夹/分区)从上游 Hudi数据集`HU`消费新数据(包括迟到数据)，来解决上面的问题。
+应用处理逻辑，并使用下游Hudi数据集`HD`高效更新/协调迟到数据。在这里，`HU`和`HD`可以以更频繁的时间被连续调度
+比如15分钟，并且`HD`提供端到端30分钟的延迟。
 
-Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi dataset `HU` at a record granularity (not folders/partitions),
-apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi dataset `HD`. Here, `HU` and `HD` can be continuously scheduled at a much more frequent schedule
-like 15 mins, and providing an end-end latency of 30 mins at `HD`.
+为实现这一目标，Hudi采用了类似于[Spark Streaming](https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations)、发布/订阅系统等流处理框架，以及像[Kafka](http://kafka.apache.org/documentation/#theconsumer)
+或[Oracle XStream](https://docs.oracle.com/cd/E11882_01/server.112/e16545/xstrm_cncpt.htm#XSTRM187)等数据库复制技术的类似概念。
+如果感兴趣，可以在[这里](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop)找到有关增量处理(相比于流处理和批处理)好处的更详细解释。
 
+## DFS的数据分发
 
-To achieve this, Hudi has embraced similar concepts from stream processing frameworks like [Spark Streaming](https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations) , Pub/Sub systems like [Kafka](http://kafka.apache.org/documentation/#theconsumer)
-or database replication technologies like [Oracle XStream](https://docs.oracle.com/cd/E11882_01/server.112/e16545/xstrm_cncpt.htm#XSTRM187).
-For the more curious, a more detailed explanation of the benefits of Incremental Processing (compared to Stream Processing & Batch Processing) can be found [here](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop)
+Hadoop的一个流行用例是压缩数据，然后将其分发回在线服务存储层，以供应用程序使用。
+例如，一个Spark管道可以[确定Hadoop上的紧急制动事件](https://eng.uber.com/telematics/)并将它们加载到服务存储层(如ElasticSearch)中，供Uber应用程序使用以增加安全驾驶。这种用例中，通常架构会在Hadoop和服务存储之间引入`队列`，以防止目标服务存储被压垮。
+对于队列的选择，一种流行的选择是Kafka，这个模型经常导致__在DFS上存储相同数据的冗余(用于计算结果的离线分析)和Kafka(用于分发)__
 
-
-## Data Dispersal From DFS
-
-A popular use-case for Hadoop, is to crunch data and then disperse it back to an online serving store, to be used by an application.
-For e.g, a Spark Pipeline can [determine hard braking events on Hadoop](https://eng.uber.com/telematics/) and load them into a serving store like ElasticSearch, to be used by the Uber application to increase safe driving. Typical architectures for this employ a `queue` between Hadoop and serving store, to prevent overwhelming the target serving store.
-A popular choice for this queue is Kafka and this model often results in __redundant storage of same data on DFS (for offline analysis on computed results) and Kafka (for dispersal)__
-
-Once again Hudi can efficiently solve this problem, by having the Spark Pipeline upsert output from
-each run into a Hudi dataset, which can then be incrementally tailed (just like a Kafka topic) for new data & written into the serving store.
+通过将每次运行的Spark管道更新插入的输出转换为Hudi数据集，Hudi可以再次有效地解决这个问题，然后可以以增量方式获取尾部数据(就像Kafka主题一样)然后写入服务存储层。
