@@ -28,9 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 @SuppressWarnings("unchecked")
@@ -38,24 +36,6 @@ import org.junit.Test;
  * Test-cases for covering HoodieReadClient APIs
  */
 public class TestHoodieReadClient extends TestHoodieClientBase {
-
-  @Before
-  public void setUp() throws Exception {
-    initTempFolderAndPath();
-    initTestDataGenerator();
-    initSparkContexts();
-    initFileSystem();
-    initTableType();
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    cleanupTableType();
-    cleanupTestDataGenerator();
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupTempFolderAndPath();
-  }
 
   /**
    * Test ReadFilter API after writing new records using HoodieWriteClient.insert
