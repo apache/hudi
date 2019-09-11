@@ -410,7 +410,7 @@ public class SchemaUtil {
     List<String> partitionFields = new ArrayList<>();
     for (String partitionKey : config.partitionFields) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
-      partitionFields.add(new StringBuilder().append(partitionKey).append(" ")
+      partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
           .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
     }
 
