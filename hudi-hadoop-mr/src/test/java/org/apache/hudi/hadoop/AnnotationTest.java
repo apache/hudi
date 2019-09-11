@@ -27,8 +27,8 @@ public class AnnotationTest {
 
   @Test
   public void testAnnotation() {
-    assertTrue(HoodieInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
-    Annotation[] annotations = HoodieInputFormat.class.getAnnotations();
+    assertTrue(HoodieParquetInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
+    Annotation[] annotations = HoodieParquetInputFormat.class.getAnnotations();
     boolean found = false;
     for (Annotation annotation : annotations) {
       if ("UseFileSplitsFromInputFormat".equals(annotation.annotationType().getSimpleName())) {

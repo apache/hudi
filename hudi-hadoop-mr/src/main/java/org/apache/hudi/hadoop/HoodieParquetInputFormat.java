@@ -57,9 +57,9 @@ import org.apache.log4j.Logger;
  * Hoodie/Non-Hoodie datasets
  */
 @UseFileSplitsFromInputFormat
-public class HoodieInputFormat extends MapredParquetInputFormat implements Configurable {
+public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieInputFormat.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
   protected Configuration conf;
 

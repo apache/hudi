@@ -35,7 +35,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.hadoop.realtime.HoodieRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
 /**
  * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR)
@@ -46,7 +46,7 @@ public class HoodieMergeOnReadTestUtils {
       throws IOException {
     JobConf jobConf = new JobConf();
     Schema schema = HoodieAvroUtils.addMetadataFields(Schema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
-    HoodieRealtimeInputFormat inputFormat = new HoodieRealtimeInputFormat();
+    HoodieParquetRealtimeInputFormat inputFormat = new HoodieParquetRealtimeInputFormat();
     setPropsForInputFormat(inputFormat, jobConf, schema, basePath);
     return inputPaths.stream().map(path -> {
       setInputPath(jobConf, path);
@@ -76,8 +76,8 @@ public class HoodieMergeOnReadTestUtils {
     }).get();
   }
 
-  private static void setPropsForInputFormat(HoodieRealtimeInputFormat inputFormat, JobConf jobConf, Schema schema,
-      String basePath) {
+  private static void setPropsForInputFormat(HoodieParquetRealtimeInputFormat inputFormat, JobConf jobConf,
+      Schema schema, String basePath) {
     List<Schema.Field> fields = schema.getFields();
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));

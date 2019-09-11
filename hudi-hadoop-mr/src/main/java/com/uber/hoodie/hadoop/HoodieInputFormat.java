@@ -18,9 +18,11 @@
 
 package com.uber.hoodie.hadoop;
 
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+
 /**
  * Temporary class to allow seamless migration of com.uber.hoodie to org.apache.hudi
  */
-public class HoodieInputFormat extends org.apache.hudi.hadoop.HoodieInputFormat {
+public class HoodieInputFormat extends HoodieParquetInputFormat {
 
 }
