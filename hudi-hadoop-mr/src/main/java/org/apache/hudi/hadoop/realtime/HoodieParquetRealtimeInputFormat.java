@@ -52,7 +52,7 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.HoodieInputFormat;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -61,9 +61,9 @@ import org.apache.log4j.Logger;
  * Input Format, that provides a real-time view of data in a Hoodie dataset
  */
 @UseFileSplitsFromInputFormat
-public class HoodieRealtimeInputFormat extends HoodieInputFormat implements Configurable {
+public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormat.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
 
   // These positions have to be deterministic across all tables
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;

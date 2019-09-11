@@ -38,12 +38,12 @@ import org.junit.rules.TemporaryFolder;
 
 public class HoodieInputFormatTest {
 
-  private HoodieInputFormat inputFormat;
+  private HoodieParquetInputFormat inputFormat;
   private JobConf jobConf;
 
   @Before
   public void setUp() {
-    inputFormat = new HoodieInputFormat();
+    inputFormat = new HoodieParquetInputFormat();
     jobConf = new JobConf();
     inputFormat.setConf(jobConf);
   }

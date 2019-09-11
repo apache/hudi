@@ -70,8 +70,8 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.CombineFileInputFormat;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.hudi.hadoop.HoodieInputFormat;
-import org.apache.hudi.hadoop.realtime.HoodieRealtimeInputFormat;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -403,9 +403,9 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       InputFormat inputFormat = getInputFormatFromCache(inputFormatClass, job);
       LOG.info("Input Format => " + inputFormatClass.getName());
       // **MOD** Set the hoodie filter in the combine
-      if (inputFormatClass.getName().equals(HoodieInputFormat.class.getName())) {
+      if (inputFormatClass.getName().equals(HoodieParquetInputFormat.class.getName())) {
         combine.setHoodieFilter(true);
-      } else if (inputFormatClass.getName().equals(HoodieRealtimeInputFormat.class.getName())) {
+      } else if (inputFormatClass.getName().equals(HoodieParquetRealtimeInputFormat.class.getName())) {
         LOG.info("Setting hoodie filter and realtime input format");
         combine.setHoodieFilter(true);
         combine.setRealTime(true);
@@ -857,13 +857,13 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
       LOG.info("Listing status in HoodieCombineHiveInputFormat.HoodieCombineFileInputFormatShim");
       List<FileStatus> result;
       if (hoodieFilter) {
-        HoodieInputFormat input;
+        HoodieParquetInputFormat input;
         if (isRealTime) {
           LOG.info("Using HoodieRealtimeInputFormat");
-          input = new HoodieRealtimeInputFormat();
+          input = new HoodieParquetRealtimeInputFormat();
         } else {
           LOG.info("Using HoodieInputFormat");
-          input = new HoodieInputFormat();
+          input = new HoodieParquetInputFormat();
         }
         input.setConf(job.getConfiguration());
         result = new ArrayList<FileStatus>(
