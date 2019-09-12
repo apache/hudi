@@ -69,12 +69,12 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
   @Before
   public void setUp() throws Exception {
-    initResourceGroupForHoodieClientTests();
+    initResources();
   }
 
   @After
   public void tearDown() throws Exception {
-    cleanupResourceGroupForHoodieClientTests();
+    cleanupResources();
   }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
