@@ -67,7 +67,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
    *
    * @throws IOException
    */
-  public void initResourceGroupForHoodieClientTests() throws IOException {
+  public void initResources() throws IOException {
     initTempFolderAndPath();
     initSparkContexts();
     initTestDataGenerator();
@@ -79,7 +79,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
    * Cleanups resource group for the subclasses of {@link TestHoodieClientBase}.
    * @throws IOException
    */
-  public void cleanupResourceGroupForHoodieClientTests() throws IOException {
+  public void cleanupResources() throws IOException {
     cleanupTableType();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
