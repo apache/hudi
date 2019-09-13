@@ -105,12 +105,12 @@ fi
 
 git commit -am "Moving to ${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT on master branch."
 
-#if git push origin ${MASTER_BRANCH}; then
-#  break
-#else
-#  clean_up
-#  exit
-#fi
+if git push origin ${MASTER_BRANCH}; then
+  break
+else
+  clean_up
+  exit
+fi
 
 # Checkout and update release branch - Add incubating and remove snapshot
 git checkout ${RELEASE_BRANCH}
@@ -133,6 +133,6 @@ if [[ $confirmation != "y" ]]; then
 fi
 
 git commit -am "Create release branch for version ${RELEASE}."
-#git push --set-upstream origin ${RELEASE_BRANCH}
+git push --set-upstream origin ${RELEASE_BRANCH}
 
 clean_up
