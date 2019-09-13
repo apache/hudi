@@ -79,7 +79,32 @@ cd ${LOCAL_CLONE_DIR}
 git clone ${GITHUB_REPO_URL}
 cd ${HUDI_ROOT_DIR}
 
-# Create local release branch
+# Update Notice.txt
+mvn notice:generate
+
+echo "==============Update NOTICE.txt in master branch as following================"
+git diff
+echo "==============================================================="
+
+echo "Please make sure all changes above are expected. Do you confirm to commit?: [y|N]"
+read confirmation
+if [[ $confirmation != "y" ]]; then
+  echo "Exit without committing any changes on master branch."
+  clean_up
+  exit
+fi
+
+git commit -am "Updating NOTICE.txt in master" --allow-empty
+
+# Pushing NOTICE.txt changes to master
+if git push origin ${MASTER_BRANCH}; then
+  break
+else
+  clean_up
+  exit
+fi
+
+# Now, create local release branch
 git branch ${RELEASE_BRANCH}
 
 git checkout ${MASTER_BRANCH}

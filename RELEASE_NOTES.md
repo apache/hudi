@@ -8,10 +8,10 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers and update NOTICE.txt files
   * **Vinoth Chandar** [HUDI-244] : Hive sync should escape partition field name - now supports field names beginning with '_' for e.g
   * **Balaji Varadarajan** [HUDI-250] Ensure Hudi CLI wrapper works with non snapshot jars too
   * **Nishith Agarwal** [HUDI-235] Fix scheduled compaction rollback in restore command
-  * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers
   * **yanghua** [HUDI-217] Provide a unified resource management class to standardize the resource allocation and release for hudi client test cases
   * **Bhavani Sudha Saktheeswaran** [HUDI-164] Fixes incorrect averageBytesPerRecord
   * **Balaji Varadarajan** [HUDI-243] Rename HoodieInputFormat and HoodieRealtimeInputFormat to HoodieParquetInputFormat and HoodieParquetRealtimeInputFormat
