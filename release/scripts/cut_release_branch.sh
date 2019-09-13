@@ -58,7 +58,7 @@ fi
 
 MASTER_BRANCH=master
 RELEASE_BRANCH=release-${RELEASE}
-GITHUB_REPO_URL=https://gitbox.apache.org/repos/asf/incubator-hudi.git
+GITHUB_REPO_URL=git@github.com:apache/incubator-hudi.git
 HUDI_ROOT_DIR=incubator-hudi
 LOCAL_CLONE_DIR=hudi_release_${RELEASE}
 

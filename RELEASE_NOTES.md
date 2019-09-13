@@ -7,9 +7,9 @@ Release 0.5.0-incubating
  * Complete Redo of Hudi Jar bundling
  * Bug fixes in query side integration, DeltaStreamer, compaction, rollbacks, restore
 
-
 ### Full PR List
-
+  * **Balaji Varadarajan** [HUDI-250] Ensure Hudi CLI wrapper works with non snapshot jars too
+  * **Nishith Agarwal** [HUDI-235] Fix scheduled compaction rollback in restore command
   * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers
   * **yanghua** [HUDI-217] Provide a unified resource management class to standardize the resource allocation and release for hudi client test cases
   * **Bhavani Sudha Saktheeswaran** [HUDI-164] Fixes incorrect averageBytesPerRecord
