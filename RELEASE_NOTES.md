@@ -11,6 +11,7 @@ Release 0.5.0-incubating
 ### Full PR List
 
   * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers
+  * **yanghua** [HUDI-217] Provide a unified resource management class to standardize the resource allocation and release for hudi client test cases
   * **Bhavani Sudha Saktheeswaran** [HUDI-164] Fixes incorrect averageBytesPerRecord
   * **Balaji Varadarajan** [HUDI-243] Rename HoodieInputFormat and HoodieRealtimeInputFormat to HoodieParquetInputFormat and HoodieParquetRealtimeInputFormat
   * **Vinoth Chandar** [HUDI-143] Excluding javax.* from utilities and spark bundles
