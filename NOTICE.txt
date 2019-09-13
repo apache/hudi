@@ -25,12 +25,11 @@ This project includes:
   Apache Avro Mapred API under The Apache Software License, Version 2.0
   Apache Calcite Avatica under Apache License, Version 2.0
   Apache Calcite Avatica Metrics under Apache License, Version 2.0
+  Apache Commons Codec under Apache License, Version 2.0
   Apache Commons Collections under Apache License, Version 2.0
   Apache Commons Compress under The Apache Software License, Version 2.0
   Apache Commons Crypto under Apache License, Version 2.0
-  Apache Commons IO under Apache License, Version 2.0
   Apache Commons Lang under Apache License, Version 2.0
-  Apache Commons Logging under The Apache Software License, Version 2.0
   Apache Curator under The Apache Software License, Version 2.0
   Apache Derby Database Engine and Embedded JDBC Driver under Apache 2
   Apache Directory API ASN.1 API under The Apache Software License, Version 2.0
@@ -99,13 +98,14 @@ This project includes:
   Commons BeanUtils Core under The Apache Software License, Version 2.0
   Commons CLI under The Apache Software License, Version 2.0
   Commons Codec under The Apache Software License, Version 2.0
-  Commons Collections under The Apache Software License, Version 2.0
   Commons Compiler under New BSD License
   Commons Compress under The Apache Software License, Version 2.0
   Commons Configuration under The Apache Software License, Version 2.0
   Commons Daemon under The Apache Software License, Version 2.0
   Commons DBCP under The Apache Software License, Version 2.0
+  Commons IO under The Apache Software License, Version 2.0
   Commons Lang under The Apache Software License, Version 2.0
+  Commons Logging under The Apache Software License, Version 2.0
   Commons Math under The Apache Software License, Version 2.0
   Commons Net under The Apache Software License, Version 2.0
   Commons Pool under The Apache Software License, Version 2.0
@@ -301,7 +301,6 @@ This project includes:
   junixsocket-common under Apache License, Version 2.0
   junixsocket-native-common under Apache License, Version 2.0
   JVM Integration for Metrics under Apache License 2.0
-  Kryo under New BSD License
   Kryo Shaded under 3-Clause BSD License
   leveldbjni-all under The BSD 3-Clause License
   LZ4 and xxHash under The Apache Software License, Version 2.0
@@ -330,15 +329,14 @@ This project includes:
   org.jetbrains.kotlin:kotlin-stdlib-common under The Apache License, Version 2.0
   org.jetbrains.kotlin:kotlin-stdlib-jdk7 under The Apache License, Version 2.0
   org.jetbrains.kotlin:kotlin-stdlib-jdk8 under The Apache License, Version 2.0
+  org.pentaho:pentaho-aggdesigner-algorithm under Apache License, Version 2.0
   oro under Apache License, Version 2.0
   OSGi resource locator bundle - used by various API providers that rely on META-INF/services mechanism to locate providers. under CDDL + GPLv2 with classpath exception
   ParaNamer Core under BSD
-  Pentaho Aggregate Designer Algorithm under Apache 2
   Protocol Buffer Java API under New BSD license
   Py4J under The New BSD License
   pyrolite under MIT License
   RabbitMQ Java Client under ASL 2.0 or GPL v2 or MPL 1.1
-  ReflectASM under New BSD License
   RoaringBitmap under Apache 2
   RocksDB JNI under Apache License 2.0 or GNU General Public License, version 2
   Scala Compiler under BSD 3-Clause
@@ -350,7 +348,6 @@ This project includes:
   scalatest under the Apache License, ASL Version 2.0
   ServiceLocator Default Implementation under CDDL + GPLv2 with classpath exception
   Servlet Specification 2.5 API under CDDL 1.0
-  Servlet Specification API under Apache License Version 2.0
   servlet-api under CDDL
   SLF4J API Module under MIT License
   SLF4J LOG4J-12 Binding under MIT License

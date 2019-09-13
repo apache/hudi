@@ -25,10 +25,9 @@ This project includes:
   Apache Calcite Avatica under Apache License, Version 2.0
   Apache Calcite Avatica Metrics under Apache License, Version 2.0
   Apache Commons Collections under Apache License, Version 2.0
+  Apache Commons Compress under The Apache Software License, Version 2.0
   Apache Commons Crypto under Apache License, Version 2.0
-  Apache Commons IO under Apache License, Version 2.0
   Apache Commons Lang under Apache License, Version 2.0
-  Apache Commons Logging under The Apache Software License, Version 2.0
   Apache Curator under The Apache Software License, Version 2.0
   Apache Derby Database Engine and Embedded JDBC Driver under Apache 2
   Apache Directory API ASN.1 API under The Apache Software License, Version 2.0
@@ -85,11 +84,12 @@ This project includes:
   Commons CLI under The Apache Software License, Version 2.0
   Commons Codec under The Apache Software License, Version 2.0
   Commons Compiler under New BSD License
-  Commons Compress under The Apache Software License, Version 2.0
   Commons Configuration under The Apache Software License, Version 2.0
   Commons Daemon under The Apache Software License, Version 2.0
   Commons DBCP under The Apache Software License, Version 2.0
+  Commons IO under The Apache Software License, Version 2.0
   Commons Lang under The Apache Software License, Version 2.0
+  Commons Logging under The Apache Software License, Version 2.0
   Commons Math under The Apache Software License, Version 2.0
   Commons Net under The Apache Software License, Version 2.0
   Commons Pool under The Apache Software License, Version 2.0
@@ -277,7 +277,6 @@ This project includes:
   scalatest under the Apache License, ASL Version 2.0
   ServiceLocator Default Implementation under CDDL + GPLv2 with classpath exception
   Servlet Specification 2.5 API under CDDL 1.0
-  Servlet Specification API under Apache License Version 2.0
   servlet-api under CDDL
   SLF4J API Module under MIT License
   SLF4J LOG4J-12 Binding under MIT License
