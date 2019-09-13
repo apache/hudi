@@ -10,11 +10,7 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 This project includes:
   An open source Java toolkit for Amazon S3 under Apache License, Version 2.0
   Apache Avro under The Apache Software License, Version 2.0
-  Apache Avro IPC under The Apache Software License, Version 2.0
-  Apache Avro Mapred API under The Apache Software License, Version 2.0
   Apache Commons Collections under Apache License, Version 2.0
-  Apache Commons IO under Apache License, Version 2.0
-  Apache Commons Logging under The Apache Software License, Version 2.0
   Apache Directory API ASN.1 API under The Apache Software License, Version 2.0
   Apache Directory LDAP API Utilities under The Apache Software License, Version 2.0
   Apache Hadoop Annotations under Apache License, Version 2.0
@@ -25,14 +21,6 @@ This project includes:
   Apache HttpClient under Apache License, Version 2.0
   Apache HttpCore under Apache License, Version 2.0
   Apache Log4j under The Apache Software License, Version 2.0
-  Apache Parquet Avro under The Apache Software License, Version 2.0
-  Apache Parquet Column under The Apache Software License, Version 2.0
-  Apache Parquet Common under The Apache Software License, Version 2.0
-  Apache Parquet Encodings under The Apache Software License, Version 2.0
-  Apache Parquet Format (Incubating) under The Apache Software License, Version 2.0
-  Apache Parquet Hadoop under The Apache Software License, Version 2.0
-  Apache Parquet Jackson under The Apache Software License, Version 2.0
-  Apache Velocity under The Apache Software License, Version 2.0
   ApacheDS I18n under The Apache Software License, Version 2.0
   ApacheDS Protocol Kerberos Codec under The Apache Software License, Version 2.0
   ASM Core under 3-Clause BSD License
@@ -42,7 +30,9 @@ This project includes:
   Commons Compress under The Apache Software License, Version 2.0
   Commons Configuration under The Apache Software License, Version 2.0
   Commons Daemon under The Apache Software License, Version 2.0
+  Commons IO under The Apache Software License, Version 2.0
   Commons Lang under The Apache Software License, Version 2.0
+  Commons Logging under The Apache Software License, Version 2.0
   Commons Math under The Apache Software License, Version 2.0
   Commons Net under The Apache Software License, Version 2.0
   commons-beanutils under Apache License
@@ -51,7 +41,6 @@ This project includes:
   Curator Recipes under The Apache Software License, Version 2.0
   Data Mapper for Jackson under The Apache Software License, Version 2.0
   Digester under The Apache Software License, Version 2.0
-  fastutil under Apache License, Version 2.0
   FindBugs-jsr305 under The Apache Software License, Version 2.0
   Fluent API for Apache HttpClient under Apache License, Version 2.0
   Gson under The Apache Software License, Version 2.0
@@ -118,7 +107,6 @@ This project includes:
   ParaNamer Core under BSD
   Protocol Buffer Java API under New BSD license
   RocksDB JNI under Apache License 2.0 or GNU General Public License, version 2
-  Servlet Specification API under Apache License Version 2.0
   servlet-api under CDDL
   SLF4J API Module under MIT License
   SLF4J LOG4J-12 Binding under MIT License

@@ -12,8 +12,7 @@ This project includes:
   An open source Java toolkit for Amazon S3 under Apache License, Version 2.0
   Annotation 1.0 under The Apache Software License, Version 2.0
   ant under The Apache Software License, Version 2.0
-  Antlr 3 Runtime under BSD
-  ANTLR 4 Runtime under The BSD License
+  ANTLR 3 Runtime under BSD licence
   ANTLR ST4 4.0.4 under BSD licence
   ANTLR StringTemplate 4.0.2 under BSD licence
   AOP alliance under Public Domain
@@ -26,10 +25,8 @@ This project includes:
   Apache Calcite Avatica under Apache License, Version 2.0
   Apache Calcite Avatica Metrics under Apache License, Version 2.0
   Apache Commons Collections under Apache License, Version 2.0
+  Apache Commons Compress under The Apache Software License, Version 2.0
   Apache Commons Crypto under Apache License, Version 2.0
-  Apache Commons IO under Apache License, Version 2.0
-  Apache Commons Lang under Apache License, Version 2.0
-  Apache Commons Logging under The Apache Software License, Version 2.0
   Apache Curator under The Apache Software License, Version 2.0
   Apache Derby Database Engine and Embedded JDBC Driver under Apache 2
   Apache Directory API ASN.1 API under The Apache Software License, Version 2.0
@@ -89,11 +86,12 @@ This project includes:
   Commons CLI under The Apache Software License, Version 2.0
   Commons Codec under The Apache Software License, Version 2.0
   Commons Compiler under New BSD License
-  Commons Compress under The Apache Software License, Version 2.0
   Commons Configuration under The Apache Software License, Version 2.0
   Commons Daemon under The Apache Software License, Version 2.0
   Commons DBCP under The Apache Software License, Version 2.0
+  Commons IO under The Apache Software License, Version 2.0
   Commons Lang under The Apache Software License, Version 2.0
+  Commons Logging under The Apache Software License, Version 2.0
   Commons Math under The Apache Software License, Version 2.0
   Commons Net under The Apache Software License, Version 2.0
   Commons Pool under The Apache Software License, Version 2.0
@@ -192,6 +190,7 @@ This project includes:
   java-xmlbuilder under Apache License, Version 2.0
   JavaBeans Activation Framework (JAF) under Common Development and Distribution License (CDDL) v1.0
   Javalin under The Apache Software License, Version 2.0
+  JavaMail API under Common Development and Distribution License (CDDL) v1.0
   Javassist under MPL 1.1 or LGPL 2.1 or Apache License 2.0
   javax.annotation API under CDDL + GPLv2 with classpath exception
   javax.inject under The Apache Software License, Version 2.0
@@ -257,7 +256,6 @@ This project includes:
   Metrics Core under Apache License 2.0
   Metrics Core Library under Apache License 2.0
   MinLog under New BSD License
-  Mockito under The MIT License
   Netty/All-in-One under Apache License, Version 2.0
   Objenesis under Apache 2
   Open JSON under The Apache Software License, Version 2.0
@@ -285,20 +283,16 @@ This project includes:
   scalatest under the Apache License, ASL Version 2.0
   ServiceLocator Default Implementation under CDDL + GPLv2 with classpath exception
   Servlet Specification 2.5 API under CDDL 1.0
-  Servlet Specification API under Apache License Version 2.0
   servlet-api under CDDL
   SLF4J API Module under MIT License
   SLF4J LOG4J-12 Binding under MIT License
   Slider Core under Apache License, Version 2.0
   snappy-java under The Apache Software License, Version 2.0
   Spark Integration for Kafka 0.8 under Apache 2.0 License
-  Spark Project Catalyst under Apache 2.0 License
   Spark Project Core under Apache 2.0 License
   Spark Project Launcher under Apache 2.0 License
   Spark Project Networking under Apache 2.0 License
   Spark Project Shuffle Streaming Service under Apache 2.0 License
-  Spark Project Sketch under Apache 2.0 License
-  Spark Project SQL under Apache 2.0 License
   Spark Project Streaming under Apache 2.0 License
   Spark Project Tags under Apache 2.0 License
   Spark Project Unsafe under Apache 2.0 License
@@ -308,13 +302,11 @@ This project includes:
   Tephra Core under The Apache Software License, Version 2.0
   Tephra HBase 1.0 Compatibility under The Apache Software License, Version 2.0
   The Netty Project under Apache License, Version 2.0
-  univocity-parsers under Apache 2
   utils under Apache License 2.0
   Xerces2 Java Parser under The Apache Software License, Version 2.0
   XML Commons External Components XML APIs under The Apache Software License, Version 2.0
   Xml Compatibility extensions for Jackson under The Apache Software License, Version 2.0 or GNU Lesser General Public License (LGPL), Version 2.1
   xmlenc Library under The BSD License
-  XZ for Java under Public Domain
   ZkClient under The Apache Software License, Version 2.0
   zookeeper under Apache License, Version 2.0
 

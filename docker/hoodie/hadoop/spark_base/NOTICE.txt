@@ -18,13 +18,10 @@ This project includes:
   Apache Ant Core under The Apache Software License, Version 2.0
   Apache Ant Launcher under The Apache Software License, Version 2.0
   Apache Avro under The Apache Software License, Version 2.0
-  Apache Avro IPC under The Apache Software License, Version 2.0
-  Apache Avro Mapred API under The Apache Software License, Version 2.0
   Apache Calcite Avatica under Apache License, Version 2.0
   Apache Calcite Avatica Metrics under Apache License, Version 2.0
   Apache Commons Collections under Apache License, Version 2.0
-  Apache Commons IO under Apache License, Version 2.0
-  Apache Commons Logging under The Apache Software License, Version 2.0
+  Apache Commons Compress under The Apache Software License, Version 2.0
   Apache Curator under The Apache Software License, Version 2.0
   Apache Derby Database Engine and Embedded JDBC Driver under Apache 2
   Apache Directory API ASN.1 API under The Apache Software License, Version 2.0
@@ -77,11 +74,12 @@ This project includes:
   Commons CLI under The Apache Software License, Version 2.0
   Commons Codec under The Apache Software License, Version 2.0
   Commons Compiler under New BSD License
-  Commons Compress under The Apache Software License, Version 2.0
   Commons Configuration under The Apache Software License, Version 2.0
   Commons Daemon under The Apache Software License, Version 2.0
   Commons DBCP under The Apache Software License, Version 2.0
+  Commons IO under The Apache Software License, Version 2.0
   Commons Lang under The Apache Software License, Version 2.0
+  Commons Logging under The Apache Software License, Version 2.0
   Commons Math under The Apache Software License, Version 2.0
   Commons Net under The Apache Software License, Version 2.0
   Commons Pool under The Apache Software License, Version 2.0
@@ -231,6 +229,7 @@ This project includes:
   org.jetbrains.kotlin:kotlin-stdlib-jdk7 under The Apache License, Version 2.0
   org.jetbrains.kotlin:kotlin-stdlib-jdk8 under The Apache License, Version 2.0
   org.pentaho:pentaho-aggdesigner-algorithm under Apache License, Version 2.0
+  oro under Apache License, Version 2.0
   ParaNamer Core under BSD
   Protocol Buffer Java API under New BSD license
   RabbitMQ Java Client under ASL 2.0 or GPL v2 or MPL 1.1
@@ -238,13 +237,11 @@ This project includes:
   Scala Compiler under BSD 3-Clause
   Scala Library under BSD 3-Clause
   Servlet Specification 2.5 API under CDDL 1.0
-  Servlet Specification API under Apache License Version 2.0
   servlet-api under CDDL
   SLF4J API Module under MIT License
   SLF4J LOG4J-12 Binding under MIT License
   Slider Core under Apache License, Version 2.0
-  Snappy for Java under The Apache Software License, Version 2.0
-  spark-avro under Apache-2.0
+  snappy-java under The Apache Software License, Version 2.0
   StAX API under The Apache Software License, Version 2.0
   Tephra API under The Apache Software License, Version 2.0
   Tephra Core under The Apache Software License, Version 2.0
