@@ -5,9 +5,10 @@ Release 0.5.0-incubating
  * First Apache Incubating Release
  * Package Renames from com.uber.hoodie to org.apache.hudi (See https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi)
  * Complete Redo of Hudi Jar bundling
- * Bug fixes in query side integration, DeltaStreamer, compaction, rollbacks, restore
+ * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Vinoth Chandar** [HUDI-244] : Hive sync should escape partition field name - now supports field names beginning with '_' for e.g
   * **Balaji Varadarajan** [HUDI-250] Ensure Hudi CLI wrapper works with non snapshot jars too
   * **Nishith Agarwal** [HUDI-235] Fix scheduled compaction rollback in restore command
   * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers
