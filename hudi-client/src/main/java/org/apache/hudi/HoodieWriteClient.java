@@ -808,16 +808,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
             instantsToStats.put(instant.getTimestamp(), statsForInstant);
             break;
           case HoodieTimeline.COMPACTION_ACTION:
-            if (instant.isRequested()) {
-              // TODO : Get file status and create a rollback stat and file
-              // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
-              // delete these files when it does not see a corresponding instant file under .hoodie
-              deleteRequestedCompaction(instant.getTimestamp());
-              logger.info("Deleted pending scheduled compaction " + instant.getTimestamp());
-            } else {
-              List<HoodieRollbackStat> statsForCompaction = doRollbackAndGetStats(instant.getTimestamp());
-              instantsToStats.put(instant.getTimestamp(), statsForCompaction);
-            }
+            // TODO : Get file status and create a rollback stat and file
+            // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
+            // delete these files when it does not see a corresponding instant file under .hoodie
+            List<HoodieRollbackStat> statsForCompaction = doRollbackAndGetStats(instant.getTimestamp());
+            logger.info("Rollback stats for instant " + instant);
+            instantsToStats.put(instant.getTimestamp(), statsForCompaction);
+            logger.info("Deleted compaction instant " + instant);
             break;
           default:
             throw new IllegalArgumentException("invalid action name " + instant.getAction());

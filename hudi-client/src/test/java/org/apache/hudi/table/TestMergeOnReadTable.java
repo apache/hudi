@@ -681,6 +681,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
           .toList());
       assertTrue(fileGroups.isEmpty());
     }
+    // make sure there are no log files remaining
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
+    assertTrue(new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline()).getAllFileGroups()
+        .noneMatch(fileGroup -> fileGroup.getAllRawFileSlices().anyMatch(f -> f.getLogFiles().count() > 0)));
   }
 
   protected HoodieWriteConfig getHoodieWriteConfigWithSmallFileHandlingOff() {
