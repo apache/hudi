@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -111,6 +111,8 @@
             <ul class="nav navbar-nav navbar-right">
                 <!-- entries without drop-downs appear here -->
                 
+
+                
                 
                 
                 <li><a href="news">News</a></li>
@@ -167,6 +169,12 @@
 <li>
 
 		
+                <li>
+                    
+                    <!-- link to the Chinese home page when current is blog page -->
+                    <a href="/cn/quickstart.html">中文版</a>
+                    
+                </li>
                 <!--comment out this block if you want to hide search-->
                 <li>
                     <!--start search-->
@@ -341,20 +349,17 @@ refer to <a href="migration_guide.html">migration guide</a>.</p>
 
 <h2 id="download-hudi">Download Hudi</h2>
 
-<p>Check out <a href="https://github.com/apache/incubator-hudi">code</a> or download <a href="https://github.com/apache/incubator-hudi/archive/hudi-0.4.5.zip">latest release</a> 
-and normally build the maven project, from command line</p>
+<p>Check out <a href="https://github.com/apache/incubator-hudi">code</a> and normally build the maven project, from command line</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>$ mvn clean install -DskipTests -DskipITs
-</code></pre>
-</div>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ mvn clean install -DskipTests -DskipITs
+</code></pre></div></div>
 
-<p>To work with older version of Hive (pre Hive-1.2.1), use
-<code class="highlighter-rouge">
-$ mvn clean install -DskipTests -DskipITs -Dhive11
-</code></p>
+<p>To work with older version of Hive (pre Hive-1.2.1), use</p>
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ mvn clean install -DskipTests -DskipITs -Dhive11
+</code></pre></div></div>
 
-<div class="bs-callout bs-callout-info">For IDE, you can pull in the code into IntelliJ as a normal maven project. 
-You might want to add your spark jars folder to project dependencies under ‘Module Setttings’, to be able to run from IDE.</div>
+<p>For IDE, you can pull in the code into IntelliJ as a normal maven project. 
+You might want to add your spark jars folder to project dependencies under ‘Module Setttings’, to be able to run from IDE.</p>
 
 <h3 id="version-compatibility">Version Compatibility</h3>
 
@@ -392,8 +397,8 @@ Further, we have verified that Hudi works with the following combination of Hado
   </tbody>
 </table>
 
-<div class="bs-callout bs-callout-info">If your environment has other versions of hadoop/hive/spark, please try out Hudi 
-and let us know if there are any issues. </div>
+<p>If your environment has other versions of hadoop/hive/spark, please try out Hudi 
+and let us know if there are any issues.</p>
 
 <h2 id="generate-sample-dataset">Generate Sample Dataset</h2>
 
@@ -401,7 +406,7 @@ and let us know if there are any issues. </div>
 
 <p>Please set the following environment variables according to your setup. We have given an example setup with CDH version</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>cd incubator-hudi 
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd incubator-hudi 
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre/
 export HIVE_HOME=/var/hadoop/setup/apache-hive-1.1.0-cdh5.7.2-bin
 export HADOOP_HOME=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
@@ -411,15 +416,14 @@ export SPARK_HOME=/var/hadoop/setup/spark-2.3.1-bin-hadoop2.7
 export SPARK_INSTALL=$SPARK_HOME
 export SPARK_CONF_DIR=$SPARK_HOME/conf
 export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$PATH
-</code></pre>
-</div>
+</code></pre></div></div>
 
 <h3 id="run-hoodiejavaapp">Run HoodieJavaApp</h3>
 
 <p>Run <strong>hudi-spark/src/test/java/HoodieJavaApp.java</strong> class, to place a two commits (commit 1 =&gt; 100 inserts, commit 2 =&gt; 100 updates to previously inserted 100 records) onto your DFS/local filesystem. Use the wrapper script
 to run from command-line</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>cd hudi-spark
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd hudi-spark
 ./run_hoodie_app.sh --help
 Usage: &lt;main class&gt; [options]
   Options:
@@ -434,8 +438,7 @@ Usage: &lt;main class&gt; [options]
     --table-type, -t
        One of COPY_ON_WRITE or MERGE_ON_READ
        Default: COPY_ON_WRITE
-</code></pre>
-</div>
+</code></pre></div></div>
 
 <p>The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the <code class="highlighter-rouge">hudi-spark</code> module as dependency
 and follow a similar pattern to write/read datasets via the datasource.</p>
@@ -446,7 +449,7 @@ and follow a similar pattern to write/read datasets via the datasource.</p>
 
 <h3 id="start-hive-server-locally">Start Hive Server locally</h3>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>hdfs namenode # start name node
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hdfs namenode # start name node
 hdfs datanode # start data node
 
 bin/hive --service metastore  # start metastore
@@ -456,15 +459,14 @@ bin/hiveserver2 \
   --hiveconf hive.stats.autogather=false \
   --hiveconf hive.aux.jars.path=/path/to/packaging/hudi-hive-bundle/target/hudi-hive-bundle-0.4.6-SNAPSHOT.jar
 
-</code></pre>
-</div>
+</code></pre></div></div>
 
 <h3 id="run-hive-sync-tool">Run Hive Sync Tool</h3>
 <p>Hive Sync Tool will update/create the necessary metadata(schema and partitions) in hive metastore. This allows for schema evolution and incremental addition of new partitions written to.
 It uses an incremental approach by storing the last commit time synced in the TBLPROPERTIES and only syncing the commits from the last sync commit time stored.
 Both <a href="writing_data.html#datasource-writer">Spark Datasource</a> &amp; <a href="writing_data.html#deltastreamer">DeltaStreamer</a> have capability to do this, after each write.</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>cd hudi-hive
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd hudi-hive
 ./run_sync_tool.sh
   --user hive
   --pass hive
@@ -474,16 +476,15 @@ Both <a href="writing_data.html#datasource-writer">Spark Datasource</a> &amp; <a
   --table hoodie_test
   --partitioned-by field1,field2
 
-</code></pre>
-</div>
-<div class="bs-callout bs-callout-info">For some reason, if you want to do this by hand. Please 
-follow <a href="https://cwiki.apache.org/confluence/display/HUDI/Registering+sample+dataset+to+Hive+via+beeline">this</a>.</div>
+</code></pre></div></div>
+<p>For some reason, if you want to do this by hand. Please 
+follow <a href="https://cwiki.apache.org/confluence/display/HUDI/Registering+sample+dataset+to+Hive+via+beeline">this</a>.</p>
 
 <h3 id="hive">HiveQL</h3>
 
 <p>Let’s first perform a query on the latest committed snapshot of the table</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>hive&gt; set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive&gt; set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
 hive&gt; set hive.stats.autogather=false;
 hive&gt; add jar file:///path/to/hudi-hive-bundle-0.4.6-SNAPSHOT.jar;
 hive&gt; select count(*) from hoodie_test;
@@ -492,14 +493,13 @@ OK
 100
 Time taken: 18.05 seconds, Fetched: 1 row(s)
 hive&gt;
-</code></pre>
-</div>
+</code></pre></div></div>
 
 <h3 id="spark">SparkSQL</h3>
 
 <p>Spark is super easy, once you get Hive working as above. Just spin up a Spark Shell as below</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>$ cd $SPARK_INSTALL
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ cd $SPARK_INSTALL
 $ spark-shell --jars $HUDI_SRC/packaging/hudi-spark-bundle/target/hudi-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
 
 scala&gt; val sqlContext = new org.apache.spark.sql.SQLContext(sc)
@@ -507,8 +507,7 @@ scala&gt; sqlContext.sql("show tables").show(10000)
 scala&gt; sqlContext.sql("describe hoodie_test").show(10000)
 scala&gt; sqlContext.sql("describe hoodie_test_rt").show(10000)
 scala&gt; sqlContext.sql("select count(*) from hoodie_test").show(10000)
-</code></pre>
-</div>
+</code></pre></div></div>
 
 <h3 id="presto">Presto</h3>
 
@@ -519,16 +518,15 @@ scala&gt; sqlContext.sql("select count(*) from hoodie_test").show(10000)
   <li>Startup your server and you should be able to query the same Hive table via Presto</li>
 </ul>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>show columns from hive.default.hoodie_test;
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>show columns from hive.default.hoodie_test;
 select count(*) from hive.default.hoodie_test
-</code></pre>
-</div>
+</code></pre></div></div>
 
 <h3 id="incremental-hiveql">Incremental HiveQL</h3>
 
 <p>Let’s now perform a query, to obtain the <strong>ONLY</strong> changed rows since a commit in the past.</p>
 
-<div class="highlighter-rouge"><pre class="highlight"><code>hive&gt; set hoodie.hoodie_test.consume.mode=INCREMENTAL;
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive&gt; set hoodie.hoodie_test.consume.mode=INCREMENTAL;
 hive&gt; set hoodie.hoodie_test.consume.start.timestamp=001;
 hive&gt; set hoodie.hoodie_test.consume.max.commits=10;
 hive&gt; select `_hoodie_commit_time`, rider, driver from hoodie_test where `_hoodie_commit_time` &gt; '001' limit 10;
@@ -547,11 +545,9 @@ All commits :[001, 002]
 Time taken: 0.056 seconds, Fetched: 10 row(s)
 hive&gt;
 hive&gt;
-</code></pre>
-</div>
+</code></pre></div></div>
 
-<div class="alert alert-info" role="alert"><i class="fa fa-info-circle"></i> <b>Note:</b> This is only supported for Read-optimized view for now.</div>
-
+<p>This is only supported for Read-optimized view for now.”</p>
 
 
     <div class="tags">
