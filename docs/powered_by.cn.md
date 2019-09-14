@@ -49,7 +49,9 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 7. ["Building highly efficient data lakes using Apache Hudi (Incubating)"](https://www.slideshare.net/ChesterChen/sf-big-analytics-20190612-building-highly-efficient-data-lakes-using-apache-hudi) - By Vinoth Chandar 
    June 2019, SF Big Analytics Meetup, San Mateo, CA
-
+   
+8. ["Apache Hudi (Incubating) - The Past, Present and Future Of Efficient Data Lake Architectures"](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM) - By Vinoth Chandar & Balaji Varadarajan
+   September 2019, ApacheCon NA 19, Las Vegas, NV, USA
 
 ## Articles
 

@@ -16,8 +16,7 @@ If you have Hive, Hadoop, Spark installed already & prefer to do it on your own 
 
 ## Download Hudi
 
-Check out [code](https://github.com/apache/incubator-hudi) or download [latest release](https://github.com/apache/incubator-hudi/archive/hudi-0.4.5.zip) 
-and normally build the maven project, from command line
+Check out [code](https://github.com/apache/incubator-hudi) and normally build the maven project, from command line
 
 ```
 $ mvn clean install -DskipTests -DskipITs
