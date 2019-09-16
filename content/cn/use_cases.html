@@ -3,7 +3,7 @@
     <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency">
+<meta name="description" content="以下是一些使用Hudi的示例，说明了加快处理速度和提高效率的好处">
 <meta name="keywords" content="hudi, data ingestion, etl, real time, use cases">
 <title>Use Cases | Hudi</title>
 <link rel="stylesheet" href="/css/syntax.css">
@@ -115,15 +115,15 @@
                 
                 
                 
-                <li><a href="news">News</a></li>
+                <li><a href="news">新闻</a></li>
                 
                 
                 
-                <li><a href="community.html">Community</a></li>
+                <li><a href="community.html">社区</a></li>
                 
                 
                 
-                <li><a href="https://github.com/apache/incubator-hudi" target="_blank">Code</a></li>
+                <li><a href="https://github.com/apache/incubator-hudi" target="_blank">代码</a></li>
                 
                 
                 
@@ -132,27 +132,27 @@
                 
                 
                 <li class="dropdown">
-                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developers<b class="caret"></b></a>
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">开发者<b class="caret"></b></a>
                     <ul class="dropdown-menu">
                         
                         
-                        <li><a href="contributing.html">Contributing</a></li>
+                        <li><a href="contributing.html">贡献</a></li>
                         
                         
                         
-                        <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank">Wiki/Designs</a></li>
+                        <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank">维基/设计</a></li>
                         
                         
                         
-                        <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank">Issues</a></li>
+                        <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank">问题</a></li>
                         
                         
                         
-                        <li><a href="https://cwiki.apache.org/confluence/pages/viewrecentblogposts.action?key=HUDI" target="_blank">Blog</a></li>
+                        <li><a href="https://cwiki.apache.org/confluence/pages/viewrecentblogposts.action?key=HUDI" target="_blank">博客</a></li>
                         
                         
                         
-                        <li><a href="https://projects.apache.org/project.html?incubator-hudi" target="_blank">Team</a></li>
+                        <li><a href="https://projects.apache.org/project.html?incubator-hudi" target="_blank">团队</a></li>
                         
                         
                     </ul>
@@ -171,8 +171,7 @@
 		
                 <li>
                     
-                    <!-- link to the Chinese home page when current is blog page -->
-                    <a href="/cn/use_cases.html">中文版</a>
+                    <a href="/use_cases.html">English</a>
                     
                 </li>
                 <!--comment out this block if you want to hide search-->
@@ -237,21 +236,21 @@
             
             
             
-            <li class="active"><a href="use_cases.html">Use Cases</a></li>
+            <li><a href="use_cases.html">用户案例</a></li>
             
             
             
             
             
             
-            <li><a href="powered_by.html">Talks & Powered By</a></li>
+            <li><a href="powered_by.html">演讲 & Powered By</a></li>
             
             
             
             
             
             
-            <li><a href="comparison.html">Comparison</a></li>
+            <li><a href="comparison.html">对比</a></li>
             
             
             
@@ -261,47 +260,47 @@
         
     
     <li>
-        <a href="#">Documentation</a>
+        <a href="#">文档</a>
         <ul>
             
             
             
-            <li><a href="concepts.html">Concepts</a></li>
+            <li><a href="concepts.html">概念</a></li>
             
             
             
             
             
             
-            <li><a href="writing_data.html">Writing Data</a></li>
+            <li><a href="writing_data.html">写入数据</a></li>
             
             
             
             
             
             
-            <li><a href="querying_data.html">Querying Data</a></li>
+            <li><a href="querying_data.html">查询数据</a></li>
             
             
             
             
             
             
-            <li><a href="configurations.html">Configuration</a></li>
+            <li><a href="configurations.html">配置</a></li>
             
             
             
             
             
             
-            <li><a href="performance.html">Performance</a></li>
+            <li><a href="performance.html">性能</a></li>
             
             
             
             
             
             
-            <li><a href="admin_guide.html">Administering</a></li>
+            <li><a href="admin_guide.html">管理</a></li>
             
             
             
@@ -333,7 +332,7 @@
 <div class="post-content">
 
    
-    <div class="summary">Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency</div>
+    <div class="summary">以下是一些使用Hudi的示例，说明了加快处理速度和提高效率的好处</div>
    
 
     
@@ -341,61 +340,58 @@
 
     
 
-  <h2 id="near-real-time-ingestion">Near Real-Time Ingestion</h2>
+  <h2 id="近实时摄取">近实时摄取</h2>
 
-<p>Ingesting data from external sources like (event logs, databases, external sources) into a <a href="http://martinfowler.com/bliki/DataLake.html">Hadoop Data Lake</a> is a well known problem.
-In most (if not all) Hadoop deployments, it is unfortunately solved in a piecemeal fashion, using a medley of ingestion tools,
-even though this data is arguably the most valuable for the entire organization.</p>
+<p>将外部源(如事件日志、数据库、外部源)的数据摄取到<a href="http://martinfowler.com/bliki/DataLake.html">Hadoop数据湖</a>是一个众所周知的问题。
+尽管这些数据对整个组织来说是最有价值的，但不幸的是，在大多数(如果不是全部)Hadoop部署中都使用零散的方式解决，即使用多个不同的摄取工具。</p>
 
-<p>For RDBMS ingestion, Hudi provides <strong>faster loads via Upserts</strong>, as opposed costly &amp; inefficient bulk loads. For e.g, you can read the MySQL BIN log or <a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop Incremental Import</a> and apply them to an
-equivalent Hudi table on DFS. This would be much faster/efficient than a <a href="https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457">bulk merge job</a>
-or <a href="http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/">complicated handcrafted merge workflows</a></p>
+<p>对于RDBMS摄取，Hudi提供__通过更新插入达到更快加载__，而不是昂贵且低效的批量加载。例如，您可以读取MySQL BIN日志或<a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop增量导入</a>并将其应用于
+DFS上的等效Hudi表。这比<a href="https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457">批量合并任务</a>及<a href="http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/">复杂的手工合并工作流</a>更快/更有效率。</p>
 
-<p>For NoSQL datastores like <a href="http://cassandra.apache.org/">Cassandra</a> / <a href="http://www.project-voldemort.com/voldemort/">Voldemort</a> / <a href="https://hbase.apache.org/">HBase</a>, even moderately big installations store billions of rows.
-It goes without saying that <strong>full bulk loads are simply infeasible</strong> and more efficient approaches are needed if ingestion is to keep up with the typically high update volumes.</p>
+<p>对于NoSQL数据存储，如<a href="http://cassandra.apache.org/">Cassandra</a> / <a href="http://www.project-voldemort.com/voldemort/">Voldemort</a> / <a href="https://hbase.apache.org/">HBase</a>，即使是中等规模大小也会存储数十亿行。
+毫无疑问， <strong>全量加载不可行</strong>，如果摄取需要跟上较高的更新量，那么则需要更有效的方法。</p>
 
-<p>Even for immutable data sources like <a href="kafka.apache.org">Kafka</a> , Hudi helps <strong>enforces a minimum file size on HDFS</strong>, which improves NameNode health by solving one of the <a href="https://blog.cloudera.com/blog/2009/02/the-small-files-problem/">age old problems in Hadoop land</a> in a holistic way. This is all the more important for event streams, since typically its higher volume (eg: click streams) and if not managed well, can cause serious damage to your Hadoop cluster.</p>
+<p>即使对于像<a href="kafka.apache.org">Kafka</a>这样的不可变数据源，Hudi也可以 <strong>强制在HDFS上使用最小文件大小</strong>, 这采取了综合方式解决<a href="https://blog.cloudera.com/blog/2009/02/the-small-files-problem/">Hadoop中的一个老问题</a>来改善NameNode的健康状况。这对事件流来说更为重要，因为它通常具有较高容量(例如：点击流)，如果管理不当，可能会对Hadoop群集造成严重损害。</p>
 
-<p>Across all sources, Hudi adds the much needed ability to atomically publish new data to consumers via notion of commits, shielding them from partial ingestion failures</p>
+<p>在所有源中，通过<code class="highlighter-rouge">提交</code>这一概念，Hudi增加了以原子方式向消费者发布新数据的功能，这种功能十分必要。</p>
 
-<h2 id="near-real-time-analytics">Near Real-time Analytics</h2>
+<h2 id="近实时分析">近实时分析</h2>
 
-<p>Typically, real-time <a href="https://en.wikipedia.org/wiki/Data_mart">datamarts</a> are powered by specialized analytical stores such as <a href="http://druid.io/">Druid</a> or <a href="http://www.memsql.com/">Memsql</a> or <a href="http://opentsdb.net/">even OpenTSDB</a> .
-This is absolutely perfect for lower scale (<a href="https://blog.twitter.com/2015/hadoop-filesystem-at-twitter">relative to Hadoop installations like this</a>) data, that needs sub-second query responses such as system monitoring or interactive real-time analysis.
-But, typically these systems end up getting abused for less interactive queries also since data on Hadoop is intolerably stale. This leads to under utilization &amp; wasteful hardware/license costs.</p>
+<p>通常，实时<a href="https://en.wikipedia.org/wiki/Data_mart">数据集市</a>由专业(实时)数据分析存储提供支持，例如<a href="http://druid.io/">Druid</a>或<a href="http://www.memsql.com/">Memsql</a>或<a href="http://opentsdb.net/">OpenTSDB</a>。
+这对于较小规模的数据量来说绝对是完美的(<a href="https://blog.twitter.com/2015/hadoop-filesystem-at-twitter">相比于这样安装Hadoop</a>)，这种情况需要在亚秒级响应查询，例如系统监控或交互式实时分析。
+但是，由于Hadoop上的数据太陈旧了，通常这些系统会被滥用于非交互式查询，这导致利用率不足和硬件/许可证成本的浪费。</p>
 
-<p>On the other hand, interactive SQL solutions on Hadoop such as Presto &amp; SparkSQL excel in <strong>queries that finish within few seconds</strong>.
-By bringing <strong>data freshness to a few minutes</strong>, Hudi can provide a much efficient alternative, as well unlock real-time analytics on <strong>several magnitudes larger datasets</strong> stored in DFS.
-Also, Hudi has no external dependencies (like a dedicated HBase cluster, purely used for real-time analytics) and thus enables faster analytics on much fresher analytics, without increasing the operational overhead.</p>
+<p>另一方面，Hadoop上的交互式SQL解决方案(如Presto和SparkSQL)表现出色，在__几秒钟内完成查询__。
+通过将__数据新鲜度提高到几分钟__，Hudi可以提供一个更有效的替代方案，并支持存储在DFS中的__数量级更大的数据集__的实时分析。
+此外，Hudi没有外部依赖(如专用于实时分析的HBase集群)，因此可以在更新的分析上实现更快的分析，而不会增加操作开销。</p>
 
-<h2 id="incremental-processing-pipelines">Incremental Processing Pipelines</h2>
+<h2 id="增量处理管道">增量处理管道</h2>
 
-<p>One fundamental ability Hadoop provides is to build a chain of datasets derived from each other via DAGs expressed as workflows.
-Workflows often depend on new data being output by multiple upstream workflows and traditionally, availability of new data is indicated by a new DFS Folder/Hive Partition.
-Let’s take a concrete example to illustrate this. An upstream workflow <code class="highlighter-rouge">U</code> can create a Hive partition for every hour, with data for that hour (event_time) at the end of each hour (processing_time), providing effective freshness of 1 hour.
-Then, a downstream workflow <code class="highlighter-rouge">D</code>, kicks off immediately after <code class="highlighter-rouge">U</code> finishes, and does its own processing for the next hour, increasing the effective latency to 2 hours.</p>
+<p>Hadoop提供的一个基本能力是构建一系列数据集，这些数据集通过表示为工作流的DAG相互派生。
+工作流通常取决于多个上游工作流输出的新数据，新数据的可用性传统上由新的DFS文件夹/Hive分区指示。
+让我们举一个具体的例子来说明这点。上游工作流<code class="highlighter-rouge">U</code>可以每小时创建一个Hive分区，在每小时结束时(processing_time)使用该小时的数据(event_time)，提供1小时的有效新鲜度。
+然后，下游工作流<code class="highlighter-rouge">D</code>在<code class="highlighter-rouge">U</code>结束后立即启动，并在下一个小时内自行处理，将有效延迟时间增加到2小时。</p>
 
-<p>The above paradigm simply ignores late arriving data i.e when <code class="highlighter-rouge">processing_time</code> and <code class="highlighter-rouge">event_time</code> drift apart.
-Unfortunately, in today’s post-mobile &amp; pre-IoT world, <strong>late data from intermittently connected mobile devices &amp; sensors are the norm, not an anomaly</strong>.
-In such cases, the only remedy to guarantee correctness is to <a href="https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data">reprocess the last few hours</a> worth of data,
-over and over again each hour, which can significantly hurt the efficiency across the entire ecosystem. For e.g; imagine reprocessing TBs worth of data every hour across hundreds of workflows.</p>
+<p>上面的示例忽略了迟到的数据，即<code class="highlighter-rouge">processing_time</code>和<code class="highlighter-rouge">event_time</code>分开时。
+不幸的是，在今天的后移动和前物联网世界中，<strong>来自间歇性连接的移动设备和传感器的延迟数据是常态，而不是异常</strong>。
+在这种情况下，保证正确性的唯一补救措施是<a href="https://falcon.apache.org/FalconDocumentation.html#Handling_late_input_data">重新处理最后几个小时</a>的数据，
+每小时一遍又一遍，这可能会严重影响整个生态系统的效率。例如; 试想一下，在数百个工作流中每小时重新处理TB数据。</p>
 
-<p>Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upsteam Hudi dataset <code class="highlighter-rouge">HU</code> at a record granularity (not folders/partitions),
-apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi dataset <code class="highlighter-rouge">HD</code>. Here, <code class="highlighter-rouge">HU</code> and <code class="highlighter-rouge">HD</code> can be continuously scheduled at a much more frequent schedule
-like 15 mins, and providing an end-end latency of 30 mins at <code class="highlighter-rouge">HD</code>.</p>
+<p>Hudi通过以单个记录为粒度的方式(而不是文件夹/分区)从上游 Hudi数据集<code class="highlighter-rouge">HU</code>消费新数据(包括迟到数据)，来解决上面的问题。
+应用处理逻辑，并使用下游Hudi数据集<code class="highlighter-rouge">HD</code>高效更新/协调迟到数据。在这里，<code class="highlighter-rouge">HU</code>和<code class="highlighter-rouge">HD</code>可以以更频繁的时间被连续调度
+比如15分钟，并且<code class="highlighter-rouge">HD</code>提供端到端30分钟的延迟。</p>
 
-<p>To achieve this, Hudi has embraced similar concepts from stream processing frameworks like <a href="https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations">Spark Streaming</a> , Pub/Sub systems like <a href="http://kafka.apache.org/documentation/#theconsumer">Kafka</a>
-or database replication technologies like <a href="https://docs.oracle.com/cd/E11882_01/server.112/e16545/xstrm_cncpt.htm#XSTRM187">Oracle XStream</a>.
-For the more curious, a more detailed explanation of the benefits of Incremental Processing (compared to Stream Processing &amp; Batch Processing) can be found <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">here</a></p>
+<p>为实现这一目标，Hudi采用了类似于<a href="https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations">Spark Streaming</a>、发布/订阅系统等流处理框架，以及像<a href="http://kafka.apache.org/documentation/#theconsumer">Kafka</a>
+或<a href="https://docs.oracle.com/cd/E11882_01/server.112/e16545/xstrm_cncpt.htm#XSTRM187">Oracle XStream</a>等数据库复制技术的类似概念。
+如果感兴趣，可以在<a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">这里</a>找到有关增量处理(相比于流处理和批处理)好处的更详细解释。</p>
 
-<h2 id="data-dispersal-from-dfs">Data Dispersal From DFS</h2>
+<h2 id="dfs的数据分发">DFS的数据分发</h2>
 
-<p>A popular use-case for Hadoop, is to crunch data and then disperse it back to an online serving store, to be used by an application.
-For e.g, a Spark Pipeline can <a href="https://eng.uber.com/telematics/">determine hard braking events on Hadoop</a> and load them into a serving store like ElasticSearch, to be used by the Uber application to increase safe driving. Typical architectures for this employ a <code class="highlighter-rouge">queue</code> between Hadoop and serving store, to prevent overwhelming the target serving store.
-A popular choice for this queue is Kafka and this model often results in <strong>redundant storage of same data on DFS (for offline analysis on computed results) and Kafka (for dispersal)</strong></p>
+<p>Hadoop的一个流行用例是压缩数据，然后将其分发回在线服务存储层，以供应用程序使用。
+例如，一个Spark管道可以<a href="https://eng.uber.com/telematics/">确定Hadoop上的紧急制动事件</a>并将它们加载到服务存储层(如ElasticSearch)中，供Uber应用程序使用以增加安全驾驶。这种用例中，通常架构会在Hadoop和服务存储之间引入<code class="highlighter-rouge">队列</code>，以防止目标服务存储被压垮。
+对于队列的选择，一种流行的选择是Kafka，这个模型经常导致__在DFS上存储相同数据的冗余(用于计算结果的离线分析)和Kafka(用于分发)__</p>
 
-<p>Once again Hudi can efficiently solve this problem, by having the Spark Pipeline upsert output from
-each run into a Hudi dataset, which can then be incrementally tailed (just like a Kafka topic) for new data &amp; written into the serving store.</p>
+<p>通过将每次运行的Spark管道更新插入的输出转换为Hudi数据集，Hudi可以再次有效地解决这个问题，然后可以以增量方式获取尾部数据(就像Kafka主题一样)然后写入服务存储层。</p>
 
 
     <div class="tags">
