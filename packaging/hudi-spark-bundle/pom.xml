@@ -84,6 +84,8 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+
+                  <include>com.databricks:spark-avro_2.11</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -126,6 +128,10 @@
                 <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.databricks.</pattern>
+                  <shadedPattern>org.apache.hudi.com.databricks.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
                 <!--
