@@ -216,7 +216,6 @@
       <groupId>com.databricks</groupId>
       <artifactId>spark-avro_2.11</artifactId>
       <version>4.0.0</version>
-      <scope>provided</scope>
     </dependency>
 
     <!-- Hadoop -->
