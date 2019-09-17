@@ -8,6 +8,9 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Balaji Varadarajan** [HUDI-257] Fix Bloom Index unit-test failures
+  * **Balaji Varadarajan** [HUDI-252] Add Disclaimer and cleanup NOTICE and LICENSE files in hudi. Identify packages which are under non-apache license in LICENSE file
+  * **Taher Koitwala** [HUDI-62] Index Lookup Timer added to HoodieWriteClient
   * **Balaji Varadarajan** [HUDI-249] Update Release-notes. Add sign-artifacts to POM and release related scripts. Add missing license headers and update NOTICE.txt files
   * **Vinoth Chandar** [HUDI-244] : Hive sync should escape partition field name - now supports field names beginning with '_' for e.g
   * **Balaji Varadarajan** [HUDI-250] Ensure Hudi CLI wrapper works with non snapshot jars too
