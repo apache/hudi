@@ -75,6 +75,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     initTempFolderAndPath();
     initTableType();
     initTestDataGenerator();
+    initFileSystem();
   }
 
   @After
@@ -82,6 +83,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     cleanupSparkContexts();
     cleanupTempFolderAndPath();
     cleanupTableType();
+    cleanupFileSystem();
     cleanupTestDataGenerator();
   }
 
