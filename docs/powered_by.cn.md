@@ -6,28 +6,27 @@ permalink: powered_by.html
 toc: false
 ---
 
-## Adoption
+## 已使用
 
 #### Uber
 
-Hudi was originally developed at [Uber](https://uber.com), to achieve [low latency database ingestion, with high efficiency](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32).
-It has been in production since Aug 2016, powering ~100 highly business critical tables on Hadoop, worth 100s of TBs(including top 10 including trips,riders,partners).
-It also powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
+Hudi最初由[Uber](https://uber.com)开发，用于实现[低延迟、高效率的数据库摄取](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32)。
+Hudi自2016年8月开始在生产环境上线，在Hadoop上驱动约100个非常关键的业务表，支撑约100亿TB的数据规模(前10名包括旅行，乘客，合作伙伴)。
+Hudi还支持几个增量的Hive ETL管道，并且目前已集成到Uber的数据分发系统中。
 
 #### EMIS Health
 
-[EMIS Health][https://www.emishealth.com/] is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
+[EMIS Health](https://www.emishealth.com/)是英国最大的初级保健IT软件提供商，其数据集包括超过500亿的医疗保健记录。HUDI用于管理生产中的分析数据集，并使其与上游源保持同步。Presto用于查询以HUDI格式写入的数据。
 
 #### Yields.io
 
-Yields.io is the first FinTech platform that uses AI for automated model validation and real-time monitoring on an enterprise-wide scale. Their data lake is managed by Hudi. They are also actively building their infrastructure for incremental, cross language/platform machine learning using Hudi.
+Yields.io是第一个使用AI在企业范围内进行自动模型验证和实时监控的金融科技平台。他们的数据湖由Hudi管理，他们还积极使用Hudi为增量式、跨语言/平台机器学习构建基础架构。
 
 #### Yotpo
 
-Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework https://github.com/YotpoLtd/metorikku and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
- 
+Hudi在Yotpo有不少用途。首先，在他们的[开源ETL框架](https://github.com/YotpoLtd/metorikku)中集成了Hudi作为CDC管道的输出写入程序，即从数据库binlog生成的事件流到Kafka然后再写入S3。
 
-## Talks & Presentations
+## 演讲 & 报告
 
 1. ["Hoodie: Incremental processing on Hadoop at Uber"](https://conferences.oreilly.com/strata/strata-ca/public/schedule/detail/56511) -  By Vinoth Chandar & Prasanna Rajaperumal
    Mar 2017, Strata + Hadoop World, San Jose, CA
@@ -53,7 +52,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 8. ["Apache Hudi (Incubating) - The Past, Present and Future Of Efficient Data Lake Architectures"](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM) - By Vinoth Chandar & Balaji Varadarajan
    September 2019, ApacheCon NA 19, Las Vegas, NV, USA
 
-## Articles
+## 文章
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
 2. ["Hoodie: Uber Engineering's Incremental Processing Framework on Hadoop"](https://eng.uber.com/hoodie/) - Engineering Blog By Prasanna Rajaperumal
