@@ -8,6 +8,7 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Vinoth Chandar** [HUDI-254]: Bundle and shade databricks/avro with spark bundle
   * **Balaji Varadarajan** [HUDI-257] Fix Bloom Index unit-test failures
   * **Balaji Varadarajan** [HUDI-252] Add Disclaimer and cleanup NOTICE and LICENSE files in hudi. Identify packages which are under non-apache license in LICENSE file
   * **Taher Koitwala** [HUDI-62] Index Lookup Timer added to HoodieWriteClient
