@@ -35,6 +35,11 @@ Here's a typical lifecycle of events to contribute to Hudi.
  - [Optional] If you want to get involved, but don't have a project in mind, please check JIRA for small, quick-starters.
  - [Optional] Familiarize yourself with internals of Hudi using content on this page, as well as [wiki](https://cwiki.apache.org/confluence/display/HUDI)
  - Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself. (If you don't have perms to do this, please email the dev mailing list with your JIRA id and a small intro for yourself. We'd be happy to add you as a contributor)
+ - While raising a new JIRA or updating an existing one, please make sure to do the following
+   - The issue type and versions (when resolving the ticket) are set correctly
+   - Summary should be descriptive enough to catch the essence of the problem/ feature
+   - Capture the version of Hoodie/Spark/Hive/Hadoop/Cloud environments in the ticket
+   - Whenever possible, provide steps to reproduce via sample code or on the [docker setup](https://hudi.apache.org/docker_demo.html)
  - Almost all PRs should be linked to a JIRA. Before you begin work, click "Start Progress" on the JIRA, which tells everyone that you are working on the issue actively.
  - Make your code change
    - Every source file needs to include the Apache license header. Every new dependency needs to
