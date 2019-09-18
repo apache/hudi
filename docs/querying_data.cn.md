@@ -14,8 +14,8 @@ bundle has been provided, the dataset can be queried by popular query engines li
 Specifically, there are two Hive tables named off [table name](configurations.html#TABLE_NAME_OPT_KEY) passed during write. 
 For e.g, if `table name = hudi_tbl`, then we get  
 
- - `hudi_tbl` realizes the read optimized view of the dataset backed by `HoodieInputFormat`, exposing purely columnar data.
- - `hudi_tbl_rt` realizes the real time view of the dataset  backed by `HoodieRealtimeInputFormat`, exposing merged view of base and log data.
+ - `hudi_tbl` realizes the read optimized view of the dataset backed by `HoodieParquetInputFormat`, exposing purely columnar data.
+ - `hudi_tbl_rt` realizes the real time view of the dataset  backed by `HoodieParquetRealtimeInputFormat`, exposing merged view of base and log data.
 
 As discussed in the concepts section, the one key primitive needed for [incrementally processing](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop),
 is `incremental pulls` (to obtain a change stream/log from a dataset). Hudi datasets can be pulled incrementally, which means you can get ALL and ONLY the updated & new rows 
@@ -33,7 +33,7 @@ classes with its dependencies are available for query planning & execution.
 
 ### Read Optimized table {#hive-ro-view}
 In addition to setup above, for beeline cli access, the `hive.input.format` variable needs to be set to the  fully qualified path name of the 
-inputformat `org.apache.hudi.hadoop.HoodieInputFormat`. For Tez, additionally the `hive.tez.input.format` needs to be set 
+inputformat `org.apache.hudi.hadoop.HoodieParquetInputFormat`. For Tez, additionally the `hive.tez.input.format` needs to be set 
 to `org.apache.hadoop.hive.ql.io.HiveInputFormat`
 
 ### Real time table {#hive-rt-view}
