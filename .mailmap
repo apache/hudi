@@ -1,0 +1,6 @@
+# See https://github.com/git/git/blob/master/Documentation/mailmap.txt for syntax
+#vinoth's uber email and personal email mapping to apache
+<vinoth@uber.com> <vinoth@apache.org>
+<vinoth@bytearray.io> <vinoth@apache.org>
+# Prasanna's uber email mapping to active email
+<prasanna@uber.com> <prasanna.raj@gmail.com>
