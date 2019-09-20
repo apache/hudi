@@ -115,15 +115,15 @@
                 
                 
                 
-                <li><a href="news">News</a></li>
+                <li><a href="news">新闻</a></li>
                 
                 
                 
-                <li><a href="community.html">Community</a></li>
+                <li><a href="community.html">社区</a></li>
                 
                 
                 
-                <li><a href="https://github.com/apache/incubator-hudi" target="_blank">Code</a></li>
+                <li><a href="https://github.com/apache/incubator-hudi" target="_blank">代码</a></li>
                 
                 
                 
@@ -132,27 +132,27 @@
                 
                 
                 <li class="dropdown">
-                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">Developers<b class="caret"></b></a>
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">开发者<b class="caret"></b></a>
                     <ul class="dropdown-menu">
                         
                         
-                        <li><a href="contributing.html">Contributing</a></li>
+                        <li><a href="contributing.html">贡献</a></li>
                         
                         
                         
-                        <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank">Wiki/Designs</a></li>
+                        <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank">维基/设计</a></li>
                         
                         
                         
-                        <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank">Issues</a></li>
+                        <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank">问题</a></li>
                         
                         
                         
-                        <li><a href="https://cwiki.apache.org/confluence/pages/viewrecentblogposts.action?key=HUDI" target="_blank">Blog</a></li>
+                        <li><a href="https://cwiki.apache.org/confluence/pages/viewrecentblogposts.action?key=HUDI" target="_blank">博客</a></li>
                         
                         
                         
-                        <li><a href="https://projects.apache.org/project.html?incubator-hudi" target="_blank">Team</a></li>
+                        <li><a href="https://projects.apache.org/project.html?incubator-hudi" target="_blank">团队</a></li>
                         
                         
                     </ul>
@@ -171,8 +171,7 @@
 		
                 <li>
                     
-                    <!-- link to the Chinese home page when current is blog page -->
-                    <a href="/cn/docker_demo.html">中文版</a>
+                    <a href="/docker_demo.html">English</a>
                     
                 </li>
                 <!--comment out this block if you want to hide search-->
@@ -237,21 +236,21 @@
             
             
             
-            <li><a href="use_cases.html">Use Cases</a></li>
+            <li><a href="use_cases.html">用户案例</a></li>
             
             
             
             
             
             
-            <li><a href="powered_by.html">Talks & Powered By</a></li>
+            <li><a href="powered_by.html">演讲 & Powered By</a></li>
             
             
             
             
             
             
-            <li><a href="comparison.html">Comparison</a></li>
+            <li><a href="comparison.html">对比</a></li>
             
             
             
@@ -261,47 +260,47 @@
         
     
     <li>
-        <a href="#">Documentation</a>
+        <a href="#">文档</a>
         <ul>
             
             
             
-            <li><a href="concepts.html">Concepts</a></li>
+            <li><a href="concepts.html">概念</a></li>
             
             
             
             
             
             
-            <li><a href="writing_data.html">Writing Data</a></li>
+            <li><a href="writing_data.html">写入数据</a></li>
             
             
             
             
             
             
-            <li><a href="querying_data.html">Querying Data</a></li>
+            <li><a href="querying_data.html">查询数据</a></li>
             
             
             
             
             
             
-            <li><a href="configurations.html">Configuration</a></li>
+            <li><a href="configurations.html">配置</a></li>
             
             
             
             
             
             
-            <li><a href="performance.html">Performance</a></li>
+            <li><a href="performance.html">性能</a></li>
             
             
             
             
             
             
-            <li><a href="admin_guide.html">Administering</a></li>
+            <li><a href="admin_guide.html">管理</a></li>
             
             
             
@@ -401,9 +400,7 @@ Creating hivemetastore             ... done
 Creating historyserver             ... done
 Creating hiveserver                ... done
 Creating datanode1                 ... done
-Creating presto-coordinator-1      ... done
 Creating sparkmaster               ... done
-Creating presto-worker-1           ... done
 Creating adhoc-1                   ... done
 Creating adhoc-2                   ... done
 Creating spark-worker-1            ... done
@@ -751,96 +748,6 @@ scala&gt; spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, clo
 
 </code></pre></div></div>
 
-<h4 id="step-4-c-run-presto-queries">Step 4 (c): Run Presto Queries</h4>
-
-<p>Here are the Presto queries for similar Hive and Spark queries. Currently, Hudi does not support Presto queries on realtime views.</p>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
-presto&gt; show catalogs;
-  Catalog
------------
- hive
- jmx
- localfile
- system
-(4 rows)
-
-Query 20190817_134851_00000_j8rcz, FINISHED, 1 node
-Splits: 19 total, 19 done (100.00%)
-0:04 [0 rows, 0B] [0 rows/s, 0B/s]
-
-presto&gt; use hive.default;
-USE
-presto:default&gt; show tables;
-       Table
---------------------
- stock_ticks_cow
- stock_ticks_mor
- stock_ticks_mor_rt
-(3 rows)
-
-Query 20190822_181000_00001_segyw, FINISHED, 2 nodes
-Splits: 19 total, 19 done (100.00%)
-0:05 [3 rows, 99B] [0 rows/s, 18B/s]
-
-
-# COPY-ON-WRITE Queries:
-=========================
-
-
-presto:default&gt; select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
- symbol |        _col1
---------+---------------------
- GOOG   | 2018-08-31 10:29:00
-(1 row)
-
-Query 20190822_181011_00002_segyw, FINISHED, 1 node
-Splits: 49 total, 49 done (100.00%)
-0:12 [197 rows, 613B] [16 rows/s, 50B/s]
-
-presto:default&gt; select "_hoodie_commit_time", symbol, ts, volume, open, close from stock_ticks_cow where symbol = 'GOOG';
- _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
----------------------+--------+---------------------+--------+-----------+----------
- 20190822180221      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
- 20190822180221      | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085
-(2 rows)
-
-Query 20190822_181141_00003_segyw, FINISHED, 1 node
-Splits: 17 total, 17 done (100.00%)
-0:02 [197 rows, 613B] [109 rows/s, 341B/s]
-
-
-# Merge-On-Read Queries:
-==========================
-
-Lets run similar queries against M-O-R dataset. 
-
-# Run against ReadOptimized View. Notice that the latest timestamp is 10:29
-presto:default&gt; select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
- symbol |        _col1
---------+---------------------
- GOOG   | 2018-08-31 10:29:00
-(1 row)
-
-Query 20190822_181158_00004_segyw, FINISHED, 1 node
-Splits: 49 total, 49 done (100.00%)
-0:02 [197 rows, 613B] [110 rows/s, 343B/s]
-
-
-presto:default&gt;  select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';
- _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
----------------------+--------+---------------------+--------+-----------+----------
- 20190822180250      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
- 20190822180250      | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085
-(2 rows)
-
-Query 20190822_181256_00006_segyw, FINISHED, 1 node
-Splits: 17 total, 17 done (100.00%)
-0:02 [197 rows, 613B] [92 rows/s, 286B/s]
-
-presto:default&gt; exit
-</code></pre></div></div>
-
 <h4 id="step-5-upload-second-batch-to-kafka-and-run-deltastreamer-to-ingest">Step 5: Upload second batch to Kafka and run DeltaStreamer to ingest</h4>
 
 <p>Upload the second batch of data and ingest this batch using delta-streamer. As this batch does not bring in any new
@@ -1008,67 +915,6 @@ scala&gt; spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, clo
 
 exit
 exit
-</code></pre></div></div>
-
-<h4 id="step-6c-run-presto-queries">Step 6(c): Run Presto Queries</h4>
-
-<p>Running the same queries on Presto for ReadOptimized views.</p>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
-presto&gt; use hive.default;
-USE
-
-# Copy On Write Table:
-
-presto:default&gt;select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
- symbol |        _col1
---------+---------------------
- GOOG   | 2018-08-31 10:59:00
-(1 row)
-
-Query 20190822_181530_00007_segyw, FINISHED, 1 node
-Splits: 49 total, 49 done (100.00%)
-0:02 [197 rows, 613B] [125 rows/s, 389B/s]
-
-presto:default&gt;select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG';
- _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
----------------------+--------+---------------------+--------+-----------+----------
- 20190822180221      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
- 20190822181433      | GOOG   | 2018-08-31 10:59:00 |   9021 | 1227.1993 | 1227.215
-(2 rows)
-
-Query 20190822_181545_00008_segyw, FINISHED, 1 node
-Splits: 17 total, 17 done (100.00%)
-0:02 [197 rows, 613B] [106 rows/s, 332B/s]
-
-As you can notice, the above queries now reflect the changes that came as part of ingesting second batch.
-
-
-# Merge On Read Table:
-
-# Read Optimized View
-presto:default&gt; select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
- symbol |        _col1
---------+---------------------
- GOOG   | 2018-08-31 10:29:00
-(1 row)
-
-Query 20190822_181602_00009_segyw, FINISHED, 1 node
-Splits: 49 total, 49 done (100.00%)
-0:01 [197 rows, 613B] [139 rows/s, 435B/s]
-
-presto:default&gt;select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';
- _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
----------------------+--------+---------------------+--------+-----------+----------
- 20190822180250      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
- 20190822180250      | GOOG   | 2018-08-31 10:29:00 |   3391 | 1230.1899 | 1230.085
-(2 rows)
-
-Query 20190822_181615_00010_segyw, FINISHED, 1 node
-Splits: 17 total, 17 done (100.00%)
-0:01 [197 rows, 613B] [154 rows/s, 480B/s]
-
-presto:default&gt; exit
 </code></pre></div></div>
 
 <h4 id="step-7--incremental-query-for-copy-on-write-table">Step 7 : Incremental Query for COPY-ON-WRITE Table</h4>
@@ -1314,7 +1160,7 @@ exit
 exit
 </code></pre></div></div>
 
-<h5 id="step-10-read-optimized-and-realtime-views-for-mor-with-spark-sql-after-compaction">Step 10: Read Optimized and Realtime Views for MOR with Spark-SQL after compaction</h5>
+<h5 id="read-optimized-and-realtime-views-for-mor-with-spark-sql-after-compaction">Read Optimized and Realtime Views for MOR with Spark-SQL after compaction</h5>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker exec -it adhoc-1 /bin/bash
 bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
@@ -1351,38 +1197,6 @@ scala&gt; spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, clo
 | 20180924064636       | GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |
 | 20180924070031       | GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |
 +----------------------+---------+----------------------+---------+------------+-----------+--+
-</code></pre></div></div>
-
-<h5 id="step-11--presto-queries-over-read-optimized-view-on-mor-dataset-after-compaction">Step 11:  Presto queries over Read Optimized View on MOR dataset after compaction</h5>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
-presto&gt; use hive.default;
-USE
-
-# Read Optimized View
-resto:default&gt; select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
-  symbol |        _col1
---------+---------------------
- GOOG   | 2018-08-31 10:59:00
-(1 row)
-
-Query 20190822_182319_00011_segyw, FINISHED, 1 node
-Splits: 49 total, 49 done (100.00%)
-0:01 [197 rows, 613B] [133 rows/s, 414B/s]
-
-presto:default&gt; select "_hoodie_commit_time", symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';
- _hoodie_commit_time | symbol |         ts          | volume |   open    |  close
----------------------+--------+---------------------+--------+-----------+----------
- 20190822180250      | GOOG   | 2018-08-31 09:59:00 |   6330 |    1230.5 |  1230.02
- 20190822181944      | GOOG   | 2018-08-31 10:59:00 |   9021 | 1227.1993 | 1227.215
-(2 rows)
-
-Query 20190822_182333_00012_segyw, FINISHED, 1 node
-Splits: 17 total, 17 done (100.00%)
-0:02 [197 rows, 613B] [98 rows/s, 307B/s]
-
-presto:default&gt;
-
 </code></pre></div></div>
 
 <p>This brings the demo to an end.</p>
