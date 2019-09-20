@@ -100,6 +100,8 @@
     <skipUTs>${skipTests}</skipUTs>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
+    <mr.bundle.avro.scope>provided</mr.bundle.avro.scope>
+    <mr.bundle.avro.shade.prefix></mr.bundle.avro.shade.prefix>
   </properties>
 
   <scm>
@@ -904,6 +906,13 @@
       </activation>
       <properties>
         <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties</surefire-log4j.file>
+      </properties>
+    </profile>
+    <profile>
+      <id>aws-emr-profile</id>
+      <properties>
+        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
+        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
       </properties>
     </profile>
   </profiles>
