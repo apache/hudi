@@ -96,21 +96,21 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType) throws IOException {
-    return initTableType(getDefaultHadoopConf(), basePath, tableType);
+    return init(getDefaultHadoopConf(), basePath, tableType);
   }
 
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath)
       throws IOException {
-    return initTableType(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
+    return init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
 
-  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
-      HoodieTableType tableType) throws IOException {
+  public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType)
+      throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
     properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
-    return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
+    return HoodieTableMetaClient.initDatasetAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
   public static String makeNewCommitTime() {

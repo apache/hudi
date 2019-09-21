@@ -200,7 +200,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, getTableType());
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
   }
 
   /**
