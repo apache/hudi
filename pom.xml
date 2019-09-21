@@ -175,31 +175,6 @@
   <build>
     <plugins>
       <plugin>
-        <groupId>org.jasig.maven</groupId>
-        <artifactId>maven-notice-plugin</artifactId>
-        <version>1.1.0</version>
-        <executions>
-          <execution>
-            <id>generate-notice</id>
-            <!-- Generate notice before packaging so that they can be added to jar -->
-            <!-- <phase>generate-resources</phase> -->
-            <phase>none</phase>
-            <goals>
-              <goal>generate</goal>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <noticeTemplate>${maven.multiModuleProjectDirectory}/release/config/NOTICE.template</noticeTemplate>
-          <licenseMapping>
-            <param>${maven.multiModuleProjectDirectory}/release/config/license-mappings.xml</param>
-          </licenseMapping>
-          <outputDir>${notice.dir}</outputDir>
-          <fileName>${notice.file}</fileName>
-        </configuration>
-      </plugin>
-      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
         <version>3.0.0</version>
@@ -394,18 +369,17 @@
               </licenseFamily>
             </licenseFamilies>
             <excludes>
+              <exclude>NOTICE</exclude>
               <exclude>**/.*</exclude>
-              <exclude>**/*.txt</exclude>
-              <exclude>**/*.sh</exclude>
-              <exclude>**/*.log</exclude>
+              <exclude>**/*.json</exclude>
+              <exclude>**/*.sqltemplate</exclude>
+              <exclude>**/compose_env</exclude>
+              <exclude>**/*NOTICE*</exclude>
+              <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
-              <exclude>**/test/resources/*.avsc</exclude>
               <exclude>**/test/resources/*.data</exclude>
-              <exclude>**/test/resources/*.schema</exclude>
-              <exclude>**/test/resources/*.csv</exclude>
-              <exclude>**/main/avro/*.avsc</exclude>
-              <exclude>**/target/*</exclude>
-              <exclude>**/style/*</exclude>
+              <exclude>**/target/**</exclude>
+              <excludes>**/generated-sources/**</excludes>
             </excludes>
           </configuration>
           <executions>
