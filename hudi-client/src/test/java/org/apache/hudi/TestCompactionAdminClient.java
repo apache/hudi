@@ -53,7 +53,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   public void setUp() throws Exception {
     initTempFolderAndPath();
     initSparkContexts();
-    metaClient = HoodieTestUtils.initTableType(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(jsc, basePath);
   }
 
