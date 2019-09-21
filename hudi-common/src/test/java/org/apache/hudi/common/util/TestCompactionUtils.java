@@ -65,7 +65,7 @@ public class TestCompactionUtils {
 
   @Before
   public void init() throws IOException {
-    metaClient = HoodieTestUtils.initTableType(getDefaultHadoopConf(),
+    metaClient = HoodieTestUtils.init(getDefaultHadoopConf(),
         tmpFolder.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     basePath = metaClient.getBasePath();
   }

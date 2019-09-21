@@ -131,7 +131,7 @@ public class HDFSParquetImporter implements Serializable {
       properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
       properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
       HoodieTableMetaClient
-          .initializePathAsHoodieDataset(jsc.hadoopConfiguration(), cfg.targetPath, properties);
+          .initDatasetAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
       HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr,
           cfg.parallelism, Option.empty(), props);

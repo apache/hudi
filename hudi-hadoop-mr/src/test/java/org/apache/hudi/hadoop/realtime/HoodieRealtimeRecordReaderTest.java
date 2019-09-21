@@ -172,7 +172,7 @@ public class HoodieRealtimeRecordReaderTest {
   public void testReader(boolean partitioned) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
         HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir =
@@ -263,7 +263,7 @@ public class HoodieRealtimeRecordReaderTest {
   public void testUnMergedReader() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
         HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
@@ -347,7 +347,7 @@ public class HoodieRealtimeRecordReaderTest {
   public void testReaderWithNestedAndComplexSchema() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
-    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
         HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;
@@ -489,7 +489,7 @@ public class HoodieRealtimeRecordReaderTest {
     // initial commit
     List<String> logFilePaths = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.initTableType(hadoopConf, basePath.getRoot().getAbsolutePath(),
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
         HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;

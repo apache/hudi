@@ -273,7 +273,7 @@ public class HoodieTableMetaClient implements Serializable {
     properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
     properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, type.name());
     properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, archiveLogFolder);
-    return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
+    return HoodieTableMetaClient.initDatasetAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
   /**
@@ -287,7 +287,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
     }
-    return HoodieTableMetaClient.initializePathAsHoodieDataset(hadoopConf, basePath, properties);
+    return HoodieTableMetaClient.initDatasetAndGetMetaClient(hadoopConf, basePath, properties);
   }
 
   /**
@@ -296,7 +296,7 @@ public class HoodieTableMetaClient implements Serializable {
    *
    * @return Instance of HoodieTableMetaClient
    */
-  public static HoodieTableMetaClient initializePathAsHoodieDataset(Configuration hadoopConf,
+  public static HoodieTableMetaClient initDatasetAndGetMetaClient(Configuration hadoopConf,
       String basePath, Properties props) throws IOException {
     log.info("Initializing " + basePath + " as hoodie dataset " + basePath);
     Path basePathDir = new Path(basePath);
