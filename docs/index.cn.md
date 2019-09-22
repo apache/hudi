@@ -1,23 +1,24 @@
 ---
-title: What is Hudi?
+title: 什么是Hudi?
 keywords: big data, stream processing, cloud, hdfs, storage, upserts, change capture
 tags: [getting_started]
 sidebar: mydoc_sidebar
 permalink: index.html
-summary: "Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing."
+summary: "Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。"
 ---
 
-Hudi (pronounced “Hoodie”) ingests & manages storage of large analytical datasets over DFS ([HDFS](http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html) or cloud stores) and provides three logical views for query access.
+Hudi（发音为“hoodie”）摄取与管理处于DFS([HDFS](http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html) 或云存储)之上的大型分析数据集并为查询访问提供三个逻辑视图。
 
- * **Read Optimized View** - Provides excellent query performance on pure columnar storage, much like plain [Parquet](https://parquet.apache.org/) tables.
- * **Incremental View** - Provides a change stream out of the dataset to feed downstream jobs/ETLs.
- * **Near-Real time Table** - Provides queries on real-time data, using a combination of columnar & row based storage (e.g Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))
+ * **读优化视图** - 在纯列式存储上提供出色的查询性能，非常像[parquet](https://parquet.apache.org/)表。
+ * **增量视图** - 在数据集之上提供一个变更流并提供给下游的作业或ETL任务。
+ * **准实时的表** - 使用基于列存储(例如 Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))和行存储以提供对实时数据的查询
+
 
 
 <figure>
     <img class="docimage" src="/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-By carefully managing how data is laid out in storage & how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like [Presto](https://prestodb.io) & [Spark](https://spark.apache.org/sql/), while at the same time capable of being consumed incrementally from processing/ETL frameworks like [Hive](https://hive.apache.org/) & [Spark](https://spark.apache.org/docs/latest/) to build derived (Hudi) datasets.
+通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于[presto](https://prestodb.io)和[spark](https://spark.apache.org/sql/)等交互式SQL引擎，同时能够从处理/ETL框架（如[hive](https://hive.apache.org/)& [spark](https://spark.apache.org/docs/latest/)中进行增量消费以构建派生（Hudi）数据集。
 
-Hudi broadly consists of a self contained Spark library to build datasets and integrations with existing query engines for data access. See [quickstart](quickstart.html) for a demo.
+Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见[快速启动](quickstart.html)。
