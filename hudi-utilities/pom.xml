@@ -92,6 +92,14 @@
       <scope>test</scope>
     </dependency>
 
+    <!--DerbyDb lib used internally for JDBC testing-->
+    <dependency>
+      <groupId>org.apache.derby</groupId>
+      <artifactId>derby</artifactId>
+      <version>10.11.1.1</version>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>

@@ -1,0 +1,13 @@
+----------------------------------------------------------------
+Tue Oct 01 15:18:34 IST 2019:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.11.1.1 - (1616546): instance a816c00e-016d-86b8-b32b-00001555cc88 
+on database directory /tmp/derby/sales with class loader sun.misc.Launcher$AppClassLoader@18b4aac2 
+Loaded from file:/home/taher/.m2/repository/org/apache/derby/derby/10.11.1.1/derby-10.11.1.1.jar
+java.vendor=Oracle Corporation
+java.runtime.version=1.8.0_211-b12
+user.dir=/home/taher/TaherGit/incubator-hudi/hudi-utilities
+os.name=Linux
+os.arch=amd64
+os.version=4.15.0-64-generic
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
