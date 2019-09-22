@@ -92,7 +92,7 @@ public class UtilHelpers {
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     try {
-      DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(fs, cfgPath);
+      DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
       if (!overriddenProps.isEmpty()) {
         logger.info("Adding overridden properties to file properties.");
         conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
