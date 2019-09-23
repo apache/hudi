@@ -48,11 +48,10 @@ public class HiveSyncConfig implements Serializable {
       "--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
   public String basePath;
 
-  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by",
-      required = false)
+  @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
   public List<String> partitionFields = new ArrayList<>();
 
-  @Parameter(names = "-partition-value-extractor", description = "Class which implements "
+  @Parameter(names = "--partition-value-extractor", description = "Class which implements "
       + "PartitionValueExtractor "
       + "to extract the partition "
       + "values from HDFS path")
@@ -74,24 +73,11 @@ public class HiveSyncConfig implements Serializable {
       + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
+  @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
+  public Boolean useJdbc = true;
+
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
-
-  @Override
-  public String toString() {
-    return "HiveSyncConfig{"
-        + "databaseName='" + databaseName + '\''
-        + ", tableName='" + tableName + '\''
-        + ", hiveUser='" + hiveUser + '\''
-        + ", hivePass='" + hivePass + '\''
-        + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", basePath='" + basePath + '\''
-        + ", partitionFields=" + partitionFields
-        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-        + ", assumeDatePartitioning=" + assumeDatePartitioning
-        + ", help=" + help
-        + '}';
-  }
 
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -106,5 +92,23 @@ public class HiveSyncConfig implements Serializable {
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     return newConfig;
+  }
+
+  @Override
+  public String toString() {
+    return "HiveSyncConfig{"
+        + "databaseName='" + databaseName + '\''
+        + ", tableName='" + tableName + '\''
+        + ", hiveUser='" + hiveUser + '\''
+        + ", hivePass='" + hivePass + '\''
+        + ", jdbcUrl='" + jdbcUrl + '\''
+        + ", basePath='" + basePath + '\''
+        + ", partitionFields=" + partitionFields
+        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
+        + ", assumeDatePartitioning=" + assumeDatePartitioning
+        + ", usePreApacheInputFormat=" + usePreApacheInputFormat
+        + ", useJdbc=" + useJdbc
+        + ", help=" + help
+        + '}';
   }
 }

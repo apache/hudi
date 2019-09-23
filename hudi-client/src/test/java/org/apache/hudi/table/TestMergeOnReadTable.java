@@ -85,7 +85,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     jsc.hadoopConfiguration().addResource(dfs.getConf());
     initTempFolderAndPath();
     dfs.mkdirs(new Path(basePath));
-    HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
     initTestDataGenerator();
   }
 
@@ -294,7 +294,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   public void testCOWToMORConvertedDatasetRollback() throws Exception {
 
     //Set TableType to COW
-    HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.COPY_ON_WRITE);
 
     HoodieWriteConfig cfg = getConfig(true);
     try (HoodieWriteClient client = getWriteClient(cfg);) {
@@ -330,7 +330,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       //Set TableType to MOR
-      HoodieTestUtils.initTableType(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
+      HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
 
       //rollback a COW commit when TableType is MOR
       client.rollback(newCommitTime);
