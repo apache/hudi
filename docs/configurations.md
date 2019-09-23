@@ -338,7 +338,7 @@ Property: `hoodie.keep.min.commits`, `hoodie.keep.max.commits` <br/>
 Property: `hoodie.commits.archival.batch` <br/>
 <span style="color:grey">This controls the number of commit instants read in memory as a batch and archived together.</span>
 
-##### compactionSmallFileSize(size = 0) {#compactionSmallFileSize} 
+##### compactionSmallFileSize(size = 100MB) {#compactionSmallFileSize} 
 Property: `hoodie.parquet.small.file.limit` <br/>
 <span style="color:grey">This should be less < maxFileSize and setting it to 0, turns off this feature. Small files can always happen because of the number of insert records in a partition in a batch. Hudi has an option to auto-resolve small files by masking inserts into this partition as updates to existing small files. The size here is the minimum file size considered as a "small file size".</span>
 
