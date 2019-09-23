@@ -118,7 +118,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       logger.info("Reading from path: " + tablePath);
       fs = FSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
-      metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath);
+      metaClient.reloadMetaClient(fs.getConf(), tablePath);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> localReadRecords = HoodieClientTestUtils
           .readCommit(tablePath, sqlContext, timeline, writeCommitTime);

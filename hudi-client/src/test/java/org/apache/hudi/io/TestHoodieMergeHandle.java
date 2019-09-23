@@ -32,7 +32,6 @@ import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.FSUtils;
@@ -58,17 +57,17 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     initSparkContexts("TestHoodieMergeHandle");
     initTempFolderAndPath();
     initFileSystem();
-    initTableType();
     initTestDataGenerator();
+    initMetaClient();
   }
 
   @After
   public void tearDown() throws Exception {
-    cleanupTableType();
     cleanupFileSystem();
     cleanupTestDataGenerator();
     cleanupTempFolderAndPath();
     cleanupSparkContexts();
+    cleanupMetaClient();
   }
 
   private HoodieWriteClient getWriteClient(HoodieWriteConfig config) throws Exception {
@@ -109,7 +108,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       // verify that there is a commit
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       assertEquals("Expecting a single commit.", 1,
           timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants());
@@ -137,7 +136,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       // verify that there are 2 commits
-      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       assertEquals("Expecting two commits.", 2, timeline.findInstantsAfter("000", Integer.MAX_VALUE)
           .countInstants());
@@ -161,7 +160,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       // verify that there are now 3 commits
-      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       assertEquals("Expecting three commits.", 3, timeline.findInstantsAfter("000", Integer.MAX_VALUE)
           .countInstants());
@@ -259,7 +258,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
           .map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get(), 100);
 
       // Update all the 100 records
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
       newCommitTime = "101";

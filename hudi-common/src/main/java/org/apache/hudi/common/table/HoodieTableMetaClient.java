@@ -85,29 +85,14 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath,
-      boolean loadActiveTimelineOnLoad) {
+      boolean loadActiveTimelineOnLoad) throws DatasetNotFoundException {
     this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build());
   }
 
   public HoodieTableMetaClient(Configuration conf, String basePath,
       boolean loadActiveTimelineOnLoad, ConsistencyGuardConfig consistencyGuardConfig)
       throws DatasetNotFoundException {
-    log.info("Loading HoodieTableMetaClient from " + basePath);
-    this.basePath = basePath;
-    this.consistencyGuardConfig = consistencyGuardConfig;
-    this.hadoopConf = new SerializableConfiguration(conf);
-    Path basePathDir = new Path(this.basePath);
-    this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
-    Path metaPathDir = new Path(this.metaPath);
-    this.fs = getFs();
-    DatasetNotFoundException.checkValidDataset(fs, basePathDir, metaPathDir);
-    this.tableConfig = new HoodieTableConfig(fs, metaPath);
-    this.tableType = tableConfig.getTableType();
-    log.info("Finished Loading Table of type " + tableType + " from " + basePath);
-    if (loadActiveTimelineOnLoad) {
-      log.info("Loading Active commit timeline for " + basePath);
-      getActiveTimeline();
-    }
+    init(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig);
   }
 
   /**
@@ -116,6 +101,22 @@ public class HoodieTableMetaClient implements Serializable {
    * @deprecated
    */
   public HoodieTableMetaClient() {
+  }
+
+  public void reloadMetaClient(Configuration conf, String basePath)
+      throws IOException, DatasetNotFoundException {
+    reloadMetaClient(conf, basePath, false);
+  }
+
+  public void reloadMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad)
+      throws IOException, DatasetNotFoundException {
+    reloadMetaClient(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build());
+  }
+
+  public void reloadMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
+      ConsistencyGuardConfig consistencyGuardConfig) throws IOException, DatasetNotFoundException {
+    cleanup();
+    init(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig);
   }
 
   /**
@@ -477,4 +478,43 @@ public class HoodieTableMetaClient implements Serializable {
   public void setTableConfig(HoodieTableConfig tableConfig) {
     this.tableConfig = tableConfig;
   }
+
+  //------------------------------------------------------
+  //        Resource initialization and cleanup
+  //------------------------------------------------------
+
+  private void init(Configuration conf, String basePath,
+      boolean loadActiveTimelineOnLoad, ConsistencyGuardConfig consistencyGuardConfig) {
+    log.info("Loading HoodieTableMetaClient from " + basePath);
+    this.basePath = basePath;
+    this.consistencyGuardConfig = consistencyGuardConfig;
+    this.hadoopConf = new SerializableConfiguration(conf);
+    Path basePathDir = new Path(this.basePath);
+    this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
+    Path metaPathDir = new Path(this.metaPath);
+    this.fs = getFs();
+    DatasetNotFoundException.checkValidDataset(fs, basePathDir, metaPathDir);
+    this.tableConfig = new HoodieTableConfig(fs, metaPath);
+    this.tableType = tableConfig.getTableType();
+    log.info("Finished Loading Table of type " + tableType + " from " + basePath);
+    if (loadActiveTimelineOnLoad) {
+      log.info("Loading Active commit timeline for " + basePath);
+      getActiveTimeline();
+    }
+  }
+
+  private void cleanup() throws IOException {
+    this.basePath = null;
+    this.consistencyGuardConfig = null;
+    this.hadoopConf = null;
+    this.metaPath = null;
+    if (this.fs != null) {
+      this.fs.close();
+      this.fs = null;
+    }
+    this.tableConfig = null;
+    this.tableType = null;
+    this.activeTimeline = null;
+  }
+
 }

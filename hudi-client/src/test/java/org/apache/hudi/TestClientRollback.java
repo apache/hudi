@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FSUtils;
@@ -97,7 +96,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       assertNoWriteErrors(statuses);
       List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(),
           getConfig().shouldAssumeDatePartitioning());
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view1 = table.getROFileSystemView();
 
@@ -122,7 +121,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       // Verify there are no errors
       assertNoWriteErrors(statuses);
 
-      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view2 = table.getROFileSystemView();
 
@@ -143,7 +142,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstants().findFirst().get();
       client.rollbackToSavepoint(savepoint.getTimestamp());
 
-      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view3 = table.getROFileSystemView();
       dataFiles = partitionPaths.stream().flatMap(s -> {

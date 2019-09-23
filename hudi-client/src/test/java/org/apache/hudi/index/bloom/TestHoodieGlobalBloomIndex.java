@@ -40,8 +40,6 @@ import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
@@ -66,16 +64,17 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieGlobalBloomIndex");
     initTempFolderAndPath();
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
+    initMetaClient();
   }
 
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupTempFolderAndPath();
+    cleanupMetaClient();
   }
 
   @Test
@@ -127,8 +126,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01");
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
     List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
     // Still 0, as no valid commit
@@ -139,7 +138,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     new File(basePath + "/.hoodie/20160401010101.commit").createNewFile();
     new File(basePath + "/.hoodie/20150312101010.commit").createNewFile();
 
-    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     filesList = index.loadInvolvedFiles(partitions, jsc, table);
     assertEquals(filesList.size(), 4);
 
@@ -264,8 +263,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         HoodieClientTestUtils.writeParquetFile(basePath, "2015/03/12", Arrays.asList(record4), schema, null, false);
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient.reloadMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
 
     // Add some commits
