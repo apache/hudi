@@ -223,9 +223,9 @@ public class HoodieDeltaStreamer implements Serializable {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
-    @Parameter(names = {"--min-sync-interval-second"}, description = "the min sync interval of each sync in "
+    @Parameter(names = {"--min-sync-interval-seconds"}, description = "the min sync interval of each sync in "
         + "continuous mode")
-    public Integer minSyncIntervalSecond = 0;
+    public Integer minSyncIntervalSeconds = 0;
 
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";
@@ -397,9 +397,9 @@ public class HoodieDeltaStreamer implements Serializable {
                     scheduledCompactionInstant.get()));
                 asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
               }
-              long toSleepMs = cfg.minSyncIntervalSecond * 1000 - (System.currentTimeMillis() - start);
+              long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
               if (toSleepMs > 0) {
-                log.info("last sync ran less than min sync interval: " + cfg.minSyncIntervalSecond + " s, sleep: "
+                log.info("Last sync ran less than min sync interval: " + cfg.minSyncIntervalSeconds + " s, sleep: "
                     + toSleepMs + " ms.");
                 Thread.sleep(toSleepMs);
               }
