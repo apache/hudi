@@ -38,10 +38,12 @@ import java.util.stream.Collectors;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.ql.metadata.Hive;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hive.jdbc.HiveDriver;
@@ -85,7 +87,7 @@ public class HoodieHiveClient {
   private final HoodieTableMetaClient metaClient;
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;
-  private HiveMetaStoreClient client;
+  private IMetaStoreClient client;
   private HiveSyncConfig syncConfig;
   private FileSystem fs;
   private Connection connection;
@@ -106,8 +108,8 @@ public class HoodieHiveClient {
       createHiveConnection();
     }
     try {
-      this.client = new HiveMetaStoreClient(configuration);
-    } catch (MetaException e) {
+      this.client = Hive.get(configuration).getMSC();
+    } catch (MetaException | HiveException e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
 
@@ -609,7 +611,7 @@ public class HoodieHiveClient {
         connection.close();
       }
       if (client != null) {
-        client.close();
+        Hive.closeCurrent();
         client = null;
       }
     } catch (SQLException e) {
