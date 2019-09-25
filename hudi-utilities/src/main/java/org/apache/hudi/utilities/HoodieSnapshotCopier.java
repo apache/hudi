@@ -105,7 +105,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
       jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
         // Only take latest version files <= latestCommit.
-        FileSystem fs1 = FSUtils.getFs(baseDir, serConf.get());
+        FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
         Stream<HoodieDataFile> dataFiles = fsView.getLatestDataFilesBeforeOrOn(partition,
             latestCommitTimestamp);
@@ -124,7 +124,7 @@ public class HoodieSnapshotCopier implements Serializable {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
         Path toPartitionPath = new Path(outputDir, partition);
-        FileSystem ifs = FSUtils.getFs(baseDir, serConf.get());
+        FileSystem ifs = FSUtils.getFs(baseDir, serConf.newCopy());
 
         if (!ifs.exists(toPartitionPath)) {
           ifs.mkdirs(toPartitionPath);

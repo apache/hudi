@@ -29,6 +29,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.WriteStatus;
+import org.apache.hudi.common.SerializableConfiguration;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -118,9 +119,9 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
 
       try {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config2, "101", table2, updateRecords.iterator(), fileId);
-        Configuration conf = new Configuration();
-        AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchema());
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
+        SerializableConfiguration conf = new SerializableConfiguration(new Configuration());
+        AvroReadSupport.setAvroReadSchema(conf.get(), mergeHandle.getWriterSchema());
+        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf.get(),
             new Path(config2.getBasePath() + "/" + insertResult.getStat().getPath()));
         for (GenericRecord rec : oldRecords) {
           mergeHandle.write(rec);
