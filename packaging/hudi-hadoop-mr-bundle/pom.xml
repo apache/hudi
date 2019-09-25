@@ -30,6 +30,7 @@
     <checkstyle.skip>true</checkstyle.skip>
     <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
     <notice.file>HUDI_NOTICE.txt</notice.file>
+    <avro.scope>provided</avro.scope>
   </properties>
 
   <build>
@@ -136,7 +137,16 @@
     <dependency>
       <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <scope>compile</scope>
+      <scope>${avro.scope}</scope>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>shade-avro</id>
+      <properties>
+        <avro.scope>compile</avro.scope>
+      </properties>
+    </profile>
+  </profiles>
 </project>
