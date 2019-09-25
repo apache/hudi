@@ -111,7 +111,7 @@ public class FileSystemViewManager {
    */
   private static RocksDbBasedFileSystemView createRocksDBBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.get(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new RocksDbBasedFileSystemView(metaClient, timeline, viewConf);
   }
@@ -126,7 +126,7 @@ public class FileSystemViewManager {
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
     logger.info("Creating SpillableMap based view for basePath " + basePath);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.get(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf);
   }
@@ -142,7 +142,7 @@ public class FileSystemViewManager {
   private static HoodieTableFileSystemView createInMemoryFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
     logger.info("Creating InMemory based view for basePath " + basePath);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.get(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
@@ -188,12 +188,12 @@ public class FileSystemViewManager {
         logger.info("Creating remote only table view");
         return new FileSystemViewManager(conf, config,
             (basePath, viewConfig) -> createRemoteFileSystemView(conf, viewConfig,
-                new HoodieTableMetaClient(conf.get(), basePath)));
+                new HoodieTableMetaClient(conf.newCopy(), basePath)));
       case REMOTE_FIRST:
         logger.info("Creating remote first table view");
         return new FileSystemViewManager(conf, config, (basePath, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
-              createRemoteFileSystemView(conf, viewConfig, new HoodieTableMetaClient(conf.get(), basePath));
+              createRemoteFileSystemView(conf, viewConfig, new HoodieTableMetaClient(conf.newCopy(), basePath));
           SyncableFileSystemView secondaryView = null;
           switch (viewConfig.getSecondaryStorageType()) {
             case MEMORY:

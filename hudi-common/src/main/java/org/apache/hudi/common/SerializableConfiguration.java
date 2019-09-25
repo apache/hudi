@@ -33,11 +33,15 @@ public class SerializableConfiguration implements Serializable {
   }
 
   public SerializableConfiguration(SerializableConfiguration configuration) {
-    this.configuration = configuration.get();
+    this.configuration = configuration.newCopy();
+  }
+
+  public Configuration newCopy() {
+    return new Configuration(configuration);
   }
 
   public Configuration get() {
-    return new Configuration(configuration);
+    return configuration;
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {
