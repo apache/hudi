@@ -53,14 +53,13 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
 
   @Before
   public void setUp() throws Exception {
-    initTempFolderAndPath();
+    initPath();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath);
     initSparkContexts("TestUpdateMapFunction");
   }
 
   @After
-  public void tearDown() throws Exception {
-    cleanupTempFolderAndPath();
+  public void tearDown() {
     cleanupSparkContexts();
   }
 

@@ -45,6 +45,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.minicluster.MiniClusterUtil;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -65,21 +66,20 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.exception.CorruptedLogFileException;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 @SuppressWarnings("Duplicates")
 @RunWith(Parameterized.class)
-public class HoodieLogFormatTest {
+public class HoodieLogFormatTest extends HoodieCommonTestHarness {
 
-  private static final String BASE_OUTPUT_PATH = "/tmp/";
-  private static String basePath;
+  private static String BASE_OUTPUT_PATH = "/tmp/";
   private FileSystem fs;
   private Path partitionPath;
   private int bufferSize = 4096;
@@ -108,8 +108,7 @@ public class HoodieLogFormatTest {
   @Before
   public void setUp() throws IOException, InterruptedException {
     this.fs = MiniClusterUtil.fileSystem;
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
+
     assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
     this.partitionPath = new Path(folder.getRoot().getPath());
     this.basePath = folder.getRoot().getParent();

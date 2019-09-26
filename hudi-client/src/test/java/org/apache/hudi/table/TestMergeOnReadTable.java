@@ -83,7 +83,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
     initDFS();
     initSparkContexts("TestHoodieMergeOnReadTable");
     jsc.hadoopConfiguration().addResource(dfs.getConf());
-    initTempFolderAndPath();
+    initPath();
     dfs.mkdirs(new Path(basePath));
     HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, HoodieTableType.MERGE_ON_READ);
     initTestDataGenerator();
@@ -92,7 +92,6 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   @After
   public void clean() throws IOException {
     cleanupDFS();
-    cleanupTempFolderAndPath();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
   }
@@ -968,6 +967,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       Thread.sleep(1000);
       // Rollback again to pretend the first rollback failed partially. This should not error our
       writeClient.rollback(newCommitTime);
+      folder.delete();
     }
   }
 

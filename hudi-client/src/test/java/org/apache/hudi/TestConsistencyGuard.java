@@ -18,7 +18,6 @@
 
 package org.apache.hudi;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
 import org.apache.hadoop.fs.Path;
@@ -33,15 +32,14 @@ import org.junit.Test;
 public class TestConsistencyGuard extends HoodieClientTestHarness {
 
   @Before
-  public void setup() throws IOException {
-    initTempFolderAndPath();
+  public void setup() {
+    initPath();
     initFileSystemWithDefaultConfiguration();
   }
 
   @After
   public void tearDown() throws Exception {
     cleanupFileSystem();
-    cleanupTempFolderAndPath();
   }
 
   @Test

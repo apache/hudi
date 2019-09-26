@@ -24,8 +24,9 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.stream.Stream;
+
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -34,20 +35,16 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.junit.rules.TemporaryFolder;
 
-public class HoodieActiveTimelineTest {
+public class HoodieActiveTimelineTest extends HoodieCommonTestHarness {
 
   private HoodieActiveTimeline timeline;
-  private HoodieTableMetaClient metaClient;
   @Rule
   public final ExpectedException exception = ExpectedException.none();
-  @Rule
-  public TemporaryFolder tmpFolder = new TemporaryFolder();
-  
+
   @Before
   public void setUp() throws Exception {
-    this.metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
+    initMetaClient();
   }
 
   @Test

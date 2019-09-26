@@ -89,7 +89,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   @Before
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieBloomIndex");
-    initTempFolderAndPath();
+    initPath();
     initFileSystem();
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
@@ -101,7 +101,6 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupFileSystem();
-    cleanupTempFolderAndPath();
     cleanupMetaClient();
   }
 
