@@ -11,12 +11,12 @@ toc: false
 #### Uber
 
 Hudi最初由[Uber](https://uber.com)开发，用于实现[低延迟、高效率的数据库摄取](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32)。
-Hudi自2016年8月开始在生产环境上线，在Hadoop上驱动约100个非常关键的业务表，支撑约100亿TB的数据规模(前10名包括旅行，乘客，合作伙伴)。
+Hudi自2016年8月开始在生产环境上线，在Hadoop上驱动约100个非常关键的业务表，支撑约几百TB的数据规模(前10名包括行程、乘客、司机)。
 Hudi还支持几个增量的Hive ETL管道，并且目前已集成到Uber的数据分发系统中。
 
 #### EMIS Health
 
-[EMIS Health](https://www.emishealth.com/)是英国最大的初级保健IT软件提供商，其数据集包括超过500亿的医疗保健记录。HUDI用于管理生产中的分析数据集，并使其与上游源保持同步。Presto用于查询以HUDI格式写入的数据。
+[EMIS Health](https://www.emishealth.com/)是英国最大的初级保健IT软件提供商，其数据集包括超过5000亿的医疗保健记录。HUDI用于管理生产中的分析数据集，并使其与上游源保持同步。Presto用于查询以HUDI格式写入的数据。
 
 #### Yields.io
 
