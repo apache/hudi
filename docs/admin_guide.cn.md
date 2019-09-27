@@ -13,7 +13,7 @@ summary: 本节概述了可用于操作Hudi数据集生态系统的工具
  - [Graphite指标](#metrics)
  - [Hudi应用程序的Spark UI](#spark-ui)
 
-本节简要介绍了每一种方法，并提供了有关[疑难解答](#troubleshooting)的一些常规指南
+本节简要介绍了每一种方法，并提供了有关[故障排除](#troubleshooting)的一些常规指南
 
 ## Admin CLI {#admin-cli}
 
@@ -70,7 +70,7 @@ Metadata for table trips loaded
 hoodie:trips->
 ```
 
-连接到数据集后，便可使用许多其他命令。该shell程序具有上下文自动完成帮助(按TAB键)，下面是所有命令的列表，本节中没有对其中的一些内容进行了回顾。
+连接到数据集后，便可使用许多其他命令。该shell程序具有上下文自动完成帮助(按TAB键)，下面是所有命令的列表，本节中对其中的一些命令进行了详细示例。
 
 
 ```
@@ -108,7 +108,7 @@ hoodie:trips->
 
 #### 检查提交
 
-在Hudi中，更新或插入一批记录的任务称为**提交**。提交可提供基本的原子性保证，以便仅提交的数据可用于查询。
+在Hudi中，更新或插入一批记录的任务被称为**提交**。提交可提供基本的原子性保证，即只有提交的数据可用于查询。
 每个提交都有一个单调递增的字符串/数字，称为**提交编号**。通常，这是我们开始提交的时间。
 
 查看有关最近10次提交的一些基本信息，
@@ -125,7 +125,7 @@ hoodie:trips->commits show --sortBy "Total Bytes Written" --desc true --limit 10
 hoodie:trips->
 ```
 
-在每次写入开始时，Hudi还将.inflight提交写入.hoodie文件夹。您可以使用那里的时间戳来估计提交使用的时间
+在每次写入开始时，Hudi还将.inflight提交写入.hoodie文件夹。您可以使用那里的时间戳来估计正在进行的提交已经花费的时间
 
 ```
 $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
@@ -186,7 +186,7 @@ Hudi将每个分区视为文件组的集合，每个文件组包含按提交顺�
 
 #### 统计信息
 
-由于Hudi直接管理DFS数据集的文件大小，因此了解可能会很全面
+由于Hudi直接管理DFS数据集的文件大小，这些信息会帮助你全面了解Hudi的运行状况
 
 
 ```
@@ -199,7 +199,7 @@ hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc 
     ....
 ```
 
-如果Hudi写入花费的时间更长，那么如果突然增加写入量可查看写放大
+如果Hudi写入花费的时间更长，那么可以通过观察写放大指标来发现任何异常
 
 ```
 hoodie:trips->stats wa
@@ -214,7 +214,7 @@ hoodie:trips->stats wa
 #### 归档的提交
 
 为了限制DFS上.commit文件的增长量，Hudi将较旧的.commit文件(适当考虑清理策略)归档到commits.archived文件中。
-这是一个序列文件，其包含commitNumber => json的映射，其包含有关提交的原始信息(上面已很好地汇总了相同的信息)。
+这是一个序列文件，其包含commitNumber => json的映射，及有关提交的原始信息(上面已很好地汇总了相同的信息)。
 
 #### 压缩
 
@@ -328,7 +328,7 @@ hoodie:stock_ticks_mor->compaction validate --instant 20181005222601
 
 ##### 注意
 
-必须在不运行任何其他写如/摄取程序的情况下执行以下命令。
+必须在其他写入/摄取程序没有运行的情况下执行以下命令。
 
 有时，有必要从压缩计划中删除fileId以便加快或取消压缩操作。
 压缩计划之后在此文件上发生的所有新日志文件都将被安全地重命名以便进行保留。Hudi提供以下CLI来支持
@@ -342,7 +342,7 @@ hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
 No File renames needed to unschedule file from pending compaction. Operation successful.
 ```
 
-在其他情况下，需要恢复整个压缩计划。以下CLI支持此功能
+在其他情况下，需要撤销整个压缩计划。以下CLI支持此功能
 
 ```
 hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
@@ -371,7 +371,7 @@ Compaction successfully repaired
 
  - **提交持续时间** - 这是成功提交一批记录所花费的时间
  - **回滚持续时间** - 同样，撤消失败的提交所剩余的部分数据所花费的时间(每次写入失败后都会自动发生)
- - **文件级别指标** - 显示每次提交中新增、版本、删除(清除)的新文件数量
+ - **文件级别指标** - 显示每次提交中新增、版本、删除(清除)的文件数量
  - **记录级别指标** - 每次提交插入/更新的记录总数
  - **分区级别指标** - 更新的分区数量(对于了解提交持续时间的突然峰值非常有用)
 
@@ -384,32 +384,32 @@ Compaction successfully repaired
 
 ## 故障排除 {#troubleshooting}
 
-以下部分通常有助于调试Hudi故障。将以下元数据添加到每条记录中，以帮助使用标准Hadoop SQL引擎(Hive/Presto/Spark)轻松分类问题。
+以下部分通常有助于调试Hudi故障。以下元数据已被添加到每条记录中，可以通过标准Hadoop SQL引擎(Hive/Presto/Spark)检索，来更容易地诊断问题的严重性。
 
  - **_hoodie_record_key** - 作为每个DFS分区内的主键，是所有更新/插入的基础
  - **_hoodie_commit_time** - 该记录上次的提交
- - **_hoodie_file_name** - 包含记录的实际文件名(对分类重复非常有用)
+ - **_hoodie_file_name** - 包含记录的实际文件名(对检查重复非常有用)
  - **_hoodie_partition_path** - basePath的路径，该路径标识包含此记录的分区
 
-请注意，到目前为止，Hudi假定应用程序为给定的recordKey传递相同的确定性分区路径。即每个分区内强制recordKey的唯一性。
+请注意，到目前为止，Hudi假定应用程序为给定的recordKey传递相同的确定性分区路径。即仅在每个分区内保证recordKey(主键)的唯一性。
 
 #### 缺失记录
 
-请在可以写入记录的窗口中，使用上面的admin命令检查是否存在任何写入错误。
+请在可能写入记录的窗口中，使用上面的admin命令检查是否存在任何写入错误。
 如果确实发现错误，那么记录实际上不是由Hudi写入的，而是交还给应用程序来决定如何处理。
 
 #### 重复
 
-首先，请确认是否确实存在重复**AFTER**，以确保查询可以[正确](sql_queries.html)访问Hudi数据集。
+首先，请确保访问Hudi数据集的查询是[没有问题的](sql_queries.html)，并之后确认的确有重复。
 
  - 如果确认，请使用上面的元数据字段来标识包含记录的物理文件和分区文件。
- - 如果重复的文件跨越整个分区路径，则意味着您的应用程序正在为同一recordKey生成不同的分区路径，请修复您的应用程序.
- - 如果重复跨越同一分区路径中的多个文件，请使用邮件列表。这不应该发生。您可以使用`records deduplicate`命令修复数据。
+ - 如果重复的记录存在于不同分区路径下的文件，则意味着您的应用程序正在为同一recordKey生成不同的分区路径，请修复您的应用程序.
+ - 如果重复的记录存在于同一分区路径下的多个文件，请使用邮件列表汇报这个问题。这不应该发生。您可以使用`records deduplicate`命令修复数据。
 
 #### Spark故障 {#spark-ui}
 
-典型的upsert() DAG如下所示。请注意，Hudi客户端会缓存中间的RDD，以智能地分析工作负载和大小文件和并行度。
-另外，由于还显示了探针作业，Spark UI两次显示了sortByKey，但它只是一个排序。
+典型的upsert() DAG如下所示。请注意，Hudi客户端会缓存中间的RDD，以智能地并调整文件大小和Spark并行度。
+另外，由于还显示了探针作业，Spark UI显示了两次sortByKey，但它只是一个排序。
 <figure>
     <img class="docimage" src="/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 1000px" />
 </figure>
@@ -419,15 +419,15 @@ Compaction successfully repaired
 
 **索引查找以标识要更改的文件**
 
- - Job 1 : 触发输入数据读取，转换为HoodieRecord对象，然后停止将获取的输入记录写入到目标分区路径。
+ - Job 1 : 触发输入数据读取，转换为HoodieRecord对象，然后根据输入记录拿到目标分区路径。
  - Job 2 : 加载我们需要检查的文件名集。
- - Job 3  & 4 : 通过联合上面1和2中的RDD，智能调整spark大小之后进行的实际查找。
- - Job 5 : 具有带有位置的recordKeys的标记的RDD。
+ - Job 3  & 4 : 通过联合上面1和2中的RDD，智能调整spark join并行度，然后进行实际查找。
+ - Job 5 : 生成带有位置的recordKeys作为标记的RDD。
 
 **执行数据的实际写入**
 
- - Job 6 : 将记录与recordKey(位置)进行懒惰连接，以提供最终的HoodieRecord集，现在它包含有关在何处找到它们的文件/分区路径的信息(如果插入，则为null)。然后还要再次分析工作负载以确定文件的大小。
+ - Job 6 : 将记录与recordKey(位置)进行懒惰连接，以提供最终的HoodieRecord集，现在它包含每条记录的文件/分区路径信息(如果插入，则为null)。然后还要再次分析工作负载以确定文件的大小。
  - Job 7 : 实际写入数据(更新 + 插入 + 插入转为更新以保持文件大小)
 
-根据异常源(Hudi/Spark)，DAG的上述知识可用于查明实际问题。最常遇到的故障是由YARN/DFS临时故障引起的。
+根据异常源(Hudi/Spark)，上述关于DAG的信息可用于查明实际问题。最常遇到的故障是由YARN/DFS临时故障引起的。
 将来，将在项目中添加更复杂的调试/管理UI，以帮助自动进行某些调试。
