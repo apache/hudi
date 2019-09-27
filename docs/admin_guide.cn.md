@@ -4,24 +4,24 @@ keywords: hudi, administration, operation, devops
 sidebar: mydoc_sidebar
 permalink: admin_guide.html
 toc: false
-summary: This section offers an overview of tools available to operate an ecosystem of Hudi datasets
+summary: 本节概述了可用于操作Hudi数据集生态系统的工具
 ---
 
-Admins/ops can gain visibility into Hudi datasets/pipelines in the following ways
+管理员/运维人员可以通过以下方式了解Hudi数据集/管道
 
- - [Administering via the Admin CLI](#admin-cli)
- - [Graphite metrics](#metrics)
- - [Spark UI of the Hudi Application](#spark-ui)
+ - [通过Admin CLI进行管理](#admin-cli)
+ - [Graphite指标](#metrics)
+ - [Hudi应用程序的Spark UI](#spark-ui)
 
-This section provides a glimpse into each of these, with some general guidance on [troubleshooting](#troubleshooting)
+本节简要介绍了每一种方法，并提供了有关[故障排除](#troubleshooting)的一些常规指南
 
 ## Admin CLI {#admin-cli}
 
-Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`.
-A hudi dataset resides on DFS, in a location referred to as the **basePath** and we would need this location in order to connect to a Hudi dataset.
-Hudi library effectively manages this dataset internally, using .hoodie subfolder to track all metadata
+一旦构建了hudi，就可以通过`cd hudi-cli && ./hudi-cli.sh`启动shell。
+一个hudi数据集位于DFS上的**basePath**位置，我们需要该位置才能连接到Hudi数据集。
+Hudi库使用.hoodie子文件夹跟踪所有元数据，从而有效地在内部管理该数据集。
 
-To initialize a hudi table, use the following command.
+初始化hudi表，可使用如下命令。
 
 ```
 18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
@@ -58,7 +58,7 @@ hoodie:hoodie_table_1->desc
     | hoodie.archivelog.folder|                              |
 ```
 
-Following is a sample command to connect to a Hudi dataset contains uber trips.
+以下是连接到包含uber trips的Hudi数据集的示例命令。
 
 ```
 hoodie:trips->connect --path /app/uber/trips
@@ -70,8 +70,7 @@ Metadata for table trips loaded
 hoodie:trips->
 ```
 
-Once connected to the dataset, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section
-are reviewed
+连接到数据集后，便可使用许多其他命令。该shell程序具有上下文自动完成帮助(按TAB键)，下面是所有命令的列表，本节中对其中的一些命令进行了详细示例。
 
 
 ```
@@ -107,12 +106,12 @@ hoodie:trips->
 ```
 
 
-#### Inspecting Commits
+#### 检查提交
 
-The task of upserting or inserting a batch of incoming records is known as a **commit** in Hudi. A commit provides basic atomicity guarantees such that only commited data is available for querying.
-Each commit has a monotonically increasing string/number called the **commit number**. Typically, this is the time at which we started the commit.
+在Hudi中，更新或插入一批记录的任务被称为**提交**。提交可提供基本的原子性保证，即只有提交的数据可用于查询。
+每个提交都有一个单调递增的字符串/数字，称为**提交编号**。通常，这是我们开始提交的时间。
 
-To view some basic information about the last 10 commits,
+查看有关最近10次提交的一些基本信息，
 
 
 ```
@@ -126,8 +125,7 @@ hoodie:trips->commits show --sortBy "Total Bytes Written" --desc true --limit 10
 hoodie:trips->
 ```
 
-At the start of each write, Hudi also writes a .inflight commit to the .hoodie folder. You can use the timestamp there to estimate how long the commit has been inflight
-
+在每次写入开始时，Hudi还将.inflight提交写入.hoodie文件夹。您可以使用那里的时间戳来估计正在进行的提交已经花费的时间
 
 ```
 $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
@@ -135,9 +133,9 @@ $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 ```
 
 
-#### Drilling Down to a specific Commit
+#### 深入到特定的提交
 
-To understand how the writes spread across specific partiions,
+了解写入如何分散到特定分区，
 
 
 ```
@@ -149,8 +147,7 @@ hoodie:trips->commit showpartitions --commit 20161005165855 --sortBy "Total Byte
      ....
 ```
 
-If you need file level granularity , we can do the following
-
+如果您需要文件级粒度，我们可以执行以下操作
 
 ```
 hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
@@ -162,10 +159,9 @@ hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
 ```
 
 
-#### FileSystem View
+#### 文件系统视图
 
-Hudi views each partition as a collection of file-groups with each file-group containing a list of file-slices in commit
-order (See Concepts). The below commands allow users to view the file-slices for a data-set.
+Hudi将每个分区视为文件组的集合，每个文件组包含按提交顺序排列的文件切片列表(请参阅概念)。以下命令允许用户查看数据集的文件切片。
 
 ```
  hoodie:stock_ticks_mor->show fsview all
@@ -188,9 +184,9 @@ order (See Concepts). The below commands allow users to view the file-slices for
 ```
 
 
-#### Statistics
+#### 统计信息
 
-Since Hudi directly manages file sizes for DFS dataset, it might be good to get an overall picture
+由于Hudi直接管理DFS数据集的文件大小，这些信息会帮助你全面了解Hudi的运行状况
 
 
 ```
@@ -203,8 +199,7 @@ hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc 
     ....
 ```
 
-In case of Hudi write taking much longer, it might be good to see the write amplification for any sudden increases
-
+如果Hudi写入花费的时间更长，那么可以通过观察写放大指标来发现任何异常
 
 ```
 hoodie:trips->stats wa
@@ -216,16 +211,14 @@ hoodie:trips->stats wa
 ```
 
 
-#### Archived Commits
+#### 归档的提交
 
-In order to limit the amount of growth of .commit files on DFS, Hudi archives older .commit files (with due respect to the cleaner policy) into a commits.archived file.
-This is a sequence file that contains a mapping from commitNumber => json with raw information about the commit (same that is nicely rolled up above).
+为了限制DFS上.commit文件的增长量，Hudi将较旧的.commit文件(适当考虑清理策略)归档到commits.archived文件中。
+这是一个序列文件，其包含commitNumber => json的映射，及有关提交的原始信息(上面已很好地汇总了相同的信息)。
 
+#### 压缩
 
-#### Compactions
-
-To get an idea of the lag between compaction and writer applications, use the below command to list down all
-pending compactions.
+要了解压缩和写程序之间的时滞，请使用以下命令列出所有待处理的压缩。
 
 ```
 hoodie:trips->compactions show all
@@ -236,7 +229,7 @@ hoodie:trips->compactions show all
     | <INSTANT_2>            | INFLIGHT | 27                           |
 ```
 
-To inspect a specific compaction plan, use
+要检查特定的压缩计划，请使用
 
 ```
 hoodie:trips->compaction show --instant <INSTANT_1>
@@ -247,8 +240,8 @@ hoodie:trips->compaction show --instant <INSTANT_1>
 
 ```
 
-To manually schedule or run a compaction, use the below command. This command uses spark launcher to perform compaction
-operations. NOTE : Make sure no other application is scheduling compaction for this dataset concurrently
+要手动调度或运行压缩，请使用以下命令。该命令使用spark启动器执行压缩操作。
+注意：确保没有其他应用程序正在同时调度此数据集的压缩
 
 ```
 hoodie:trips->help compaction schedule
@@ -306,9 +299,9 @@ Description:               Run Compaction for given instant time
 * compaction run - Run Compaction for given instant time
 ```
 
-##### Validate Compaction
+##### 验证压缩
 
-Validating a compaction plan : Check if all the files necessary for compactions are present and are valid
+验证压缩计划：检查压缩所需的所有文件是否都存在且有效
 
 ```
 hoodie:stock_ticks_mor->compaction validate --instant 20181005222611
@@ -333,16 +326,15 @@ hoodie:stock_ticks_mor->compaction validate --instant 20181005222601
     | 05320e98-9a57-4c38-b809-a6beaaeb36bd| 20181005222445   | hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | false| All log files specified in compaction operation is not present. Missing ....    |
 ```
 
-##### NOTE
+##### 注意
 
-The following commands must be executed without any other writer/ingestion application running.
+必须在其他写入/摄取程序没有运行的情况下执行以下命令。
 
-Sometimes, it becomes necessary to remove a fileId from a compaction-plan inorder to speed-up or unblock compaction
-operation. Any new log-files that happened on this file after the compaction got scheduled will be safely renamed
-so that are preserved. Hudi provides the following CLI to support it
+有时，有必要从压缩计划中删除fileId以便加快或取消压缩操作。
+压缩计划之后在此文件上发生的所有新日志文件都将被安全地重命名以便进行保留。Hudi提供以下CLI来支持
 
 
-##### UnScheduling Compaction
+##### 取消调度压缩
 
 ```
 hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
@@ -350,7 +342,7 @@ hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
 No File renames needed to unschedule file from pending compaction. Operation successful.
 ```
 
-In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
+在其他情况下，需要撤销整个压缩计划。以下CLI支持此功能
 
 ```
 hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
@@ -358,13 +350,12 @@ hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
 No File renames needed to unschedule pending compaction. Operation successful.
 ```
 
-##### Repair Compaction
+##### 修复压缩
 
-The above compaction unscheduling operations could sometimes fail partially (e:g -> DFS temporarily unavailable). With
-partial failures, the compaction operation could become inconsistent with the state of file-slices. When you run
-`compaction validate`, you can notice invalid compaction operations if there is one.  In these cases, the repair
-command comes to the rescue, it will rearrange the file-slices so that there is no loss and the file-slices are
-consistent with the compaction plan
+上面的压缩取消调度操作有时可能会部分失败(例如：DFS暂时不可用)。
+如果发生部分故障，则压缩操作可能与文件切片的状态不一致。
+当您运行`压缩验证`时，您会注意到无效的压缩操作(如果有的话)。
+在这种情况下，修复命令将立即执行，它将重新排列文件切片，以使文件不丢失，并且文件切片与压缩计划一致
 
 ```
 hoodie:stock_ticks_mor->compaction repair --instant 20181005222611
@@ -374,71 +365,69 @@ Compaction successfully repaired
 ```
 
 
-## Metrics {#metrics}
+## 指标 {#metrics}
 
-Once the Hudi Client is configured with the right datasetname and environment for metrics, it produces the following graphite metrics, that aid in debugging hudi datasets
+为Hudi Client配置正确的数据集名称和指标环境后，它将生成以下graphite指标，以帮助调试hudi数据集
 
- - **Commit Duration** - This is amount of time it took to successfully commit a batch of records
- - **Rollback Duration** - Similarly, amount of time taken to undo partial data left over by a failed commit (happens everytime automatically after a failing write)
- - **File Level metrics** - Shows the amount of new files added, versions, deleted (cleaned) in each commit
- - **Record Level Metrics** - Total records inserted/updated etc per commit
- - **Partition Level metrics** - number of partitions upserted (super useful to understand sudden spikes in commit duration)
+ - **提交持续时间** - 这是成功提交一批记录所花费的时间
+ - **回滚持续时间** - 同样，撤消失败的提交所剩余的部分数据所花费的时间(每次写入失败后都会自动发生)
+ - **文件级别指标** - 显示每次提交中新增、版本、删除(清除)的文件数量
+ - **记录级别指标** - 每次提交插入/更新的记录总数
+ - **分区级别指标** - 更新的分区数量(对于了解提交持续时间的突然峰值非常有用)
 
-These metrics can then be plotted on a standard tool like grafana. Below is a sample commit duration chart.
+然后可以将这些指标绘制在grafana等标准工具上。以下是提交持续时间图表示例。
 
 <figure>
     <img class="docimage" src="/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 1000px" />
 </figure>
 
 
-## Troubleshooting Failures {#troubleshooting}
+## 故障排除 {#troubleshooting}
 
-Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage  issues easily using standard Hadoop SQL engines (Hive/Presto/Spark)
+以下部分通常有助于调试Hudi故障。以下元数据已被添加到每条记录中，可以通过标准Hadoop SQL引擎(Hive/Presto/Spark)检索，来更容易地诊断问题的严重性。
 
- - **_hoodie_record_key** - Treated as a primary key within each DFS partition, basis of all updates/inserts
- - **_hoodie_commit_time** - Last commit that touched this record
- - **_hoodie_file_name** - Actual file name containing the record (super useful to triage duplicates)
- - **_hoodie_partition_path** - Path from basePath that identifies the partition containing this record
+ - **_hoodie_record_key** - 作为每个DFS分区内的主键，是所有更新/插入的基础
+ - **_hoodie_commit_time** - 该记录上次的提交
+ - **_hoodie_file_name** - 包含记录的实际文件名(对检查重复非常有用)
+ - **_hoodie_partition_path** - basePath的路径，该路径标识包含此记录的分区
 
-Note that as of now, Hudi assumes the application passes in the same deterministic partitionpath for a given recordKey. i.e the uniqueness of record key is only enforced within each partition
+请注意，到目前为止，Hudi假定应用程序为给定的recordKey传递相同的确定性分区路径。即仅在每个分区内保证recordKey(主键)的唯一性。
 
+#### 缺失记录
 
-#### Missing records
+请在可能写入记录的窗口中，使用上面的admin命令检查是否存在任何写入错误。
+如果确实发现错误，那么记录实际上不是由Hudi写入的，而是交还给应用程序来决定如何处理。
 
-Please check if there were any write errors using the admin commands above, during the window at which the record could have been written.
-If you do find errors, then the record was not actually written by Hudi, but handed back to the application to decide what to do with it.
+#### 重复
 
-#### Duplicates
+首先，请确保访问Hudi数据集的查询是[没有问题的](sql_queries.html)，并之后确认的确有重复。
 
-First of all, please confirm if you do indeed have duplicates **AFTER** ensuring the query is accessing the Hudi datasets [properly](sql_queries.html) .
+ - 如果确认，请使用上面的元数据字段来标识包含记录的物理文件和分区文件。
+ - 如果重复的记录存在于不同分区路径下的文件，则意味着您的应用程序正在为同一recordKey生成不同的分区路径，请修复您的应用程序.
+ - 如果重复的记录存在于同一分区路径下的多个文件，请使用邮件列表汇报这个问题。这不应该发生。您可以使用`records deduplicate`命令修复数据。
 
- - If confirmed, please use the metadata fields above, to identify the physical files & partition files containing the records .
- - If duplicates span files across partitionpath, then this means your application is generating different partitionPaths for same recordKey, Please fix your app
- - if duplicates span multiple files within the same partitionpath, please engage with mailing list. This should not happen. You can use the `records deduplicate` command to fix your data.
+#### Spark故障 {#spark-ui}
 
-#### Spark failures {#spark-ui}
-
-Typical upsert() DAG looks like below. Note that Hudi client also caches intermediate RDDs to intelligently profile workload and size files and spark parallelism.
-Also Spark UI shows sortByKey twice due to the probe job also being shown, nonetheless its just a single sort.
-
+典型的upsert() DAG如下所示。请注意，Hudi客户端会缓存中间的RDD，以智能地并调整文件大小和Spark并行度。
+另外，由于还显示了探针作业，Spark UI显示了两次sortByKey，但它只是一个排序。
 <figure>
     <img class="docimage" src="/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 1000px" />
 </figure>
 
 
-At a high level, there are two steps
+概括地说，有两个步骤
 
-**Index Lookup to identify files to be changed**
+**索引查找以标识要更改的文件**
 
- - Job 1 : Triggers the input data read, converts to HoodieRecord object and then stops at obtaining a spread of input records to target partition paths
- - Job 2 : Load the set of file names which we need check against
- - Job 3  & 4 : Actual lookup after smart sizing of spark join parallelism, by joining RDDs in 1 & 2 above
- - Job 5 : Have a tagged RDD of recordKeys with locations
+ - Job 1 : 触发输入数据读取，转换为HoodieRecord对象，然后根据输入记录拿到目标分区路径。
+ - Job 2 : 加载我们需要检查的文件名集。
+ - Job 3  & 4 : 通过联合上面1和2中的RDD，智能调整spark join并行度，然后进行实际查找。
+ - Job 5 : 生成带有位置的recordKeys作为标记的RDD。
 
-**Performing the actual writing of data**
+**执行数据的实际写入**
 
- - Job 6 : Lazy join of incoming records against recordKey, location to provide a final set of HoodieRecord which now contain the information about which file/partitionpath they are found at (or null if insert). Then also profile the workload again to determine sizing of files
- - Job 7 : Actual writing of data (update + insert + insert turned to updates to maintain file size)
+ - Job 6 : 将记录与recordKey(位置)进行懒惰连接，以提供最终的HoodieRecord集，现在它包含每条记录的文件/分区路径信息(如果插入，则为null)。然后还要再次分析工作负载以确定文件的大小。
+ - Job 7 : 实际写入数据(更新 + 插入 + 插入转为更新以保持文件大小)
 
-Depending on the exception source (Hudi/Spark), the above knowledge of the DAG can be used to pinpoint the actual issue. The most often encountered failures result from YARN/DFS temporary failures.
-In the future, a more sophisticated debug/management UI would be added to the project, that can help automate some of this debugging.
+根据异常源(Hudi/Spark)，上述关于DAG的信息可用于查明实际问题。最常遇到的故障是由YARN/DFS临时故障引起的。
+将来，将在项目中添加更复杂的调试/管理UI，以帮助自动进行某些调试。
