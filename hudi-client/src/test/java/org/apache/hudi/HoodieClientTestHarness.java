@@ -55,6 +55,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
   protected TemporaryFolder folder = null;
   protected transient HoodieTestDataGenerator dataGen = null;
   protected transient ExecutorService executorService;
+  protected transient HoodieTableMetaClient metaClient;
 
   //dfs
   protected String dfsBasePath;
@@ -72,7 +73,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
     initSparkContexts();
     initTestDataGenerator();
     initFileSystem();
-    initTableType();
+    initMetaClient();
   }
 
   /**
@@ -80,7 +81,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
    * @throws IOException
    */
   public void cleanupResources() throws IOException {
-    cleanupTableType();
+    cleanupMetaClient();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
@@ -191,7 +192,7 @@ public abstract class HoodieClientTestHarness implements Serializable {
    *
    * @throws IOException
    */
-  protected void initTableType() throws IOException {
+  protected void initMetaClient() throws IOException {
     if (basePath == null) {
       throw new IllegalStateException("The base path has not been initialized.");
     }
@@ -200,14 +201,14 @@ public abstract class HoodieClientTestHarness implements Serializable {
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
+    metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
   }
 
   /**
    * Cleanups table type.
    */
-  protected void cleanupTableType() {
-
+  protected void cleanupMetaClient() {
+    metaClient = null;
   }
 
   /**

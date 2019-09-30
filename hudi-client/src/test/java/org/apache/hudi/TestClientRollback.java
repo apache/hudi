@@ -97,7 +97,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       assertNoWriteErrors(statuses);
       List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(),
           getConfig().shouldAssumeDatePartitioning());
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view1 = table.getROFileSystemView();
 
@@ -122,7 +122,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       // Verify there are no errors
       assertNoWriteErrors(statuses);
 
-      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view2 = table.getROFileSystemView();
 
@@ -143,7 +143,7 @@ public class TestClientRollback extends TestHoodieClientBase {
       HoodieInstant savepoint = table.getCompletedSavepointTimeline().getInstants().findFirst().get();
       client.rollbackToSavepoint(savepoint.getTimestamp());
 
-      metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view3 = table.getROFileSystemView();
       dataFiles = partitionPaths.stream().flatMap(s -> {
