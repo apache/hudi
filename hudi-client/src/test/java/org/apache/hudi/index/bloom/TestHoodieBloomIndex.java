@@ -44,7 +44,6 @@ import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -92,10 +91,10 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     initSparkContexts("TestHoodieBloomIndex");
     initTempFolderAndPath();
     initFileSystem();
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
+    initMetaClient();
   }
 
   @After
@@ -103,6 +102,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     cleanupSparkContexts();
     cleanupFileSystem();
     cleanupTempFolderAndPath();
+    cleanupMetaClient();
   }
 
   private HoodieWriteConfig makeConfig() {
@@ -163,8 +163,8 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
             false);
 
     List<String> partitions = Arrays.asList("2016/01/21", "2016/04/01", "2015/03/12");
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, jsc, table);
     // Still 0, as no valid commit
     assertEquals(filesList.size(), 0);
@@ -174,7 +174,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     new File(basePath + "/.hoodie/20160401010101.commit").createNewFile();
     new File(basePath + "/.hoodie/20150312101010.commit").createNewFile();
 
-    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     filesList = index.loadInvolvedFiles(partitions, jsc, table);
     assertEquals(filesList.size(), 4);
 
@@ -286,9 +286,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // We have some records to be tagged (two different partitions)
     JavaRDD<HoodieRecord> recordRDD = jsc.emptyRDD();
     // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = makeConfig();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
@@ -331,9 +331,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = makeConfig();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
@@ -353,8 +353,8 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
 
     // We do the tag again
-    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);
 
@@ -401,9 +401,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieKey> keysRDD = jsc.parallelize(Arrays.asList(key1, key2, key3, key4));
 
     // Also create the metadata and config
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = makeConfig();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
@@ -424,8 +424,8 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         HoodieClientTestUtils.writeParquetFile(basePath, "2015/01/31", Arrays.asList(record4), schema, null, true);
 
     // We do the tag again
-    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, jsc, table);
 
     // Check results
@@ -473,9 +473,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     // We do the tag
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2));
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieWriteConfig config = makeConfig();
-    HoodieTable table = HoodieTable.getHoodieTable(metadata, config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config);
     JavaRDD<HoodieRecord> taggedRecordRDD = bloomIndex.tagLocation(recordRDD, jsc, table);

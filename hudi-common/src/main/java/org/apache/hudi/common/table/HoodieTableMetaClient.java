@@ -71,6 +71,7 @@ public class HoodieTableMetaClient implements Serializable {
   private String basePath;
   private transient HoodieWrapperFileSystem fs;
   private String metaPath;
+  private boolean loadActiveTimelineOnLoad;
   private SerializableConfiguration hadoopConf;
   private HoodieTableType tableType;
   private HoodieTableConfig tableConfig;
@@ -104,6 +105,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.tableConfig = new HoodieTableConfig(fs, metaPath);
     this.tableType = tableConfig.getTableType();
     log.info("Finished Loading Table of type " + tableType + " from " + basePath);
+    this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     if (loadActiveTimelineOnLoad) {
       log.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
@@ -116,6 +118,14 @@ public class HoodieTableMetaClient implements Serializable {
    * @deprecated
    */
   public HoodieTableMetaClient() {
+  }
+
+  public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
+    return new HoodieTableMetaClient(
+        oldMetaClient.hadoopConf.get(),
+        oldMetaClient.basePath,
+        oldMetaClient.loadActiveTimelineOnLoad,
+        oldMetaClient.consistencyGuardConfig);
   }
 
   /**

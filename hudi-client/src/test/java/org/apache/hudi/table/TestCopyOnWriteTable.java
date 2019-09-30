@@ -73,7 +73,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   public void setUp() throws Exception {
     initSparkContexts("TestCopyOnWriteTable");
     initTempFolderAndPath();
-    initTableType();
+    initMetaClient();
     initTestDataGenerator();
     initFileSystem();
   }
@@ -82,7 +82,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupSparkContexts();
     cleanupTempFolderAndPath();
-    cleanupTableType();
+    cleanupMetaClient();
     cleanupFileSystem();
     cleanupTestDataGenerator();
   }
@@ -94,7 +94,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
     String commitTime = HoodieTestUtils.makeNewCommitTime();
     HoodieWriteConfig config = makeHoodieClientConfig();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     Pair<Path, String> newPathWithWriteToken = jsc.parallelize(Arrays.asList(1)).map(x -> {
@@ -127,7 +127,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config = makeHoodieClientConfig();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
 
     String partitionPath = "/2016/01/31";
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
@@ -203,7 +203,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
     Thread.sleep(1000);
     String newCommitTime = HoodieTestUtils.makeNewCommitTime();
-    metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieCopyOnWriteTable newTable = new HoodieCopyOnWriteTable(config, jsc);
     List<WriteStatus> statuses =
         jsc.parallelize(Arrays.asList(1)).map(x -> {
@@ -271,7 +271,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class)
         .build();
     String firstCommitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
 
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
@@ -308,8 +308,8 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   public void testInsertRecords() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfig();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
 
     // Case 1:
     // 10 records for partition 1, 1 record for partition 2.
@@ -362,7 +362,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
         HoodieStorageConfig.newBuilder().limitFileSize(64 * 1024).parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024)
             .build()).build();
     String commitTime = HoodieTestUtils.makeNewCommitTime();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     List<HoodieRecord> records = new ArrayList<>();
@@ -401,8 +401,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
     HoodieClientTestUtils.fakeCommitFile(basePath, "001");
     HoodieClientTestUtils.fakeDataFile(basePath, testPartitionPath, "001", "file1", fileSize);
-
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{testPartitionPath});
@@ -476,7 +475,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   public void testInsertUpsertWithHoodieAvroPayload() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(
         HoodieStorageConfig.newBuilder().limitFileSize(1000 * 1024).build()).build();
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     final HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
     String commitTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
@@ -487,7 +486,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
     WriteStatus writeStatus = ws.get(0).get(0);
     String fileId = writeStatus.getFileId();
-    metadata.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
+    metaClient.getFs().create(new Path(basePath + "/.hoodie/000.commit")).close();
     final HoodieCopyOnWriteTable table2 = new HoodieCopyOnWriteTable(config, jsc);
 
     final List<HoodieRecord> updates =
