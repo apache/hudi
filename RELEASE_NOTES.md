@@ -26,6 +26,18 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Balaji Varadarajan** HUDI-121 : Address comments during RC2 voting
+  * **Bhavani Sudha Saktheeswaran** [HUDI-271] Create QuickstartUtils for simplifying quickstart guide
+  * **vinoyang** [HUDI-247] Unify the re-initialization of HoodieTableMetaClient in test for hoodie-client module (#930)
+  * **Balaji Varadarajan** [HUDI-279] Fix regression in Schema Evolution due to PR-755
+  * **Xing Pan** [HUDI-269] Limit sync frequency (#921)
+  * **vinoth chandar** [MINOR] : Further updates to .mailmap for vinoth (#919)
+  * **PanXing** [MINOR] support reading cfg file in another s3 bucket (#914)
+  * **vinoyang** HUDI-267 Refactor bad method name HoodieTestUtils#initTableType and HoodieTableMetaClient#initializePathAsHoodieDataset (#916)
+  * **Nishith Agarwal** HUDI-180 : Adding support for hive registration using metastore along with JDBC
+  * **Balaji Varadarajan** Fix  mailmap to allow mapping of defunct emailIds to active emailIds
+  * **Balaji Varadarajan** Adding mailmap to allow mapping of defunct emailIds to active emailIds
+  * **Balaji Varadarajan** Updating release notes and preparing for 0.5.0-incubating-rc2 release
   * **Vinoth Chandar** [HUDI-254]: Bundle and shade databricks/avro with spark bundle
   * **Balaji Varadarajan** [HUDI-257] Fix Bloom Index unit-test failures
   * **Balaji Varadarajan** [HUDI-252] Add Disclaimer and cleanup NOTICE and LICENSE files in hudi. Identify packages which are under non-apache license in LICENSE file
