@@ -22,10 +22,8 @@ Check out [code](https://github.com/apache/incubator-hudi) and normally build th
 $ mvn clean install -DskipTests -DskipITs
 ```
 
-To work with older version of Hive (pre Hive-1.2.1), use
-```
-$ mvn clean install -DskipTests -DskipITs -Dhive11
-```
+Hudi works with Hive 2.3.x or higher versions. As long as Hive 2.x protocol can talk to Hive 1.x, you can use Hudi to 
+talk to older hive versions.
 
 For IDE, you can pull in the code into IntelliJ as a normal maven project. 
 You might want to add your spark jars folder to project dependencies under 'Module Setttings', to be able to run from IDE.
@@ -38,9 +36,7 @@ Further, we have verified that Hudi works with the following combination of Hado
 
 | Hadoop | Hive  | Spark | Instructions to Build Hudi |
 | ---- | ----- | ---- | ---- |
-| 2.6.0-cdh5.7.2 | 1.1.0-cdh5.7.2 | spark-2.[1-3].x | Use “mvn clean install -DskipTests -Dhadoop.version=2.6.0-cdh5.7.2 -Dhive.version=1.1.0-cdh5.7.2” |
-| Apache hadoop-2.8.4 | Apache hive-2.3.3 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
-| Apache hadoop-2.7.3 | Apache hive-1.2.1 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
+| Apache hadoop-2.[7-8].x | Apache hive-2.3.[1-3] | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
 
 If your environment has other versions of hadoop/hive/spark, please try out Hudi 
 and let us know if there are any issues. 
