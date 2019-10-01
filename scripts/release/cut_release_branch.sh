@@ -35,9 +35,10 @@ function clean_up(){
 
 if [[ $# -eq 1 && $1 = "-h" ]]; then
 	echo "This script will update apache hudi(incubating) master branch with next release version and cut release branch for current development version."
-	echo "There are two params required:"
+	echo "There are 3 params required:"
 	echo "--release=\${CURRENT_RELEASE_VERSION}"
 	echo "--next_release=\${NEXT_RELEASE_VERSION}"
+	echo "--rc_num=\${RC_NUM}"
 	exit
 else
 	for param in "$@"
@@ -48,9 +49,13 @@ else
 		if [[ $param =~ --next_release\=([0-9]\.[0-9]*\.[0-9]) ]]; then
 			NEXT_VERSION_IN_BASE_BRANCH=${BASH_REMATCH[1]}
 		fi
+		if [[ $param =~ --rc_num\=([0-9]*) ]]; then
+                        RC_NUM=${BASH_REMATCH[1]}
+		fi
 	done
 fi
-if [[ -z "$RELEASE" || -z "$NEXT_VERSION_IN_BASE_BRANCH" ]]; then
+
+if [[ -z "$RELEASE" || -z "$NEXT_VERSION_IN_BASE_BRANCH" || -z "$RC_NUM" ]]; then
 	echo "This sricpt needs to be ran with params, please run with -h to get more instructions."
 	exit
 fi
@@ -68,41 +73,18 @@ echo "next_release: ${NEXT_VERSION_IN_BASE_BRANCH}"
 echo "working master branch: ${MASTER_BRANCH}"
 echo "working release branch: ${RELEASE_BRANCH}"
 echo "local repo dir: ~/${LOCAL_CLONE_DIR}/${HUDI_ROOT_DIR}"
+echo "RC_NUM: $RC_NUM
 echo "==============================================================="
 
 cd ~
 if [[ -d ${LOCAL_CLONE_DIR} ]]; then
   rm -rf ${LOCAL_CLONE_DIR}
 fi
+
 mkdir ${LOCAL_CLONE_DIR}
 cd ${LOCAL_CLONE_DIR}
 git clone ${GITHUB_REPO_URL}
 cd ${HUDI_ROOT_DIR}
-
-# Update Notice.txt
-mvn notice:generate
-
-echo "==============Update NOTICE.txt in master branch as following================"
-git diff
-echo "==============================================================="
-
-echo "Please make sure all changes above are expected. Do you confirm to commit?: [y|N]"
-read confirmation
-if [[ $confirmation != "y" ]]; then
-  echo "Exit without committing any changes on master branch."
-  clean_up
-  exit
-fi
-
-git commit -am "Updating NOTICE.txt in master" --allow-empty
-
-# Pushing NOTICE.txt changes to master
-if git push origin ${MASTER_BRANCH}; then
-  break
-else
-  clean_up
-  exit
-fi
 
 # Now, create local release branch
 git branch ${RELEASE_BRANCH}
@@ -139,7 +121,7 @@ fi
 
 # Checkout and update release branch - Add incubating and remove snapshot
 git checkout ${RELEASE_BRANCH}
-mvn versions:set -DnewVersion=${RELEASE}-incubating
+mvn versions:set -DnewVersion=${RELEASE}-incubating-rc${RC_NUM}
 
 echo "==================Current working branch======================="
 echo ${RELEASE_BRANCH}
