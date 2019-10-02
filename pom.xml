@@ -58,7 +58,6 @@
       <name>Apache License, Version 2.0</name>
       <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
-      <comments>A business-friendly OSS license</comments>
     </license>
   </licenses>
 
@@ -66,67 +65,6 @@
     <name>The Apache Software Foundation</name>
     <url>https://www.apache.org</url>
   </organization>
-
-  <developers>
-    <developer>
-      <id>vinothchandar</id>
-      <name>Vinoth Chandar</name>
-      <organization>Confluent Inc</organization>
-    </developer>
-    <developer>
-      <id>prasannarajaperumal</id>
-      <name>Prasanna Rajaperumal</name>
-      <organization>Snowflake</organization>
-    </developer>
-    <developer>
-      <id>n3nash</id>
-      <name>Nishith Agarwal</name>
-      <organization>Uber</organization>
-    </developer>
-    <developer>
-      <id>bvaradar</id>
-      <name>Balaji Varadharajan</name>
-      <organization>Uber</organization>
-    </developer>
-  </developers>
-
-  <contributors>
-    <contributor>
-      <name>Wei Yan</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Siddhartha Gunda</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Omkar Joshi</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Zeeshan Qureshi</name>
-      <organization>Shopify</organization>
-    </contributor>
-    <contributor>
-      <name>Kathy Ge</name>
-      <organization>Shopify</organization>
-    </contributor>
-    <contributor>
-      <name>Kaushik Devarajaiah</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Anbu Cheeralan</name>
-      <organization>DoubleVerify</organization>
-    </contributor>
-    <contributor>
-      <name>Jiale Tan</name>
-      <organization>Vungle</organization>
-    </contributor>
-  </contributors>
-
-  <inceptionYear>2016</inceptionYear>
-
 
   <properties>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
