@@ -174,6 +174,8 @@ Usage: <main class> [options]
        Default: false
   * --jdbc-url
        Hive jdbc connect url
+  * --use-jdbc
+       Whether to use jdbc connection or hive metastore (via thrift)
   * --pass
        Hive password
   * --table
