@@ -26,7 +26,9 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
-  * **Balaji Varadarajan** HUDI-121 : Address comments during RC2 voting
+  * **Balaji Varadarajan** [HUDI-287] Address comments during review of release candidate. Remove LICENSE and NOTICE files in hoodie child modules. 
+  * **Balaji Varadarajan** [HUDI-121] Fix bugs in Release Scripts found during RC creation
+  * **Balaji Varadarajan** [HUDI-121] : Address comments during RC2 voting
   * **Bhavani Sudha Saktheeswaran** [HUDI-271] Create QuickstartUtils for simplifying quickstart guide
   * **vinoyang** [HUDI-247] Unify the re-initialization of HoodieTableMetaClient in test for hoodie-client module (#930)
   * **Balaji Varadarajan** [HUDI-279] Fix regression in Schema Evolution due to PR-755
