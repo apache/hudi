@@ -29,8 +29,8 @@ set -o nounset
 set -o xtrace
 
 CURR_DIR=`pwd`
-if [[ `basename $CURR_DIR` != "release" ]] ; then
-  echo "You have to call the script from the release/ dir"
+if [[ `basename $CURR_DIR` != "scripts" ]] ; then
+  echo "You have to call the script from the scripts/ dir"
   exit 1
 fi
 
