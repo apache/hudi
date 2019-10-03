@@ -60,7 +60,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     initSparkContexts("TestHoodieCompactor");
 
     // Create a temp folder as the base path
-    initTempFolderAndPath();
+    initPath();
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath, hadoopConf);
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
@@ -71,7 +71,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupFileSystem();
     cleanupTestDataGenerator();
-    cleanupTempFolderAndPath();
     cleanupSparkContexts();
   }
 

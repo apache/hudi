@@ -64,7 +64,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   @Before
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieGlobalBloomIndex");
-    initTempFolderAndPath();
+    initPath();
     // We have some records to be tagged (two different partitions)
     schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/exampleSchema.txt"));
     schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
@@ -72,9 +72,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   }
 
   @After
-  public void tearDown() throws Exception {
+  public void tearDown() {
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
     cleanupMetaClient();
   }
 

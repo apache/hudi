@@ -51,18 +51,17 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
 
   @Before
   public void setUp() throws Exception {
-    initTempFolderAndPath();
+    initPath();
     initSparkContexts();
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(jsc, basePath);
   }
 
   @After
-  public void tearDown() throws Exception {
+  public void tearDown() {
     client.close();
     metaClient = null;
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
   }
 
   @Test

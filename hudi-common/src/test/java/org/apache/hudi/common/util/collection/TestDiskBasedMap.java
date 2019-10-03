@@ -35,8 +35,8 @@ import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.AvroBinaryTestPayload;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -47,19 +47,20 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.common.util.SpillableMapTestUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class TestDiskBasedMap {
+public class TestDiskBasedMap extends HoodieCommonTestHarness {
 
-  private static final String BASE_OUTPUT_PATH = "/tmp/";
+  @Before
+  public void setup() {
+    initPath();
+  }
 
   @Test
   public void testSimpleInsert() throws IOException, URISyntaxException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
-
-    DiskBasedMap records = new DiskBasedMap<>(BASE_OUTPUT_PATH);
+    DiskBasedMap records = new DiskBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -77,10 +78,7 @@ public class TestDiskBasedMap {
 
   @Test
   public void testSimpleInsertWithoutHoodieMetadata() throws IOException, URISyntaxException {
-    Schema schema = getSimpleSchema();
-    String payloadClazz = HoodieAvroPayload.class.getName();
-
-    DiskBasedMap records = new DiskBasedMap<>(BASE_OUTPUT_PATH);
+    DiskBasedMap records = new DiskBasedMap<>(basePath);
     List<HoodieRecord> hoodieRecords = SchemaTestUtil
         .generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
     Set<String> recordKeys = new HashSet<>();
@@ -102,11 +100,9 @@ public class TestDiskBasedMap {
 
   @Test
   public void testSimpleUpsert() throws IOException, URISyntaxException {
-
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
 
-    DiskBasedMap records = new DiskBasedMap<>(BASE_OUTPUT_PATH);
+    DiskBasedMap records = new DiskBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
 
     // perform some inserts

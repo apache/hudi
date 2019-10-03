@@ -59,7 +59,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   @Before
   public void init() throws Exception {
     initDFS();
-    initTempFolderAndPath();
+    initPath();
     initSparkContexts("TestHoodieCommitArchiveLog");
     hadoopConf = dfs.getConf();
     jsc.hadoopConfiguration().addResource(dfs.getConf());
@@ -70,7 +70,6 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   @After
   public void clean() throws IOException {
     cleanupDFS();
-    cleanupTempFolderAndPath();
     cleanupSparkContexts();
   }
 

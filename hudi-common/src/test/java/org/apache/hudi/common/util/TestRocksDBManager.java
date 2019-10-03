@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,14 +32,21 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class TestRocksDBManager {
 
   private static RocksDBDAO dbManager;
 
+  @BeforeClass
+  public static void setUpClass() {
+    dbManager = new RocksDBDAO("/dummy/path",
+            FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
+  }
+
   @AfterClass
-  public static void drop() throws IOException {
+  public static void tearDownClass() {
     if (dbManager != null) {
       dbManager.close();
       dbManager = null;
@@ -66,8 +72,6 @@ public class TestRocksDBManager {
       return new Payload(prefix, key, val, family);
     }).collect(Collectors.toList());
 
-    dbManager = new RocksDBDAO("/dummy/path",
-        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
     colFamilies.stream().forEach(family -> dbManager.dropColumnFamily(family));
     colFamilies.stream().forEach(family -> dbManager.addColumnFamily(family));
 

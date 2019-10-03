@@ -72,7 +72,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   @Before
   public void setUp() throws Exception {
     initSparkContexts("TestCopyOnWriteTable");
-    initTempFolderAndPath();
+    initPath();
     initMetaClient();
     initTestDataGenerator();
     initFileSystem();
@@ -81,7 +81,6 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
     cleanupMetaClient();
     cleanupFileSystem();
     cleanupTestDataGenerator();

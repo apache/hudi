@@ -102,7 +102,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     jsc.hadoopConfiguration().addResource(utility.getConfiguration());
 
     // Create a temp folder as the base path
-    initTempFolderAndPath();
+    initPath();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -110,7 +110,6 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
     cleanupTestDataGenerator();
     cleanupMetaClient();
   }

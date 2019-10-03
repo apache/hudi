@@ -32,22 +32,28 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
-import org.junit.rules.TemporaryFolder;
 
-public class TestFSUtils {
+public class TestFSUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
+
+  @Before
+  public void setUp() throws IOException {
+    initMetaClient();
+  }
 
   @Test
   public void testMakeDataFileName() {
@@ -75,13 +81,9 @@ public class TestFSUtils {
    * This code tests the fix by ensuring ".hoodie" and their subfolders are never processed.
    */
   public void testProcessFiles() throws Exception {
-    TemporaryFolder tmpFolder = new TemporaryFolder();
-    tmpFolder.create();
     // All directories including marker dirs.
     List<String> folders = Arrays.asList("2016/04/15", "2016/05/16", ".hoodie/.temp/2/2016/04/15",
         ".hoodie/.temp/2/2016/05/16");
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
-    String basePath = metaClient.getBasePath();
     folders.stream().forEach(f -> {
       try {
         metaClient.getFs().mkdirs(new Path(new Path(basePath), f));

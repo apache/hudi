@@ -21,7 +21,6 @@ package org.apache.hudi.common.util;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -34,6 +33,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -41,19 +41,12 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestParquetUtils {
-
-
-  private String basePath;
+public class TestParquetUtils extends HoodieCommonTestHarness {
 
   @Before
-  public void setup() throws IOException {
-    // Create a temp folder as the base path
-    TemporaryFolder folder = new TemporaryFolder();
-    folder.create();
-    basePath = folder.getRoot().getAbsolutePath();
+  public void setup() {
+    initPath();
   }
 
   @Test

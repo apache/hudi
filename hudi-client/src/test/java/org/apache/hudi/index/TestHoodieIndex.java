@@ -35,14 +35,13 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   @Before
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieIndex");
-    initTempFolderAndPath();
+    initPath();
     initMetaClient();
   }
 
   @After
-  public void tearDown() throws Exception {
+  public void tearDown() {
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
     cleanupMetaClient();
   }
 

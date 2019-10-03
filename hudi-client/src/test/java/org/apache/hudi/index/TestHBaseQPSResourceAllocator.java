@@ -50,7 +50,7 @@ public class TestHBaseQPSResourceAllocator extends HoodieClientTestHarness {
     hbaseConfig = utility.getConnection().getConfiguration();
     initSparkContexts("TestQPSResourceAllocator");
 
-    initTempFolderAndPath();
+    initPath();
     basePath = folder.getRoot().getAbsolutePath() + QPS_TEST_SUFFIX_PATH;
     // Initialize table
     initMetaClient();
@@ -59,7 +59,6 @@ public class TestHBaseQPSResourceAllocator extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
     cleanupMetaClient();
     if (utility != null) {
       utility.shutdownMiniCluster();
