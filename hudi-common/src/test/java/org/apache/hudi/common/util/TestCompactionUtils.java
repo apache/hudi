@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.model.HoodieTestUtils.getDefaultHadoopConf;
 import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
 import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
 import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
@@ -35,21 +34,19 @@ import java.util.stream.IntStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieDataFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestCompactionUtils {
+public class TestCompactionUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -57,17 +54,11 @@ public class TestCompactionUtils {
       new ImmutableMap.Builder<String, Double>()
           .put("key1", 1.0)
           .put("key2", 3.0).build();
-  @Rule
-  public TemporaryFolder tmpFolder = new TemporaryFolder();
-  private HoodieTableMetaClient metaClient;
-  private String basePath;
   private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> metrics;
 
   @Before
   public void init() throws IOException {
-    metaClient = HoodieTestUtils.init(getDefaultHadoopConf(),
-        tmpFolder.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    basePath = metaClient.getBasePath();
+    initMetaClient();
   }
 
   @Test
@@ -236,5 +227,10 @@ public class TestCompactionUtils {
       Assert.assertEquals("Log File Index " + idx, paths.get(idx), op.getDeltaFilePaths().get(idx));
     });
     Assert.assertEquals("Metrics set", metrics, op.getMetrics());
+  }
+
+  @Override
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }

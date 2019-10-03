@@ -25,26 +25,21 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 
 /**
  */
-public class TestHoodieROTablePathFilter {
-
-  @Rule
-  public TemporaryFolder tmpFolder = new TemporaryFolder();
-  
-  private HoodieTableMetaClient metaClient;
+public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   
   @Before
   public void setUp() throws Exception {
-    this.metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
+    initMetaClient();
   }
   
   @Test
@@ -105,5 +100,7 @@ public class TestHoodieROTablePathFilter {
     path = basePath + File.separator + "nonhoodiefolder/somefile";
     new File(path).createNewFile();
     assertTrue(pathFilter.accept(new Path("file:///" + path)));
+
+    folder.delete();
   }
 }

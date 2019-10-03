@@ -38,6 +38,7 @@ import java.util.stream.Stream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -45,8 +46,6 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.TableFileSystemView;
@@ -62,50 +61,38 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
-public class HoodieTableFileSystemViewTest {
+public class HoodieTableFileSystemViewTest extends HoodieCommonTestHarness {
 
   private static final transient Logger log = LogManager.getLogger(HoodieTableFileSystemViewTest.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  protected HoodieTableMetaClient metaClient;
-  protected String basePath;
   protected SyncableFileSystemView fsView;
   protected TableFileSystemView.ReadOptimizedView roView;
   protected TableFileSystemView.RealtimeView rtView;
 
-  @Rule
-  public TemporaryFolder tmpFolder = new TemporaryFolder();
-
   @Before
   public void init() throws IOException {
-    initializeMetaClient();
+    initMetaClient();
     refreshFsView();
   }
 
-  protected void initializeMetaClient() throws IOException {
-    metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    basePath = metaClient.getBasePath();
-  }
-
-  protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
-    return new HoodieTableFileSystemView(metaClient, timeline);
-  }
-
   protected void refreshFsView() throws IOException {
-    metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
+    super.refreshFsView();
+    closeFsView();
+    fsView = getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    roView = fsView;
+    rtView = fsView;
+  }
+
+  private void closeFsView() {
     if (null != fsView) {
       fsView.close();
       fsView = null;
     }
-    fsView = getFileSystemView(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
-    roView = (TableFileSystemView.ReadOptimizedView) fsView;
-    rtView = (TableFileSystemView.RealtimeView) fsView;
   }
 
   /**
@@ -1184,5 +1171,10 @@ public class HoodieTableFileSystemViewTest {
             .map(CompactionOperation::getFileId).collect(Collectors.toSet());
     Assert.assertEquals(1, fileIdsInCompaction.size());
     Assert.assertTrue(fileIdsInCompaction.contains(fileId));
+  }
+
+  @Override
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }

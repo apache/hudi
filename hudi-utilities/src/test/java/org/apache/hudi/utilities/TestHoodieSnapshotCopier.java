@@ -27,6 +27,7 @@ import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FSUtils;
@@ -35,9 +36,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestHoodieSnapshotCopier {
+public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -49,23 +49,17 @@ public class TestHoodieSnapshotCopier {
 
   @Before
   public void init() throws IOException {
-    try {
-      // Prepare directories
-      TemporaryFolder folder = new TemporaryFolder();
-      folder.create();
-      rootPath = "file://" + folder.getRoot().getAbsolutePath();
-      basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
-      outputPath = rootPath + "/output";
+    // Prepare directories
+    rootPath = "file://" + folder.getRoot().getAbsolutePath();
+    basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
+    outputPath = rootPath + "/output";
 
-      final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-      fs = FSUtils.getFs(basePath, hadoopConf);
-      HoodieTestUtils.init(hadoopConf, basePath);
-      // Start a local Spark job
-      SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
-      jsc = new JavaSparkContext(conf);
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
+    final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+    fs = FSUtils.getFs(basePath, hadoopConf);
+    HoodieTestUtils.init(hadoopConf, basePath);
+    // Start a local Spark job
+    SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
+    jsc = new JavaSparkContext(conf);
   }
 
   @Test

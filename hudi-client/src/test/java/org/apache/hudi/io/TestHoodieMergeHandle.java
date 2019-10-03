@@ -56,7 +56,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   @Before
   public void setUp() throws Exception {
     initSparkContexts("TestHoodieMergeHandle");
-    initTempFolderAndPath();
+    initPath();
     initFileSystem();
     initTestDataGenerator();
     initMetaClient();
@@ -66,7 +66,6 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupFileSystem();
     cleanupTestDataGenerator();
-    cleanupTempFolderAndPath();
     cleanupSparkContexts();
     cleanupMetaClient();
   }
