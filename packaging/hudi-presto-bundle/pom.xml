@@ -28,8 +28,6 @@
 
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-    <notice.file>HUDI_NOTICE.txt</notice.file>
   </properties>
 
   <build>

@@ -25,10 +25,6 @@
 
   <artifactId>hudi-hadoop-mr</artifactId>
 
-  <properties>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-  </properties>
-
   <dependencies>
     <!-- Hudi -->
     <dependency>

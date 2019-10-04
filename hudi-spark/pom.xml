@@ -26,10 +26,6 @@
   <artifactId>hudi-spark</artifactId>
   <packaging>jar</packaging>
 
-  <properties>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-  </properties>
-
   <build>
     <resources>
       <resource>
