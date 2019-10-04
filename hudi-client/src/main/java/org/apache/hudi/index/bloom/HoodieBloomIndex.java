@@ -371,7 +371,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       // currentLocation 2 times and it will fail the second time. So creating a new in memory
       // copy of the hoodie record.
       record = new HoodieRecord<>(inputRecord);
+      record.unseal();
       record.setCurrentLocation(location.get());
+      record.seal();
     }
     return record;
   }
