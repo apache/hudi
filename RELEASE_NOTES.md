@@ -26,6 +26,7 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **leesf** [HUDI-265] Failed to delete tmp dirs created in unit tests
   * **Balaji Varadarajan** [HUDI-287] Address comments during review of release candidate. Remove LICENSE and NOTICE files in hoodie child modules. 
   * **Balaji Varadarajan** [HUDI-121] Fix bugs in Release Scripts found during RC creation
   * **Balaji Varadarajan** [HUDI-121] : Address comments during RC2 voting

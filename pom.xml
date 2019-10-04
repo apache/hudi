@@ -95,8 +95,6 @@
     <jetty.version>7.6.0.v20120127</jetty.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
-    <notice.dir>${project.basedir}</notice.dir>
-    <notice.file>NOTICE.txt</notice.file>
     <skipTests>false</skipTests>
     <skipITs>${skipTests}</skipITs>
     <skipUTs>${skipTests}</skipUTs>

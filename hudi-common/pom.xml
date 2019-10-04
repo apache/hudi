@@ -25,10 +25,6 @@
 
   <artifactId>hudi-common</artifactId>
 
-  <properties>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-  </properties>
-
   <build>
     <resources>
       <resource>

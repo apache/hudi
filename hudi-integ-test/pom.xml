@@ -135,7 +135,6 @@
     <skipITs>false</skipITs>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <checkstyle.skip>true</checkstyle.skip>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
   </properties>
 
   <build>
