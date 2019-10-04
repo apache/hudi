@@ -26,10 +26,6 @@
   <artifactId>hudi-hive</artifactId>
   <packaging>jar</packaging>
 
-  <properties>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-  </properties>
-
   <dependencies>
 
     <!-- Hoodie -->
