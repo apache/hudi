@@ -132,7 +132,9 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
       while (hoodieRecordIterator.hasNext()) {
         HoodieRecord<T> rec = hoodieRecordIterator.next();
         if (recordLocationMap.containsKey(rec.getKey())) {
+          rec.unseal();
           rec.setCurrentLocation(recordLocationMap.get(rec.getKey()));
+          rec.seal();
         }
         taggedRecords.add(rec);
       }

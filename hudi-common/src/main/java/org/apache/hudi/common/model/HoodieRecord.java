@@ -63,17 +63,24 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
    */
   private HoodieRecordLocation newLocation;
 
+  /**
+   * Indicates whether the object is sealed.
+   */
+  private boolean sealed;
+
   public HoodieRecord(HoodieKey key, T data) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
     this.newLocation = null;
+    this.sealed = false;
   }
 
   public HoodieRecord(HoodieRecord<T> record) {
     this(record.key, record.data);
     this.currentLocation = record.currentLocation;
     this.newLocation = record.newLocation;
+    this.sealed = record.sealed;
   }
 
   public HoodieKey getKey() {
@@ -100,6 +107,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
    * Sets the current currentLocation of the record. This should happen exactly-once
    */
   public HoodieRecord setCurrentLocation(HoodieRecordLocation location) {
+    checkState();
     assert currentLocation == null;
     this.currentLocation = location;
     return this;
@@ -114,6 +122,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
    * exactly-once.
    */
   public HoodieRecord setNewLocation(HoodieRecordLocation location) {
+    checkState();
     assert newLocation == null;
     this.newLocation = location;
     return this;
@@ -169,5 +178,19 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public String getRecordKey() {
     assert key != null;
     return key.getRecordKey();
+  }
+
+  public void seal() {
+    this.sealed = true;
+  }
+
+  public void unseal() {
+    this.sealed = false;
+  }
+
+  public void checkState() {
+    if (sealed) {
+      throw new UnsupportedOperationException("Not allowed to modify after sealed");
+    }
   }
 }

@@ -45,7 +45,9 @@ public class SpillableMapTestUtils {
           recordKeys.add(key);
           HoodieRecord record = new HoodieRecord<>(new HoodieKey(key, partitionPath),
               new HoodieAvroPayload(Option.of((GenericRecord) r)));
+          record.unseal();
           record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));
+          record.seal();
           records.put(key, record);
         });
     return recordKeys;

@@ -101,7 +101,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
         storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
         // update the new location of record, so we know where to find it next
+        record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
+        record.seal();
         recordsWritten++;
         insertRecordsWritten++;
       } else {
