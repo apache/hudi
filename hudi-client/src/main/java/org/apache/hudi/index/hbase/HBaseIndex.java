@@ -239,7 +239,9 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                       currentRecord = new HoodieRecord(
                           new HoodieKey(currentRecord.getRecordKey(), partitionPath),
                           currentRecord.getData());
+                      currentRecord.unseal();
                       currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+                      currentRecord.seal();
                       taggedRecords.add(currentRecord);
                       // the key from Result and the key being processed should be same
                       assert (currentRecord.getRecordKey().contentEquals(keyFromResult));

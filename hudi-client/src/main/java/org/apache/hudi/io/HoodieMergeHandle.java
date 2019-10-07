@@ -208,7 +208,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       HoodieRecord<T> record = newRecordsItr.next();
       partitionPath = record.getPartitionPath();
       // update the new location of the record, so we know where to find it next
+      record.unseal();
       record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      record.seal();
       //NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }

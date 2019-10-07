@@ -113,7 +113,9 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
       TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
       HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
           rowChange1);
+      record1.unseal();
       record1.setCurrentLocation(new HoodieRecordLocation("100", fileId));
+      record1.seal();
       updateRecords.add(record1);
 
       try {

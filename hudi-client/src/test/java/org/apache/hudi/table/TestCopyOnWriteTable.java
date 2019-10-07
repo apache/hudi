@@ -192,7 +192,9 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     TestRawTripPayload updateRowChanges1 = new TestRawTripPayload(updateRecordStr1);
     HoodieRecord updatedRecord1 = new HoodieRecord(
         new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()), updateRowChanges1);
+    updatedRecord1.unseal();
     updatedRecord1.setCurrentLocation(new HoodieRecordLocation(null, FSUtils.getFileId(parquetFile.getName())));
+    updatedRecord1.seal();
 
     TestRawTripPayload rowChange4 = new TestRawTripPayload(recordStr4);
     HoodieRecord insertedRecord1 = new HoodieRecord(
@@ -407,7 +409,9 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", numInserts);
     List<HoodieRecord> updateRecords = dataGenerator.generateUpdates("001", numUpdates);
     for (HoodieRecord updateRec : updateRecords) {
+      updateRec.unseal();
       updateRec.setCurrentLocation(new HoodieRecordLocation("001", "file1"));
+      updateRec.seal();
     }
     List<HoodieRecord> records = new ArrayList<>();
     records.addAll(insertRecords);

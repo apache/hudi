@@ -293,7 +293,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   private void writeToBuffer(HoodieRecord<T> record) {
     // update the new location of the record, so we know where to find it next
+    record.unseal();
     record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+    record.seal();
     Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
       recordList.add(indexedRecord.get());
