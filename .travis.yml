@@ -14,8 +14,9 @@
 # limitations under the License.
 
 language: java
+dist: trusty
 jdk:
-  - oraclejdk8
+  - openjdk8
 sudo: required
 env:
   - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit
