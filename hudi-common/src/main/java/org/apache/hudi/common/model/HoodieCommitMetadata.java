@@ -338,10 +338,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieCommitMetadata{"
-        + "partitionToWriteStats=" + partitionToWriteStats
-        + ", compacted=" + compacted
-        + ", extraMetadataMap=" + extraMetadataMap
-        + '}';
+    return "HoodieCommitMetadata{" + "partitionToWriteStats=" + partitionToWriteStats + ", compacted=" + compacted
+        + ", extraMetadataMap=" + extraMetadataMap + '}';
   }
 }

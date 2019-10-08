@@ -25,8 +25,8 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.FSUtils;
 
 /**
- * A Hoodie Instant represents a action done on a hoodie dataset. All actions start with a inflight
- * instant and then create a completed instant after done.
+ * A Hoodie Instant represents a action done on a hoodie dataset. All actions start with a inflight instant and then
+ * create a completed instant after done.
  *
  * @see HoodieTimeline
  */
@@ -76,7 +76,7 @@ public class HoodieInstant implements Serializable {
   }
 
   public HoodieInstant(boolean isInflight, String action, String timestamp) {
-    //TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
+    // TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
     this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
     this.action = action;
     this.timestamp = timestamp;
@@ -151,9 +151,7 @@ public class HoodieInstant implements Serializable {
       return false;
     }
     HoodieInstant that = (HoodieInstant) o;
-    return state == that.state
-        && Objects.equals(action, that.action)
-        && Objects.equals(timestamp, that.timestamp);
+    return state == that.state && Objects.equals(action, that.action) && Objects.equals(timestamp, that.timestamp);
   }
 
   public State getState() {

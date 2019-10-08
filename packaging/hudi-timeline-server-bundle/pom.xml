@@ -229,6 +229,7 @@
 
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
+        <main.basedir>${project.parent.basedir}</main.basedir>
     </properties>
 
 

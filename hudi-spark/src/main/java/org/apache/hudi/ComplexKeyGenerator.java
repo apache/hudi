@@ -26,8 +26,7 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 
 /**
- * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as
- * configs.
+ * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class ComplexKeyGenerator extends KeyGenerator {
 
@@ -42,15 +41,14 @@ public class ComplexKeyGenerator extends KeyGenerator {
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
-    this.partitionPathFields = Arrays.asList(props
-            .getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","));
+    this.partitionPathFields =
+        Arrays.asList(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","));
   }
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
     if (recordKeyFields == null || partitionPathFields == null) {
-      throw new HoodieException(
-              "Unable to find field names for record key or partition path in cfg");
+      throw new HoodieException("Unable to find field names for record key or partition path in cfg");
     }
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {

@@ -38,10 +38,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * This is an one-time use class meant for migrating the configuration for
- * "hoodie.compaction.payload.class" in .hoodie/hoodie.properties from com.uber.hoodie to
- * org.apache.hudi
- * It takes in a file containing base-paths for a set of hudi datasets and does the migration
+ * This is an one-time use class meant for migrating the configuration for "hoodie.compaction.payload.class" in
+ * .hoodie/hoodie.properties from com.uber.hoodie to org.apache.hudi It takes in a file containing base-paths for a set
+ * of hudi datasets and does the migration
  */
 public class UpgradePayloadFromUberToApache implements Serializable {
 
@@ -66,8 +65,8 @@ public class UpgradePayloadFromUberToApache implements Serializable {
       if (!basePath.startsWith("#")) {
         logger.info("Performing upgrade for " + basePath);
         String metaPath = String.format("%s/.hoodie", basePath);
-        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
-            FSUtils.prepareHadoopConf(new Configuration()), basePath, false);
+        HoodieTableMetaClient metaClient =
+            new HoodieTableMetaClient(FSUtils.prepareHadoopConf(new Configuration()), basePath, false);
         HoodieTableConfig tableConfig = metaClient.getTableConfig();
         if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
           Map<String, String> propsMap = tableConfig.getProps();
@@ -75,10 +74,8 @@ public class UpgradePayloadFromUberToApache implements Serializable {
             String payloadClass = propsMap.get(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
             logger.info("Found payload class=" + payloadClass);
             if (payloadClass.startsWith("com.uber.hoodie")) {
-              String newPayloadClass = payloadClass.replace("com.uber.hoodie",
-                  "org.apache.hudi");
-              logger.info("Replacing payload class (" + payloadClass
-                  + ") with (" + newPayloadClass + ")");
+              String newPayloadClass = payloadClass.replace("com.uber.hoodie", "org.apache.hudi");
+              logger.info("Replacing payload class (" + payloadClass + ") with (" + newPayloadClass + ")");
               Map<String, String> newPropsMap = new HashMap<>(propsMap);
               newPropsMap.put(HoodieCompactionConfig.PAYLOAD_CLASS_PROP, newPayloadClass);
               Properties props = new Properties();

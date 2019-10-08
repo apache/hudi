@@ -28,8 +28,7 @@ import java.util.List;
  */
 public class HiveSyncConfig implements Serializable {
 
-  @Parameter(names = {
-      "--database"}, description = "name of the target database in Hive", required = true)
+  @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
   public String databaseName;
 
   @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
@@ -44,33 +43,25 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
   public String jdbcUrl;
 
-  @Parameter(names = {
-      "--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
+  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie dataset to sync", required = true)
   public String basePath;
 
   @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
   public List<String> partitionFields = new ArrayList<>();
 
-  @Parameter(names = "--partition-value-extractor", description = "Class which implements "
-      + "PartitionValueExtractor "
-      + "to extract the partition "
-      + "values from HDFS path")
-  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class
-      .getName();
+  @Parameter(names = "--partition-value-extractor", description = "Class which implements " + "PartitionValueExtractor "
+      + "to extract the partition " + "values from HDFS path")
+  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getName();
 
-  @Parameter(names = {
-      "--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support "
-      + "backward compatibility. If"
-      + " you use hoodie 0.3.x, do "
-      + "not set this parameter")
+  @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
+      + " exists to support " + "backward compatibility. If" + " you use hoodie 0.3.x, do " + "not set this parameter")
   public Boolean assumeDatePartitioning = false;
 
-  @Parameter(names = {
-      "--use-pre-apache-input-format"}, description = "Use InputFormat under com.uber.hoodie package "
-      + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
-      + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
-      + "org.apache.hudi input format.")
+  @Parameter(names = {"--use-pre-apache-input-format"},
+      description = "Use InputFormat under com.uber.hoodie package "
+          + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
+          + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
+          + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
@@ -96,19 +87,10 @@ public class HiveSyncConfig implements Serializable {
 
   @Override
   public String toString() {
-    return "HiveSyncConfig{"
-        + "databaseName='" + databaseName + '\''
-        + ", tableName='" + tableName + '\''
-        + ", hiveUser='" + hiveUser + '\''
-        + ", hivePass='" + hivePass + '\''
-        + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", basePath='" + basePath + '\''
-        + ", partitionFields=" + partitionFields
-        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-        + ", assumeDatePartitioning=" + assumeDatePartitioning
-        + ", usePreApacheInputFormat=" + usePreApacheInputFormat
-        + ", useJdbc=" + useJdbc
-        + ", help=" + help
-        + '}';
+    return "HiveSyncConfig{" + "databaseName='" + databaseName + '\'' + ", tableName='" + tableName + '\''
+        + ", hiveUser='" + hiveUser + '\'' + ", hivePass='" + hivePass + '\'' + ", jdbcUrl='" + jdbcUrl + '\''
+        + ", basePath='" + basePath + '\'' + ", partitionFields=" + partitionFields + ", partitionValueExtractorClass='"
+        + partitionValueExtractorClass + '\'' + ", assumeDatePartitioning=" + assumeDatePartitioning
+        + ", usePreApacheInputFormat=" + usePreApacheInputFormat + ", useJdbc=" + useJdbc + ", help=" + help + '}';
   }
 }

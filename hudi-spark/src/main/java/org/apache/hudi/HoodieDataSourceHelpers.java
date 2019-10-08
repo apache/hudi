@@ -29,14 +29,13 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 /**
- * List of helpers to aid, construction of instanttime for read and write operations using
- * datasource
+ * List of helpers to aid, construction of instanttime for read and write operations using datasource
  */
 public class HoodieDataSourceHelpers {
 
   /**
-   * Checks if the Hoodie dataset has new data since given timestamp. This can be subsequently fed
-   * to an incremental view read, to perform incremental processing.
+   * Checks if the Hoodie dataset has new data since given timestamp. This can be subsequently fed to an incremental
+   * view read, to perform incremental processing.
    */
   public static boolean hasNewCommits(FileSystem fs, String basePath, String commitTimestamp) {
     return listCommitsSince(fs, basePath, commitTimestamp).size() > 0;
@@ -45,8 +44,7 @@ public class HoodieDataSourceHelpers {
   /**
    * Get a list of instant times that have occurred, from the given instant timestamp.
    */
-  public static List<String> listCommitsSince(FileSystem fs, String basePath,
-      String instantTimestamp) {
+  public static List<String> listCommitsSince(FileSystem fs, String basePath, String instantTimestamp) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstants()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
@@ -61,15 +59,14 @@ public class HoodieDataSourceHelpers {
   }
 
   /**
-   * Obtain all the commits, compactions that have occurred on the timeline, whose instant times
-   * could be fed into the datasource options.
+   * Obtain all the commits, compactions that have occurred on the timeline, whose instant times could be fed into the
+   * datasource options.
    */
   public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
-          Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
-              HoodieActiveTimeline.DELTA_COMMIT_ACTION));
+          Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION, HoodieActiveTimeline.DELTA_COMMIT_ACTION));
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }

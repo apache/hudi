@@ -75,9 +75,9 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
   @Test
   public void testArchiveEmptyDataset() throws IOException {
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").build();
+    HoodieWriteConfig cfg =
+        HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+            .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     boolean result = archiveLog.archiveIfRequired(jsc);
@@ -88,8 +88,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   public void testArchiveDatasetWithArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 4).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 4).build())
         .forTable("test-trip-table").build();
     HoodieTestUtils.init(hadoopConf, basePath);
     // Requested Compaction
@@ -149,7 +148,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     HoodieTestUtils.createCleanFiles(basePath, "105", dfs.getConf());
     HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "106", "107");
 
-    //reload the timeline and get all the commmits before archive
+    // reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> originalCommits = timeline.getInstants().collect(Collectors.toList());
 
@@ -163,49 +162,47 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
     assertTrue(archiveLog.archiveIfRequired(jsc));
 
-    //reload the timeline and remove the remaining commits
+    // reload the timeline and remove the remaining commits
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     originalCommits.removeAll(timeline.getInstants().collect(Collectors.toList()));
 
     // Check compaction instants
-    List<HoodieInstant> instants =
-        HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
-            new Path(metaClient.getMetaAuxiliaryPath()),
-            HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+    List<HoodieInstant> instants = HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
+        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
     assertEquals("Should delete all compaction instants < 104", 4, instants.size());
-    assertFalse("Requested Compaction must be absent for 100", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertFalse("Inflight Compaction must be absent for 100", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertFalse("Requested Compaction must be absent for 101", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertFalse("Inflight Compaction must be absent for 101", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertFalse("Requested Compaction must be absent for 102", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertFalse("Inflight Compaction must be absent for 102", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertFalse("Requested Compaction must be absent for 103", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")));
-    assertFalse("Inflight Compaction must be absent for 103", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")));
-    assertTrue("Requested Compaction must be present for 104", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")));
-    assertTrue("Inflight Compaction must be present for 104", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "104")));
-    assertTrue("Requested Compaction must be present for 105", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "105")));
-    assertTrue("Inflight Compaction must be present for 105", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "105")));
+    assertFalse("Requested Compaction must be absent for 100",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
+    assertFalse("Inflight Compaction must be absent for 100",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")));
+    assertFalse("Requested Compaction must be absent for 101",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
+    assertFalse("Inflight Compaction must be absent for 101",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")));
+    assertFalse("Requested Compaction must be absent for 102",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")));
+    assertFalse("Inflight Compaction must be absent for 102",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")));
+    assertFalse("Requested Compaction must be absent for 103",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")));
+    assertFalse("Inflight Compaction must be absent for 103",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")));
+    assertTrue("Requested Compaction must be present for 104",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "104")));
+    assertTrue("Inflight Compaction must be present for 104",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "104")));
+    assertTrue("Requested Compaction must be present for 105",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "105")));
+    assertTrue("Inflight Compaction must be present for 105",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "105")));
 
-    //read the file
-    Reader reader = HoodieLogFormat.newReader(dfs,
-        new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1_1-0-1")),
-        HoodieArchivedMetaEntry.getClassSchema());
+    // read the file
+    Reader reader =
+        HoodieLogFormat.newReader(dfs, new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1_1-0-1")),
+            HoodieArchivedMetaEntry.getClassSchema());
 
     int archivedRecordsCount = 0;
     List<IndexedRecord> readRecords = new ArrayList<>();
-    //read the avro blocks and validate the number of records written in each avro block
+    // read the avro blocks and validate the number of records written in each avro block
     while (reader.hasNext()) {
       HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
       List<IndexedRecord> records = blk.getRecords();
@@ -215,7 +212,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     }
     assertEquals("Total archived records and total read records are the same count", 8, archivedRecordsCount);
 
-    //make sure the archived commits are the same as the (originalcommits - commitsleft)
+    // make sure the archived commits are the same as the (originalcommits - commitsleft)
     List<String> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> {
       return r.get("commitTime").toString();
     }).collect(Collectors.toList());
@@ -232,9 +229,9 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   @Test
   public void testArchiveDatasetWithNoArchival() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     // Requested Compaction
@@ -273,35 +270,33 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4, timeline.countInstants());
 
-    List<HoodieInstant> instants =
-        HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
-            new Path(metaClient.getMetaAuxiliaryPath()),
-            HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+    List<HoodieInstant> instants = HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
+        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
     assertEquals("Should not delete any aux compaction files when maxCommitsToKeep is 5", 8, instants.size());
-    assertTrue("Requested Compaction must be present for 100", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertTrue("Inflight Compaction must be present for 100", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")));
-    assertTrue("Requested Compaction must be present for 101", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertTrue("Inflight Compaction must be present for 101", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")));
-    assertTrue("Requested Compaction must be present for 102", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertTrue("Inflight Compaction must be present for 102", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")));
-    assertTrue("Requested Compaction must be present for 103", instants.contains(
-        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")));
-    assertTrue("Inflight Compaction must be present for 103", instants.contains(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")));
+    assertTrue("Requested Compaction must be present for 100",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
+    assertTrue("Inflight Compaction must be present for 100",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "100")));
+    assertTrue("Requested Compaction must be present for 101",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
+    assertTrue("Inflight Compaction must be present for 101",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "101")));
+    assertTrue("Requested Compaction must be present for 102",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "102")));
+    assertTrue("Inflight Compaction must be present for 102",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "102")));
+    assertTrue("Requested Compaction must be present for 103",
+        instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "103")));
+    assertTrue("Inflight Compaction must be present for 103",
+        instants.contains(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, "103")));
   }
 
   @Test
   public void testArchiveCommitSafety() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
@@ -325,9 +320,9 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   @Test
   public void testArchiveCommitSavepointNoHole() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
@@ -357,9 +352,9 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
   @Test
   public void testArchiveCommitCompactionNoHole() throws IOException {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable("test-trip-table").withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build()).build();
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-trip-table")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
+        .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
     HoodieTestDataGenerator.createCommitFile(basePath, "100", dfs.getConf());
@@ -382,9 +377,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     timeline = metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline();
     assertFalse("Instants before oldest pending compaction can be removed",
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")));
-    assertEquals(
-        "Since we have a pending compaction at 101, we should never archive any commit "
-            + "after 101 (we only " + "archive 100)", 7, timeline.countInstants());
+    assertEquals("Since we have a pending compaction at 101, we should never archive any commit "
+        + "after 101 (we only " + "archive 100)", 7, timeline.countInstants());
     assertTrue("Requested Compaction must still be present",
         timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
     assertTrue("Instants greater than oldest pending compaction must be present",

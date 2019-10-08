@@ -30,8 +30,8 @@ import org.apache.avro.generic.GenericRecord;
 
 /**
  * Marjority of this is copied from
- * https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/
- * common/JsonConverter.java Adjusted for expected behavior of our use cases
+ * https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/ common/JsonConverter.java
+ * Adjusted for expected behavior of our use cases
  */
 public class MercifulJsonConverter {
 
@@ -51,8 +51,7 @@ public class MercifulJsonConverter {
     }
   }
 
-  private GenericRecord convert(Map<String, Object> raw, Schema schema)
-      throws IOException {
+  private GenericRecord convert(Map<String, Object> raw, Schema schema) throws IOException {
     GenericRecord result = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
       String name = f.name();
@@ -128,17 +127,15 @@ public class MercifulJsonConverter {
         }
         return mapRes;
       default:
-        throw new IllegalArgumentException(
-            "JsonConverter cannot handle type: " + schema.getType());
+        throw new IllegalArgumentException("JsonConverter cannot handle type: " + schema.getType());
     }
     throw new JsonConversionException(value, name, schema);
   }
 
   private boolean isOptional(Schema schema) {
-    return schema.getType().equals(Schema.Type.UNION)
-        && schema.getTypes().size() == 2
+    return schema.getType().equals(Schema.Type.UNION) && schema.getTypes().size() == 2
         && (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)
-        || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
+            || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
   }
 
   private Schema getNonNull(Schema schema) {
@@ -160,8 +157,7 @@ public class MercifulJsonConverter {
 
     @Override
     public String toString() {
-      return String.format("Type conversion error for field %s, %s for %s",
-          fieldName, value, schema);
+      return String.format("Type conversion error for field %s, %s for %s", fieldName, value, schema);
     }
   }
 }

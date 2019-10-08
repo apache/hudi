@@ -74,26 +74,23 @@ public class HoodieCompactionAdminTool {
           serializeOperationResult(fs, res);
           break;
         case UNSCHEDULE_FILE:
-          List<RenameOpResult> r =
-              admin.unscheduleCompactionFileId(new HoodieFileGroupId(cfg.partitionPath, cfg.fileId),
-                  cfg.skipValidation, cfg.dryRun);
+          List<RenameOpResult> r = admin.unscheduleCompactionFileId(
+              new HoodieFileGroupId(cfg.partitionPath, cfg.fileId), cfg.skipValidation, cfg.dryRun);
           if (cfg.printOutput) {
             System.out.println(r);
           }
           serializeOperationResult(fs, r);
           break;
         case UNSCHEDULE_PLAN:
-          List<RenameOpResult> r2 =
-              admin
-                  .unscheduleCompactionPlan(cfg.compactionInstantTime, cfg.skipValidation, cfg.parallelism, cfg.dryRun);
+          List<RenameOpResult> r2 = admin.unscheduleCompactionPlan(cfg.compactionInstantTime, cfg.skipValidation,
+              cfg.parallelism, cfg.dryRun);
           if (cfg.printOutput) {
             printOperationResult("Result of Unscheduling Compaction Plan :", r2);
           }
           serializeOperationResult(fs, r2);
           break;
         case REPAIR:
-          List<RenameOpResult> r3 =
-              admin.repairCompaction(cfg.compactionInstantTime, cfg.parallelism, cfg.dryRun);
+          List<RenameOpResult> r3 = admin.repairCompaction(cfg.compactionInstantTime, cfg.parallelism, cfg.dryRun);
           if (cfg.printOutput) {
             printOperationResult("Result of Repair Operation :", r3);
           }
@@ -122,7 +119,7 @@ public class HoodieCompactionAdminTool {
    * Print Operation Result
    *
    * @param initialLine Initial Line
-   * @param result      Result
+   * @param result Result
    */
   private <T> void printOperationResult(String initialLine, List<T> result) {
     System.out.println(initialLine);
@@ -135,10 +132,7 @@ public class HoodieCompactionAdminTool {
    * Operation Types
    */
   public enum Operation {
-    VALIDATE,
-    UNSCHEDULE_PLAN,
-    UNSCHEDULE_FILE,
-    REPAIR
+    VALIDATE, UNSCHEDULE_PLAN, UNSCHEDULE_FILE, REPAIR
   }
 
   /**

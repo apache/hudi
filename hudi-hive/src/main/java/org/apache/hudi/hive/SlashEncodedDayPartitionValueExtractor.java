@@ -25,9 +25,8 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
 /**
- * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not
- * straight forward and requires a pluggable implementation to extract the partition value from HDFS
- * path.
+ * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not straight forward and
+ * requires a pluggable implementation to extract the partition value from HDFS path.
  * <p>
  * This implementation extracts datestr=yyyy-mm-dd from path of type /yyyy/mm/dd
  */
@@ -51,8 +50,7 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
     // partition path is expected to be in this format yyyy/mm/dd
     String[] splits = partitionPath.split("/");
     if (splits.length != 3) {
-      throw new IllegalArgumentException(
-          "Partition path " + partitionPath + " is not in the form yyyy/mm/dd ");
+      throw new IllegalArgumentException("Partition path " + partitionPath + " is not in the form yyyy/mm/dd ");
     }
     // Get the partition part and remove the / as well at the end
     int year = Integer.parseInt(splits[0]);

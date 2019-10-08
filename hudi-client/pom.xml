@@ -26,6 +26,10 @@
   <artifactId>hudi-client</artifactId>
   <packaging>jar</packaging>
 
+  <properties>
+    <main.basedir>${project.parent.basedir}</main.basedir>
+  </properties>
+
   <build>
     <plugins>
       <plugin>

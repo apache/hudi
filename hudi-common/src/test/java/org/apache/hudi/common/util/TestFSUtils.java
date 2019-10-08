@@ -74,16 +74,16 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   @Test
   /**
-   * Tests if process Files return only paths excluding marker directories
-   * Cleaner, Rollback and compaction-scheduling logic was recursively processing all subfolders including that
-   * of ".hoodie" when looking for partition-paths. This causes a race when they try to list all folders (recursively)
-   * but the marker directory (that of compaction inside of ".hoodie" folder) is deleted underneath by compactor.
-   * This code tests the fix by ensuring ".hoodie" and their subfolders are never processed.
+   * Tests if process Files return only paths excluding marker directories Cleaner, Rollback and compaction-scheduling
+   * logic was recursively processing all subfolders including that of ".hoodie" when looking for partition-paths. This
+   * causes a race when they try to list all folders (recursively) but the marker directory (that of compaction inside
+   * of ".hoodie" folder) is deleted underneath by compactor. This code tests the fix by ensuring ".hoodie" and their
+   * subfolders are never processed.
    */
   public void testProcessFiles() throws Exception {
     // All directories including marker dirs.
-    List<String> folders = Arrays.asList("2016/04/15", "2016/05/16", ".hoodie/.temp/2/2016/04/15",
-        ".hoodie/.temp/2/2016/05/16");
+    List<String> folders =
+        Arrays.asList("2016/04/15", "2016/05/16", ".hoodie/.temp/2/2016/04/15", ".hoodie/.temp/2/2016/05/16");
     folders.stream().forEach(f -> {
       try {
         metaClient.getFs().mkdirs(new Path(new Path(basePath), f));
@@ -93,12 +93,9 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     });
 
     // Files inside partitions and marker directories
-    List<String> files = Arrays.asList(
-        "2016/04/15/1_1-0-1_20190528120000.parquet",
-        "2016/05/16/2_1-0-1_20190528120000.parquet",
-        ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000.parquet",
-        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000.parquet"
-    );
+    List<String> files = Arrays.asList("2016/04/15/1_1-0-1_20190528120000.parquet",
+        "2016/05/16/2_1-0-1_20190528120000.parquet", ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000.parquet",
+        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000.parquet");
 
     files.stream().forEach(f -> {
       try {
@@ -115,8 +112,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       return true;
     }, true);
 
-    Assert.assertTrue("Hoodie MetaFolder MUST be skipped but got :" + collected, collected.stream()
-        .noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
+    Assert.assertTrue("Hoodie MetaFolder MUST be skipped but got :" + collected,
+        collected.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
     // Check if only files are listed
     Assert.assertEquals(2, collected.size());
 
@@ -127,8 +124,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       return true;
     }, false);
 
-    Assert.assertFalse("Hoodie MetaFolder will be present :" + collected2, collected2.stream()
-        .noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
+    Assert.assertFalse("Hoodie MetaFolder will be present :" + collected2,
+        collected2.stream().noneMatch(s -> s.contains(HoodieTableMetaClient.METAFOLDER_NAME)));
     // Check if only files are listed including hoodie.properties
     Assert.assertEquals("Collected=" + collected2, 5, collected2.size());
   }
@@ -166,7 +163,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testGetRelativePartitionPath() {
     Path basePath = new Path("/test/apache");
     Path partitionPath = new Path("/test/apache/hudi/sub");
-    assertEquals("hudi/sub",FSUtils.getRelativePartitionPath(basePath, partitionPath));
+    assertEquals("hudi/sub", FSUtils.getRelativePartitionPath(basePath, partitionPath));
   }
 
   @Test
@@ -232,9 +229,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     String log1Ver0 = makeOldLogFileName("file1", ".log", "1", 0);
     String log1Ver1 = makeOldLogFileName("file1", ".log", "1", 1);
     String log1base2 = makeOldLogFileName("file1", ".log", "2", 0);
-    List<HoodieLogFile> logFiles =
-        Arrays.asList(log1base2, log1Ver1, log1Ver0).stream()
-            .map(f -> new HoodieLogFile(f)).collect(Collectors.toList());
+    List<HoodieLogFile> logFiles = Arrays.asList(log1base2, log1Ver1, log1Ver0).stream().map(f -> new HoodieLogFile(f))
+        .collect(Collectors.toList());
     logFiles.sort(HoodieLogFile.getLogFileComparator());
     assertEquals(log1Ver0, logFiles.get(0).getFileName());
     assertEquals(log1Ver1, logFiles.get(1).getFileName());
@@ -265,11 +261,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals(log1base2W1, logFiles.get(5).getFileName());
   }
 
-  public static String makeOldLogFileName(String fileId, String logFileExtension,
-      String baseCommitTime, int version) {
-    Pattern oldLogFilePattern =
-        Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(\\.([0-9]*))");
-    return "." + String
-        .format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
+  public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
+    Pattern oldLogFilePattern = Pattern.compile("\\.(.*)_(.*)\\.(.*)\\.([0-9]*)(\\.([0-9]*))");
+    return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
   }
 }

@@ -155,11 +155,9 @@ public class DeltaSync implements Serializable {
   private final HoodieTableType tableType;
 
 
-  public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession,
-      SchemaProvider schemaProvider, HoodieTableType tableType, TypedProperties props,
-      JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
-      Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient)
-      throws IOException {
+  public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
+      HoodieTableType tableType, TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,
+      Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
 
     this.cfg = cfg;
     this.jssc = jssc;
@@ -176,8 +174,8 @@ public class DeltaSync implements Serializable {
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassName);
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
 
-    this.formatAdapter = new SourceFormatAdapter(UtilHelpers.createSource(cfg.sourceClassName, props, jssc,
-        sparkSession, schemaProvider));
+    this.formatAdapter = new SourceFormatAdapter(
+        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider));
 
     this.hiveConf = hiveConf;
     if (cfg.filterDupes) {
@@ -194,8 +192,7 @@ public class DeltaSync implements Serializable {
   private void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath);
-      this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline()
-          .filterCompletedInstants());
+      this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
     } else {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
@@ -214,8 +211,7 @@ public class DeltaSync implements Serializable {
     // Refresh Timeline
     refreshTimeline();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt =
-        readFromSource(commitTimelineOpt);
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
 
     if (null != srcRecordsWithCkpt) {
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
@@ -246,8 +242,8 @@ public class DeltaSync implements Serializable {
     if (commitTimelineOpt.isPresent()) {
       Option<HoodieInstant> lastCommit = commitTimelineOpt.get().lastInstant();
       if (lastCommit.isPresent()) {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-            commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
         if (cfg.checkpoint != null && !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
@@ -274,25 +270,22 @@ public class DeltaSync implements Serializable {
     if (transformer != null) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
-      InputBatch<Dataset<Row>> dataAndCheckpoint = formatAdapter.fetchNewDataInRowFormat(
-          resumeCheckpointStr, cfg.sourceLimit);
+      InputBatch<Dataset<Row>> dataAndCheckpoint =
+          formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
 
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
-      avroRDDOptional = transformed.map(t ->
-          AvroConversionUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD()
-      );
+      avroRDDOptional = transformed
+          .map(t -> AvroConversionUtils.createRdd(t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
 
       // Use Transformed Row's schema if not overridden
       // Use Transformed Row's schema if not overridden. If target schema is not specified
       // default to RowBasedSchemaProvider
-      schemaProvider =
-          this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null
-              ? transformed
-              .map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema()))
-              .orElse(dataAndCheckpoint.getSchemaProvider())
-              : this.schemaProvider;
+      schemaProvider = this.schemaProvider == null || this.schemaProvider.getTargetSchema() == null
+          ? transformed.map(r -> (SchemaProvider) new RowBasedSchemaProvider(r.schema())).orElse(
+              dataAndCheckpoint.getSchemaProvider())
+          : this.schemaProvider;
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
@@ -303,8 +296,8 @@ public class DeltaSync implements Serializable {
     }
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
-      log.info("No new data, source checkpoint has not changed. Nothing to commit."
-          + "Old checkpoint=(" + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
+      log.info("No new data, source checkpoint has not changed. Nothing to commit." + "Old checkpoint=("
+          + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
       return null;
     }
 
@@ -339,8 +332,7 @@ public class DeltaSync implements Serializable {
     if (cfg.filterDupes) {
       // turn upserts to insert
       cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
-      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig(),
-          writeClient.getTimelineServer());
+      records = DataSourceUtils.dropDuplicates(jssc, records, writeClient.getConfig(), writeClient.getTimelineServer());
     }
 
     boolean isEmpty = records.isEmpty();
@@ -375,8 +367,7 @@ public class DeltaSync implements Serializable {
             + totalErrorRecords + "/" + totalRecords);
       }
 
-      boolean success = writeClient.commit(commitTime, writeStatusRDD,
-          Option.of(checkpointCommitMetadata));
+      boolean success = writeClient.commit(commitTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
         log.info("Commit " + commitTime + " successful!");
 
@@ -396,14 +387,12 @@ public class DeltaSync implements Serializable {
         throw new HoodieException("Commit " + commitTime + " failed!");
       }
     } else {
-      log.error("Delta Sync found errors when writing. Errors/Total="
-          + totalErrorRecords + "/" + totalRecords);
+      log.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
       log.error("Printing out the top 100 errors");
       writeStatusRDD.filter(ws -> ws.hasErrors()).take(100).forEach(ws -> {
         log.error("Global error :", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().entrySet().forEach(r ->
-              log.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
+          ws.getErrors().entrySet().forEach(r -> log.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
         }
       });
       // Rolling back instant
@@ -432,7 +421,7 @@ public class DeltaSync implements Serializable {
         try {
           Thread.sleep(1000);
         } catch (InterruptedException e) {
-          //No-Op
+          // No-Op
         }
       }
     }
@@ -445,8 +434,8 @@ public class DeltaSync implements Serializable {
   private void syncHive() throws ClassNotFoundException {
     if (cfg.enableHiveSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
-      log.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName
-          + "). Hive metastore URL :" + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
+      log.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
+          + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
 
       new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
     }
@@ -474,17 +463,13 @@ public class DeltaSync implements Serializable {
    */
   private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
     HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder()
-            .withPath(cfg.targetBasePath)
-            .combineInput(cfg.filterDupes, true)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-                .withPayloadClass(cfg.payloadClassName)
+        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName)
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-            .withAutoCommit(false)
-            .withProps(props);
+            .withAutoCommit(false).withProps(props);
 
     if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());

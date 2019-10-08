@@ -35,8 +35,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader implements
-    RecordReader<NullWritable, ArrayWritable> {
+class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
+    implements RecordReader<NullWritable, ArrayWritable> {
 
   private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
 
@@ -51,19 +51,18 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
   }
 
   /**
-   * Goes through the log files and populates a map with latest version of each key logged, since
-   * the base split was written.
+   * Goes through the log files and populates a map with latest version of each key logged, since the base split was
+   * written.
    */
   private HoodieMergedLogRecordScanner getMergedLogRecordScanner() throws IOException {
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
-    return new HoodieMergedLogRecordScanner(
-        FSUtils.getFs(split.getPath().toString(), jobConf), split.getBasePath(),
+    return new HoodieMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), jobConf), split.getBasePath(),
         split.getDeltaFilePaths(), usesCustomPayload ? getWriterSchema() : getReaderSchema(), split.getMaxCommitTime(),
         getMaxCompactionMemoryInBytes(),
-        Boolean.valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-            DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
+        Boolean
+            .valueOf(jobConf.get(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false, jobConf.getInt(MAX_DFS_STREAM_BUFFER_SIZE_PROP, DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
         jobConf.get(SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH));
   }
@@ -80,8 +79,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
       // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
-      String key = arrayWritable.get()[HoodieParquetRealtimeInputFormat.HOODIE_RECORD_KEY_COL_POS]
-          .toString();
+      String key = arrayWritable.get()[HoodieParquetRealtimeInputFormat.HOODIE_RECORD_KEY_COL_POS].toString();
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
@@ -106,8 +104,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader impleme
         ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(recordToReturn, getWriterSchema());
         Writable[] replaceValue = aWritable.get();
         if (LOG.isDebugEnabled()) {
-          LOG.debug(String.format("key %s, base values: %s, log values: %s", key,
-              arrayWritableToString(arrayWritable), arrayWritableToString(aWritable)));
+          LOG.debug(String.format("key %s, base values: %s, log values: %s", key, arrayWritableToString(arrayWritable),
+              arrayWritableToString(aWritable)));
         }
         Writable[] originalValue = arrayWritable.get();
         try {

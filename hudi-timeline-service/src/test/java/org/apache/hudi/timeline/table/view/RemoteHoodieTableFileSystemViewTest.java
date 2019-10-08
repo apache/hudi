@@ -41,13 +41,11 @@ public class RemoteHoodieTableFileSystemViewTest extends HoodieTableFileSystemVi
   private RemoteHoodieTableFileSystemView view;
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
-    FileSystemViewStorageConfig sConf = FileSystemViewStorageConfig.newBuilder()
-        .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
+    FileSystemViewStorageConfig sConf =
+        FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
     try {
-      server =
-          new TimelineService(0,
-              FileSystemViewManager.createViewManager(new SerializableConfiguration(metaClient.getHadoopConf()),
-                  sConf));
+      server = new TimelineService(0,
+          FileSystemViewManager.createViewManager(new SerializableConfiguration(metaClient.getHadoopConf()), sConf));
       server.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

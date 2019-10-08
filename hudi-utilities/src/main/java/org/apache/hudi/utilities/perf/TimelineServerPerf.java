@@ -82,8 +82,8 @@ public class TimelineServerPerf implements Serializable {
 
     List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(timelineServer.getFs(), cfg.basePath, true);
     Collections.shuffle(allPartitionPaths);
-    List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error"))
-        .limit(cfg.maxPartitions).collect(Collectors.toList());
+    List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
+        .collect(Collectors.toList());
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     if (!useExternalTimelineServer) {
       this.timelineServer.startService();
@@ -100,15 +100,13 @@ public class TimelineServerPerf implements Serializable {
 
     String dumpPrefix = UUID.randomUUID().toString();
     System.out.println("First Iteration to load all partitions");
-    Dumper d = new Dumper(metaClient.getFs(), new Path(reportDir,
-        String.format("1_%s.csv", dumpPrefix)));
+    Dumper d = new Dumper(metaClient.getFs(), new Path(reportDir, String.format("1_%s.csv", dumpPrefix)));
     d.init();
     d.dump(runLookups(jsc, selected, fsView, 1, 0));
     d.close();
     System.out.println("\n\n\n First Iteration is done");
 
-    Dumper d2 = new Dumper(metaClient.getFs(), new Path(reportDir,
-        String.format("2_%s.csv", dumpPrefix)));
+    Dumper d2 = new Dumper(metaClient.getFs(), new Path(reportDir, String.format("2_%s.csv", dumpPrefix)));
     d2.init();
     d2.dump(runLookups(jsc, selected, fsView, cfg.numIterations, cfg.numCoresPerExecutor));
     d2.close();
@@ -164,8 +162,8 @@ public class TimelineServerPerf implements Serializable {
       long beginTs = System.currentTimeMillis();
       Option<FileSlice> c = fsView.getLatestFileSlice(partition, fileId);
       long endTs = System.currentTimeMillis();
-      System.out.println("Latest File Slice for part=" + partition + ", fileId="
-          + fileId + ", Slice=" + c + ", Time=" + (endTs - beginTs));
+      System.out.println("Latest File Slice for part=" + partition + ", fileId=" + fileId + ", Slice=" + c + ", Time="
+          + (endTs - beginTs));
       latencyHistogram.update(endTs - beginTs);
     }
     return new PerfStats(partition, id, latencyHistogram.getSnapshot());
@@ -288,8 +286,7 @@ public class TimelineServerPerf implements Serializable {
         description = "Directory where spilled view entries will be stored. Used for SPILLABLE_DISK storage type")
     public String baseStorePathForFileGroups = FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR;
 
-    @Parameter(names = {"--rocksdb-path", "-rp"},
-        description = "Root directory for RocksDB")
+    @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
     public String rocksDBPath = FileSystemViewStorageConfig.DEFAULT_ROCKSDB_BASE_PATH;
 
     @Parameter(names = {"--wait-for-manual-queries", "-ww"})

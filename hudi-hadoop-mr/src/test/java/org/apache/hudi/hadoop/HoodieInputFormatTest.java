@@ -84,18 +84,14 @@ public class HoodieInputFormatTest {
     // Before the commit
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
-    ensureFilesInCommit(
-        "Commit 200 has not been committed. We should not see files from this commit", files, "200",
-        0);
+    ensureFilesInCommit("Commit 200 has not been committed. We should not see files from this commit", files, "200", 0);
     InputFormatTestUtil.commit(basePath, "200");
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
-    ensureFilesInCommit(
-        "5 files have been updated to commit 200. We should see 5 files from commit 200 and 5 "
-            + "files from 100 commit", files, "200", 5);
-    ensureFilesInCommit(
-        "5 files have been updated to commit 200. We should see 5 files from commit 100 and 5 "
-            + "files from 200 commit", files, "100", 5);
+    ensureFilesInCommit("5 files have been updated to commit 200. We should see 5 files from commit 200 and 5 "
+        + "files from 100 commit", files, "200", 5);
+    ensureFilesInCommit("5 files have been updated to commit 200. We should see 5 files from commit 100 and 5 "
+        + "files from 200 commit", files, "100", 5);
   }
 
   @Test
@@ -110,9 +106,8 @@ public class HoodieInputFormatTest {
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals(
-        "We should exclude commit 100 when returning incremental pull with start commit time as "
-            + "100", 0, files.length);
+    assertEquals("We should exclude commit 100 when returning incremental pull with start commit time as " + "100", 0,
+        files.length);
   }
 
   @Test
@@ -140,43 +135,31 @@ public class HoodieInputFormatTest {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
     FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals("Pulling 1 commit from 100, should get us the 5 files committed at 200", 5,
-        files.length);
-    ensureFilesInCommit("Pulling 1 commit from 100, should get us the 5 files committed at 200",
-        files, "200", 5);
+    assertEquals("Pulling 1 commit from 100, should get us the 5 files committed at 200", 5, files.length);
+    ensureFilesInCommit("Pulling 1 commit from 100, should get us the 5 files committed at 200", files, "200", 5);
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 3);
     files = inputFormat.listStatus(jobConf);
 
-    assertEquals(
-        "Pulling 3 commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
-            + "commit and 1 file from 200 commit", 5, files.length);
-    ensureFilesInCommit("Pulling 3 commits from 100, should get us the 3 files from 400 commit",
-        files, "400", 3);
-    ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 300 commit",
-        files, "300", 1);
-    ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 200 commit",
-        files, "200", 1);
+    assertEquals("Pulling 3 commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
+        + "commit and 1 file from 200 commit", 5, files.length);
+    ensureFilesInCommit("Pulling 3 commits from 100, should get us the 3 files from 400 commit", files, "400", 3);
+    ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 300 commit", files, "300", 1);
+    ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtil.MAX_COMMIT_ALL);
     files = inputFormat.listStatus(jobConf);
 
-    assertEquals(
-        "Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 "
-            + "commits", 5, files.length);
-    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 600 commit",
-        files, "600", 1);
-    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 500 commit",
-        files, "500", 1);
-    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 400 commit",
-        files, "400", 1);
-    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 300 commit",
-        files, "300", 1);
-    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 200 commit",
-        files, "200", 1);
+    assertEquals("Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 " + "commits",
+        5, files.length);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 600 commit", files, "600", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 500 commit", files, "500", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 400 commit", files, "400", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 300 commit", files, "300", 1);
+    ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
   }
 
-  //TODO enable this after enabling predicate pushdown
+  // TODO enable this after enabling predicate pushdown
   public void testPredicatePushDown() throws IOException {
     // initial commit
     Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");
@@ -186,8 +169,7 @@ public class HoodieInputFormatTest {
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     // check whether we have 10 records at this point
-    ensureRecordsInCommit("We need to have 10 records at this point for commit " + commit1, commit1,
-        10, 10);
+    ensureRecordsInCommit("We need to have 10 records at this point for commit " + commit1, commit1, 10, 10);
 
     // update 2 records in the original parquet file and save it as commit 200
     String commit2 = "20160629193623";
@@ -196,27 +178,23 @@ public class HoodieInputFormatTest {
 
     InputFormatTestUtil.setupIncremental(jobConf, commit1, 1);
     // check whether we have 2 records at this point
-    ensureRecordsInCommit(
-        "We need to have 2 records that was modified at commit " + commit2 + " and no more",
-        commit2, 2, 2);
+    ensureRecordsInCommit("We need to have 2 records that was modified at commit " + commit2 + " and no more", commit2,
+        2, 2);
     // Make sure we have the 10 records if we roll back the stattime
     InputFormatTestUtil.setupIncremental(jobConf, "0", 2);
-    ensureRecordsInCommit(
-        "We need to have 8 records that was modified at commit " + commit1 + " and no more",
-        commit1, 8, 10);
-    ensureRecordsInCommit(
-        "We need to have 2 records that was modified at commit " + commit2 + " and no more",
-        commit2, 2, 10);
+    ensureRecordsInCommit("We need to have 8 records that was modified at commit " + commit1 + " and no more", commit1,
+        8, 10);
+    ensureRecordsInCommit("We need to have 2 records that was modified at commit " + commit2 + " and no more", commit2,
+        2, 10);
   }
 
-  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
-      int totalExpected) throws IOException {
+  private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit, int totalExpected)
+      throws IOException {
     int actualCount = 0;
     int totalCount = 0;
     InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
     for (InputSplit split : splits) {
-      RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat
-          .getRecordReader(split, jobConf, null);
+      RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat.getRecordReader(split, jobConf, null);
       NullWritable key = recordReader.createKey();
       ArrayWritable writable = recordReader.createValue();
 
@@ -234,8 +212,7 @@ public class HoodieInputFormatTest {
     assertEquals(msg, totalExpected, totalCount);
   }
 
-  public static void ensureFilesInCommit(String msg, FileStatus[] files, String commit,
-      int expected) {
+  public static void ensureFilesInCommit(String msg, FileStatus[] files, String commit, int expected) {
     int count = 0;
     for (FileStatus file : files) {
       String commitTs = FSUtils.getCommitTime(file.getPath().getName());

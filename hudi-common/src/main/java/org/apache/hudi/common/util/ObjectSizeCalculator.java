@@ -54,17 +54,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Contains utility methods for calculating the memory usage of objects. It
- * only works on the HotSpot JVM, and infers the actual memory layout (32 bit
- * vs. 64 bit word size, compressed object pointers vs. uncompressed) from
- * best available indicators. It can reliably detect a 32 bit vs. 64 bit JVM.
- * It can only make an educated guess at whether compressed OOPs are used,
- * though; specifically, it knows what the JVM's default choice of OOP
- * compression would be based on HotSpot version and maximum heap sizes, but if
- * the choice is explicitly overridden with the <tt>-XX:{+|-}UseCompressedOops</tt> command line
- * switch, it can not detect
- * this fact and will report incorrect sizes, as it will presume the default JVM
- * behavior.
+ * Contains utility methods for calculating the memory usage of objects. It only works on the HotSpot JVM, and infers
+ * the actual memory layout (32 bit vs. 64 bit word size, compressed object pointers vs. uncompressed) from best
+ * available indicators. It can reliably detect a 32 bit vs. 64 bit JVM. It can only make an educated guess at whether
+ * compressed OOPs are used, though; specifically, it knows what the JVM's default choice of OOP compression would be
+ * based on HotSpot version and maximum heap sizes, but if the choice is explicitly overridden with the
+ * <tt>-XX:{+|-}UseCompressedOops</tt> command line switch, it can not detect this fact and will report incorrect sizes,
+ * as it will presume the default JVM behavior.
  *
  * @author Attila Szegedi
  */
@@ -104,8 +100,7 @@ public class ObjectSizeCalculator {
     int getReferenceSize();
 
     /**
-     * Returns the quantum field size for a field owned by one of an object's ancestor superclasses
-     * in this JVM.
+     * Returns the quantum field size for a field owned by one of an object's ancestor superclasses in this JVM.
      *
      * @return the quantum field size for a superclass field.
      */
@@ -114,24 +109,18 @@ public class ObjectSizeCalculator {
 
   private static class CurrentLayout {
 
-    private static final MemoryLayoutSpecification SPEC =
-        getEffectiveMemoryLayoutSpecification();
+    private static final MemoryLayoutSpecification SPEC = getEffectiveMemoryLayoutSpecification();
   }
 
   /**
-   * Given an object, returns the total allocated size, in bytes, of the object
-   * and all other objects reachable from it.  Attempts to to detect the current JVM memory layout,
-   * but may fail with {@link UnsupportedOperationException};
+   * Given an object, returns the total allocated size, in bytes, of the object and all other objects reachable from it.
+   * Attempts to to detect the current JVM memory layout, but may fail with {@link UnsupportedOperationException};
    *
-   * @param obj the object; can be null. Passing in a {@link java.lang.Class} object doesn't do
-   * anything special, it measures the size of all objects
-   * reachable through it (which will include its class loader, and by
-   * extension, all other Class objects loaded by
-   * the same loader, and all the parent class loaders). It doesn't provide the
-   * size of the static fields in the JVM class that the Class object
-   * represents.
-   * @return the total allocated size of the object and all other objects it
-   * retains.
+   * @param obj the object; can be null. Passing in a {@link java.lang.Class} object doesn't do anything special, it
+   *        measures the size of all objects reachable through it (which will include its class loader, and by
+   *        extension, all other Class objects loaded by the same loader, and all the parent class loaders). It doesn't
+   *        provide the size of the static fields in the JVM class that the Class object represents.
+   * @return the total allocated size of the object and all other objects it retains.
    * @throws UnsupportedOperationException if the current vm memory layout cannot be detected.
    */
   public static long getObjectSize(Object obj) throws UnsupportedOperationException {
@@ -164,8 +153,7 @@ public class ObjectSizeCalculator {
   private long size;
 
   /**
-   * Creates an object size calculator that can calculate object sizes for a given
-   * {@code memoryLayoutSpecification}.
+   * Creates an object size calculator that can calculate object sizes for a given {@code memoryLayoutSpecification}.
    *
    * @param memoryLayoutSpecification a description of the JVM memory layout.
    */
@@ -179,24 +167,19 @@ public class ObjectSizeCalculator {
   }
 
   /**
-   * Given an object, returns the total allocated size, in bytes, of the object
-   * and all other objects reachable from it.
+   * Given an object, returns the total allocated size, in bytes, of the object and all other objects reachable from it.
    *
-   * @param obj the object; can be null. Passing in a {@link java.lang.Class} object doesn't do
-   * anything special, it measures the size of all objects
-   * reachable through it (which will include its class loader, and by
-   * extension, all other Class objects loaded by
-   * the same loader, and all the parent class loaders). It doesn't provide the
-   * size of the static fields in the JVM class that the Class object
-   * represents.
-   * @return the total allocated size of the object and all other objects it
-   * retains.
+   * @param obj the object; can be null. Passing in a {@link java.lang.Class} object doesn't do anything special, it
+   *        measures the size of all objects reachable through it (which will include its class loader, and by
+   *        extension, all other Class objects loaded by the same loader, and all the parent class loaders). It doesn't
+   *        provide the size of the static fields in the JVM class that the Class object represents.
+   * @return the total allocated size of the object and all other objects it retains.
    */
   public synchronized long calculateObjectSize(Object obj) {
     // Breadth-first traversal instead of naive depth-first with recursive
     // implementation, so we don't blow the stack traversing long linked lists.
     try {
-      for (; ; ) {
+      for (;;) {
         visit(obj);
         if (pending.isEmpty()) {
           return size;
@@ -324,8 +307,7 @@ public class ObjectSizeCalculator {
       }
       this.fieldsSize = fieldsSize;
       this.objectSize = roundTo(objectHeaderSize + fieldsSize, objectPadding);
-      this.referenceFields = referenceFields.toArray(
-          new Field[referenceFields.size()]);
+      this.referenceFields = referenceFields.toArray(new Field[referenceFields.size()]);
     }
 
     void visit(Object obj, ObjectSizeCalculator calc) {
@@ -338,8 +320,7 @@ public class ObjectSizeCalculator {
         try {
           calc.enqueue(f.get(obj));
         } catch (IllegalAccessException e) {
-          final AssertionError ae = new AssertionError(
-              "Unexpected denial of access to " + f);
+          final AssertionError ae = new AssertionError("Unexpected denial of access to " + f);
           ae.initCause(e);
           throw ae;
         }
@@ -360,17 +341,15 @@ public class ObjectSizeCalculator {
     if (type == long.class || type == double.class) {
       return 8;
     }
-    throw new AssertionError("Encountered unexpected primitive type "
-        + type.getName());
+    throw new AssertionError("Encountered unexpected primitive type " + type.getName());
   }
 
   @VisibleForTesting
   static MemoryLayoutSpecification getEffectiveMemoryLayoutSpecification() {
     final String vmName = System.getProperty("java.vm.name");
-    if (vmName == null || !(vmName.startsWith("Java HotSpot(TM) ")
-        || vmName.startsWith("OpenJDK") || vmName.startsWith("TwitterJDK"))) {
-      throw new UnsupportedOperationException(
-          "ObjectSizeCalculator only supported on HotSpot VM");
+    if (vmName == null || !(vmName.startsWith("Java HotSpot(TM) ") || vmName.startsWith("OpenJDK")
+        || vmName.startsWith("TwitterJDK"))) {
+      throw new UnsupportedOperationException("ObjectSizeCalculator only supported on HotSpot VM");
     }
 
     final String dataModel = System.getProperty("sun.arch.data.model");
@@ -403,13 +382,12 @@ public class ObjectSizeCalculator {
         }
       };
     } else if (!"64".equals(dataModel)) {
-      throw new UnsupportedOperationException("Unrecognized value '"
-          + dataModel + "' of sun.arch.data.model system property");
+      throw new UnsupportedOperationException(
+          "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
     }
 
     final String strVmVersion = System.getProperty("java.vm.version");
-    final int vmVersion = Integer.parseInt(strVmVersion.substring(0,
-        strVmVersion.indexOf('.')));
+    final int vmVersion = Integer.parseInt(strVmVersion.substring(0, strVmVersion.indexOf('.')));
     if (vmVersion >= 17) {
       long maxMemory = 0;
       for (MemoryPoolMXBean mp : ManagementFactory.getMemoryPoolMXBeans()) {

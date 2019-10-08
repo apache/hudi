@@ -35,8 +35,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   private String maxRecordKey;
 
 
-  public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY =
-      "org.apache.hudi.bloomfilter";
+  public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
   public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
 
@@ -50,8 +49,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
     HashMap<String, String> extraMetaData = new HashMap<>();
     if (bloomFilter != null) {
-      extraMetaData
-          .put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilter.serializeToString());
+      extraMetaData.put(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY, bloomFilter.serializeToString());
       if (minRecordKey != null && maxRecordKey != null) {
         extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
         extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);

@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.ConsistencyGuard;
 import org.apache.hudi.exception.HoodieException;
 
 /**
- * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This
- * gives a cheap way to check on the underlying file size.
+ * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This gives a cheap way
+ * to check on the underlying file size.
  */
 public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
 
@@ -41,8 +41,8 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   // Consistency guard
   private final ConsistencyGuard consistencyGuard;
 
-  public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out,
-      ConsistencyGuard consistencyGuard, Runnable closeCallback) throws IOException {
+  public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out, ConsistencyGuard consistencyGuard,
+      Runnable closeCallback) throws IOException {
     super(out);
     this.path = path;
     this.closeCallback = closeCallback;

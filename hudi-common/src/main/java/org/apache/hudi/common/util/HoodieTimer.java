@@ -23,9 +23,8 @@ import java.util.Deque;
 import org.apache.hudi.exception.HoodieException;
 
 /**
- * Timing utility to help keep track of execution times of code blocks. This class helps to allow multiple
- * timers started at the same time and automatically returns the execution time in the order in which the
- * timers are stopped.
+ * Timing utility to help keep track of execution times of code blocks. This class helps to allow multiple timers
+ * started at the same time and automatically returns the execution time in the order in which the timers are stopped.
  */
 public class HoodieTimer {
 

@@ -52,8 +52,8 @@ import org.junit.Test;
 
 /**
  * This class is intentionally using a different way of setting up the MiniDFSCluster and not relying on
- * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325
- * Reference : https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch
+ * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325 Reference :
+ * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch
  */
 public class HoodieLogFormatAppendFailureTest {
 
@@ -83,8 +83,8 @@ public class HoodieLogFormatAppendFailureTest {
   }
 
   @Test(timeout = 60000)
-  public void testFailedToGetAppendStreamFromHDFSNameNode() throws IOException, URISyntaxException,
-      InterruptedException, TimeoutException {
+  public void testFailedToGetAppendStreamFromHDFSNameNode()
+      throws IOException, URISyntaxException, InterruptedException, TimeoutException {
 
     // Use some fs like LocalFileSystem, that does not support appends
     String uuid = UUID.randomUUID().toString();
@@ -101,9 +101,8 @@ public class HoodieLogFormatAppendFailureTest {
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
 
     Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
-        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits"
-            + ".archive").overBaseCommit("")
-        .withFs(fs).build();
+        .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits" + ".archive")
+        .overBaseCommit("").withFs(fs).build();
 
     writer = writer.appendBlock(dataBlock);
     // get the current log file version to compare later
@@ -134,8 +133,7 @@ public class HoodieLogFormatAppendFailureTest {
     // return a new writer with a bumped up logVersion
     writer = HoodieLogFormat.newWriterBuilder().onParentPath(testPath)
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits" + ".archive")
-        .overBaseCommit("")
-        .withFs(fs).build();
+        .overBaseCommit("").withFs(fs).build();
     // The log version should be different for this new writer
     Assert.assertFalse(writer.getLogFile().getLogVersion() == logFileVersion);
   }

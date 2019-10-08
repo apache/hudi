@@ -107,7 +107,7 @@ public class HdfsTestService {
    * exist.
    *
    * @param localDFSLocation The location on the local FS to hold the HDFS metadata and block data
-   * @param clean            Specifies if we want to start a clean cluster
+   * @param clean Specifies if we want to start a clean cluster
    * @return Returns true if we should format a DFSCluster, otherwise false
    */
   private static boolean shouldFormatDFSCluster(String localDFSLocation, boolean clean) {
@@ -122,9 +122,9 @@ public class HdfsTestService {
   /**
    * Configure the DFS Cluster before launching it.
    *
-   * @param config           The already created Hadoop configuration we'll further configure for HDFS
+   * @param config The already created Hadoop configuration we'll further configure for HDFS
    * @param localDFSLocation The location on the local filesystem where cluster data is stored
-   * @param bindIP           An IP address we want to force the datanode and namenode to bind to.
+   * @param bindIP An IP address we want to force the datanode and namenode to bind to.
    * @return The updated Configuration object.
    */
   private static Configuration configureDFSCluster(Configuration config, String localDFSLocation, String bindIP,

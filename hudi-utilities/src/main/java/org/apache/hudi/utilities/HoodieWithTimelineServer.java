@@ -51,8 +51,7 @@ public class HoodieWithTimelineServer implements Serializable {
 
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory",
-        "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
     @Parameter(names = {"--num-partitions", "-n"}, description = "Num Partitions", required = false)
     public Integer numPartitions = 100;
@@ -87,8 +86,7 @@ public class HoodieWithTimelineServer implements Serializable {
     System.out.println("Driver Hostname is :" + driverHost);
     List<String> messages = new ArrayList<>();
     IntStream.range(0, cfg.numPartitions).forEach(i -> messages.add("Hello World"));
-    List<String> gotMessages =
-        jsc.parallelize(messages).map(msg -> sendRequest(driverHost, cfg.serverPort)).collect();
+    List<String> gotMessages = jsc.parallelize(messages).map(msg -> sendRequest(driverHost, cfg.serverPort)).collect();
     System.out.println("Got Messages :" + gotMessages);
     Preconditions.checkArgument(gotMessages.equals(messages), "Got expected reply from Server");
   }

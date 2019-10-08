@@ -31,8 +31,8 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Encapsulates all the needed information about a compaction and make a decision whether this
- * compaction is effective or not
+ * Encapsulates all the needed information about a compaction and make a decision whether this compaction is effective
+ * or not
  *
  */
 public class CompactionOperation implements Serializable {
@@ -44,10 +44,9 @@ public class CompactionOperation implements Serializable {
   private HoodieFileGroupId id;
   private Map<String, Double> metrics;
 
-  //Only for serialization/de-serialization
+  // Only for serialization/de-serialization
   @Deprecated
-  public CompactionOperation() {
-  }
+  public CompactionOperation() {}
 
   public CompactionOperation(String fileId, String partitionPath, String baseInstantTime,
       Option<String> dataFileCommitTime, List<String> deltaFilePaths, Option<String> dataFilePath,
@@ -60,8 +59,8 @@ public class CompactionOperation implements Serializable {
     this.metrics = metrics;
   }
 
-  public CompactionOperation(Option<HoodieDataFile> dataFile, String partitionPath,
-      List<HoodieLogFile> logFiles, Map<String, Double> metrics) {
+  public CompactionOperation(Option<HoodieDataFile> dataFile, String partitionPath, List<HoodieLogFile> logFiles,
+      Map<String, Double> metrics) {
     if (dataFile.isPresent()) {
       this.baseInstantTime = dataFile.get().getCommitTime();
       this.dataFilePath = Option.of(dataFile.get().getPath());
@@ -75,8 +74,7 @@ public class CompactionOperation implements Serializable {
       this.dataFileCommitTime = Option.empty();
     }
 
-    this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString())
-        .collect(Collectors.toList());
+    this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList());
     this.metrics = metrics;
   }
 
@@ -113,12 +111,13 @@ public class CompactionOperation implements Serializable {
   }
 
   public Option<HoodieDataFile> getBaseFile() {
-    //TODO: HUDI-130 - Paths return in compaction plan needs to be relative to base-path
+    // TODO: HUDI-130 - Paths return in compaction plan needs to be relative to base-path
     return dataFilePath.map(df -> new HoodieDataFile(df));
   }
 
   /**
    * Convert Avro generated Compaction operation to POJO for Spark RDD operation
+   * 
    * @param operation Hoodie Compaction Operation
    * @return
    */
@@ -126,8 +125,7 @@ public class CompactionOperation implements Serializable {
     CompactionOperation op = new CompactionOperation();
     op.baseInstantTime = operation.getBaseInstantTime();
     op.dataFilePath = Option.ofNullable(operation.getDataFilePath());
-    op.dataFileCommitTime =
-        op.dataFilePath.map(p -> FSUtils.getCommitTime(new Path(p).getName()));
+    op.dataFileCommitTime = op.dataFilePath.map(p -> FSUtils.getCommitTime(new Path(p).getName()));
     op.deltaFilePaths = new ArrayList<>(operation.getDeltaFilePaths());
     op.id = new HoodieFileGroupId(operation.getPartitionPath(), operation.getFileId());
     op.metrics = operation.getMetrics() == null ? new HashMap<>() : new HashMap<>(operation.getMetrics());
@@ -136,14 +134,9 @@ public class CompactionOperation implements Serializable {
 
   @Override
   public String toString() {
-    return "CompactionOperation{"
-        + "baseInstantTime='" + baseInstantTime + '\''
-        + ", dataFileCommitTime=" + dataFileCommitTime
-        + ", deltaFilePaths=" + deltaFilePaths
-        + ", dataFilePath=" + dataFilePath
-        + ", id='" + id + '\''
-        + ", metrics=" + metrics
-        + '}';
+    return "CompactionOperation{" + "baseInstantTime='" + baseInstantTime + '\'' + ", dataFileCommitTime="
+        + dataFileCommitTime + ", deltaFilePaths=" + deltaFilePaths + ", dataFilePath=" + dataFilePath + ", id='" + id
+        + '\'' + ", metrics=" + metrics + '}';
   }
 
   @Override
@@ -158,8 +151,7 @@ public class CompactionOperation implements Serializable {
     return Objects.equals(baseInstantTime, operation.baseInstantTime)
         && Objects.equals(dataFileCommitTime, operation.dataFileCommitTime)
         && Objects.equals(deltaFilePaths, operation.deltaFilePaths)
-        && Objects.equals(dataFilePath, operation.dataFilePath)
-        && Objects.equals(id, operation.id);
+        && Objects.equals(dataFilePath, operation.dataFilePath) && Objects.equals(id, operation.id);
   }
 
   @Override

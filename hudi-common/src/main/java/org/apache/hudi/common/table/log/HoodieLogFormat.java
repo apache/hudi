@@ -33,11 +33,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * File Format for Hoodie Log Files. The File Format consists of blocks each separated with a
- * MAGIC sync marker. A Block can either be a Data block, Command block or Delete Block. Data
- * Block - Contains log records serialized as Avro Binary Format Command Block - Specific commands
- * like ROLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written block Delete Block - List of
- * keys to delete - tombstone for keys
+ * File Format for Hoodie Log Files. The File Format consists of blocks each separated with a MAGIC sync marker. A Block
+ * can either be a Data block, Command block or Delete Block. Data Block - Contains log records serialized as Avro
+ * Binary Format Command Block - Specific commands like ROLLBACK_PREVIOUS-BLOCK - Tombstone for the previously written
+ * block Delete Block - List of keys to delete - tombstone for keys
  */
 public interface HoodieLogFormat {
 
@@ -47,8 +46,8 @@ public interface HoodieLogFormat {
   byte[] MAGIC = new byte[] {'#', 'H', 'U', 'D', 'I', '#'};
 
   /**
-   * The current version of the log format. Anytime the log format changes this version needs to be
-   * bumped and corresponding changes need to be made to {@link HoodieLogFormatVersion}
+   * The current version of the log format. Anytime the log format changes this version needs to be bumped and
+   * corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
   int currentVersion = 1;
 
@@ -84,12 +83,14 @@ public interface HoodieLogFormat {
 
     /**
      * Read log file in reverse order and check if prev block is present
+     * 
      * @return
      */
     public boolean hasPrev();
 
     /**
      * Read log file in reverse order and return prev block if present
+     * 
      * @return
      * @throws IOException
      */
@@ -220,9 +221,8 @@ public interface HoodieLogFormat {
           // Use rollover write token as write token to create new log file with tokens
           logWriteToken = rolloverLogWriteToken;
         }
-        log.info(
-            "Computed the next log version for " + logFileId + " in " + parentPath + " as "
-                + logVersion + " with write-token " + logWriteToken);
+        log.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
+            + " with write-token " + logWriteToken);
       }
 
       if (logWriteToken == null) {
@@ -259,16 +259,15 @@ public interface HoodieLogFormat {
     return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, false, false);
   }
 
-  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, boolean
-      readBlockLazily, boolean reverseReader)
-      throws IOException {
-    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE,
-        readBlockLazily, reverseReader);
+  static HoodieLogFormat.Reader newReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema,
+      boolean readBlockLazily, boolean reverseReader) throws IOException {
+    return new HoodieLogFileReader(fs, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, readBlockLazily,
+        reverseReader);
   }
 
   /**
-   * A set of feature flags associated with a log format. Versions are changed when the log format
-   * changes. TODO(na) - Implement policies around major/minor versions
+   * A set of feature flags associated with a log format. Versions are changed when the log format changes. TODO(na) -
+   * Implement policies around major/minor versions
    */
   abstract class LogFormatVersion {
 

@@ -64,8 +64,8 @@ public class RocksDBDAO {
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
     this.basePath = basePath;
-    this.rocksDBBasePath = String.format("%s/%s/%s", rocksDBBasePath,
-        this.basePath.replace("/", "_"), UUID.randomUUID().toString());
+    this.rocksDBBasePath =
+        String.format("%s/%s/%s", rocksDBBasePath, this.basePath.replace("/", "_"), UUID.randomUUID().toString());
     init();
   }
 
@@ -137,8 +137,8 @@ public class RocksDBDAO {
       managedColumnFamilies.add(getColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY));
     } else {
       log.info("Loading column families :" + existing.stream().map(String::new).collect(Collectors.toList()));
-      managedColumnFamilies.addAll(existing.stream()
-          .map(RocksDBDAO::getColumnFamilyDescriptor).collect(Collectors.toList()));
+      managedColumnFamilies
+          .addAll(existing.stream().map(RocksDBDAO::getColumnFamilyDescriptor).collect(Collectors.toList()));
     }
     return managedColumnFamilies;
   }
@@ -350,9 +350,8 @@ public class RocksDBDAO {
       }
     }
 
-    log.info("Prefix Search for (query=" + prefix + ") on " + columnFamilyName
-        + ". Total Time Taken (msec)=" + timer.endTimer()
-        + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
+    log.info("Prefix Search for (query=" + prefix + ") on " + columnFamilyName + ". Total Time Taken (msec)="
+        + timer.endTimer() + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
     return results.stream();
   }
 
@@ -368,7 +367,7 @@ public class RocksDBDAO {
     log.info("Prefix DELETE (query=" + prefix + ") on " + columnFamilyName);
     final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName));
     it.seek(prefix.getBytes());
-    //Find first and last keys to be deleted
+    // Find first and last keys to be deleted
     String firstEntry = null;
     String lastEntry = null;
     while (it.isValid() && new String(it.key()).startsWith(prefix)) {
@@ -384,9 +383,8 @@ public class RocksDBDAO {
     if (null != firstEntry) {
       try {
         // This will not delete the last entry
-        getRocksDB().deleteRange(managedHandlesMap.get(columnFamilyName), firstEntry.getBytes(),
-            lastEntry.getBytes());
-        //Delete the last entry
+        getRocksDB().deleteRange(managedHandlesMap.get(columnFamilyName), firstEntry.getBytes(), lastEntry.getBytes());
+        // Delete the last entry
         getRocksDB().delete(lastEntry.getBytes());
       } catch (RocksDBException e) {
         log.error("Got exception performing range delete");

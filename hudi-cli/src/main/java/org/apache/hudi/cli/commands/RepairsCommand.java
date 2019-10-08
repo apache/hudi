@@ -47,16 +47,15 @@ public class RepairsCommand implements CommandMarker {
     return HoodieCLI.tableMetadata != null;
   }
 
-  @CliCommand(value = "repair deduplicate", help = "De-duplicate a partition path contains duplicates & produce "
-      + "repaired files to replace with")
-  public String deduplicate(@CliOption(key = {
-      "duplicatedPartitionPath"}, help = "Partition Path containing the duplicates", mandatory = true) final String
-      duplicatedPartitionPath,
-      @CliOption(key = {
-          "repairedOutputPath"}, help = "Location to place the repaired files", mandatory = true) final String
-          repairedOutputPath,
-      @CliOption(key = {
-          "sparkProperties"}, help = "Spark Properites File Path", mandatory = true) final String sparkPropertiesPath)
+  @CliCommand(value = "repair deduplicate",
+      help = "De-duplicate a partition path contains duplicates & produce " + "repaired files to replace with")
+  public String deduplicate(
+      @CliOption(key = {"duplicatedPartitionPath"}, help = "Partition Path containing the duplicates",
+          mandatory = true) final String duplicatedPartitionPath,
+      @CliOption(key = {"repairedOutputPath"}, help = "Location to place the repaired files",
+          mandatory = true) final String repairedOutputPath,
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path",
+          mandatory = true) final String sparkPropertiesPath)
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), duplicatedPartitionPath, repairedOutputPath,
@@ -73,14 +72,15 @@ public class RepairsCommand implements CommandMarker {
 
 
   @CliCommand(value = "repair addpartitionmeta", help = "Add partition metadata to a dataset, if not present")
-  public String addPartitionMeta(@CliOption(key = {
-      "dryrun"}, help = "Should we actually add or just print what would be done", unspecifiedDefaultValue = "true")
-      final boolean dryRun) throws IOException {
+  public String addPartitionMeta(
+      @CliOption(key = {"dryrun"}, help = "Should we actually add or just print what would be done",
+          unspecifiedDefaultValue = "true") final boolean dryRun)
+      throws IOException {
 
-    String latestCommit = HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get()
-        .getTimestamp();
-    List<String> partitionPaths = FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs,
-        HoodieCLI.tableMetadata.getBasePath());
+    String latestCommit =
+        HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp();
+    List<String> partitionPaths =
+        FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.fs, HoodieCLI.tableMetadata.getBasePath());
     Path basePath = new Path(HoodieCLI.tableMetadata.getBasePath());
     String[][] rows = new String[partitionPaths.size() + 1][];
 
@@ -94,8 +94,8 @@ public class RepairsCommand implements CommandMarker {
       if (!HoodiePartitionMetadata.hasPartitionMetadata(HoodieCLI.fs, partitionPath)) {
         row[1] = "No";
         if (!dryRun) {
-          HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath,
-              partitionPath);
+          HoodiePartitionMetadata partitionMetadata =
+              new HoodiePartitionMetadata(HoodieCLI.fs, latestCommit, basePath, partitionPath);
           partitionMetadata.trySave(0);
         }
       }

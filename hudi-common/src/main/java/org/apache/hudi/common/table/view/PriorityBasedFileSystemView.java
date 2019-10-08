@@ -38,8 +38,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * A file system view which proxies request to a preferred File System View implementation. In case of error,
- * flip all subsequent calls to a backup file-system view implementation.
+ * A file system view which proxies request to a preferred File System View implementation. In case of error, flip all
+ * subsequent calls to a backup file-system view implementation.
  */
 public class PriorityBasedFileSystemView implements SyncableFileSystemView, Serializable {
 
@@ -140,8 +140,7 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Option<HoodieDataFile> getDataFileOn(String partitionPath, String instantTime, String fileId) {
-    return execute(partitionPath, instantTime, fileId, preferredView::getDataFileOn,
-        secondaryView::getDataFileOn);
+    return execute(partitionPath, instantTime, fileId, preferredView::getDataFileOn, secondaryView::getDataFileOn);
   }
 
   @Override

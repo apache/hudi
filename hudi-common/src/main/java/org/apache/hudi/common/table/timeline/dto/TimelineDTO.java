@@ -39,7 +39,7 @@ public class TimelineDTO {
   }
 
   public static HoodieTimeline toTimeline(TimelineDTO dto, HoodieTableMetaClient metaClient) {
-    //TODO:  For Now, we will assume, only active-timeline will be transferred.
+    // TODO: For Now, we will assume, only active-timeline will be transferred.
     return new HoodieDefaultTimeline(dto.instants.stream().map(InstantDTO::toInstant),
         metaClient.getActiveTimeline()::getInstantDetails);
   }

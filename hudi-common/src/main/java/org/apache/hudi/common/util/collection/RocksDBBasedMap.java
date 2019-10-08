@@ -41,7 +41,7 @@ public final class RocksDBBasedMap<K extends Serializable, R extends Serializabl
 
   @Override
   public int size() {
-    return (int)getRocksDBDAO().prefixSearch(columnFamilyName, "").count();
+    return (int) getRocksDBDAO().prefixSearch(columnFamilyName, "").count();
   }
 
   @Override
@@ -62,7 +62,7 @@ public final class RocksDBBasedMap<K extends Serializable, R extends Serializabl
 
   @Override
   public R get(Object key) {
-    return getRocksDBDAO().get(columnFamilyName, (Serializable)key);
+    return getRocksDBDAO().get(columnFamilyName, (Serializable) key);
   }
 
   @Override
@@ -119,7 +119,6 @@ public final class RocksDBBasedMap<K extends Serializable, R extends Serializabl
   }
 
   public Iterator<R> iterator() {
-    return getRocksDBDAO().prefixSearch(columnFamilyName, "")
-        .map(p -> (R)(p.getValue())).iterator();
+    return getRocksDBDAO().prefixSearch(columnFamilyName, "").map(p -> (R) (p.getValue())).iterator();
   }
 }

@@ -28,16 +28,14 @@ import org.junit.Test;
 public class ITTestHoodieSanity extends ITTestBase {
 
   enum PartitionType {
-    SINGLE_KEY_PARTITIONED,
-    MULTI_KEYS_PARTITIONED,
-    NON_PARTITIONED,
+    SINGLE_KEY_PARTITIONED, MULTI_KEYS_PARTITIONED, NON_PARTITIONED,
   }
 
   @Test
   /**
-   * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with single partition key
-   * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count
-   * query in hive console.
+   * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with single partition key data-set
+   * and performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive
+   * console.
    */
   public void testRunHoodieJavaAppOnSinglePartitionKeyCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_single_partition_key_cow_test";
@@ -48,8 +46,8 @@ public class ITTestHoodieSanity extends ITTestBase {
   @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with multiple partition-keys
-   * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count
-   * query in hive console.
+   * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count query
+   * in hive console.
    */
   public void testRunHoodieJavaAppOnMultiPartitionKeysCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_multi_partition_key_cow_test";
@@ -59,9 +57,9 @@ public class ITTestHoodieSanity extends ITTestBase {
 
   @Test
   /**
-   * A basic integration test that runs HoodieJavaApp to create a sample non-partitioned COW Hoodie
-   * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count
-   * query in hive console.
+   * A basic integration test that runs HoodieJavaApp to create a sample non-partitioned COW Hoodie data-set and
+   * performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive
+   * console.
    */
   public void testRunHoodieJavaAppOnNonPartitionedCOWTable() throws Exception {
     String hiveTableName = "docker_hoodie_non_partition_key_cow_test";
@@ -70,10 +68,9 @@ public class ITTestHoodieSanity extends ITTestBase {
   }
 
   /**
-   * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie
-   * data-set and performs upserts on it. Hive integration and upsert functionality is checked by running a count
-   * query in hive console.
-   * TODO: Add spark-shell test-case
+   * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie data-set and performs upserts on it.
+   * Hive integration and upsert functionality is checked by running a count query in hive console. TODO: Add
+   * spark-shell test-case
    */
   public void testRunHoodieJavaAppOnCOWTable(String hiveTableName, PartitionType partitionType) throws Exception {
 
@@ -98,16 +95,14 @@ public class ITTestHoodieSanity extends ITTestBase {
     // Run Hoodie Java App
     String cmd;
     if (partitionType == PartitionType.SINGLE_KEY_PARTITIONED) {
-      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl
-          + " --hive-url " + HIVE_SERVER_JDBC_URL + " --hive-table " + hiveTableName;
+      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl + " --hive-url " + HIVE_SERVER_JDBC_URL
+          + " --hive-table " + hiveTableName;
     } else if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
-      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl
-          + " --hive-url " + HIVE_SERVER_JDBC_URL + " --hive-table " + hiveTableName
-          + " --use-multi-partition-keys";
+      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl + " --hive-url " + HIVE_SERVER_JDBC_URL
+          + " --hive-table " + hiveTableName + " --use-multi-partition-keys";
     } else {
-      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl
-          + " --hive-url " + HIVE_SERVER_JDBC_URL + " --hive-table " + hiveTableName
-          + " --non-partitioned";
+      cmd = HOODIE_JAVA_APP + " --hive-sync --table-path " + hdfsUrl + " --hive-url " + HIVE_SERVER_JDBC_URL
+          + " --hive-table " + hiveTableName + " --non-partitioned";
     }
     executeCommandStringInDocker(ADHOC_1_CONTAINER, cmd, true);
 

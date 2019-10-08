@@ -27,8 +27,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.MercifulJsonConverter;
 
 /**
- * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy
- * fields to circumvent issues around serializing these objects from driver to executors
+ * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
+ * serializing these objects from driver to executors
  */
 public class AvroConvertor implements Serializable {
 

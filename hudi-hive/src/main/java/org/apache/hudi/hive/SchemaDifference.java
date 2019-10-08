@@ -38,9 +38,8 @@ public class SchemaDifference {
   private final Map<String, String> updateColumnTypes;
   private final Map<String, String> addColumnTypes;
 
-  private SchemaDifference(MessageType storageSchema, Map<String, String> tableSchema,
-      List<String> deleteColumns, Map<String, String> updateColumnTypes,
-      Map<String, String> addColumnTypes) {
+  private SchemaDifference(MessageType storageSchema, Map<String, String> tableSchema, List<String> deleteColumns,
+      Map<String, String> updateColumnTypes, Map<String, String> addColumnTypes) {
     this.storageSchema = storageSchema;
     this.tableSchema = tableSchema;
     this.deleteColumns = ImmutableList.copyOf(deleteColumns);
@@ -62,9 +61,8 @@ public class SchemaDifference {
 
   @Override
   public String toString() {
-    return Objects.toStringHelper(this).add("deleteColumns", deleteColumns)
-        .add("updateColumnTypes", updateColumnTypes).add("addColumnTypes", addColumnTypes)
-        .toString();
+    return Objects.toStringHelper(this).add("deleteColumns", deleteColumns).add("updateColumnTypes", updateColumnTypes)
+        .add("addColumnTypes", addColumnTypes).toString();
   }
 
   public static Builder newBuilder(MessageType storageSchema, Map<String, String> tableSchema) {
@@ -107,8 +105,7 @@ public class SchemaDifference {
     }
 
     public SchemaDifference build() {
-      return new SchemaDifference(storageSchema, tableSchema, deleteColumns, updateColumnTypes,
-          addColumnTypes);
+      return new SchemaDifference(storageSchema, tableSchema, deleteColumns, updateColumnTypes, addColumnTypes);
     }
   }
 }

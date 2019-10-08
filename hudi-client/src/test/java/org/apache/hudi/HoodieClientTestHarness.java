@@ -53,7 +53,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
 
-  //dfs
+  // dfs
   protected String dfsBasePath;
   protected transient HdfsTestService hdfsTestService;
   protected transient MiniDFSCluster dfsCluster;
@@ -74,6 +74,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
   /**
    * Cleanups resource group for the subclasses of {@link TestHoodieClientBase}.
+   * 
    * @throws IOException
    */
   public void cleanupResources() throws IOException {
@@ -84,8 +85,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext})
-   * with the given application name.
+   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) with the given application name.
    *
    * @param appName The specified application name.
    */
@@ -94,13 +94,13 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
     jsc.setLogLevel("ERROR");
 
-    //SQLContext stuff
+    // SQLContext stuff
     sqlContext = new SQLContext(jsc);
   }
 
   /**
-   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext})
-   * with a default name <b>TestHoodieClient</b>.
+   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) with a default name
+   * <b>TestHoodieClient</b>.
    */
   protected void initSparkContexts() {
     initSparkContexts("TestHoodieClient");
@@ -155,8 +155,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type
-   * specified by {@code getTableType()}.
+   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
+   * {@code getTableType()}.
    *
    * @throws IOException
    */

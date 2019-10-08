@@ -22,6 +22,7 @@
 <suppressions>
   <!-- Impossible to resolve checkstyle indentation violation because of checkstyle bug -->
   <suppress checks="indentation" files="HoodieLogFileCommand.java" lines="1-9999"/>
+  <suppress checks="indentation" files="RealtimeUnmergedRecordReader.java" lines="1-9999" />
   <!-- Member Names expected to start with "_"  -->
   <suppress checks="naming" files="TestRecord.java" lines="1-9999"/>
   <suppress checks="IllegalImport" files="Option.java" />

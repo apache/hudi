@@ -27,6 +27,7 @@ import org.apache.log4j.Logger;
 
 /**
  * Size Estimator for Hoodie record payload
+ * 
  * @param <T>
  */
 public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>> {

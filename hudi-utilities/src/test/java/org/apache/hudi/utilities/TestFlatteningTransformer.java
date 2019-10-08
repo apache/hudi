@@ -34,23 +34,20 @@ public class TestFlatteningTransformer {
     FlatteningTransformer transformer = new FlatteningTransformer();
 
     // Init
-    StructField[] nestedStructFields = new StructField[]{
-        new StructField("nestedIntColumn", DataTypes.IntegerType, true, Metadata.empty()),
-        new StructField("nestedStringColumn", DataTypes.StringType, true, Metadata.empty()),
-    };
+    StructField[] nestedStructFields =
+        new StructField[] {new StructField("nestedIntColumn", DataTypes.IntegerType, true, Metadata.empty()),
+            new StructField("nestedStringColumn", DataTypes.StringType, true, Metadata.empty()),};
 
-    StructField[] structFields = new StructField[]{
-        new StructField("intColumn", DataTypes.IntegerType, true, Metadata.empty()),
-        new StructField("stringColumn", DataTypes.StringType, true, Metadata.empty()),
-        new StructField("nestedStruct", DataTypes.createStructType(nestedStructFields), true, Metadata.empty())
-    };
+    StructField[] structFields =
+        new StructField[] {new StructField("intColumn", DataTypes.IntegerType, true, Metadata.empty()),
+            new StructField("stringColumn", DataTypes.StringType, true, Metadata.empty()),
+            new StructField("nestedStruct", DataTypes.createStructType(nestedStructFields), true, Metadata.empty())};
 
     StructType schema = new StructType(structFields);
     String flattenedSql = transformer.flattenSchema(schema, null);
 
     assertEquals("intColumn as intColumn,stringColumn as stringColumn,"
-            + "nestedStruct.nestedIntColumn as nestedStruct_nestedIntColumn,"
-            + "nestedStruct.nestedStringColumn as nestedStruct_nestedStringColumn",
-        flattenedSql);
+        + "nestedStruct.nestedIntColumn as nestedStruct_nestedIntColumn,"
+        + "nestedStruct.nestedStringColumn as nestedStruct_nestedStringColumn", flattenedSql);
   }
 }

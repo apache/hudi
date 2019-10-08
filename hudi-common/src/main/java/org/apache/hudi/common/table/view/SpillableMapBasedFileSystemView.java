@@ -46,8 +46,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   private final long maxMemoryForPendingCompaction;
   private final String baseStoreDir;
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient,
-      HoodieTimeline visibleActiveTimeline, FileSystemViewStorageConfig config) {
+  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      FileSystemViewStorageConfig config) {
     super(config.isIncrementalTimelineSyncEnabled());
     this.maxMemoryForFileGroupMap = config.getMaxMemoryForFileGroupMap();
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
@@ -55,8 +55,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     init(metaClient, visibleActiveTimeline);
   }
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient,
-      HoodieTimeline visibleActiveTimeline, FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
+  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+      FileStatus[] fileStatuses, FileSystemViewStorageConfig config) {
     this(metaClient, visibleActiveTimeline, config);
     addFilesToView(fileStatuses);
   }
@@ -64,12 +64,11 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
     try {
-      log.info("Creating Partition To File groups map using external spillable Map. Max Mem="
-          + maxMemoryForFileGroupMap + ", BaseDir=" + baseStoreDir);
+      log.info("Creating Partition To File groups map using external spillable Map. Max Mem=" + maxMemoryForFileGroupMap
+          + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
-      return (Map<String, List<HoodieFileGroup>>)
-          (new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir, new DefaultSizeEstimator(),
-              new DefaultSizeEstimator<>()));
+      return (Map<String, List<HoodieFileGroup>>) (new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir,
+          new DefaultSizeEstimator(), new DefaultSizeEstimator<>()));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -78,12 +77,11 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction) {
     try {
-      log.info("Creating Pending Compaction map using external spillable Map. Max Mem="
-          + maxMemoryForPendingCompaction + ", BaseDir=" + baseStoreDir);
+      log.info("Creating Pending Compaction map using external spillable Map. Max Mem=" + maxMemoryForPendingCompaction
+          + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
-      Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap =
-          new ExternalSpillableMap<>(maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator(),
-              new DefaultSizeEstimator<>());
+      Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap = new ExternalSpillableMap<>(
+          maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
       pendingMap.putAll(fgIdToPendingCompaction);
       return pendingMap;
     } catch (IOException e) {
@@ -92,20 +90,20 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {
-    return ((ExternalSpillableMap)partitionToFileGroupsMap).valueStream()
-        .flatMap(fg -> ((List<HoodieFileGroup>)fg).stream());
+    return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream()
+        .flatMap(fg -> ((List<HoodieFileGroup>) fg).stream());
   }
 
   @Override
   Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
-    return ((ExternalSpillableMap)fgIdToPendingCompaction).valueStream();
+    return ((ExternalSpillableMap) fgIdToPendingCompaction).valueStream();
 
   }
 
   @Override
   public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
-    return ((ExternalSpillableMap)partitionToFileGroupsMap).valueStream().flatMap(fg -> {
-      return ((List<HoodieFileGroup>)fg).stream();
+    return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream().flatMap(fg -> {
+      return ((List<HoodieFileGroup>) fg).stream();
     });
   }
 }

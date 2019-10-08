@@ -32,8 +32,8 @@ import org.apache.hudi.common.util.Option;
  * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2.
  * combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
  */
-public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
-    HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
+public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
+    implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
   /**
    * @param record
@@ -58,8 +58,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload implements
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
-      throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // combining strategy here trivially ignores currentValue on disk and writes this record
     return getInsertValue(schema);
   }

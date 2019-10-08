@@ -36,12 +36,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Used for enqueueing input records. Queue limit is controlled by {@link #memoryLimit}.
- * Unlike standard bounded queue implementations, this queue bounds the size by memory bytes occupied by its
- * tenants. The standard implementation bounds by the number of entries in the queue.
+ * Used for enqueueing input records. Queue limit is controlled by {@link #memoryLimit}. Unlike standard bounded queue
+ * implementations, this queue bounds the size by memory bytes occupied by its tenants. The standard implementation
+ * bounds by the number of entries in the queue.
  *
- * It internally samples every {@link #RECORD_SAMPLING_RATE}th record and adjusts number of records in
- * queue accordingly. This is done to ensure that we don't OOM.
+ * It internally samples every {@link #RECORD_SAMPLING_RATE}th record and adjusts number of records in queue
+ * accordingly. This is done to ensure that we don't OOM.
  *
  * This queue supports multiple producer single consumer pattern.
  *
@@ -65,8 +65,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   // used for sampling records with "RECORD_SAMPLING_RATE" frequency.
   public final AtomicLong samplingRecordCounter = new AtomicLong(-1);
   // internal queue for records.
-  private final LinkedBlockingQueue<Option<O>> queue = new
-      LinkedBlockingQueue<>();
+  private final LinkedBlockingQueue<Option<O>> queue = new LinkedBlockingQueue<>();
   // maximum amount of memory to be used for queueing records.
   private final long memoryLimit;
   // it holds the root cause of the exception in case either queueing records (consuming from
@@ -96,24 +95,21 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /**
    * Construct BoundedInMemoryQueue with default SizeEstimator
    *
-   * @param memoryLimit       MemoryLimit in bytes
+   * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
    */
   public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction) {
-    this(memoryLimit, transformFunction, new DefaultSizeEstimator() {
-    });
+    this(memoryLimit, transformFunction, new DefaultSizeEstimator() {});
   }
 
   /**
    * Construct BoundedInMemoryQueue with passed in size estimator
    *
-   * @param memoryLimit          MemoryLimit in bytes
-   * @param transformFunction    Transformer Function to convert input payload type to stored payload type
+   * @param memoryLimit MemoryLimit in bytes
+   * @param transformFunction Transformer Function to convert input payload type to stored payload type
    * @param payloadSizeEstimator Payload Size Estimator
    */
-  public BoundedInMemoryQueue(
-      final long memoryLimit,
-      final Function<I, O> transformFunction,
+  public BoundedInMemoryQueue(final long memoryLimit, final Function<I, O> transformFunction,
       final SizeEstimator<O> payloadSizeEstimator) {
     this.memoryLimit = memoryLimit;
     this.transformFunction = transformFunction;
@@ -127,9 +123,9 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Samples records with "RECORD_SAMPLING_RATE" frequency and computes average record size in bytes. It is used
-   * for determining how many maximum records to queue. Based on change in avg size it ma increase or decrease
-   * available permits.
+   * Samples records with "RECORD_SAMPLING_RATE" frequency and computes average record size in bytes. It is used for
+   * determining how many maximum records to queue. Based on change in avg size it ma increase or decrease available
+   * permits.
    *
    * @param payload Payload to size
    */
@@ -139,10 +135,10 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
     }
 
     final long recordSizeInBytes = payloadSizeEstimator.sizeEstimate(payload);
-    final long newAvgRecordSizeInBytes = Math
-        .max(1, (avgRecordSizeInBytes * numSamples + recordSizeInBytes) / (numSamples + 1));
-    final int newRateLimit = (int) Math
-        .min(RECORD_CACHING_LIMIT, Math.max(1, this.memoryLimit / newAvgRecordSizeInBytes));
+    final long newAvgRecordSizeInBytes =
+        Math.max(1, (avgRecordSizeInBytes * numSamples + recordSizeInBytes) / (numSamples + 1));
+    final int newRateLimit =
+        (int) Math.min(RECORD_CACHING_LIMIT, Math.max(1, this.memoryLimit / newAvgRecordSizeInBytes));
 
     // If there is any change in number of records to cache then we will either release (if it increased) or acquire
     // (if it decreased) to adjust rate limiting to newly computed value.
@@ -187,8 +183,8 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Reader interface but never exposed to outside world as this is a single consumer queue.
-   * Reading is done through a singleton iterator for this queue.
+   * Reader interface but never exposed to outside world as this is a single consumer queue. Reading is done through a
+   * singleton iterator for this queue.
    */
   private Option<O> readNextRecord() {
     if (this.isReadDone.get()) {

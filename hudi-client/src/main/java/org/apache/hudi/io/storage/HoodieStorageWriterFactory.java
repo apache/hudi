@@ -36,8 +36,8 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 public class HoodieStorageWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(
-      String commitTime, Path path, HoodieTable<T> hoodieTable,
-      HoodieWriteConfig config, Schema schema) throws IOException {
+      String commitTime, Path path, HoodieTable<T> hoodieTable, HoodieWriteConfig config, Schema schema)
+      throws IOException {
     final String name = path.getName();
     final String extension = FSUtils.isLogFile(path) ? HOODIE_LOG.getFileExtension() : FSUtils.getFileExtension(name);
     if (PARQUET.getFileExtension().equals(extension)) {
@@ -46,19 +46,16 @@ public class HoodieStorageWriterFactory {
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static <T extends HoodieRecordPayload,
-      R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(String commitTime, Path path,
-      HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable) throws IOException {
-    BloomFilter filter = new BloomFilter(config.getBloomFilterNumEntries(),
-        config.getBloomFilterFPP());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(schema), schema, filter);
+  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> newParquetStorageWriter(
+      String commitTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable)
+      throws IOException {
+    BloomFilter filter = new BloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP());
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
 
-    HoodieParquetConfig parquetConfig =
-        new HoodieParquetConfig(writeSupport, config.getParquetCompressionCodec(),
-            config.getParquetBlockSize(), config.getParquetPageSize(),
-            config.getParquetMaxFileSize(), hoodieTable.getHadoopConf(),
-            config.getParquetCompressionRatio());
+    HoodieParquetConfig parquetConfig = new HoodieParquetConfig(writeSupport, config.getParquetCompressionCodec(),
+        config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
+        hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
 
     return new HoodieParquetWriter<>(commitTime, path, parquetConfig, schema);
   }

@@ -35,6 +35,7 @@ import org.apache.spark.Partitioner;
  * Partitions bloom filter checks by spreading out comparisons across buckets of work.
  *
  * Each bucket incurs the following cost
+ * 
  * <pre>
  *   1) Read bloom filter from file footer
  *   2) Check keys against bloom filter
@@ -47,6 +48,7 @@ import org.apache.spark.Partitioner;
  * could bound the amount of skew to std_dev(numberOfBucketsPerPartition) * cost of (3), lower than sort partitioning.
  *
  * Approach has two goals :
+ * 
  * <pre>
  *   1) Pack as many buckets from same file group into same partition, to amortize cost of (1) and (2) further
  *   2) Spread buckets across partitions evenly to achieve skew reduction
@@ -76,8 +78,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
 
     Map<String, Integer> bucketsPerFileGroup = new HashMap<>();
     // Compute the buckets needed per file group, using simple uniform distribution
-    fileGroupToComparisons.forEach((f, c) ->
-        bucketsPerFileGroup.put(f, (int) Math.ceil((c * 1.0) / keysPerBucket)));
+    fileGroupToComparisons.forEach((f, c) -> bucketsPerFileGroup.put(f, (int) Math.ceil((c * 1.0) / keysPerBucket)));
     int totalBuckets = bucketsPerFileGroup.values().stream().mapToInt(i -> i).sum();
     // If totalBuckets > targetPartitions, no need to have extra partitions
     this.partitions = Math.min(targetPartitions, totalBuckets);

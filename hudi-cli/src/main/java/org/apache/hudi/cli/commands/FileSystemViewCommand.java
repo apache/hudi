@@ -52,24 +52,23 @@ public class FileSystemViewCommand implements CommandMarker {
 
   @CliCommand(value = "show fsview all", help = "Show entire file-system view")
   public String showAllFileSlices(
-      @CliOption(key = {"pathRegex"},
-          help = "regex to select files, eg: 2016/08/02", unspecifiedDefaultValue = "*/*/*") String globRegex,
+      @CliOption(key = {"pathRegex"}, help = "regex to select files, eg: 2016/08/02",
+          unspecifiedDefaultValue = "*/*/*") String globRegex,
       @CliOption(key = {"readOptimizedOnly"}, help = "Only display read-optimized view",
           unspecifiedDefaultValue = "false") boolean readOptimizedOnly,
       @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
           unspecifiedDefaultValue = "") String maxInstant,
-      @CliOption(key = {
-          "includeMax"}, help = "Include Max Instant", unspecifiedDefaultValue = "false") boolean includeMaxInstant,
-      @CliOption(key = {
-          "includeInflight"}, help = "Include Inflight Instants", unspecifiedDefaultValue = "false")
-          boolean includeInflight,
-      @CliOption(key = {"excludeCompaction"}, help = "Exclude compaction Instants", unspecifiedDefaultValue = "false")
-          boolean excludeCompaction,
+      @CliOption(key = {"includeMax"}, help = "Include Max Instant",
+          unspecifiedDefaultValue = "false") boolean includeMaxInstant,
+      @CliOption(key = {"includeInflight"}, help = "Include Inflight Instants",
+          unspecifiedDefaultValue = "false") boolean includeInflight,
+      @CliOption(key = {"excludeCompaction"}, help = "Exclude compaction Instants",
+          unspecifiedDefaultValue = "false") boolean excludeCompaction,
       @CliOption(key = {"limit"}, help = "Limit rows to be displayed", unspecifiedDefaultValue = "-1") Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {
-          "headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     HoodieTableFileSystemView fsView = buildFileSystemView(globRegex, maxInstant, readOptimizedOnly, includeMaxInstant,
@@ -97,15 +96,10 @@ public class FileSystemViewCommand implements CommandMarker {
     fieldNameToConverterMap.put("Total Delta File Size", converterFunction);
     fieldNameToConverterMap.put("Data-File Size", converterFunction);
 
-    TableHeader header = new TableHeader()
-        .addTableHeaderField("Partition")
-        .addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant")
-        .addTableHeaderField("Data-File")
-        .addTableHeaderField("Data-File Size");
+    TableHeader header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
+        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size");
     if (!readOptimizedOnly) {
-      header = header.addTableHeaderField("Num Delta Files")
-          .addTableHeaderField("Total Delta File Size")
+      header = header.addTableHeaderField("Num Delta Files").addTableHeaderField("Total Delta File Size")
           .addTableHeaderField("Delta Files");
     }
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
@@ -113,25 +107,24 @@ public class FileSystemViewCommand implements CommandMarker {
 
   @CliCommand(value = "show fsview latest", help = "Show latest file-system view")
   public String showLatestFileSlices(
-      @CliOption(key = {"partitionPath"},
-          help = "A valid paritition path", mandatory = true) String partition,
+      @CliOption(key = {"partitionPath"}, help = "A valid paritition path", mandatory = true) String partition,
       @CliOption(key = {"readOptimizedOnly"}, help = "Only display read-optimized view",
           unspecifiedDefaultValue = "false") boolean readOptimizedOnly,
       @CliOption(key = {"maxInstant"}, help = "File-Slices upto this instant are displayed",
           unspecifiedDefaultValue = "") String maxInstant,
       @CliOption(key = {"merge"}, help = "Merge File Slices due to pending compaction",
           unspecifiedDefaultValue = "true") final boolean merge,
-      @CliOption(key = {"includeMax"}, help = "Include Max Instant", unspecifiedDefaultValue = "false")
-          boolean includeMaxInstant,
-      @CliOption(key = {"includeInflight"}, help = "Include Inflight Instants", unspecifiedDefaultValue = "false")
-          boolean includeInflight,
-      @CliOption(key = {"excludeCompaction"}, help = "Exclude compaction Instants", unspecifiedDefaultValue = "false")
-          boolean excludeCompaction,
+      @CliOption(key = {"includeMax"}, help = "Include Max Instant",
+          unspecifiedDefaultValue = "false") boolean includeMaxInstant,
+      @CliOption(key = {"includeInflight"}, help = "Include Inflight Instants",
+          unspecifiedDefaultValue = "false") boolean includeInflight,
+      @CliOption(key = {"excludeCompaction"}, help = "Exclude compaction Instants",
+          unspecifiedDefaultValue = "false") boolean excludeCompaction,
       @CliOption(key = {"limit"}, help = "Limit rows to be displayed", unspecifiedDefaultValue = "-1") Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {
-          "headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false") final boolean headerOnly)
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
 
     HoodieTableFileSystemView fsView = buildFileSystemView(partition, maxInstant, readOptimizedOnly, includeMaxInstant,
@@ -163,28 +156,25 @@ public class FileSystemViewCommand implements CommandMarker {
       if (!readOptimizedOnly) {
         row[idx++] = fs.getLogFiles().count();
         row[idx++] = fs.getLogFiles().mapToLong(lf -> lf.getFileSize()).sum();
-        long logFilesScheduledForCompactionTotalSize = fs.getLogFiles()
-            .filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
-            .mapToLong(lf -> lf.getFileSize()).sum();
+        long logFilesScheduledForCompactionTotalSize =
+            fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+                .mapToLong(lf -> lf.getFileSize()).sum();
         row[idx++] = logFilesScheduledForCompactionTotalSize;
 
-        long logFilesUnscheduledTotalSize = fs.getLogFiles()
-            .filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
-            .mapToLong(lf -> lf.getFileSize()).sum();
+        long logFilesUnscheduledTotalSize =
+            fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+                .mapToLong(lf -> lf.getFileSize()).sum();
         row[idx++] = logFilesUnscheduledTotalSize;
 
         double logSelectedForCompactionToBaseRatio =
             dataFileSize > 0 ? logFilesScheduledForCompactionTotalSize / (dataFileSize * 1.0) : -1;
         row[idx++] = logSelectedForCompactionToBaseRatio;
-        double logUnscheduledToBaseRatio =
-            dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
+        double logUnscheduledToBaseRatio = dataFileSize > 0 ? logFilesUnscheduledTotalSize / (dataFileSize * 1.0) : -1;
         row[idx++] = logUnscheduledToBaseRatio;
 
-        row[idx++] = fs.getLogFiles()
-            .filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+        row[idx++] = fs.getLogFiles().filter(lf -> lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
             .collect(Collectors.toList()).toString();
-        row[idx++] = fs.getLogFiles()
-            .filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
+        row[idx++] = fs.getLogFiles().filter(lf -> !lf.getBaseCommitTime().equals(fs.getBaseInstantTime()))
             .collect(Collectors.toList()).toString();
       }
       rows.add(row);
@@ -200,16 +190,11 @@ public class FileSystemViewCommand implements CommandMarker {
       fieldNameToConverterMap.put("Delta Size - compaction unscheduled", converterFunction);
     }
 
-    TableHeader header = new TableHeader()
-        .addTableHeaderField("Partition")
-        .addTableHeaderField("FileId")
-        .addTableHeaderField("Base-Instant")
-        .addTableHeaderField("Data-File")
-        .addTableHeaderField("Data-File Size");
+    TableHeader header = new TableHeader().addTableHeaderField("Partition").addTableHeaderField("FileId")
+        .addTableHeaderField("Base-Instant").addTableHeaderField("Data-File").addTableHeaderField("Data-File Size");
 
     if (!readOptimizedOnly) {
-      header = header.addTableHeaderField("Num Delta Files")
-          .addTableHeaderField("Total Delta Size")
+      header = header.addTableHeaderField("Num Delta Files").addTableHeaderField("Total Delta Size")
           .addTableHeaderField("Delta Size - compaction scheduled")
           .addTableHeaderField("Delta Size - compaction unscheduled")
           .addTableHeaderField("Delta To Base Ratio - compaction scheduled")
@@ -222,19 +207,20 @@ public class FileSystemViewCommand implements CommandMarker {
 
   /**
    * Build File System View
+   * 
    * @param globRegex Path Regex
-   * @param maxInstant  Max Instants to be used for displaying file-instants
+   * @param maxInstant Max Instants to be used for displaying file-instants
    * @param readOptimizedOnly Include only read optimized view
    * @param includeMaxInstant Include Max instant
-   * @param includeInflight   Include inflight instants
+   * @param includeInflight Include inflight instants
    * @param excludeCompaction Exclude Compaction instants
    * @return
    * @throws IOException
    */
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean readOptimizedOnly,
       boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(HoodieCLI.tableMetadata.getHadoopConf(),
-        HoodieCLI.tableMetadata.getBasePath(), true);
+    HoodieTableMetaClient metaClient =
+        new HoodieTableMetaClient(HoodieCLI.tableMetadata.getHadoopConf(), HoodieCLI.tableMetadata.getBasePath(), true);
     FileSystem fs = HoodieCLI.fs;
     String globPath = String.format("%s/%s/*", HoodieCLI.tableMetadata.getBasePath(), globRegex);
     FileStatus[] statuses = fs.globStatus(new Path(globPath));

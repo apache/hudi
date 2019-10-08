@@ -59,8 +59,7 @@ public interface TableFileSystemView {
      * Stream all the latest version data files in the given partition with precondition that commitTime(file) before
      * maxCommitTime
      */
-    Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath,
-        String maxCommitTime);
+    Stream<HoodieDataFile> getLatestDataFilesBeforeOrOn(String partitionPath, String maxCommitTime);
 
     /**
      * Stream all the latest data files pass
@@ -105,20 +104,20 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestUnCompactedFileSlices(String partitionPath);
 
     /**
-     * Stream all latest file slices in  given partition with precondition that commitTime(file) before maxCommitTime
+     * Stream all latest file slices in given partition with precondition that commitTime(file) before maxCommitTime
      *
      * @param partitionPath Partition path
      * @param maxCommitTime Max Instant Time
      * @param includeFileSlicesInPendingCompaction include file-slices that are in pending compaction
      */
-    Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath,
-        String maxCommitTime, boolean includeFileSlicesInPendingCompaction);
+    Stream<FileSlice> getLatestFileSlicesBeforeOrOn(String partitionPath, String maxCommitTime,
+        boolean includeFileSlicesInPendingCompaction);
 
     /**
-     * Stream all "merged" file-slices before on an instant time
-     * If a file-group has a pending compaction request, the file-slice before and after compaction request instant
-     * is merged and returned.
-     * @param partitionPath  Partition Path
+     * Stream all "merged" file-slices before on an instant time If a file-group has a pending compaction request, the
+     * file-slice before and after compaction request instant is merged and returned.
+     * 
+     * @param partitionPath Partition Path
      * @param maxInstantTime Max Instant Time
      * @return
      */
