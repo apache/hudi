@@ -18,17 +18,14 @@
 
 package org.apache.hudi.common.table.view;
 
-import java.io.IOException;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 
-public class RocksDBBasedIncrementalFSViewSyncTest extends IncrementalFSViewSyncTest {
+public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSystemView {
 
-  @Override
-  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
-      throws IOException {
-    return new RocksDbBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
-        .withRocksDBPath(folder.newFolder().getAbsolutePath()).withIncrementalTimelineSync(true).build());
+  protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
+    return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
+        // pure disk base View
+        .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build());
   }
 }

@@ -64,9 +64,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 @SuppressWarnings("ResultOfMethodCallIgnored")
-public class HoodieTableFileSystemViewTest extends HoodieCommonTestHarness {
+public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
-  private static final transient Logger log = LogManager.getLogger(HoodieTableFileSystemViewTest.class);
+  private static final transient Logger log = LogManager.getLogger(TestHoodieTableFileSystemView.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 

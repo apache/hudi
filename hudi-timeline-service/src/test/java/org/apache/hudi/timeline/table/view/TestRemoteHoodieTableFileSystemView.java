@@ -24,18 +24,18 @@ import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemViewTest;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Bring up a remote Timeline Server and run all test-cases of HoodieTableFileSystemViewTest against it
+ * Bring up a remote Timeline Server and run all test-cases of TestHoodieTableFileSystemView against it
  */
-public class RemoteHoodieTableFileSystemViewTest extends HoodieTableFileSystemViewTest {
+public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView {
 
-  private static Logger log = LogManager.getLogger(RemoteHoodieTableFileSystemViewTest.class);
+  private static Logger log = LogManager.getLogger(TestRemoteHoodieTableFileSystemView.class);
 
   private TimelineService server;
   private RemoteHoodieTableFileSystemView view;

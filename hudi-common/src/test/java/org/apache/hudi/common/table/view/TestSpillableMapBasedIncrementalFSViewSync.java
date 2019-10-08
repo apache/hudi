@@ -18,14 +18,15 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 
-public class SpillableMapBasedFileSystemViewTest extends HoodieTableFileSystemViewTest {
+public class TestSpillableMapBasedIncrementalFSViewSync extends TestIncrementalFSViewSync {
 
-  protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
-    return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
-        // pure disk base View
-        .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build());
+  @Override
+  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline) {
+    return new SpillableMapBasedFileSystemView(metaClient, timeline,
+        FileSystemViewStorageConfig.newBuilder().withMaxMemoryForView(0L).withIncrementalTimelineSync(true).build());
   }
 }

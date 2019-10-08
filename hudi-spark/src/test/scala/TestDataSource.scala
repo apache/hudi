@@ -35,7 +35,7 @@ import scala.concurrent.{Await, Future}
 /**
   * Basic tests on the spark datasource
   */
-class DataSourceTest extends AssertionsForJUnit {
+class TestDataSource extends AssertionsForJUnit {
 
   var spark: SparkSession = null
   var dataGen: HoodieTestDataGenerator = null

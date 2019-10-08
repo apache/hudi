@@ -74,7 +74,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-public class HoodieRealtimeRecordReaderTest {
+public class TestHoodieRealtimeRecordReader {
 
   private JobConf jobConf;
   private FileSystem fs;

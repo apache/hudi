@@ -36,7 +36,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-public class HoodieActiveTimelineTest extends HoodieCommonTestHarness {
+public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   private HoodieActiveTimeline timeline;
   @Rule

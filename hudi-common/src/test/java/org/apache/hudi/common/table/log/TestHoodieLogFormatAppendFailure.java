@@ -55,7 +55,7 @@ import org.junit.Test;
  * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325 Reference :
  * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch
  */
-public class HoodieLogFormatAppendFailureTest {
+public class TestHoodieLogFormatAppendFailure {
 
   private static File baseDir;
   private static MiniDFSCluster cluster;
