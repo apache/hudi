@@ -27,7 +27,7 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.SchedulerConfGenerator;
 import org.junit.Test;
 
-public class SchedulerConfGeneratorTest {
+public class TestSchedulerConfGenerator {
 
   @Test
   public void testGenerateSparkSchedulingConf() throws Exception {

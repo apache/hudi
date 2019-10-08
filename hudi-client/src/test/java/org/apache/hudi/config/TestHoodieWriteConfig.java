@@ -30,7 +30,7 @@ import java.util.Properties;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.junit.Test;
 
-public class HoodieWriteConfigTest {
+public class TestHoodieWriteConfig {
 
   @Test
   public void testPropertyLoading() throws IOException {

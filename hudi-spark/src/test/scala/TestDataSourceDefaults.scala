@@ -26,7 +26,7 @@ import org.scalatest.junit.AssertionsForJUnit
 /**
   * Tests on the default key generator, payload classes.
   */
-class DataSourceDefaultsTest extends AssertionsForJUnit {
+class TestDataSourceDefaults extends AssertionsForJUnit {
 
   val schema = SchemaTestUtil.getComplexEvolvedSchema
   var baseRecord: GenericRecord = null

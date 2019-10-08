@@ -40,7 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.junit.Before;
 import org.junit.Test;
 
-public class HoodieTableMetaClientTest extends HoodieCommonTestHarness {
+public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
   @Before
   public void init() throws IOException {

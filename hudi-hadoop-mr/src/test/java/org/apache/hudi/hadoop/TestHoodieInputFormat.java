@@ -36,7 +36,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-public class HoodieInputFormatTest {
+public class TestHoodieInputFormat {
 
   private HoodieParquetInputFormat inputFormat;
   private JobConf jobConf;
