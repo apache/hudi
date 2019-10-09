@@ -2,7 +2,7 @@
 title: Use Cases
 keywords: hudi, data ingestion, etl, real time, use cases
 sidebar: mydoc_sidebar
-permalink: /cn/use_cases.html
+permalink: use_cases.html
 toc: false
 summary: "以下是一些使用Hudi的示例，说明了加快处理速度和提高效率的好处"
 

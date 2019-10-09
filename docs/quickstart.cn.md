@@ -4,7 +4,7 @@ keywords: hudi, quickstart
 tags: [quickstart]
 sidebar: mydoc_sidebar
 toc: false
-permalink: /cn/quickstart.html
+permalink: quickstart.html
 ---
 <br/>
 为快速了解Hudi的功能，我们制作了一个基于Docker设置、所有依赖系统都在本地运行的[演示视频](https://www.youtube.com/watch？V=vhngusxdrd0)。
