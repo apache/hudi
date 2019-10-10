@@ -30,7 +30,7 @@
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
   <version>0.5.1-SNAPSHOT</version>
-  <description>Apache Hudi brings stream style processing on big data</description>
+  <description>Apache Hudi (incubating) brings stream style processing on big data</description>
   <url>https://github.com/apache/incubator-hudi</url>
   <name>Hudi</name>
 
