@@ -101,7 +101,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         }
         // we assume, a later safe record in the log, is newer than what we have in the map &
         // replace it.
-        ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(recordToReturn, getWriterSchema());
+        ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(recordToReturn, getHiveSchema());
         Writable[] replaceValue = aWritable.get();
         if (LOG.isDebugEnabled()) {
           LOG.debug(String.format("key %s, base values: %s, log values: %s", key, arrayWritableToString(arrayWritable),
