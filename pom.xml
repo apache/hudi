@@ -156,7 +156,7 @@
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
           <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
-          <configLocation>${maven.multiModuleProjectDirectory}/style/scalastyle-config.xml</configLocation>
+          <configLocation>${main.basedir}/style/scalastyle-config.xml</configLocation>
           <outputEncoding>UTF-8</outputEncoding>
         </configuration>
         <executions>
