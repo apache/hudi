@@ -54,7 +54,7 @@
 "tags": "",
 "keywords": "hudi, administration, operation, devops",
 "url": "cnadmin_guide.html",
-"summary": "This section offers an overview of tools available to operate an ecosystem of Hudi datasets"
+"summary": "本节概述了可用于操作Hudi数据集生态系统的工具"
 }
 ,
 
@@ -228,11 +228,11 @@
 
 
 {
-"title": "What is Hudi?",
+"title": "什么是Hudi?",
 "tags": "getting_started",
 "keywords": "big data, stream processing, cloud, hdfs, storage, upserts, change capture",
 "url": "cnindex.html",
-"summary": "Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing."
+"summary": "Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。"
 }
 ,
 
