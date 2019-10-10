@@ -349,8 +349,8 @@ bundle has been provided, the dataset can be queried by popular query engines li
 For e.g, if <code class="highlighter-rouge">table name = hudi_tbl</code>, then we get</p>
 
 <ul>
-  <li><code class="highlighter-rouge">hudi_tbl</code> realizes the read optimized view of the dataset backed by <code class="highlighter-rouge">HoodieInputFormat</code>, exposing purely columnar data.</li>
-  <li><code class="highlighter-rouge">hudi_tbl_rt</code> realizes the real time view of the dataset  backed by <code class="highlighter-rouge">HoodieRealtimeInputFormat</code>, exposing merged view of base and log data.</li>
+  <li><code class="highlighter-rouge">hudi_tbl</code> realizes the read optimized view of the dataset backed by <code class="highlighter-rouge">HoodieParquetInputFormat</code>, exposing purely columnar data.</li>
+  <li><code class="highlighter-rouge">hudi_tbl_rt</code> realizes the real time view of the dataset  backed by <code class="highlighter-rouge">HoodieParquetRealtimeInputFormat</code>, exposing merged view of base and log data.</li>
 </ul>
 
 <p>As discussed in the concepts section, the one key primitive needed for <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">incrementally processing</a>,
@@ -369,7 +369,7 @@ classes with its dependencies are available for query planning &amp; execution.<
 
 <h3 id="hive-ro-view">Read Optimized table</h3>
 <p>In addition to setup above, for beeline cli access, the <code class="highlighter-rouge">hive.input.format</code> variable needs to be set to the  fully qualified path name of the 
-inputformat <code class="highlighter-rouge">org.apache.hudi.hadoop.HoodieInputFormat</code>. For Tez, additionally the <code class="highlighter-rouge">hive.tez.input.format</code> needs to be set 
+inputformat <code class="highlighter-rouge">org.apache.hudi.hadoop.HoodieParquetInputFormat</code>. For Tez, additionally the <code class="highlighter-rouge">hive.tez.input.format</code> needs to be set 
 to <code class="highlighter-rouge">org.apache.hadoop.hive.ql.io.HiveInputFormat</code></p>
 
 <h3 id="hive-rt-view">Real time table</h3>

@@ -5,8 +5,8 @@
         <description>Apache Hudi (pronounced “Hoodie”) provides upserts and incremental processing capaibilities on Big Data</description>
         <link>http://0.0.0.0:4000/</link>
         <atom:link href="http://0.0.0.0:4000/feed.xml" rel="self" type="application/rss+xml"/>
-        <pubDate>Mon, 16 Sep 2019 19:19:14 +0000</pubDate>
-        <lastBuildDate>Mon, 16 Sep 2019 19:19:14 +0000</lastBuildDate>
+        <pubDate>Thu, 10 Oct 2019 12:20:51 +0000</pubDate>
+        <lastBuildDate>Thu, 10 Oct 2019 12:20:51 +0000</lastBuildDate>
         <generator>Jekyll v3.7.2</generator>
         
     </channel>

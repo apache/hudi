@@ -692,7 +692,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.commits.archival.batch</code> <br />
 <span style="color:grey">This controls the number of commit instants read in memory as a batch and archived together.</span></p>
 
-<h5 id="compactionSmallFileSize">compactionSmallFileSize(size = 0)</h5>
+<h5 id="compactionSmallFileSize">compactionSmallFileSize(size = 100MB)</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.parquet.small.file.limit</code> <br />
 <span style="color:grey">This should be less &lt; maxFileSize and setting it to 0, turns off this feature. Small files can always happen because of the number of insert records in a partition in a batch. Hudi has an option to auto-resolve small files by masking inserts into this partition as updates to existing small files. The size here is the minimum file size considered as a “small file size”.</span></p>
 

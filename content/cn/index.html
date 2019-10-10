@@ -3,9 +3,9 @@
     <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing.">
+<meta name="description" content="Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。">
 <meta name="keywords" content="big data, stream processing, cloud, hdfs, storage, upserts, change capture">
-<title>What is Hudi? | Hudi</title>
+<title>什么是Hudi? | Hudi</title>
 <link rel="stylesheet" href="/css/syntax.css">
 
 
@@ -164,7 +164,7 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the What is Hudi? page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the 什么是Hudi? page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
@@ -187,7 +187,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: '/search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="What is Hudi?">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="什么是Hudi?">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -324,7 +324,7 @@
     <!-- Content Column -->
     <div class="col-md-9">
         <div class="post-header">
-   <h1 class="post-title-main">What is Hudi?</h1>
+   <h1 class="post-title-main">什么是Hudi?</h1>
 </div>
 
 
@@ -332,7 +332,7 @@
 <div class="post-content">
 
    
-    <div class="summary">Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing.</div>
+    <div class="summary">Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。</div>
    
 
     
@@ -363,21 +363,21 @@ $('#toc').on('click', 'a', function() {
 
     
 
-  <p>Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical datasets over DFS (<a href="http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html">HDFS</a> or cloud stores) and provides three logical views for query access.</p>
+  <p>Hudi（发音为“hoodie”）摄取与管理处于DFS(<a href="http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html">HDFS</a> 或云存储)之上的大型分析数据集并为查询访问提供三个逻辑视图。</p>
 
 <ul>
-  <li><strong>Read Optimized View</strong> - Provides excellent query performance on pure columnar storage, much like plain <a href="https://parquet.apache.org/">Parquet</a> tables.</li>
-  <li><strong>Incremental View</strong> - Provides a change stream out of the dataset to feed downstream jobs/ETLs.</li>
-  <li><strong>Near-Real time Table</strong> - Provides queries on real-time data, using a combination of columnar &amp; row based storage (e.g Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)</li>
+  <li><strong>读优化视图</strong> - 在纯列式存储上提供出色的查询性能，非常像<a href="https://parquet.apache.org/">parquet</a>表。</li>
+  <li><strong>增量视图</strong> - 在数据集之上提供一个变更流并提供给下游的作业或ETL任务。</li>
+  <li><strong>准实时的表</strong> - 使用基于列存储(例如 Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)和行存储以提供对实时数据的查询</li>
 </ul>
 
 <figure>
     <img class="docimage" src="/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-<p>By carefully managing how data is laid out in storage &amp; how it’s exposed to queries, Hudi is able to power a rich data ecosystem where external sources can be ingested in near real-time and made available for interactive SQL Engines like <a href="https://prestodb.io">Presto</a> &amp; <a href="https://spark.apache.org/sql/">Spark</a>, while at the same time capable of being consumed incrementally from processing/ETL frameworks like <a href="https://hive.apache.org/">Hive</a> &amp; <a href="https://spark.apache.org/docs/latest/">Spark</a> to build derived (Hudi) datasets.</p>
+<p>通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于<a href="https://prestodb.io">presto</a>和<a href="https://spark.apache.org/sql/">spark</a>等交互式SQL引擎，同时能够从处理/ETL框架（如<a href="https://hive.apache.org/">hive</a>&amp; <a href="https://spark.apache.org/docs/latest/">spark</a>中进行增量消费以构建派生（Hudi）数据集。</p>
 
-<p>Hudi broadly consists of a self contained Spark library to build datasets and integrations with existing query engines for data access. See <a href="quickstart.html">quickstart</a> for a demo.</p>
+<p>Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见<a href="quickstart.html">快速启动</a>。</p>
 
 
     <div class="tags">
