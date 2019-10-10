@@ -7,192 +7,164 @@ toc: false
 permalink: quickstart.html
 ---
 <br/>
-To get a quick peek at Hudi's capabilities, we have put together a [demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) 
-that showcases this on a docker based setup with all dependent systems running locally. We recommend you replicate the same setup 
-and run the demo yourself, by following steps [here](docker_demo.html). Also, if you are looking for ways to migrate your existing data to Hudi, 
-refer to [migration guide](migration_guide.html).
 
-If you have Hive, Hadoop, Spark installed already & prefer to do it on your own setup, read on.
+This guide provides a quick peek at Hudi's capabilities using spark-shell. Using Spark datasources, we will walk through 
+code snippets that allows you to insert and update a Hudi dataset of default storage type: 
+[Copy on Write](https://hudi.apache.org/concepts.html#copy-on-write-storage). 
+After each write operation we will also show how to read the data both snapshot and incrementally.
 
-## Download Hudi
+## Build Hudi spark bundle jar
 
-Check out [code](https://github.com/apache/incubator-hudi) and normally build the maven project, from command line
+Hudi requires Java 8 to be installed on a *nix system. Check out [code](https://github.com/apache/incubator-hudi) and 
+normally build the maven project, from command line:
 
-```
-$ mvn clean install -DskipTests -DskipITs
-```
+``` 
+# checkout and build
+git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
+mvn clean install -DskipTests -DskipITs
 
-Hudi works with Hive 2.3.x or higher versions. As long as Hive 2.x protocol can talk to Hive 1.x, you can use Hudi to 
-talk to older hive versions.
-
-For IDE, you can pull in the code into IntelliJ as a normal maven project. 
-You might want to add your spark jars folder to project dependencies under 'Module Setttings', to be able to run from IDE.
-
-
-### Version Compatibility
-
-Hudi requires Java 8 to be installed on a *nix system. Hudi works with Spark-2.x versions. 
-Further, we have verified that Hudi works with the following combination of Hadoop/Hive/Spark.
-
-| Hadoop | Hive  | Spark | Instructions to Build Hudi |
-| ---- | ----- | ---- | ---- |
-| Apache hadoop-2.[7-8].x | Apache hive-2.3.[1-3] | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
-
-If your environment has other versions of hadoop/hive/spark, please try out Hudi 
-and let us know if there are any issues. 
-
-## Generate Sample Dataset
-
-### Environment Variables
-
-Please set the following environment variables according to your setup. We have given an example setup with CDH version
-
-```
-cd incubator-hudi 
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre/
-export HIVE_HOME=/var/hadoop/setup/apache-hive-1.1.0-cdh5.7.2-bin
-export HADOOP_HOME=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
-export HADOOP_INSTALL=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
-export HADOOP_CONF_DIR=$HADOOP_INSTALL/etc/hadoop
-export SPARK_HOME=/var/hadoop/setup/spark-2.3.1-bin-hadoop2.7
-export SPARK_INSTALL=$SPARK_HOME
-export SPARK_CONF_DIR=$SPARK_HOME/conf
-export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$PATH
+# Export the location of hudi-spark-bundle for later 
+mkdir -p /tmp/hudi && cp packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar  /tmp/hudi/hudi-spark-bundle.jar 
+export HUDI_SPARK_BUNDLE_PATH=/tmp/hudi/hudi-spark-bundle.jar
 ```
 
-### Run HoodieJavaApp
+## Setup spark-shell
+Hudi works with Spark-2.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for 
+setting up spark. 
 
-Run __hudi-spark/src/test/java/HoodieJavaApp.java__ class, to place a two commits (commit 1 => 100 inserts, commit 2 => 100 updates to previously inserted 100 records) onto your DFS/local filesystem. Use the wrapper script
-to run from command-line
-
-```
-cd hudi-spark
-./run_hoodie_app.sh --help
-Usage: <main class> [options]
-  Options:
-    --help, -h
-       Default: false
-    --table-name, -n
-       table name for Hudi sample table
-       Default: hoodie_rt
-    --table-path, -p
-       path for Hudi sample table
-       Default: file:///tmp/hoodie/sample-table
-    --table-type, -t
-       One of COPY_ON_WRITE or MERGE_ON_READ
-       Default: COPY_ON_WRITE
-```
-
-The class lets you choose table names, output paths and one of the storage types. In your own applications, be sure to include the `hudi-spark` module as dependency
-and follow a similar pattern to write/read datasets via the datasource. 
-
-## Query a Hudi dataset
-
-Next, we will register the sample dataset into Hive metastore and try to query using [Hive](#hive), [Spark](#spark) & [Presto](#presto)
-
-### Start Hive Server locally
+From the extracted directory run spark-shell with Hudi as:
 
 ```
-hdfs namenode # start name node
-hdfs datanode # start data node
-
-bin/hive --service metastore  # start metastore
-bin/hiveserver2 \
-  --hiveconf hive.root.logger=INFO,console \
-  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
-  --hiveconf hive.stats.autogather=false \
-  --hiveconf hive.aux.jars.path=/path/to/packaging/hudi-hive-bundle/target/hudi-hive-bundle-0.4.6-SNAPSHOT.jar
-
+bin/spark-shell --jars $HUDI_SPARK_BUNDLE_PATH --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
-### Run Hive Sync Tool
-Hive Sync Tool will update/create the necessary metadata(schema and partitions) in hive metastore. This allows for schema evolution and incremental addition of new partitions written to.
-It uses an incremental approach by storing the last commit time synced in the TBLPROPERTIES and only syncing the commits from the last sync commit time stored.
-Both [Spark Datasource](writing_data.html#datasource-writer) & [DeltaStreamer](writing_data.html#deltastreamer) have capability to do this, after each write.
+Setup table name, base path and a data generator to generate records for this guide.
 
 ```
-cd hudi-hive
-./run_sync_tool.sh
-  --user hive
-  --pass hive
-  --database default
-  --jdbc-url "jdbc:hive2://localhost:10010/"
-  --base-path tmp/hoodie/sample-table/
-  --table hoodie_test
-  --partitioned-by field1,field2
+import org.apache.hudi.QuickstartUtils._
+import scala.collection.JavaConversions._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
 
-```
-For some reason, if you want to do this by hand. Please 
-follow [this](https://cwiki.apache.org/confluence/display/HUDI/Registering+sample+dataset+to+Hive+via+beeline).
-
-
-### HiveQL {#hive}
-
-Let's first perform a query on the latest committed snapshot of the table
-
-```
-hive> set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
-hive> set hive.stats.autogather=false;
-hive> add jar file:///path/to/hudi-hive-bundle-0.4.6-SNAPSHOT.jar;
-hive> select count(*) from hoodie_test;
-...
-OK
-100
-Time taken: 18.05 seconds, Fetched: 1 row(s)
-hive>
+val tableName = "hudi_cow_table"
+val basePath = "file:///tmp/hudi_cow_table"
+val dataGen = new DataGenerator
 ```
 
-### SparkSQL {#spark}
+The [DataGenerator](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java) 
+can generate sample inserts and updates based on the the sample trip schema 
+[here](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 
-Spark is super easy, once you get Hive working as above. Just spin up a Spark Shell as below
 
-```
-$ cd $SPARK_INSTALL
-$ spark-shell --jars $HUDI_SRC/packaging/hudi-spark-bundle/target/hudi-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
-
-scala> val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-scala> sqlContext.sql("show tables").show(10000)
-scala> sqlContext.sql("describe hoodie_test").show(10000)
-scala> sqlContext.sql("describe hoodie_test_rt").show(10000)
-scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
-```
-
-### Presto {#presto}
-
-Checkout the 'master' branch on OSS Presto, build it, and place your installation somewhere.
-
-* Copy the hudi/packaging/hudi-presto-bundle/target/hudi-presto-bundle-*.jar into $PRESTO_INSTALL/plugin/hive-hadoop2/
-* Startup your server and you should be able to query the same Hive table via Presto
+## Insert data {#inserts}
+Generate some new trips, load them into a DataFrame and write the DataFrame into the Hudi dataset as below.
 
 ```
-show columns from hive.default.hoodie_test;
-select count(*) from hive.default.hoodie_test
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+df.write.format("org.apache.hudi").
+    options(getQuickstartWriteConfigs).
+    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+    option(TABLE_NAME, tableName).
+    mode(Overwrite).
+    save(basePath);
+``` 
+
+`mode(Overwrite)` overwrites and recreates the dataset if it already exists.
+You can check the data generated under `/tmp/hudi_cow_table/<region>/<country>/<city>/`. We provided a record key 
+(`uuid` in [schema](#sample-schema)), partition field (`region/county/city`) and combine logic (`ts` in 
+[schema](#sample-schema)) to ensure trip records are unique within each partition. For more info, refer to 
+[Modeling data stored in Hudi](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)
+and for info on ways to ingest data into Hudi, refer to [Writing Hudi Datasets](https://hudi.apache.org/writing_data.html).
+Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
+`insert` or `bulk_insert` operations which could be faster. To know more, refer to 
+[Write operations](https://hudi.apache.org/writing_data.html#write-operations)
+ 
+## Query data {#query}
+Load the data files into a DataFrame.
+```
+val roViewDF = spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*")
+roViewDF.registerTempTable("hudi_ro_table")
+spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare > 20.0").show()
+spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
+```
+This query provides a read optimized view of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
+from base path we ve used `load(basePath + "/*/*/*/*")`. 
+Refer to [Storage Types and Views](https://hudi.apache.org/concepts.html#storage-types--views) for more info on all storage types and views supported.
+
+## Update data {#updates}
+This is similar to inserting new data. Generate updates to existing trips using the data generator, load into a DataFrame 
+and write DataFrame into the hudi dataset.
+
+```
+val updates = convertToStringList(dataGen.generateUpdates(10))
+val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));
+df.write.format("org.apache.hudi").
+    options(getQuickstartWriteConfigs).
+    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+    option(TABLE_NAME, tableName).
+    mode(Append).
+    save(basePath);
 ```
 
-### Incremental HiveQL
+Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the dataset for the first time.
+[Querying](#query) the data again will now show updated trips. Each write operation generates a new [commit](http://hudi.incubator.apache.org/concepts.html) 
+denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 
-Let's now perform a query, to obtain the __ONLY__ changed rows since a commit in the past.
+## Incremental query
+
+Hudi also provides capability to obtain a stream of records that changed since given commit timestamp. 
+This can be achieved using Hudi's incremental view and providing a begin time from which changes need to be streamed. 
+We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
 ```
-hive> set hoodie.hoodie_test.consume.mode=INCREMENTAL;
-hive> set hoodie.hoodie_test.consume.start.timestamp=001;
-hive> set hoodie.hoodie_test.consume.max.commits=10;
-hive> select `_hoodie_commit_time`, rider, driver from hoodie_test where `_hoodie_commit_time` > '001' limit 10;
-OK
-All commits :[001, 002]
-002	rider-001	driver-001
-002	rider-001	driver-001
-002	rider-002	driver-002
-002	rider-001	driver-001
-002	rider-001	driver-001
-002	rider-002	driver-002
-002	rider-001	driver-001
-002	rider-002	driver-002
-002	rider-002	driver-002
-002	rider-001	driver-001
-Time taken: 0.056 seconds, Fetched: 10 row(s)
-hive>
-hive>
-```
+val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
+val beginTime = commits(commits.length - 2) // commit time we are interested in
 
-This is only supported for Read-optimized view for now."
+// incrementally query data
+val incViewDF = spark.
+    read.
+    format("org.apache.hudi").
+    option(VIEW_TYPE_OPT_KEY, VIEW_TYPE_INCREMENTAL_OPT_VAL).
+    option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+    load(basePath);
+incViewDF.registerTempTable("hudi_incr_table")
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()
+``` 
+This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
+feature is that it now lets you author streaming pipelines on batch data.
+
+## Point in time query
+Lets look at how to query data as of a specific time. The specific time can be represented by pointing endTime to a 
+specific commit time and beginTime to "000" (denoting earliest possible commit time). 
+
+```
+val beginTime = "000" // Represents all commits > this time.
+val endTime = commits(commits.length - 2) // commit time we are interested in
+
+//incrementally query data
+val incViewDF = spark.read.format("org.apache.hudi").
+    option(VIEW_TYPE_OPT_KEY, VIEW_TYPE_INCREMENTAL_OPT_VAL).
+    option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+    option(END_INSTANTTIME_OPT_KEY, endTime).
+    load(basePath);
+incViewDF.registerTempTable("hudi_incr_table")
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()
+``` 
+
+## Where to go from here?
+Here, we used Spark to show case the capabilities of Hudi. However, Hudi can support multiple storage types/views and 
+Hudi datasets can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
+[demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all 
+dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
+steps [here](docker_demo.html) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+to Hudi, refer to [migration guide](migration_guide.html). 
