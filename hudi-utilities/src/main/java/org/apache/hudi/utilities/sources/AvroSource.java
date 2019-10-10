@@ -27,9 +27,7 @@ import org.apache.spark.sql.SparkSession;
 
 public abstract class AvroSource extends Source<JavaRDD<GenericRecord>> {
 
-  public AvroSource(TypedProperties props,
-      JavaSparkContext sparkContext,
-      SparkSession sparkSession,
+  public AvroSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.AVRO);
   }

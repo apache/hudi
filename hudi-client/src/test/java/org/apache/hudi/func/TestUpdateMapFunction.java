@@ -87,8 +87,8 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
       insertRecords
           .add(new HoodieRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
 
-      HoodieCreateHandle createHandle = new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(),
-          "f1-0", insertRecords.iterator());
+      HoodieCreateHandle createHandle =
+          new HoodieCreateHandle(config, "100", table, rowChange1.getPartitionPath(), "f1-0", insertRecords.iterator());
       createHandle.write();
       WriteStatus insertResult = createHandle.close();
       return insertResult;
@@ -111,8 +111,8 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
       List<HoodieRecord> updateRecords = new ArrayList<>();
       TestRawTripPayload rowChange1 = new TestRawTripPayload(recordStr1);
-      HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()),
-          rowChange1);
+      HoodieRecord record1 =
+          new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
       record1.unseal();
       record1.setCurrentLocation(new HoodieRecordLocation("100", fileId));
       record1.seal();

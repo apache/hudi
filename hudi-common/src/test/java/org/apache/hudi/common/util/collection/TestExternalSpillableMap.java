@@ -64,8 +64,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath,
-            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -86,8 +85,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath,
-            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -124,8 +122,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath,
-            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
@@ -178,9 +175,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   public void simpleTestWithException() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
-    ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, failureOutputPath,
-            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
+    ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records = new ExternalSpillableMap<>(16L,
+        failureOutputPath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -198,8 +194,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath,
-            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
@@ -218,8 +213,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<String> keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
     // Update the commitTime for this record
-    List<IndexedRecord> updatedRecords = SchemaTestUtil
-        .updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
+    List<IndexedRecord> updatedRecords =
+        SchemaTestUtil.updateHoodieTestRecords(keysToBeUpdated, recordsToUpdate, newCommitTime);
     // Upsert this updated record
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
     GenericRecord gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
@@ -251,8 +246,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath,
-            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
@@ -290,8 +284,8 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     key = recordKeys.get(recordKeys.size() - 1);
     record = records.get(key);
     // Get the field we want to update
-    fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING)
-        .findAny().get().name();
+    fieldName = schema.getFields().stream().filter(field -> field.schema().getType() == Schema.Type.STRING).findAny()
+        .get().name();
     // Use a new value to update this field
     newValue = "update2";
     recordsToUpdate = new ArrayList<>();
@@ -311,6 +305,5 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 
   // TODO : come up with a performance eval test for spillableMap
   @Test
-  public void testLargeInsertUpsert() {
-  }
+  public void testLargeInsertUpsert() {}
 }

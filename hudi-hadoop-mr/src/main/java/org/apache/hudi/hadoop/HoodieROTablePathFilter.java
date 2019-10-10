@@ -37,22 +37,22 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Given a path is a part of - Hoodie dataset = accepts ONLY the latest version of each path -
- * Non-Hoodie dataset = then always accept
+ * Given a path is a part of - Hoodie dataset = accepts ONLY the latest version of each path - Non-Hoodie dataset = then
+ * always accept
  * <p>
- * We can set this filter, on a query engine's Hadoop Config and if it respects path filters, then
- * you should be able to query both hoodie and non-hoodie datasets as you would normally do.
+ * We can set this filter, on a query engine's Hadoop Config and if it respects path filters, then you should be able to
+ * query both hoodie and non-hoodie datasets as you would normally do.
  * <p>
- * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop
- * .HoodieROTablePathFilter.class, org.apache.hadoop.fs.PathFilter.class)
+ * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop .HoodieROTablePathFilter.class,
+ * org.apache.hadoop.fs.PathFilter.class)
  */
 public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
   private static final transient Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
 
   /**
-   * Its quite common, to have all files from a given partition path be passed into accept(), cache
-   * the check for hoodie metadata for known partition paths and the latest versions of files
+   * Its quite common, to have all files from a given partition path be passed into accept(), cache the check for hoodie
+   * metadata for known partition paths and the latest versions of files
    */
   private HashMap<String, HashSet<Path>> hoodiePathCache;
 
@@ -135,19 +135,16 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
       if (baseDir != null) {
         try {
-          HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(),
-              baseDir.toString());
+          HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-              metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-              fs.listStatus(folder));
-          List<HoodieDataFile> latestFiles = fsView.getLatestDataFiles()
-              .collect(Collectors.toList());
+              metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), fs.listStatus(folder));
+          List<HoodieDataFile> latestFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
           }
-          LOG.info("Based on hoodie metadata from base path: " + baseDir.toString() + ", caching "
-              + latestFiles.size() + " files under " + folder);
+          LOG.info("Based on hoodie metadata from base path: " + baseDir.toString() + ", caching " + latestFiles.size()
+              + " files under " + folder);
           for (HoodieDataFile lfile : latestFiles) {
             hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }

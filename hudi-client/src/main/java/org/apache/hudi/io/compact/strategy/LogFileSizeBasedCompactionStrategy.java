@@ -30,14 +30,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
- * LogFileSizeBasedCompactionStrategy orders the compactions based on the total log files size and
- * limits the compactions within a configured IO bound
+ * LogFileSizeBasedCompactionStrategy orders the compactions based on the total log files size and limits the
+ * compactions within a configured IO bound
  *
  * @see BoundedIOCompactionStrategy
  * @see CompactionStrategy
  */
-public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrategy implements
-    Comparator<HoodieCompactionOperation> {
+public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrategy
+    implements Comparator<HoodieCompactionOperation> {
 
   private static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILE_SIZE";
 
@@ -47,9 +47,8 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
     Map<String, Double> metrics = super.captureMetrics(config, dataFile, partitionPath, logFiles);
 
     // Total size of all the log files
-    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize)
-        .filter(size -> size >= 0).reduce((size1, size2) -> size1 + size2)
-        .orElse(0L);
+    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
+        .reduce((size1, size2) -> size1 + size2).orElse(0L);
     // save the metrics needed during the order
     metrics.put(TOTAL_LOG_FILE_SIZE, totalLogFileSize.doubleValue());
     return metrics;
@@ -59,9 +58,8 @@ public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrat
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Order the operations based on the reverse size of the logs and limit them by the IO
-    return super
-        .orderAndFilter(writeConfig,
-            operations.stream().sorted(this).collect(Collectors.toList()), pendingCompactionPlans);
+    return super.orderAndFilter(writeConfig, operations.stream().sorted(this).collect(Collectors.toList()),
+        pendingCompactionPlans);
   }
 
   @Override

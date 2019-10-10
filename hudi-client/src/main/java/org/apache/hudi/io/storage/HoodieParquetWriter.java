@@ -36,11 +36,11 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.TaskContext;
 
 /**
- * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides
- * a way to check if the current file can take more records with the <code>canWrite()</code>
+ * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
+ * the current file can take more records with the <code>canWrite()</code>
  */
-public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord> extends
-    ParquetWriter<IndexedRecord> implements HoodieStorageWriter<R> {
+public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
+    extends ParquetWriter<IndexedRecord> implements HoodieStorageWriter<R> {
 
   private static AtomicLong recordIndex = new AtomicLong(1);
 
@@ -52,24 +52,22 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final Schema schema;
 
 
-  public HoodieParquetWriter(String commitTime, Path file, HoodieParquetConfig parquetConfig,
-      Schema schema) throws IOException {
+  public HoodieParquetWriter(String commitTime, Path file, HoodieParquetConfig parquetConfig, Schema schema)
+      throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
-        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(),
-        parquetConfig.getCompressionCodecName(), parquetConfig.getBlockSize(),
-        parquetConfig.getPageSize(), parquetConfig.getPageSize(),
+        ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
+        parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
         ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED, ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED,
-        ParquetWriter.DEFAULT_WRITER_VERSION,
-        registerFileSystem(file, parquetConfig.getHadoopConf()));
+        ParquetWriter.DEFAULT_WRITER_VERSION, registerFileSystem(file, parquetConfig.getHadoopConf()));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf());
-    this.fs = (HoodieWrapperFileSystem) this.file
-        .getFileSystem(registerFileSystem(file, parquetConfig.getHadoopConf()));
+    this.fs =
+        (HoodieWrapperFileSystem) this.file.getFileSystem(registerFileSystem(file, parquetConfig.getHadoopConf()));
     // We cannot accurately measure the snappy compressed output file size. We are choosing a
     // conservative 10%
     // TODO - compute this compression ratio dynamically by looking at the bytes written to the
     // stream and the actual file size reported by HDFS
-    this.maxFileSize = parquetConfig.getMaxFileSize() + Math
-        .round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
+    this.maxFileSize = parquetConfig.getMaxFileSize()
+        + Math.round(parquetConfig.getMaxFileSize() * parquetConfig.getCompressionRatio());
     this.writeSupport = parquetConfig.getWriteSupport();
     this.commitTime = commitTime;
     this.schema = schema;
@@ -85,10 +83,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    String seqId = HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(),
-        recordIndex.getAndIncrement());
-    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(),
-        record.getPartitionPath(), file.getName());
+    String seqId =
+        HoodieRecord.generateSequenceId(commitTime, TaskContext.getPartitionId(), recordIndex.getAndIncrement());
+    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
+        file.getName());
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, commitTime, seqId);
     super.write(avroRecord);
     writeSupport.add(record.getRecordKey());

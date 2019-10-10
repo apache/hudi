@@ -39,18 +39,14 @@ public class FlatteningTransformer implements Transformer {
 
   /** Configs supported */
   @Override
-  public Dataset<Row> apply(
-      JavaSparkContext jsc,
-      SparkSession sparkSession,
-      Dataset<Row> rowDataset,
+  public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
 
     // tmp table name doesn't like dashes
     String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
     log.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
-    return sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null)
-        + " from " + tmpTable);
+    return sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
   }
 
   public String flattenSchema(StructType schema, String prefix) {
@@ -75,7 +71,7 @@ public class FlatteningTransformer implements Transformer {
     }
 
     if (selectSQLQuery.length() > 0) {
-      selectSQLQuery. deleteCharAt(selectSQLQuery.length() - 1);
+      selectSQLQuery.deleteCharAt(selectSQLQuery.length() - 1);
     }
 
     return selectSQLQuery.toString();

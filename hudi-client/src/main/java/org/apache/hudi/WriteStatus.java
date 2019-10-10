@@ -64,14 +64,11 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * Mark write as success, optionally using given parameters for the purpose of calculating some
-   * aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
-   * objects are collected in Spark Driver.
+   * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
+   * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies
-   * it.
-   * @param optionalRecordMetadata optional metadata related to data contained in {@link
-   * HoodieRecord} before deflation.
+   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+   * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
@@ -81,14 +78,11 @@ public class WriteStatus implements Serializable {
   }
 
   /**
-   * Mark write as failed, optionally using given parameters for the purpose of calculating some
-   * aggregate metrics. This method is not meant to cache passed arguments, since WriteStatus
-   * objects are collected in Spark Driver.
+   * Mark write as failed, optionally using given parameters for the purpose of calculating some aggregate metrics. This
+   * method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.
    *
-   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies
-   * it.
-   * @param optionalRecordMetadata optional metadata related to data contained in {@link
-   * HoodieRecord} before deflation.
+   * @param record deflated {@code HoodieRecord} containing information that uniquely identifies it.
+   * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {

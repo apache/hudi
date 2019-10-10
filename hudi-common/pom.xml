@@ -25,6 +25,10 @@
 
   <artifactId>hudi-common</artifactId>
 
+  <properties>
+    <main.basedir>${project.parent.basedir}</main.basedir>
+  </properties>
+
   <build>
     <resources>
       <resource>

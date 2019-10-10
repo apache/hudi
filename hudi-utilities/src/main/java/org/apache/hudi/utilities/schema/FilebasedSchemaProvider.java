@@ -38,10 +38,8 @@ public class FilebasedSchemaProvider extends SchemaProvider {
    * Configs supported
    */
   public static class Config {
-    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider"
-        + ".source.schema.file";
-    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider"
-        + ".target.schema.file";
+    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".source.schema.file";
+    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".target.schema.file";
   }
 
   private final FileSystem fs;
@@ -55,11 +53,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
     this.fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), jssc.hadoopConfiguration());
     try {
-      this.sourceSchema = new Schema.Parser().parse(
-          fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
+      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
       if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
-        this.targetSchema = new Schema.Parser().parse(
-            fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));
+        this.targetSchema =
+            new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema", ioe);

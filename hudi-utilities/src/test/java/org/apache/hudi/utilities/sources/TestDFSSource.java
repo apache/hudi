@@ -80,16 +80,13 @@ public class TestDFSSource extends UtilitiesTestBase {
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     assertEquals(Option.empty(), jsonSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
-    UtilitiesTestBase.Helpers.saveStringsToDFS(
-        Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 100)), dfs,
+    UtilitiesTestBase.Helpers.saveStringsToDFS(Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 100)), dfs,
         dfsBasePath + "/jsonFiles/1.json");
     assertEquals(Option.empty(), jsonSource.fetchNewDataInAvroFormat(Option.empty(), 10).getBatch());
-    InputBatch<JavaRDD<GenericRecord>> fetch1 =
-        jsonSource.fetchNewDataInAvroFormat(Option.empty(), 1000000);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = jsonSource.fetchNewDataInAvroFormat(Option.empty(), 1000000);
     assertEquals(100, fetch1.getBatch().get().count());
     // Test json -> Row format
-    InputBatch<Dataset<Row>> fetch1AsRows =
-        jsonSource.fetchNewDataInRowFormat(Option.empty(), 1000000);
+    InputBatch<Dataset<Row>> fetch1AsRows = jsonSource.fetchNewDataInRowFormat(Option.empty(), 1000000);
     assertEquals(100, fetch1AsRows.getBatch().get().count());
     // Test Avro -> Row format
     Dataset<Row> fetch1Rows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
@@ -97,16 +94,15 @@ public class TestDFSSource extends UtilitiesTestBase {
     assertEquals(100, fetch1Rows.count());
 
     // 2. Produce new data, extract new data
-    UtilitiesTestBase.Helpers.saveStringsToDFS(
-        Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 10000)),
-        dfs, dfsBasePath + "/jsonFiles/2.json");
-    InputBatch<Dataset<Row>> fetch2 = jsonSource.fetchNewDataInRowFormat(
-        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    UtilitiesTestBase.Helpers.saveStringsToDFS(Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 10000)), dfs,
+        dfsBasePath + "/jsonFiles/2.json");
+    InputBatch<Dataset<Row>> fetch2 =
+        jsonSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(10000, fetch2.getBatch().get().count());
 
     // 3. Extract with previous checkpoint => gives same data back (idempotent)
-    InputBatch<Dataset<Row>> fetch3 = jsonSource.fetchNewDataInRowFormat(
-        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    InputBatch<Dataset<Row>> fetch3 =
+        jsonSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(10000, fetch3.getBatch().get().count());
     assertEquals(fetch2.getCheckpointForNextBatch(), fetch3.getCheckpointForNextBatch());
     fetch3.getBatch().get().registerTempTable("test_dfs_table");
@@ -114,8 +110,8 @@ public class TestDFSSource extends UtilitiesTestBase {
     assertEquals(10000, rowDataset.count());
 
     // 4. Extract with latest checkpoint => no new data returned
-    InputBatch<JavaRDD<GenericRecord>> fetch4 = jsonSource.fetchNewDataInAvroFormat(
-        Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> fetch4 =
+        jsonSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch4.getBatch());
   }
 }

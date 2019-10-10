@@ -99,6 +99,7 @@
     <skipITs>${skipTests}</skipITs>
     <skipUTs>${skipTests}</skipUTs>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <main.basedir>${project.basedir}</main.basedir>
   </properties>
 
   <scm>
@@ -155,11 +156,38 @@
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
           <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
-          <configLocation>${maven.multiModuleProjectDirectory}/style/scalastyle-config.xml</configLocation>
+          <configLocation>${main.basedir}/style/scalastyle-config.xml</configLocation>
           <outputEncoding>UTF-8</outputEncoding>
         </configuration>
         <executions>
           <execution>
+            <phase>compile</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>1.24.3</version>
+        <configuration>
+          <java>
+            <eclipse>
+              <file>${main.basedir}/style/eclipse-java-google-style.xml</file>
+              <version>4.10.0</version>
+            </eclipse>
+          </java>
+          <scala>
+            <!--<endWithNewLine/>-->
+            <trimTrailingWhitespace/>
+          </scala>
+        </configuration>
+        <executions>
+          <execution>
+            <!-- Runs in compile phase to fail fast in case of formatting issues.-->
+            <id>spotless-check</id>
             <phase>compile</phase>
             <goals>
               <goal>check</goal>

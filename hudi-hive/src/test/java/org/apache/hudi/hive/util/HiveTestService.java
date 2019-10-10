@@ -142,7 +142,7 @@ public class HiveTestService {
     // 'new HiveConf()'. This is fixed by https://issues.apache.org/jira/browse/HIVE-6657,
     // in Hive 0.14.
     // As a workaround, the property is set in hive-site.xml in this module.
-    //conf.set(HiveConf.ConfVars.HIVE_SERVER2_AUTHENTICATION.varname, "NOSASL");
+    // conf.set(HiveConf.ConfVars.HIVE_SERVER2_AUTHENTICATION.varname, "NOSASL");
     File localHiveDir = new File(localHiveLocation);
     localHiveDir.mkdirs();
     File metastoreDbDir = new File(localHiveDir, "metastore_db");
@@ -225,8 +225,7 @@ public class HiveTestService {
     private final TTransportFactory parentTransFactory;
     private final TTransportFactory childTransFactory;
 
-    private ChainedTTransportFactory(TTransportFactory parentTransFactory,
-        TTransportFactory childTransFactory) {
+    private ChainedTTransportFactory(TTransportFactory parentTransFactory, TTransportFactory childTransFactory) {
       this.parentTransFactory = parentTransFactory;
       this.childTransFactory = childTransFactory;
     }
@@ -268,17 +267,15 @@ public class HiveTestService {
       int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
       int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
       boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
-      boolean useFramedTransport = conf.getBoolVar(
-          HiveConf.ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
+      boolean useFramedTransport = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_FRAMED_TRANSPORT);
 
       // don't support SASL yet
-      //boolean useSasl = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL);
+      // boolean useSasl = conf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL);
 
       TServerTransport serverTransport;
       if (forceBindIP != null) {
         InetSocketAddress address = new InetSocketAddress(forceBindIP, port);
-        serverTransport =
-            tcpKeepAlive ? new TServerSocketKeepAlive(address) : new TServerSocket(address);
+        serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(address) : new TServerSocket(address);
 
       } else {
         serverTransport = tcpKeepAlive ? new TServerSocketKeepAlive(port) : new TServerSocket(port);
@@ -287,29 +284,24 @@ public class HiveTestService {
       TProcessor processor;
       TTransportFactory transFactory;
 
-      IHMSHandler handler = (IHMSHandler) HiveMetaStore
-          .newRetryingHMSHandler("new db based metaserver",
-              conf, true);
+      IHMSHandler handler = (IHMSHandler) HiveMetaStore.newRetryingHMSHandler("new db based metaserver", conf, true);
 
       if (conf.getBoolVar(HiveConf.ConfVars.METASTORE_EXECUTE_SET_UGI)) {
-        transFactory =
-            useFramedTransport ? new ChainedTTransportFactory(new TFramedTransport.Factory(),
-                new TUGIContainingTransport.Factory()) : new TUGIContainingTransport.Factory();
+        transFactory = useFramedTransport
+            ? new ChainedTTransportFactory(new TFramedTransport.Factory(), new TUGIContainingTransport.Factory())
+            : new TUGIContainingTransport.Factory();
 
         processor = new TUGIBasedProcessor<IHMSHandler>(handler);
         LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
       } else {
-        transFactory =
-            useFramedTransport ? new TFramedTransport.Factory() : new TTransportFactory();
+        transFactory = useFramedTransport ? new TFramedTransport.Factory() : new TTransportFactory();
         processor = new TSetIpAddressProcessor<IHMSHandler>(handler);
         LOG.info("Starting DB backed MetaStore Server");
       }
 
       TThreadPoolServer.Args args = new TThreadPoolServer.Args(serverTransport).processor(processor)
-          .transportFactory(transFactory)
-          .protocolFactory(new TBinaryProtocol.Factory())
-          .minWorkerThreads(minWorkerThreads)
-          .maxWorkerThreads(maxWorkerThreads);
+          .transportFactory(transFactory).protocolFactory(new TBinaryProtocol.Factory())
+          .minWorkerThreads(minWorkerThreads).maxWorkerThreads(maxWorkerThreads);
 
       final TServer tServer = new TThreadPoolServer(args);
       executorService.submit(new Runnable() {

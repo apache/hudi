@@ -50,12 +50,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns
- * meta-data about commits, savepoints, compactions, cleanups as a <code>HoodieTimeline</code>
- * Create an instance of the <code>HoodieTableMetaClient</code> with FileSystem and basePath to
- * start getting the meta-data. <p> All the timelines are computed lazily, once computed the
- * timeline is cached and never refreshed. Use the <code>HoodieTimeline.reload()</code> to refresh
- * timelines.
+ * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
+ * commits, savepoints, compactions, cleanups as a <code>HoodieTimeline</code> Create an instance of the
+ * <code>HoodieTableMetaClient</code> with FileSystem and basePath to start getting the meta-data.
+ * <p>
+ * All the timelines are computed lazily, once computed the timeline is cached and never refreshed. Use the
+ * <code>HoodieTimeline.reload()</code> to refresh timelines.
  *
  * @see HoodieTimeline
  * @since 0.3.0
@@ -79,20 +79,17 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
 
-  public HoodieTableMetaClient(Configuration conf, String basePath)
-      throws DatasetNotFoundException {
+  public HoodieTableMetaClient(Configuration conf, String basePath) throws DatasetNotFoundException {
     // Do not load any timeline by default
     this(conf, basePath, false);
   }
 
-  public HoodieTableMetaClient(Configuration conf, String basePath,
-      boolean loadActiveTimelineOnLoad) {
+  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad) {
     this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build());
   }
 
-  public HoodieTableMetaClient(Configuration conf, String basePath,
-      boolean loadActiveTimelineOnLoad, ConsistencyGuardConfig consistencyGuardConfig)
-      throws DatasetNotFoundException {
+  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
+      ConsistencyGuardConfig consistencyGuardConfig) throws DatasetNotFoundException {
     log.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
@@ -117,15 +114,11 @@ public class HoodieTableMetaClient implements Serializable {
    *
    * @deprecated
    */
-  public HoodieTableMetaClient() {
-  }
+  public HoodieTableMetaClient() {}
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
-    return new HoodieTableMetaClient(
-        oldMetaClient.hadoopConf.get(),
-        oldMetaClient.basePath,
-        oldMetaClient.loadActiveTimelineOnLoad,
-        oldMetaClient.consistencyGuardConfig);
+    return new HoodieTableMetaClient(oldMetaClient.hadoopConf.get(), oldMetaClient.basePath,
+        oldMetaClient.loadActiveTimelineOnLoad, oldMetaClient.consistencyGuardConfig);
   }
 
   /**
@@ -133,14 +126,12 @@ public class HoodieTableMetaClient implements Serializable {
    *
    * @deprecated
    */
-  private void readObject(java.io.ObjectInputStream in)
-      throws IOException, ClassNotFoundException {
+  private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
     fs = null; // will be lazily inited
   }
 
-  private void writeObject(java.io.ObjectOutputStream out)
-      throws IOException {
+  private void writeObject(java.io.ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
   }
 
@@ -173,8 +164,9 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   *  Returns Marker folder path
-    * @param instantTs Instant Timestamp
+   * Returns Marker folder path
+   * 
+   * @param instantTs Instant Timestamp
    * @return
    */
   public String getMarkerFolderPath(String instantTs) {
@@ -215,14 +207,17 @@ public class HoodieTableMetaClient implements Serializable {
       FileSystem fileSystem = FSUtils.getFs(metaPath, hadoopConf.newCopy());
       Preconditions.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
           "File System not expected to be that of HoodieWrapperFileSystem");
-      fs = new HoodieWrapperFileSystem(fileSystem, consistencyGuardConfig.isConsistencyCheckEnabled()
-            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig) : new NoOpConsistencyGuard());
+      fs = new HoodieWrapperFileSystem(fileSystem,
+          consistencyGuardConfig.isConsistencyCheckEnabled()
+              ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
+              : new NoOpConsistencyGuard());
     }
     return fs;
   }
 
   /**
    * Return raw file-system
+   * 
    * @return
    */
   public FileSystem getRawFs() {
@@ -260,8 +255,8 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Get the archived commits as a timeline. This is costly operation, as all data from the archived
-   * files are read. This should not be used, unless for historical debugging purposes
+   * Get the archived commits as a timeline. This is costly operation, as all data from the archived files are read.
+   * This should not be used, unless for historical debugging purposes
    *
    * @return Active commit timeline
    */
@@ -276,8 +271,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Helper method to initialize a dataset, with given basePath, tableType, name, archiveFolder
    */
-  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
-      String tableType, String tableName, String archiveLogFolder) throws IOException {
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
+      String tableName, String archiveLogFolder) throws IOException {
     HoodieTableType type = HoodieTableType.valueOf(tableType);
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
@@ -301,13 +296,12 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path as a hoodie dataset with configs passed in as as
-   * Properties
+   * Helper method to initialize a given path as a hoodie dataset with configs passed in as as Properties
    *
    * @return Instance of HoodieTableMetaClient
    */
-  public static HoodieTableMetaClient initDatasetAndGetMetaClient(Configuration hadoopConf,
-      String basePath, Properties props) throws IOException {
+  public static HoodieTableMetaClient initDatasetAndGetMetaClient(Configuration hadoopConf, String basePath,
+      Properties props) throws IOException {
     log.info("Initializing " + basePath + " as hoodie dataset " + basePath);
     Path basePathDir = new Path(basePath);
     final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
@@ -320,9 +314,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     // if anything other than default archive log folder is specified, create that too
-    String archiveLogPropVal = props
-        .getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME,
-            HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
+    String archiveLogPropVal = props.getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME,
+        HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
     if (!archiveLogPropVal.equals(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER)) {
       Path archiveLogDir = new Path(metaPathDir, archiveLogPropVal);
       if (!fs.exists(archiveLogDir)) {
@@ -346,14 +339,12 @@ public class HoodieTableMetaClient implements Serializable {
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
-    log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType()
-        + " from " + basePath);
+    log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
   }
 
   // HELPER METHODS TO CREATE META FILE NAMES
-  public static FileStatus[] scanFiles(FileSystem fs, Path metaPath, PathFilter nameFilter)
-      throws IOException {
+  public static FileStatus[] scanFiles(FileSystem fs, Path metaPath, PathFilter nameFilter) throws IOException {
     return fs.listStatus(metaPath, nameFilter);
   }
 
@@ -375,10 +366,10 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Get the commit + pending-compaction timeline visible for this table.
-   * A RT filesystem view is constructed with this timeline so that file-slice after pending compaction-requested
-   * instant-time is also considered valid. A RT file-system view for reading must then merge the file-slices before
-   * and after pending compaction instant so that all delta-commits are read.
+   * Get the commit + pending-compaction timeline visible for this table. A RT filesystem view is constructed with this
+   * timeline so that file-slice after pending compaction-requested instant-time is also considered valid. A RT
+   * file-system view for reading must then merge the file-slices before and after pending compaction instant so that
+   * all delta-commits are read.
    */
   public HoodieTimeline getCommitsAndCompactionTimeline() {
     switch (this.getTableType()) {
@@ -415,8 +406,7 @@ public class HoodieTableMetaClient implements Serializable {
       case MERGE_ON_READ:
         return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
       default:
-        throw new HoodieException(
-            "Could not commit on unknown storage type " + this.getTableType());
+        throw new HoodieException("Could not commit on unknown storage type " + this.getTableType());
     }
   }
 
@@ -424,23 +414,21 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects
    *
-   * @param fs                 FileSystem
-   * @param metaPath           Meta Path where hoodie instants are present
+   * @param fs FileSystem
+   * @param metaPath Meta Path where hoodie instants are present
    * @param includedExtensions Included hoodie extensions
    * @return List of Hoodie Instants generated
    * @throws IOException in case of failure
    */
-  public static List<HoodieInstant> scanHoodieInstantsFromFileSystem(
-      FileSystem fs, Path metaPath, Set<String> includedExtensions) throws IOException {
-    return Arrays.stream(
-        HoodieTableMetaClient
-            .scanFiles(fs, metaPath, path -> {
-              // Include only the meta files with extensions that needs to be included
-              String extension = FSUtils.getFileExtension(path.getName());
-              return includedExtensions.contains(extension);
-            })).sorted(Comparator.comparing(
-                // Sort the meta-data by the instant time (first part of the file name)
-                fileStatus -> FSUtils.getInstantTime(fileStatus.getPath().getName())))
+  public static List<HoodieInstant> scanHoodieInstantsFromFileSystem(FileSystem fs, Path metaPath,
+      Set<String> includedExtensions) throws IOException {
+    return Arrays.stream(HoodieTableMetaClient.scanFiles(fs, metaPath, path -> {
+      // Include only the meta files with extensions that needs to be included
+      String extension = FSUtils.getFileExtension(path.getName());
+      return includedExtensions.contains(extension);
+    })).sorted(Comparator.comparing(
+        // Sort the meta-data by the instant time (first part of the file name)
+        fileStatus -> FSUtils.getInstantTime(fileStatus.getPath().getName())))
         // create HoodieInstantMarkers from FileStatus, which extracts properties
         .map(HoodieInstant::new).collect(Collectors.toList());
   }

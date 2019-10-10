@@ -40,8 +40,8 @@ public class SparkUtil {
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
     String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
         .getAbsolutePath();
-    SparkLauncher sparkLauncher = new SparkLauncher().setAppResource(currentJar)
-        .setMainClass(SparkMain.class.getName());
+    SparkLauncher sparkLauncher =
+        new SparkLauncher().setAppResource(currentJar).setMainClass(SparkMain.class.getName());
 
     if (!StringUtils.isNullOrEmpty(propertiesFile)) {
       sparkLauncher.setPropertiesFile(propertiesFile);

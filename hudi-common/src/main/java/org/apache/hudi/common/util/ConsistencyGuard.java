@@ -32,12 +32,12 @@ public interface ConsistencyGuard {
    * File Visibility
    */
   enum FileVisibility {
-    APPEAR,
-    DISAPPEAR,
+    APPEAR, DISAPPEAR,
   }
 
   /**
    * Wait for file to be listable based on configurable timeout
+   * 
    * @param filePath
    * @throws IOException when having trouble listing the path
    * @throws TimeoutException when retries exhausted
@@ -46,6 +46,7 @@ public interface ConsistencyGuard {
 
   /**
    * Wait for file to be listable based on configurable timeout
+   * 
    * @param filePath
    * @throws IOException when having trouble listing the path
    * @throws TimeoutException when retries exhausted
@@ -65,8 +66,9 @@ public interface ConsistencyGuard {
 
   /**
    * Wait Till target visibility is reached
-   * @param dirPath  Directory Path
-   * @param files    Files
+   * 
+   * @param dirPath Directory Path
+   * @param files Files
    * @param targetVisibility Target Visibitlity
    * @throws IOException
    * @throws TimeoutException

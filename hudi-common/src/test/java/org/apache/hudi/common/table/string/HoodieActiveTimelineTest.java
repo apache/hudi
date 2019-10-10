@@ -98,12 +98,10 @@ public class HoodieActiveTimelineTest extends HoodieCommonTestHarness {
   public void testTimelineOperations() throws Exception {
     timeline = new MockHoodieTimeline(Stream.of("01", "03", "05", "07", "09", "11", "13", "15", "17", "19"),
         Stream.of("21", "23"));
-    HoodieTestUtils.assertStreamEquals("", Stream.of("05", "07", "09", "11"),
-        timeline.getCommitTimeline().filterCompletedInstants().findInstantsInRange("04", "11").getInstants()
-            .map(HoodieInstant::getTimestamp));
-    HoodieTestUtils.assertStreamEquals("", Stream.of("09", "11"),
-        timeline.getCommitTimeline().filterCompletedInstants().findInstantsAfter("07", 2).getInstants()
-            .map(HoodieInstant::getTimestamp));
+    HoodieTestUtils.assertStreamEquals("", Stream.of("05", "07", "09", "11"), timeline.getCommitTimeline()
+        .filterCompletedInstants().findInstantsInRange("04", "11").getInstants().map(HoodieInstant::getTimestamp));
+    HoodieTestUtils.assertStreamEquals("", Stream.of("09", "11"), timeline.getCommitTimeline().filterCompletedInstants()
+        .findInstantsAfter("07", 2).getInstants().map(HoodieInstant::getTimestamp));
     assertFalse(timeline.empty());
     assertFalse(timeline.getCommitTimeline().filterInflightsExcludingCompaction().empty());
     assertEquals("", 12, timeline.countInstants());

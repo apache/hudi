@@ -157,18 +157,19 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     log.info("Syncing pending compaction instant (" + instant + ")");
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(metaClient, instant.getTimestamp());
     List<Pair<String, CompactionOperation>> pendingOps =
-        CompactionUtils.getPendingCompactionOperations(instant, compactionPlan).map(p -> Pair.of(p.getValue().getKey(),
-            CompactionOperation.convertFromAvroRecordInstance(p.getValue().getValue()))).collect(Collectors.toList());
+        CompactionUtils.getPendingCompactionOperations(instant, compactionPlan)
+            .map(p -> Pair.of(p.getValue().getKey(),
+                CompactionOperation.convertFromAvroRecordInstance(p.getValue().getValue())))
+            .collect(Collectors.toList());
     // First, update Pending compaction instants
     addPendingCompactionOperations(pendingOps.stream());
 
-    Map<String, List<Pair<String, HoodieFileGroup>>> partitionToFileGroups =
-        pendingOps.stream().map(opPair -> {
-          String compactionInstantTime = opPair.getKey();
-          HoodieFileGroup fileGroup = new HoodieFileGroup(opPair.getValue().getFileGroupId(), timeline);
-          fileGroup.addNewFileSliceAtInstant(compactionInstantTime);
-          return Pair.of(compactionInstantTime, fileGroup);
-        }).collect(Collectors.groupingBy(x -> x.getValue().getPartitionPath()));
+    Map<String, List<Pair<String, HoodieFileGroup>>> partitionToFileGroups = pendingOps.stream().map(opPair -> {
+      String compactionInstantTime = opPair.getKey();
+      HoodieFileGroup fileGroup = new HoodieFileGroup(opPair.getValue().getFileGroupId(), timeline);
+      fileGroup.addNewFileSliceAtInstant(compactionInstantTime);
+      return Pair.of(compactionInstantTime, fileGroup);
+    }).collect(Collectors.groupingBy(x -> x.getValue().getPartitionPath()));
     partitionToFileGroups.entrySet().forEach(entry -> {
       if (isPartitionAvailableInStore(entry.getKey())) {
         applyDeltaFileSlicesToPartitionView(entry.getKey(),
@@ -185,8 +186,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addCommitInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     log.info("Syncing committed instant (" + instant + ")");
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get(),
-        HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata =
+        HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
     commitMetadata.getPartitionToWriteStats().entrySet().stream().forEach(entry -> {
       String partition = entry.getKey();
       if (isPartitionAvailableInStore(partition)) {
@@ -196,8 +197,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
               new Path(String.format("%s/%s", metaClient.getBasePath(), p.getPath())));
           return status;
         }).toArray(FileStatus[]::new);
-        List<HoodieFileGroup> fileGroups = buildFileGroups(statuses, timeline.filterCompletedAndCompactionInstants(),
-            false);
+        List<HoodieFileGroup> fileGroups =
+            buildFileGroups(statuses, timeline.filterCompletedAndCompactionInstants(), false);
         applyDeltaFileSlicesToPartitionView(partition, fileGroups, DeltaApplyMode.ADD);
       } else {
         log.warn("Skipping partition (" + partition + ") when syncing instant (" + instant + ") as it is not loaded");
@@ -214,8 +215,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addRestoreInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     log.info("Syncing restore instant (" + instant + ")");
-    HoodieRestoreMetadata metadata = AvroUtils.deserializeAvroMetadata(
-        timeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
+    HoodieRestoreMetadata metadata =
+        AvroUtils.deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
 
     Map<String, List<Pair<String, String>>> partitionFiles =
         metadata.getHoodieRestoreMetadata().entrySet().stream().flatMap(entry -> {
@@ -238,8 +239,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addRollbackInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     log.info("Syncing rollback instant (" + instant + ")");
-    HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
-        timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+    HoodieRollbackMetadata metadata =
+        AvroUtils.deserializeAvroMetadata(timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
 
     metadata.getPartitionMetadata().entrySet().stream().forEach(e -> {
       removeFileSlicesForPartition(timeline, instant, e.getKey(), e.getValue().getSuccessDeleteFiles());
@@ -255,16 +256,16 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addCleanInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     log.info("Syncing cleaner instant (" + instant + ")");
-    HoodieCleanMetadata cleanMetadata = AvroUtils
-        .deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get());
+    HoodieCleanMetadata cleanMetadata =
+        AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get());
     cleanMetadata.getPartitionMetadata().entrySet().stream().forEach(entry -> {
       removeFileSlicesForPartition(timeline, instant, entry.getKey(), entry.getValue().getSuccessDeleteFiles());
     });
     log.info("Done Syncing cleaner instant (" + instant + ")");
   }
 
-  private void removeFileSlicesForPartition(HoodieTimeline timeline, HoodieInstant instant,
-      String partition, List<String> paths) {
+  private void removeFileSlicesForPartition(HoodieTimeline timeline, HoodieInstant instant, String partition,
+      List<String> paths) {
     if (isPartitionAvailableInStore(partition)) {
       log.info("Removing file slices for partition (" + partition + ") for instant (" + instant + ")");
       FileStatus[] statuses = paths.stream().map(p -> {
@@ -272,8 +273,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         status.setPath(new Path(p));
         return status;
       }).toArray(FileStatus[]::new);
-      List<HoodieFileGroup> fileGroups = buildFileGroups(statuses,
-          timeline.filterCompletedAndCompactionInstants(), false);
+      List<HoodieFileGroup> fileGroups =
+          buildFileGroups(statuses, timeline.filterCompletedAndCompactionInstants(), false);
       applyDeltaFileSlicesToPartitionView(partition, fileGroups, DeltaApplyMode.REMOVE);
     } else {
       log.warn("Skipping partition (" + partition + ") when syncing instant (" + instant + ") as it is not loaded");
@@ -284,8 +285,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    * Apply mode whether to add or remove the delta view
    */
   enum DeltaApplyMode {
-    ADD,
-    REMOVE
+    ADD, REMOVE
   }
 
   /**
@@ -306,27 +306,27 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     List<HoodieFileGroup> fileGroups = fetchAllStoredFileGroups(partition).collect(Collectors.toList());
     /**
-     * Note that while finding the new data/log files added/removed, the path stored in metadata will be missing
-     * the base-path,scheme and authority. Ensure the matching process takes care of this discrepancy.
+     * Note that while finding the new data/log files added/removed, the path stored in metadata will be missing the
+     * base-path,scheme and authority. Ensure the matching process takes care of this discrepancy.
      */
     Map<String, HoodieDataFile> viewDataFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    //Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
+    // Note: Delta Log Files and Data FIles can be empty when adding/removing pending compactions
     Map<String, HoodieDataFile> deltaDataFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
         .map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .map(df -> Pair.of(Path.getPathWithoutSchemeAndAuthority(new Path(df.getPath())).toString(), df))
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    Map<String, HoodieLogFile> viewLogFiles = fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
-        .flatMap(FileSlice::getLogFiles)
-        .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    Map<String, HoodieLogFile> deltaLogFiles = deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices)
-        .flatMap(FileSlice::getLogFiles)
-        .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    Map<String, HoodieLogFile> viewLogFiles =
+        fileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices).flatMap(FileSlice::getLogFiles)
+            .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    Map<String, HoodieLogFile> deltaLogFiles =
+        deltaFileGroups.stream().flatMap(HoodieFileGroup::getAllRawFileSlices).flatMap(FileSlice::getLogFiles)
+            .map(lf -> Pair.of(Path.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     switch (mode) {
       case ADD:

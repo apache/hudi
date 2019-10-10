@@ -36,10 +36,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc
- * Configurations are loaded from hoodie.properties, these properties are usually set during
- * initializing a path as hoodie base path and never changes during the lifetime of a hoodie
- * dataset.
+ * Configurations on the Hoodie Table like type of ingestion, storage formats, hive table name etc Configurations are
+ * loaded from hoodie.properties, these properties are usually set during initializing a path as hoodie base path and
+ * never changes during the lifetime of a hoodie dataset.
  *
  * @see HoodieTableMetaClient
  * @since 0.3.0
@@ -51,10 +50,8 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
-  public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME =
-      "hoodie.table.ro.file.format";
-  public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME =
-      "hoodie.table.rt.file.format";
+  public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
+  public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME = "hoodie.table.rt.file.format";
   public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = "hoodie.compaction.payload.class";
   public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
 
@@ -88,37 +85,32 @@ public class HoodieTableConfig implements Serializable {
    *
    * @deprecated
    */
-  public HoodieTableConfig() {
-  }
+  public HoodieTableConfig() {}
 
   /**
-   * Initialize the hoodie meta directory and any necessary files inside the meta (including the
-   * hoodie.properties)
+   * Initialize the hoodie meta directory and any necessary files inside the meta (including the hoodie.properties)
    */
-  public static void createHoodieProperties(FileSystem fs, Path metadataFolder,
-      Properties properties) throws IOException {
+  public static void createHoodieProperties(FileSystem fs, Path metadataFolder, Properties properties)
+      throws IOException {
     if (!fs.exists(metadataFolder)) {
       fs.mkdirs(metadataFolder);
     }
     Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
     try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
       if (!properties.containsKey(HOODIE_TABLE_NAME_PROP_NAME)) {
-        throw new IllegalArgumentException(
-                HOODIE_TABLE_NAME_PROP_NAME + " property needs to be specified");
+        throw new IllegalArgumentException(HOODIE_TABLE_NAME_PROP_NAME + " property needs to be specified");
       }
       if (!properties.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
         properties.setProperty(HOODIE_TABLE_TYPE_PROP_NAME, DEFAULT_TABLE_TYPE.name());
       }
-      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME) == HoodieTableType.MERGE_ON_READ
-              .name()
-              && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
+      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME) == HoodieTableType.MERGE_ON_READ.name()
+          && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
         properties.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS);
       }
       if (!properties.containsKey(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME)) {
         properties.setProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
       }
-      properties
-              .store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+      properties.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
   }
 
@@ -139,8 +131,8 @@ public class HoodieTableConfig implements Serializable {
   public String getPayloadClass() {
     // There could be datasets written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
-    return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS)
-        .replace("com.uber.hoodie", "org.apache.hudi");
+    return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS).replace("com.uber.hoodie",
+        "org.apache.hudi");
   }
 
   /**
@@ -182,7 +174,7 @@ public class HoodieTableConfig implements Serializable {
   }
 
   public Map<String, String> getProps() {
-    return props.entrySet().stream().collect(
-        Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+    return props.entrySet().stream()
+        .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
   }
 }

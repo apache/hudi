@@ -51,10 +51,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the
- * Hoodie Mode. If paths that does not correspond to a hoodie dataset then they are passed in as is
- * (as what FileInputFormat.listStatus() would do). The JobConf could have paths from multipe
- * Hoodie/Non-Hoodie datasets
+ * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
+ * that does not correspond to a hoodie dataset then they are passed in as is (as what FileInputFormat.listStatus()
+ * would do). The JobConf could have paths from multipe Hoodie/Non-Hoodie datasets
  */
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
@@ -86,22 +85,19 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
       // Get all commits, delta commits, compactions, as all of them produce a base parquet file
       // today
-      HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsTimeline()
-          .filterCompletedInstants();
-      ReadOptimizedView roView = new HoodieTableFileSystemView(metadata,
-          timeline, statuses);
+      HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      ReadOptimizedView roView = new HoodieTableFileSystemView(metadata, timeline, statuses);
 
       if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
         // this is of the form commitTs_partition_sequenceNumber
-        String lastIncrementalTs = HoodieHiveUtil
-            .readStartCommitTime(Job.getInstance(job), tableName);
+        String lastIncrementalTs = HoodieHiveUtil.readStartCommitTime(Job.getInstance(job), tableName);
         // Total number of commits to return in this batch. Set this to -1 to get all the commits.
         Integer maxCommits = HoodieHiveUtil.readMaxCommits(Job.getInstance(job), tableName);
         LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
-        List<String> commitsToReturn = timeline.findInstantsAfter(lastIncrementalTs, maxCommits)
-            .getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-        List<HoodieDataFile> filteredFiles = roView.getLatestDataFilesInRange(commitsToReturn)
-            .collect(Collectors.toList());
+        List<String> commitsToReturn = timeline.findInstantsAfter(lastIncrementalTs, maxCommits).getInstants()
+            .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        List<HoodieDataFile> filteredFiles =
+            roView.getLatestDataFilesInRange(commitsToReturn).collect(Collectors.toList());
         for (HoodieDataFile filteredFile : filteredFiles) {
           LOG.info("Processing incremental hoodie file - " + filteredFile.getPath());
           filteredFile = checkFileStatus(filteredFile);
@@ -110,8 +106,7 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
         LOG.info("Total paths to process after hoodie incremental filter " + filteredFiles.size());
       } else {
         // filter files on the latest commit found
-        List<HoodieDataFile> filteredFiles = roView.getLatestDataFiles()
-            .collect(Collectors.toList());
+        List<HoodieDataFile> filteredFiles = roView.getLatestDataFiles().collect(Collectors.toList());
         LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
         for (HoodieDataFile filteredFile : filteredFiles) {
           if (LOG.isDebugEnabled()) {
@@ -127,10 +122,9 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
   }
 
   /**
-   * Checks the file status for a race condition which can set the file size to 0. 1.
-   * HiveInputFormat does super.listStatus() and gets back a FileStatus[] 2. Then it creates the
-   * HoodieTableMetaClient for the paths listed. 3. Generation of splits looks at FileStatus size to
-   * create splits, which skips this file
+   * Checks the file status for a race condition which can set the file size to 0. 1. HiveInputFormat does
+   * super.listStatus() and gets back a FileStatus[] 2. Then it creates the HoodieTableMetaClient for the paths listed.
+   * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
    */
   private HoodieDataFile checkFileStatus(HoodieDataFile dataFile) throws IOException {
     Path dataPath = dataFile.getFileStatus().getPath();
@@ -146,24 +140,22 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     }
   }
 
-  private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses)
-      throws IOException {
+  private Map<HoodieTableMetaClient, List<FileStatus>> groupFileStatus(FileStatus[] fileStatuses) throws IOException {
     // This assumes the paths for different tables are grouped together
     Map<HoodieTableMetaClient, List<FileStatus>> grouped = new HashMap<>();
     HoodieTableMetaClient metadata = null;
     String nonHoodieBasePath = null;
     for (FileStatus status : fileStatuses) {
       if (!status.getPath().getName().endsWith(".parquet")) {
-        //FIXME(vc): skip non parquet files for now. This wont be needed once log file name start
+        // FIXME(vc): skip non parquet files for now. This wont be needed once log file name start
         // with "."
         continue;
       }
-      if ((metadata == null && nonHoodieBasePath == null) || (metadata == null && !status.getPath()
-          .toString().contains(nonHoodieBasePath)) || (metadata != null && !status.getPath()
-          .toString().contains(metadata.getBasePath()))) {
+      if ((metadata == null && nonHoodieBasePath == null)
+          || (metadata == null && !status.getPath().toString().contains(nonHoodieBasePath))
+          || (metadata != null && !status.getPath().toString().contains(metadata.getBasePath()))) {
         try {
-          metadata = getTableMetaClient(status.getPath().getFileSystem(conf),
-              status.getPath().getParent());
+          metadata = getTableMetaClient(status.getPath().getFileSystem(conf), status.getPath().getParent());
           nonHoodieBasePath = null;
         } catch (DatasetNotFoundException | InvalidDatasetException e) {
           LOG.info("Handling a non-hoodie path " + status.getPath());
@@ -188,29 +180,28 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
   }
 
   @Override
-  public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split,
-      final JobConf job, final Reporter reporter) throws IOException {
+  public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
+      final Reporter reporter) throws IOException {
     // TODO enable automatic predicate pushdown after fixing issues
-    //        FileSplit fileSplit = (FileSplit) split;
-    //        HoodieTableMetadata metadata = getTableMetadata(fileSplit.getPath().getParent());
-    //        String tableName = metadata.getTableName();
-    //        String mode = HoodieHiveUtil.readMode(job, tableName);
+    // FileSplit fileSplit = (FileSplit) split;
+    // HoodieTableMetadata metadata = getTableMetadata(fileSplit.getPath().getParent());
+    // String tableName = metadata.getTableName();
+    // String mode = HoodieHiveUtil.readMode(job, tableName);
 
-    //        if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
-    //            FilterPredicate predicate = constructHoodiePredicate(job, tableName, split);
-    //            LOG.info("Setting parquet predicate push down as " + predicate);
-    //            ParquetInputFormat.setFilterPredicate(job, predicate);
-    //clearOutExistingPredicate(job);
-    //        }
+    // if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
+    // FilterPredicate predicate = constructHoodiePredicate(job, tableName, split);
+    // LOG.info("Setting parquet predicate push down as " + predicate);
+    // ParquetInputFormat.setFilterPredicate(job, predicate);
+    // clearOutExistingPredicate(job);
+    // }
     return super.getRecordReader(split, job, reporter);
   }
 
   /**
-   * Read the table metadata from a data path. This assumes certain hierarchy of files which should
-   * be changed once a better way is figured out to pass in the hoodie meta directory
+   * Read the table metadata from a data path. This assumes certain hierarchy of files which should be changed once a
+   * better way is figured out to pass in the hoodie meta directory
    */
-  protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath)
-      throws IOException {
+  protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath) throws IOException {
     int levels = HoodieHiveUtil.DEFAULT_LEVELS_TO_BASEPATH;
     if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);

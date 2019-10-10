@@ -63,8 +63,9 @@ public class StatsCommand implements CommandMarker {
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false")
-      final boolean headerOnly) throws IOException {
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      throws IOException {
 
     long totalRecordsUpserted = 0;
     long totalRecordsWritten = 0;
@@ -82,7 +83,7 @@ public class StatsCommand implements CommandMarker {
       if (commit.fetchTotalUpdateRecordsWritten() > 0) {
         waf = df.format((float) commit.fetchTotalRecordsWritten() / commit.fetchTotalUpdateRecordsWritten());
       }
-      rows.add(new Comparable[]{commitTime.getTimestamp(), commit.fetchTotalUpdateRecordsWritten(),
+      rows.add(new Comparable[] {commitTime.getTimestamp(), commit.fetchTotalUpdateRecordsWritten(),
           commit.fetchTotalRecordsWritten(), waf});
       totalRecordsUpserted += commit.fetchTotalUpdateRecordsWritten();
       totalRecordsWritten += commit.fetchTotalRecordsWritten();
@@ -91,33 +92,28 @@ public class StatsCommand implements CommandMarker {
     if (totalRecordsUpserted > 0) {
       waf = df.format((float) totalRecordsWritten / totalRecordsUpserted);
     }
-    rows.add(new Comparable[]{"Total", totalRecordsUpserted, totalRecordsWritten, waf});
+    rows.add(new Comparable[] {"Total", totalRecordsUpserted, totalRecordsWritten, waf});
 
-    TableHeader header = new TableHeader()
-        .addTableHeaderField("CommitTime")
-        .addTableHeaderField("Total Upserted")
-        .addTableHeaderField("Total Written")
-        .addTableHeaderField("Write Amplifiation Factor");
+    TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Total Upserted")
+        .addTableHeaderField("Total Written").addTableHeaderField("Write Amplifiation Factor");
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
   private Comparable[] printFileSizeHistogram(String commitTime, Snapshot s) {
-    return new Comparable[]{commitTime, s.getMin(),
-        s.getValue(0.1), s.getMedian(),
-        s.getMean(), s.get95thPercentile(),
-        s.getMax(), s.size(),
-        s.getStdDev()};
+    return new Comparable[] {commitTime, s.getMin(), s.getValue(0.1), s.getMedian(), s.getMean(), s.get95thPercentile(),
+        s.getMax(), s.size(), s.getStdDev()};
   }
 
   @CliCommand(value = "stats filesizes", help = "File Sizes. Display summary stats on sizes of files")
   public String fileSizeStats(
-      @CliOption(key = {"partitionPath"},
-          help = "regex to select files, eg: 2016/08/02", unspecifiedDefaultValue = "*/*/*") final String globRegex,
+      @CliOption(key = {"partitionPath"}, help = "regex to select files, eg: 2016/08/02",
+          unspecifiedDefaultValue = "*/*/*") final String globRegex,
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
-      @CliOption(key = {"headeronly"}, help = "Print Header Only", unspecifiedDefaultValue = "false")
-      final boolean headerOnly) throws IOException {
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      throws IOException {
 
     FileSystem fs = HoodieCLI.fs;
     String globPath = String.format("%s/%s/*", HoodieCLI.tableMetadata.getBasePath(), globRegex);
@@ -145,8 +141,8 @@ public class StatsCommand implements CommandMarker {
     Snapshot s = globalHistogram.getSnapshot();
     rows.add(printFileSizeHistogram("ALL", s));
 
-    Function<Object, String> converterFunction = entry ->
-            NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
+    Function<Object, String> converterFunction =
+        entry -> NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put("Min", converterFunction);
     fieldNameToConverterMap.put("10th", converterFunction);
@@ -156,16 +152,9 @@ public class StatsCommand implements CommandMarker {
     fieldNameToConverterMap.put("Max", converterFunction);
     fieldNameToConverterMap.put("StdDev", converterFunction);
 
-    TableHeader header = new TableHeader()
-        .addTableHeaderField("CommitTime")
-        .addTableHeaderField("Min")
-        .addTableHeaderField("10th")
-        .addTableHeaderField("50th")
-        .addTableHeaderField("avg")
-        .addTableHeaderField("95th")
-        .addTableHeaderField("Max")
-        .addTableHeaderField("NumFiles")
-        .addTableHeaderField("StdDev");
+    TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Min")
+        .addTableHeaderField("10th").addTableHeaderField("50th").addTableHeaderField("avg").addTableHeaderField("95th")
+        .addTableHeaderField("Max").addTableHeaderField("NumFiles").addTableHeaderField("StdDev");
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending, limit, headerOnly, rows);
   }
 }

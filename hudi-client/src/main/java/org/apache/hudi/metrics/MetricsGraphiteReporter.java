@@ -30,8 +30,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Implementation of Graphite reporter, which connects to the Graphite server, and send metrics to
- * that server.
+ * Implementation of Graphite reporter, which connects to the Graphite server, and send metrics to that server.
  */
 public class MetricsGraphiteReporter extends MetricsReporter {
 
@@ -50,9 +49,8 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     this.serverHost = config.getGraphiteServerHost();
     this.serverPort = config.getGraphiteServerPort();
     if (serverHost == null || serverPort == 0) {
-      throw new RuntimeException(String
-          .format("Graphite cannot be initialized with serverHost[%s] and serverPort[%s].",
-              serverHost, serverPort));
+      throw new RuntimeException(String.format("Graphite cannot be initialized with serverHost[%s] and serverPort[%s].",
+          serverHost, serverPort));
     }
 
     this.graphiteReporter = createGraphiteReport();
@@ -84,8 +82,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
   private GraphiteReporter createGraphiteReport() {
     Graphite graphite = new Graphite(new InetSocketAddress(serverHost, serverPort));
     String reporterPrefix = config.getGraphiteMetricPrefix();
-    return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix)
-        .convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS)
-        .filter(MetricFilter.ALL).build(graphite);
+    return GraphiteReporter.forRegistry(registry).prefixedWith(reporterPrefix).convertRatesTo(TimeUnit.SECONDS)
+        .convertDurationsTo(TimeUnit.MILLISECONDS).filter(MetricFilter.ALL).build(graphite);
   }
 }

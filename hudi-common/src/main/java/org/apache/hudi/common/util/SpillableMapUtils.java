@@ -43,8 +43,7 @@ public class SpillableMapUtils {
   /**
    * |crc|timestamp|sizeOfKey|SizeOfValue|key|value|
    */
-  private static FileEntry readInternal(RandomAccessFile file, long valuePosition,
-      int valueLength) throws IOException {
+  private static FileEntry readInternal(RandomAccessFile file, long valuePosition, int valueLength) throws IOException {
     file.seek(valuePosition);
     long crc = file.readLong();
     long timestamp = file.readLong();
@@ -59,24 +58,22 @@ public class SpillableMapUtils {
     file.read(value, 0, valueSize);
     long crcOfReadValue = generateChecksum(value);
     if (!(crc == crcOfReadValue)) {
-      throw new HoodieCorruptedDataException("checksum of payload written to external disk does not match, "
-          + "data may be corrupted");
+      throw new HoodieCorruptedDataException(
+          "checksum of payload written to external disk does not match, " + "data may be corrupted");
     }
     return new FileEntry(crc, keySize, valueSize, key, value, timestamp);
   }
 
   /**
-   * Write Value and other metadata necessary to disk. Each entry has the following sequence of data <p>
+   * Write Value and other metadata necessary to disk. Each entry has the following sequence of data
+   * <p>
    * |crc|timestamp|sizeOfKey|SizeOfValue|key|value|
    */
-  public static long spillToDisk(SizeAwareDataOutputStream outputStream,
-      FileEntry fileEntry) throws IOException {
+  public static long spillToDisk(SizeAwareDataOutputStream outputStream, FileEntry fileEntry) throws IOException {
     return spill(outputStream, fileEntry);
   }
 
-  private static long spill(SizeAwareDataOutputStream outputStream,
-      FileEntry fileEntry)
-      throws IOException {
+  private static long spill(SizeAwareDataOutputStream outputStream, FileEntry fileEntry) throws IOException {
     outputStream.writeLong(fileEntry.getCrc());
     outputStream.writeLong(fileEntry.getTimestamp());
     outputStream.writeInt(fileEntry.getSizeOfKey());
@@ -107,15 +104,10 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class
    */
   public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
-    String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .toString();
-    String partitionPath =
-        rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
-            .toString();
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
-        new HoodieKey(recKey, partitionPath),
-        ReflectionUtils
-            .loadPayload(payloadClazz, new Object[]{Option.of(rec)}, Option.class));
+    String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String partitionPath = rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+        ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class));
     return (R) hoodieRecord;
   }
 
@@ -123,10 +115,8 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, String payloadClazz) {
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(
-        new HoodieKey(recKey, partitionPath),
-        ReflectionUtils
-            .loadPayload(payloadClazz, new Object[]{Option.empty()}, Option.class));
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+        ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.empty()}, Option.class));
     return (R) hoodieRecord;
   }
 }

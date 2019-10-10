@@ -69,16 +69,15 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     dataGeneratorMap.clear();
   }
 
-  protected AbstractBaseTestSource(TypedProperties props,
-      JavaSparkContext sparkContext, SparkSession sparkSession,
+  protected AbstractBaseTestSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
   protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime,
       int partition) {
-    int maxUniqueKeys = props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP,
-        TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
+    int maxUniqueKeys =
+        props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
 
     HoodieTestDataGenerator dataGenerator = dataGeneratorMap.get(partition);
 

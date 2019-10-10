@@ -50,24 +50,21 @@ public class AvroKafkaSource extends AvroSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr,
-      long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
     OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpointStr, sourceLimit);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
     if (totalNewMsgs <= 0) {
-      return new InputBatch<>(Option.empty(),
-          lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+      return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     } else {
       log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     }
     JavaRDD<GenericRecord> newDataRDD = toRDD(offsetRanges);
-    return new InputBatch<>(Option.of(newDataRDD),
-        KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+    return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
-    JavaRDD<GenericRecord> recordRDD = KafkaUtils
-        .createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class,
+    JavaRDD<GenericRecord> recordRDD =
+        KafkaUtils.createRDD(sparkContext, String.class, Object.class, StringDecoder.class, KafkaAvroDecoder.class,
             offsetGen.getKafkaParams(), offsetRanges).values().map(obj -> (GenericRecord) obj);
     return recordRDD;
   }

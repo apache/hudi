@@ -20,14 +20,19 @@ package org.apache.hudi.common.util.collection;
 
 /**
  * (NOTE: Adapted from Apache commons-lang3)
- * <p>An immutable triple consisting of three {@code Object} elements.</p>
+ * <p>
+ * An immutable triple consisting of three {@code Object} elements.
+ * </p>
  *
- * <p>Although the implementation is immutable, there is no restriction on the objects
- * that may be stored. If mutable objects are stored in the triple, then the triple
- * itself effectively becomes mutable. The class is also {@code final}, so a subclass
- * can not add undesirable behaviour.</p>
+ * <p>
+ * Although the implementation is immutable, there is no restriction on the objects that may be stored. If mutable
+ * objects are stored in the triple, then the triple itself effectively becomes mutable. The class is also
+ * {@code final}, so a subclass can not add undesirable behaviour.
+ * </p>
  *
- * <p>#ThreadSafe# if all three objects are thread-safe</p>
+ * <p>
+ * #ThreadSafe# if all three objects are thread-safe
+ * </p>
  *
  * @param <L> the left element type
  * @param <M> the middle element type
@@ -54,10 +59,13 @@ public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
   public final R right;
 
   /**
-   * <p>Obtains an immutable triple of from three objects inferring the generic types.</p>
+   * <p>
+   * Obtains an immutable triple of from three objects inferring the generic types.
+   * </p>
    *
-   * <p>This factory allows the triple to be created using inference to
-   * obtain the generic types.</p>
+   * <p>
+   * This factory allows the triple to be created using inference to obtain the generic types.
+   * </p>
    *
    * @param <L> the left element type
    * @param <M> the middle element type
@@ -85,7 +93,7 @@ public final class ImmutableTriple<L, M, R> extends Triple<L, M, R> {
     this.right = right;
   }
 
-  //-----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   /**
    * {@inheritDoc}

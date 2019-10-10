@@ -29,6 +29,7 @@
   <properties>
     <spring.shell.version>1.2.0.RELEASE</spring.shell.version>
     <jar.mainclass>org.springframework.shell.Bootstrap</jar.mainclass>
+    <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
   <repositories>

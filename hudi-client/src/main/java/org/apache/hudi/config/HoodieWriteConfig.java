@@ -61,8 +61,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
   private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
   private static final String DEFAULT_HOODIE_AUTO_COMMIT = "true";
-  private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP =
-      "hoodie.assume.date" + ".partitioning";
+  private static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date" + ".partitioning";
   private static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
   private static final String HOODIE_WRITE_STATUS_CLASS_PROP = "hoodie.writestatus.class";
   private static final String DEFAULT_HOODIE_WRITE_STATUS_CLASS = WriteStatus.class.getName();
@@ -143,8 +142,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getWriteBufferLimitBytes() {
-    return Integer
-        .parseInt(props.getProperty(WRITE_BUFFER_LIMIT_BYTES, DEFAULT_WRITE_BUFFER_LIMIT_BYTES));
+    return Integer.parseInt(props.getProperty(WRITE_BUFFER_LIMIT_BYTES, DEFAULT_WRITE_BUFFER_LIMIT_BYTES));
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -191,18 +189,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
    * compaction properties
    **/
   public HoodieCleaningPolicy getCleanerPolicy() {
-    return HoodieCleaningPolicy
-        .valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_POLICY_PROP));
+    return HoodieCleaningPolicy.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_POLICY_PROP));
   }
 
   public int getCleanerFileVersionsRetained() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_FILE_VERSIONS_RETAINED_PROP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_FILE_VERSIONS_RETAINED_PROP));
   }
 
   public int getCleanerCommitsRetained() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP));
   }
 
   public int getMaxCommitsToKeep() {
@@ -214,23 +209,19 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getParquetSmallFileLimit() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT_BYTES));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT_BYTES));
   }
 
   public int getCopyOnWriteInsertSplitSize() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE));
   }
 
   public int getCopyOnWriteRecordSizeEstimate() {
-    return Integer.parseInt(
-        props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_RECORD_SIZE_ESTIMATE));
   }
 
   public boolean shouldAutoTuneInsertSplits() {
-    return Boolean.parseBoolean(
-        props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS));
+    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS));
   }
 
   public int getCleanerParallelism() {
@@ -246,28 +237,23 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getInlineCompactDeltaCommitMax() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {
-    return ReflectionUtils
-        .loadClass(props.getProperty(HoodieCompactionConfig.COMPACTION_STRATEGY_PROP));
+    return ReflectionUtils.loadClass(props.getProperty(HoodieCompactionConfig.COMPACTION_STRATEGY_PROP));
   }
 
   public Long getTargetIOPerCompactionInMB() {
-    return Long
-        .parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB_PROP));
+    return Long.parseLong(props.getProperty(HoodieCompactionConfig.TARGET_IO_PER_COMPACTION_IN_MB_PROP));
   }
 
   public Boolean getCompactionLazyBlockReadEnabled() {
-    return Boolean
-        .valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP));
+    return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP));
   }
 
   public Boolean getCompactionReverseLogReadEnabled() {
-    return Boolean.valueOf(
-        props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
+    return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
   }
 
   public String getPayloadClass() {
@@ -275,13 +261,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP));
   }
 
   public int getCommitArchivalBatchSize() {
-    return Integer
-        .parseInt(props.getProperty(HoodieCompactionConfig.COMMITS_ARCHIVAL_BATCH_SIZE_PROP));
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.COMMITS_ARCHIVAL_BATCH_SIZE_PROP));
   }
 
   /**
@@ -352,9 +336,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * Fraction of the global share of QPS that should be allocated to this job.
-   * Let's say there are 3 jobs which have input size in terms of number of rows
-   * required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
+   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
+   * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
    * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
    */
   public float getHbaseIndexQPSFraction() {
@@ -370,8 +353,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * This should be same across various jobs. This is intended to limit the aggregate
-   * QPS generated across various Hoodie jobs to an Hbase Region Server
+   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various
+   * Hoodie jobs to an Hbase Region Server
    */
   public int getHbaseIndexMaxQPSPerRegionServer() {
     return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER_PROP));
@@ -382,8 +365,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public boolean getBloomIndexPruneByRanges() {
-    return Boolean
-        .parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PRUNE_BY_RANGES_PROP));
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_PRUNE_BY_RANGES_PROP));
   }
 
   public boolean getBloomIndexUseCaching() {
@@ -403,8 +385,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public StorageLevel getBloomIndexInputStorageLevel() {
-    return StorageLevel
-        .fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
+    return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
   }
 
   /**
@@ -423,8 +404,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public int getLogFileDataBlockMaxSize() {
-    return Integer
-        .parseInt(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES));
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_SIZE_MAX_BYTES));
   }
 
   public int getLogFileMaxSize() {
@@ -451,8 +431,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public MetricsReporterType getMetricsReporterType() {
-    return MetricsReporterType
-        .valueOf(props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_TYPE));
+    return MetricsReporterType.valueOf(props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_TYPE));
   }
 
   public String getGraphiteServerHost() {
@@ -475,9 +454,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public Double getMaxMemoryFractionPerCompaction() {
-    return Double
-        .valueOf(
-            props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP));
+    return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP));
   }
 
   public Long getMaxMemoryPerPartitionMerge() {
@@ -637,8 +614,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     }
 
     public Builder withAssumeDatePartitioning(boolean assumeDatePartitioning) {
-      props.setProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP,
-          String.valueOf(assumeDatePartitioning));
+      props.setProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP, String.valueOf(assumeDatePartitioning));
       return this;
     }
 
@@ -671,48 +647,42 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public HoodieWriteConfig build() {
       // Check for mandatory properties
-      setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM,
+      setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
-      setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM),
-          BULKINSERT_PARALLELISM, DEFAULT_PARALLELISM);
-      setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM,
-          DEFAULT_PARALLELISM);
-      setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP),
-          COMBINE_BEFORE_INSERT_PROP, DEFAULT_COMBINE_BEFORE_INSERT);
-      setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_UPSERT_PROP),
-          COMBINE_BEFORE_UPSERT_PROP, DEFAULT_COMBINE_BEFORE_UPSERT);
-      setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL),
-          WRITE_STATUS_STORAGE_LEVEL, DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
-      setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP),
-          HOODIE_AUTO_COMMIT_PROP, DEFAULT_HOODIE_AUTO_COMMIT);
+      setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM, DEFAULT_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,
+          DEFAULT_COMBINE_BEFORE_INSERT);
+      setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_UPSERT_PROP), COMBINE_BEFORE_UPSERT_PROP,
+          DEFAULT_COMBINE_BEFORE_UPSERT);
+      setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL), WRITE_STATUS_STORAGE_LEVEL,
+          DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP), HOODIE_AUTO_COMMIT_PROP,
+          DEFAULT_HOODIE_AUTO_COMMIT);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_ASSUME_DATE_PARTITIONING_PROP),
           HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
-      setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP),
-          HOODIE_WRITE_STATUS_CLASS_PROP, DEFAULT_HOODIE_WRITE_STATUS_CLASS);
-      setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM),
-          FINALIZE_WRITE_PARALLELISM, DEFAULT_FINALIZE_WRITE_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_WRITE_STATUS_CLASS_PROP), HOODIE_WRITE_STATUS_CLASS_PROP,
+          DEFAULT_HOODIE_WRITE_STATUS_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(FINALIZE_WRITE_PARALLELISM), FINALIZE_WRITE_PARALLELISM,
+          DEFAULT_FINALIZE_WRITE_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(EMBEDDED_TIMELINE_SERVER_ENABLED),
           EMBEDDED_TIMELINE_SERVER_ENABLED, DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP),
           INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP, String.valueOf(DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS));
       setDefaultOnCondition(props, !props.containsKey(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP),
           MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP, String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECK_INTERVAL_MS));
-      setDefaultOnCondition(props, !props.containsKey(MAX_CONSISTENCY_CHECKS_PROP),
-          MAX_CONSISTENCY_CHECKS_PROP, String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECKS));
+      setDefaultOnCondition(props, !props.containsKey(MAX_CONSISTENCY_CHECKS_PROP), MAX_CONSISTENCY_CHECKS_PROP,
+          String.valueOf(DEFAULT_MAX_CONSISTENCY_CHECKS));
       setDefaultOnCondition(props, !props.containsKey(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP),
-              FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
+          FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP, DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED);
 
       // Make sure the props is propagated
-      setDefaultOnCondition(props, !isIndexConfigSet,
-          HoodieIndexConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, !isStorageConfigSet,
-          HoodieStorageConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, !isMetricsConfigSet,
-          HoodieMetricsConfig.newBuilder().fromProperties(props).build());
-      setDefaultOnCondition(props, !isMemoryConfigSet,
-          HoodieMemoryConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isMemoryConfigSet, HoodieMemoryConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isViewConfigSet,
           FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isConsistencyGuardSet,

@@ -36,17 +36,13 @@ public class SparkBoundedInMemoryExecutor<I, O, E> extends BoundedInMemoryExecut
   final TaskContext sparkThreadTaskContext;
 
   public SparkBoundedInMemoryExecutor(final HoodieWriteConfig hoodieConfig, final Iterator<I> inputItr,
-      BoundedInMemoryQueueConsumer<O, E> consumer,
-      Function<I, O> bufferedIteratorTransform) {
+      BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> bufferedIteratorTransform) {
     this(hoodieConfig, new IteratorBasedQueueProducer<>(inputItr), consumer, bufferedIteratorTransform);
   }
 
-  public SparkBoundedInMemoryExecutor(final HoodieWriteConfig hoodieConfig,
-      BoundedInMemoryQueueProducer<I> producer,
-      BoundedInMemoryQueueConsumer<O, E> consumer,
-      Function<I, O> bufferedIteratorTransform) {
-    super(hoodieConfig.getWriteBufferLimitBytes(), producer,
-        Option.of(consumer), bufferedIteratorTransform);
+  public SparkBoundedInMemoryExecutor(final HoodieWriteConfig hoodieConfig, BoundedInMemoryQueueProducer<I> producer,
+      BoundedInMemoryQueueConsumer<O, E> consumer, Function<I, O> bufferedIteratorTransform) {
+    super(hoodieConfig.getWriteBufferLimitBytes(), producer, Option.of(consumer), bufferedIteratorTransform);
     this.sparkThreadTaskContext = TaskContext.get();
   }
 

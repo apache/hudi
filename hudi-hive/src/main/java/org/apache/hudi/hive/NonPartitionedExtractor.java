@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * Extractor for Non-partitioned hive tables
  */
-public class NonPartitionedExtractor implements  PartitionValueExtractor {
+public class NonPartitionedExtractor implements PartitionValueExtractor {
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {

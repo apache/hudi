@@ -54,9 +54,8 @@ public class TestClientRollback extends TestHoodieClientBase {
    */
   @Test
   public void testSavepointAndRollback() throws Exception {
-    HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(
-        HoodieCompactionConfig.newBuilder().withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1)
-            .build()).build();
+    HoodieWriteConfig cfg = getConfigBuilder().withCompactionConfig(HoodieCompactionConfig.newBuilder()
+        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
@@ -95,8 +94,8 @@ public class TestClientRollback extends TestHoodieClientBase {
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       // Verify there are no errors
       assertNoWriteErrors(statuses);
-      List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(),
-          getConfig().shouldAssumeDatePartitioning());
+      List<String> partitionPaths =
+          FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
       final ReadOptimizedView view1 = table.getROFileSystemView();
@@ -173,8 +172,8 @@ public class TestClientRollback extends TestHoodieClientBase {
     String commitTime2 = "20160502020601";
     String commitTime3 = "20160506030611";
     new File(basePath + "/.hoodie").mkdirs();
-    HoodieTestDataGenerator
-        .writePartitionMetadata(fs, new String[]{"2016/05/01", "2016/05/02", "2016/05/06"}, basePath);
+    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
+        basePath);
 
     // Only first two have commit files
     HoodieTestUtils.createCommitFiles(basePath, commitTime1, commitTime2);
@@ -196,8 +195,8 @@ public class TestClientRollback extends TestHoodieClientBase {
     String file32 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime3, "id32");
     String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
 
@@ -263,8 +262,8 @@ public class TestClientRollback extends TestHoodieClientBase {
     String commitTime2 = "20160502020601";
     String commitTime3 = "20160506030611";
     new File(basePath + "/.hoodie").mkdirs();
-    HoodieTestDataGenerator
-        .writePartitionMetadata(fs, new String[]{"2016/05/01", "2016/05/02", "2016/05/06"}, basePath);
+    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
+        basePath);
 
     // One good commit
     HoodieTestUtils.createCommitFiles(basePath, commitTime1);
@@ -287,8 +286,8 @@ public class TestClientRollback extends TestHoodieClientBase {
     String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
 
     // Turn auto rollback off
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
 

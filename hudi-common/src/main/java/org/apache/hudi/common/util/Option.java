@@ -54,13 +54,13 @@ public final class Option<T> implements Serializable {
   }
 
   /**
-   * Returns an empty {@code Option} instance.  No value is present for this Option.
+   * Returns an empty {@code Option} instance. No value is present for this Option.
    *
    * @param <T> Type of the non-existent value
    * @return an empty {@code Option}
    * @apiNote Though it may be tempting to do so, avoid testing if an object is empty by comparing with {@code ==}
-   * against instances returned by {@code Option.empty()}. There is no guarantee that it is a singleton. Instead, use
-   * {@link #isPresent()}.
+   *          against instances returned by {@code Option.empty()}. There is no guarantee that it is a singleton.
+   *          Instead, use {@link #isPresent()}.
    */
   public static <T> Option<T> empty() {
     @SuppressWarnings("unchecked")
@@ -143,7 +143,7 @@ public final class Option<T> implements Serializable {
    *
    * @param predicate a predicate to apply to the value, if present
    * @return an {@code Option} describing the value of this {@code Option} if a value is present and the value matches
-   * the given predicate, otherwise an empty {@code Option}
+   *         the given predicate, otherwise an empty {@code Option}
    * @throws NullPointerException if the predicate is null
    */
   public Option<T> filter(Predicate<? super T> predicate) {
@@ -157,25 +157,27 @@ public final class Option<T> implements Serializable {
 
   /**
    * If a value is present, apply the provided mapping function to it, and if the result is non-null, return an {@code
-   * Option} describing the result.  Otherwise return an empty {@code Option}.
+   * Option} describing the result. Otherwise return an empty {@code Option}.
    *
    * @param <U> The type of the result of the mapping function
    * @param mapper a mapping function to apply to the value, if present
    * @return an {@code Option} describing the result of applying a mapping function to the value of this {@code Option},
-   * if a value is present, otherwise an empty {@code Option}
+   *         if a value is present, otherwise an empty {@code Option}
    * @throws NullPointerException if the mapping function is null
    * @apiNote This method supports post-processing on optional values, without the need to explicitly check for a return
-   * status.  For example, the following code traverses a stream of file names, selects one that has not yet been
-   * processed, and then opens that file, returning an {@code Option<FileInputStream>}:
+   *          status. For example, the following code traverses a stream of file names, selects one that has not yet
+   *          been processed, and then opens that file, returning an {@code Option<FileInputStream>}:
    *
-   * <pre>{@code
+   *          <pre>
+   * {@code
    *     Option<FileInputStream> fis =
    *         names.stream().filter(name -> !isProcessedYet(name))
    *                       .findFirst()
    *                       .map(name -> new FileInputStream(name));
-   * }</pre>
+   * }
+   *          </pre>
    *
-   * Here, {@code findFirst} returns an {@code Option<String>}, and then {@code map} returns an {@code
+   *          Here, {@code findFirst} returns an {@code Option<String>}, and then {@code map} returns an {@code
    * Option<FileInputStream>} for the desired file if one exists.
    */
   public <U> Option<U> map(Function<? super T, ? extends U> mapper) {
@@ -189,14 +191,14 @@ public final class Option<T> implements Serializable {
 
   /**
    * If a value is present, apply the provided {@code Option}-bearing mapping function to it, return that result,
-   * otherwise return an empty {@code Option}.  This method is similar to {@link #map(Function)}, but the provided
-   * mapper is one whose result is already an {@code Option}, and if invoked, {@code flatMap} does not wrap it with an
+   * otherwise return an empty {@code Option}. This method is similar to {@link #map(Function)}, but the provided mapper
+   * is one whose result is already an {@code Option}, and if invoked, {@code flatMap} does not wrap it with an
    * additional {@code Option}.
    *
    * @param <U> The type parameter to the {@code Option} returned by
    * @param mapper a mapping function to apply to the value, if present the mapping function
    * @return the result of applying an {@code Option}-bearing mapping function to the value of this {@code Option}, if a
-   * value is present, otherwise an empty {@code Option}
+   *         value is present, otherwise an empty {@code Option}
    * @throws NullPointerException if the mapping function is null or returns a null result
    */
   public <U> Option<U> flatMap(Function<? super T, Option<U>> mapper) {
@@ -238,7 +240,7 @@ public final class Option<T> implements Serializable {
    * @throws X if there is no value present
    * @throws NullPointerException if no value is present and {@code exceptionSupplier} is null
    * @apiNote A method reference to the exception constructor with an empty argument list can be used as the supplier.
-   * For example, {@code IllegalStateException::new}
+   *          For example, {@code IllegalStateException::new}
    */
   public <X extends Throwable> T orElseThrow(Supplier<? extends X> exceptionSupplier) throws X {
     if (value != null) {
@@ -289,13 +291,11 @@ public final class Option<T> implements Serializable {
    *
    * @return the string representation of this instance
    * @implSpec If a value is present the result must include its string representation in the result. Empty and present
-   * Optionals must be unambiguously differentiable.
+   *           Optionals must be unambiguously differentiable.
    */
   @Override
   public String toString() {
-    return value != null
-        ? String.format("Option[%s]", value)
-        : "Option.empty";
+    return value != null ? String.format("Option[%s]", value) : "Option.empty";
   }
 
   /**

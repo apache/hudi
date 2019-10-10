@@ -20,12 +20,13 @@ package org.apache.hudi.common.util;
 
 /**
  * Default implementation of size-estimator that uses Twitter's ObjectSizeCalculator
+ * 
  * @param <T>
  */
 public class DefaultSizeEstimator<T> implements SizeEstimator<T> {
 
   @Override
-  public long sizeEstimate(T t)  {
+  public long sizeEstimate(T t) {
     return ObjectSizeCalculator.getObjectSize(t);
   }
 }

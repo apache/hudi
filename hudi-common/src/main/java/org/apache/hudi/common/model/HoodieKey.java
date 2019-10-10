@@ -24,8 +24,8 @@ import java.io.Serializable;
 /**
  * HoodieKey consists of
  * <p>
- * - recordKey     : a recordKey that acts as primary key for a record - partitionPath : path to the
- * partition that contains the record
+ * - recordKey : a recordKey that acts as primary key for a record - partitionPath : path to the partition that contains
+ * the record
  */
 public class HoodieKey implements Serializable {
 
@@ -56,8 +56,7 @@ public class HoodieKey implements Serializable {
       return false;
     }
     HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equal(recordKey, otherKey.recordKey)
-        && Objects.equal(partitionPath, otherKey.partitionPath);
+    return Objects.equal(recordKey, otherKey.recordKey) && Objects.equal(partitionPath, otherKey.partitionPath);
   }
 
   @Override

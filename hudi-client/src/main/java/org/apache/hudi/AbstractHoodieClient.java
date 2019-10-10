@@ -32,8 +32,8 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs)
- * Also, manages embedded timeline-server if enabled.
+ * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
+ * embedded timeline-server if enabled.
  */
 public abstract class AbstractHoodieClient implements Serializable, AutoCloseable {
 
@@ -45,10 +45,9 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   protected final String basePath;
 
   /**
-   * Timeline Server has the same lifetime as that of Client.
-   * Any operations done on the same timeline service will be able to take advantage
-   * of the cached file-system view. New completed actions will be synced automatically
-   * in an incremental fashion.
+   * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
+   * able to take advantage of the cached file-system view. New completed actions will be synced automatically in an
+   * incremental fashion.
    */
   private transient Option<EmbeddedTimelineService> timelineServer;
   private final boolean shouldStopTimelineServer;

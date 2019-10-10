@@ -34,9 +34,7 @@ public abstract class Source<T> implements Serializable {
   protected static volatile Logger log = LogManager.getLogger(Source.class);
 
   public enum SourceType {
-    JSON,
-    AVRO,
-    ROW
+    JSON, AVRO, ROW
   }
 
   protected transient TypedProperties props;
@@ -64,6 +62,7 @@ public abstract class Source<T> implements Serializable {
 
   /**
    * Main API called by Hoodie Delta Streamer to fetch records
+   * 
    * @param lastCkptStr Last Checkpoint
    * @param sourceLimit Source Limit
    * @return
@@ -71,8 +70,8 @@ public abstract class Source<T> implements Serializable {
   public final InputBatch<T> fetchNext(Option<String> lastCkptStr, long sourceLimit) {
     InputBatch<T> batch = fetchNewData(lastCkptStr, sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
-    return overriddenSchemaProvider == null ? batch : new InputBatch<>(batch.getBatch(),
-        batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
+    return overriddenSchemaProvider == null ? batch
+        : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
   }
 
   public SourceType getSourceType() {

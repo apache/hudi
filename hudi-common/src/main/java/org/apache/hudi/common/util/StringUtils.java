@@ -24,12 +24,14 @@ package org.apache.hudi.common.util;
 public class StringUtils {
 
   /**
-   * <p>Joins the elements of the provided array into a single String
-   * containing the provided list of elements.</p>
+   * <p>
+   * Joins the elements of the provided array into a single String containing the provided list of elements.
+   * </p>
    *
-   * <p>No separator is added to the joined String.
-   * Null objects or empty strings within the array are represented by
-   * empty strings.</p>
+   * <p>
+   * No separator is added to the joined String. Null objects or empty strings within the array are represented by empty
+   * strings.
+   * </p>
    *
    * <pre>
    * StringUtils.join(null)            = null
@@ -56,7 +58,7 @@ public class StringUtils {
 
   public static String toHexString(byte[] bytes) {
     StringBuilder sb = new StringBuilder(bytes.length * 2);
-    for (byte b: bytes) {
+    for (byte b : bytes) {
       sb.append(String.format("%02x", b));
     }
     return sb.toString();
