@@ -46,20 +46,17 @@ public class AvroDFSSource extends AvroSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr,
-      long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, String> selectPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
-    return selectPathsWithMaxModificationTime.getLeft().map(pathStr -> new InputBatch<>(
-        Option.of(fromFiles(pathStr)),
-        selectPathsWithMaxModificationTime.getRight()))
+    return selectPathsWithMaxModificationTime.getLeft()
+        .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selectPathsWithMaxModificationTime.getRight()))
         .orElseGet(() -> new InputBatch<>(Option.empty(), selectPathsWithMaxModificationTime.getRight()));
   }
 
   private JavaRDD<GenericRecord> fromFiles(String pathStr) {
-    JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
-        AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
-        sparkContext.hadoopConfiguration());
+    JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
+        AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
     return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
   }
 }

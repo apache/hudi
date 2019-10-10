@@ -29,10 +29,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 /**
- * HoodieTimeline is a view of meta-data instants in the hoodie dataset. Instants are specific
- * points in time represented as HoodieInstant. <p> Timelines are immutable once created and
- * operations create new instance of timelines which filter on the instants and this can be
- * chained.
+ * HoodieTimeline is a view of meta-data instants in the hoodie dataset. Instants are specific points in time
+ * represented as HoodieInstant.
+ * <p>
+ * Timelines are immutable once created and operations create new instance of timelines which filter on the instants and
+ * this can be chained.
  *
  * @see HoodieTableMetaClient
  * @see HoodieDefaultTimeline
@@ -58,22 +59,19 @@ public interface HoodieTimeline extends Serializable {
   String CLEAN_EXTENSION = "." + CLEAN_ACTION;
   String ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION;
   String SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION;
-  //this is to preserve backwards compatibility on commit in-flight filenames
+  // this is to preserve backwards compatibility on commit in-flight filenames
   String INFLIGHT_COMMIT_EXTENSION = INFLIGHT_EXTENSION;
   String INFLIGHT_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
-  String REQUESTED_COMPACTION_SUFFIX =
-      StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
-  String REQUESTED_COMPACTION_EXTENSION =
-      StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
-  String INFLIGHT_COMPACTION_EXTENSION =
-      StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
+  String REQUESTED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
+  String REQUESTED_COMPACTION_EXTENSION = StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
+  String INFLIGHT_COMPACTION_EXTENSION = StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
   String INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION;
   String RESTORE_EXTENSION = "." + RESTORE_ACTION;
 
-  String INVALID_INSTANT_TS  = "0";
+  String INVALID_INSTANT_TS = "0";
 
   /**
    * Filter this timeline to just include the in-flights
@@ -97,22 +95,25 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedInstants();
 
   /**
-   * Filter this timeline to just include the completed + compaction (inflight + requested) instants
-   * A RT filesystem view is constructed with this timeline so that file-slice after pending compaction-requested
-   * instant-time is also considered valid. A RT file-system view for reading must then merge the file-slices before
-   * and after pending compaction instant so that all delta-commits are read.
+   * Filter this timeline to just include the completed + compaction (inflight + requested) instants A RT filesystem
+   * view is constructed with this timeline so that file-slice after pending compaction-requested instant-time is also
+   * considered valid. A RT file-system view for reading must then merge the file-slices before and after pending
+   * compaction instant so that all delta-commits are read.
+   * 
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
-   *  Timeline to just include commits (commit/deltacommit) and compaction actions
+   * Timeline to just include commits (commit/deltacommit) and compaction actions
+   * 
    * @return
    */
   HoodieTimeline getCommitsAndCompactionTimeline();
 
   /**
    * Filter this timeline to just include requested and inflight compaction instants
+   * 
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();
@@ -162,6 +163,7 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * Get hash of timeline
+   * 
    * @return
    */
   String getTimelineHash();
@@ -177,8 +179,8 @@ public interface HoodieTimeline extends Serializable {
   boolean containsInstant(HoodieInstant instant);
 
   /**
-   * @return true if the passed instant is present as a completed instant on the timeline or if the
-   * instant is before the first completed instant in the timeline
+   * @return true if the passed instant is present as a completed instant on the timeline or if the instant is before
+   *         the first completed instant in the timeline
    */
   boolean containsOrBeforeTimelineStarts(String ts);
 
@@ -188,8 +190,8 @@ public interface HoodieTimeline extends Serializable {
   Stream<HoodieInstant> getInstants();
 
   /**
-   * @return Get the stream of completed instants in reverse order
-   * TODO Change code references to getInstants() that reverse the instants later on to use this method instead.
+   * @return Get the stream of completed instants in reverse order TODO Change code references to getInstants() that
+   *         reverse the instants later on to use this method instead.
    */
   Stream<HoodieInstant> getReverseOrderedInstants();
 
@@ -206,17 +208,13 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Helper methods to compare instants
    **/
-  BiPredicate<String, String> EQUAL =
-      (commit1, commit2) -> commit1.compareTo(commit2) == 0;
-  BiPredicate<String, String> GREATER_OR_EQUAL =
-      (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
+  BiPredicate<String, String> EQUAL = (commit1, commit2) -> commit1.compareTo(commit2) == 0;
+  BiPredicate<String, String> GREATER_OR_EQUAL = (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
   BiPredicate<String, String> GREATER = (commit1, commit2) -> commit1.compareTo(commit2) > 0;
-  BiPredicate<String, String> LESSER_OR_EQUAL =
-      (commit1, commit2) -> commit1.compareTo(commit2) <= 0;
+  BiPredicate<String, String> LESSER_OR_EQUAL = (commit1, commit2) -> commit1.compareTo(commit2) <= 0;
   BiPredicate<String, String> LESSER = (commit1, commit2) -> commit1.compareTo(commit2) < 0;
 
-  static boolean compareTimestamps(String commit1, String commit2,
-      BiPredicate<String, String> predicateToApply) {
+  static boolean compareTimestamps(String commit1, String commit2, BiPredicate<String, String> predicateToApply) {
     return predicateToApply.test(commit1, commit2);
   }
 

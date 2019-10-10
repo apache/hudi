@@ -109,11 +109,8 @@ public class SchemaTestUtil {
   public static List<HoodieRecord> generateHoodieTestRecords(int from, int limit, Schema schema)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
-    return records.stream()
-        .map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
-        .map(p -> convertToHoodieRecords(p,
-            UUID.randomUUID().toString(), "000/00/00")).collect(
-            Collectors.toList());
+    return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, schema))
+        .map(p -> convertToHoodieRecords(p, UUID.randomUUID().toString(), "000/00/00")).collect(Collectors.toList());
   }
 
   private static HoodieRecord convertToHoodieRecords(IndexedRecord iRecord, String key, String partitionPath) {
@@ -124,14 +121,12 @@ public class SchemaTestUtil {
   public static List<IndexedRecord> updateHoodieTestRecords(List<String> oldRecordKeys, List<IndexedRecord> newRecords,
       String commitTime) throws IOException, URISyntaxException {
 
-    return newRecords.stream()
-        .map(p -> {
-          ((GenericRecord) p).put(HoodieRecord.RECORD_KEY_METADATA_FIELD, oldRecordKeys.remove(0));
-          ((GenericRecord) p).put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
-          ((GenericRecord) p).put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
-          return p;
-        }).collect(
-            Collectors.toList());
+    return newRecords.stream().map(p -> {
+      ((GenericRecord) p).put(HoodieRecord.RECORD_KEY_METADATA_FIELD, oldRecordKeys.remove(0));
+      ((GenericRecord) p).put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "0000/00/00");
+      ((GenericRecord) p).put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
+      return p;
+    }).collect(Collectors.toList());
 
   }
 
@@ -139,28 +134,21 @@ public class SchemaTestUtil {
       throws IOException, URISyntaxException {
 
     List<IndexedRecord> iRecords = generateTestRecords(from, limit);
-    return iRecords
-        .stream()
-        .map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
-            new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
+    return iRecords.stream().map(r -> new HoodieRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
+        new HoodieAvroPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
   }
 
   public static List<HoodieRecord> updateHoodieTestRecordsWithoutHoodieMetadata(List<HoodieRecord> oldRecords,
-      Schema schema,
-      String fieldNameToUpdate, String newValue)
-      throws IOException, URISyntaxException {
-    return oldRecords
-        .stream()
-        .map(r -> {
-          try {
-            GenericRecord rec = (GenericRecord) r.getData().getInsertValue(schema).get();
-            rec.put(fieldNameToUpdate, newValue);
-            return new HoodieRecord<>(r.getKey(),
-                new HoodieAvroPayload(Option.of(rec)));
-          } catch (IOException io) {
-            throw new HoodieIOException("unable to get data from hoodie record", io);
-          }
-        }).collect(Collectors.toList());
+      Schema schema, String fieldNameToUpdate, String newValue) throws IOException, URISyntaxException {
+    return oldRecords.stream().map(r -> {
+      try {
+        GenericRecord rec = (GenericRecord) r.getData().getInsertValue(schema).get();
+        rec.put(fieldNameToUpdate, newValue);
+        return new HoodieRecord<>(r.getKey(), new HoodieAvroPayload(Option.of(rec)));
+      } catch (IOException io) {
+        throw new HoodieIOException("unable to get data from hoodie record", io);
+      }
+    }).collect(Collectors.toList());
   }
 
   public static Schema getEvolvedSchema() throws IOException {

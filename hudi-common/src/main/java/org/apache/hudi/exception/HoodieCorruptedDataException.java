@@ -19,7 +19,8 @@
 package org.apache.hudi.exception;
 
 /**
- * <p> Exception thrown when any data corruption happens when reading/writing from temporary disk
+ * <p>
+ * Exception thrown when any data corruption happens when reading/writing from temporary disk
  * </p>
  */
 public class HoodieCorruptedDataException extends HoodieException {

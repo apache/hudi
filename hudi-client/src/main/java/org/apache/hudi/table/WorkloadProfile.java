@@ -30,8 +30,7 @@ import org.apache.spark.api.java.JavaRDD;
 import scala.Tuple2;
 
 /**
- * Information about incoming records for upsert/insert obtained either via sampling or
- * introspecting the data fully
+ * Information about incoming records for upsert/insert obtained either via sampling or introspecting the data fully
  * <p>
  * TODO(vc): Think about obtaining this directly from index.tagLocation
  */
@@ -62,11 +61,10 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
 
     Map<Tuple2<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = taggedRecords
         .mapToPair(record -> new Tuple2<>(
-            new Tuple2<>(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())),
-            record)).countByKey();
+            new Tuple2<>(record.getPartitionPath(), Option.ofNullable(record.getCurrentLocation())), record))
+        .countByKey();
 
-    for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts
-        .entrySet()) {
+    for (Map.Entry<Tuple2<String, Option<HoodieRecordLocation>>, Long> e : partitionLocationCounts.entrySet()) {
       String partitionPath = e.getKey()._1();
       Long count = e.getValue();
       Option<HoodieRecordLocation> locOption = e.getKey()._2();

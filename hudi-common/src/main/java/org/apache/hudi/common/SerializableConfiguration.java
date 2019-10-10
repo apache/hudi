@@ -57,8 +57,7 @@ public class SerializableConfiguration implements Serializable {
   @Override
   public String toString() {
     StringBuilder str = new StringBuilder();
-    configuration.iterator().forEachRemaining(e ->
-        str.append(String.format("%s => %s \n", e.getKey(), e.getValue())));
+    configuration.iterator().forEachRemaining(e -> str.append(String.format("%s => %s \n", e.getKey(), e.getValue())));
     return configuration.toString();
   }
 }

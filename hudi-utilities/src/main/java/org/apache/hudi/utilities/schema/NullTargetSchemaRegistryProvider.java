@@ -23,9 +23,8 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Schema provider that will force DeltaStreamer to infer target schema from the dataset.
- * It can be used with SQL or Flattening transformers to avoid having a target schema in the schema
- * registry.
+ * Schema provider that will force DeltaStreamer to infer target schema from the dataset. It can be used with SQL or
+ * Flattening transformers to avoid having a target schema in the schema registry.
  */
 public class NullTargetSchemaRegistryProvider extends SchemaRegistryProvider {
 

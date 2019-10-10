@@ -25,8 +25,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.parquet.hadoop.ParquetReader;
 
 /**
- * This class wraps a parquet reader and provides an iterator based api to
- * read from a parquet file. This is used in {@link BoundedInMemoryQueue}
+ * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in
+ * {@link BoundedInMemoryQueue}
  */
 public class ParquetReaderIterator<T> implements Iterator<T> {
 

@@ -71,7 +71,7 @@ public class TestSerializationUtils {
 
     @Override
     public boolean equals(Object obj) {
-      if (!(obj instanceof  NonSerializableClass)) {
+      if (!(obj instanceof NonSerializableClass)) {
         return false;
       }
       final NonSerializableClass other = (NonSerializableClass) obj;

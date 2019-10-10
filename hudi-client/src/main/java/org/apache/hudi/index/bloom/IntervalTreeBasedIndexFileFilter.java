@@ -48,8 +48,8 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
       KeyRangeLookupTree lookUpTree = new KeyRangeLookupTree();
       bloomIndexFiles.forEach(indexFileInfo -> {
         if (indexFileInfo.hasKeyRanges()) {
-          lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(),
-              indexFileInfo.getMaxRecordKey(), indexFileInfo.getFileId()));
+          lookUpTree.insert(new KeyRangeNode(indexFileInfo.getMinRecordKey(), indexFileInfo.getMaxRecordKey(),
+              indexFileInfo.getFileId()));
         } else {
           if (!partitionToFilesWithNoRanges.containsKey(partition)) {
             partitionToFilesWithNoRanges.put(partition, new HashSet<>());

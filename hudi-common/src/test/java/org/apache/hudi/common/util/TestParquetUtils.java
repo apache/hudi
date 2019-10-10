@@ -66,8 +66,8 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     Collections.sort(rowKeys);
 
     assertEquals("Did not read back the expected list of keys", rowKeys, rowKeysInFile);
-    BloomFilter filterInFile = ParquetUtils.readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(),
-        new Path(filePath));
+    BloomFilter filterInFile =
+        ParquetUtils.readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
     for (String rowKey : rowKeys) {
       assertTrue("key should be found in bloom filter", filterInFile.mightContain(rowKey));
     }
@@ -89,9 +89,8 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(filePath, rowKeys);
 
     // Read and verify
-    Set<String> filtered = ParquetUtils.filterParquetRowKeys(HoodieTestUtils.getDefaultHadoopConf(),
-        new Path(filePath),
-        filter);
+    Set<String> filtered =
+        ParquetUtils.filterParquetRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), filter);
 
     assertEquals("Filtered count does not match", filter.size(), filtered.size());
 
@@ -100,13 +99,12 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
   }
 
-  private void writeParquetFile(String filePath,
-      List<String> rowKeys) throws Exception {
+  private void writeParquetFile(String filePath, List<String> rowKeys) throws Exception {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
     BloomFilter filter = new BloomFilter(1000, 0.0001);
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema,
-        filter);
+    HoodieAvroWriteSupport writeSupport =
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {

@@ -33,7 +33,7 @@ public abstract class BaseAvroPayload implements Serializable {
   /**
    * Avro data extracted from the source converted to bytes
    */
-  protected final byte [] recordBytes;
+  protected final byte[] recordBytes;
 
   /**
    * For purposes of preCombining

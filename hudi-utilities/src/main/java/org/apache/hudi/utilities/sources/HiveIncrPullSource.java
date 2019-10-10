@@ -46,13 +46,12 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * Source to read deltas produced by {@link HiveIncrementalPuller}, commit by commit and apply
- * to the target table
+ * Source to read deltas produced by {@link HiveIncrementalPuller}, commit by commit and apply to the target table
  * <p>
  * The general idea here is to have commits sync across the data pipeline.
  * <p>
- * [Source Tables(s)]  ====> HiveIncrementalScanner  ==> incrPullRootPath ==> targetTable {c1,c2,c3,...}
- * {c1,c2,c3,...}       {c1,c2,c3,...}
+ * [Source Tables(s)] ====> HiveIncrementalScanner ==> incrPullRootPath ==> targetTable {c1,c2,c3,...} {c1,c2,c3,...}
+ * {c1,c2,c3,...}
  * <p>
  * This produces beautiful causality, that makes data issues in ETLs very easy to debug
  */
@@ -84,8 +83,7 @@ public class HiveIncrPullSource extends AvroSource {
   /**
    * Finds the first commit from source, greater than the target's last commit, and reads it out.
    */
-  private Option<String> findCommitToPull(Option<String> latestTargetCommit)
-      throws IOException {
+  private Option<String> findCommitToPull(Option<String> latestTargetCommit) throws IOException {
 
     log.info("Looking for commits ");
 
@@ -104,7 +102,7 @@ public class HiveIncrPullSource extends AvroSource {
     }
 
     for (String commitTime : commitTimes) {
-      //TODO(vc): Add an option to delete consumed commits
+      // TODO(vc): Add an option to delete consumed commits
       if (commitTime.compareTo(latestTargetCommit.get()) > 0) {
         return Option.of(commitTime);
       }
@@ -113,30 +111,24 @@ public class HiveIncrPullSource extends AvroSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(
-      Option<String> lastCheckpointStr, long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
     try {
       // find the source commit to pull
       Option<String> commitToPull = findCommitToPull(lastCheckpointStr);
 
       if (!commitToPull.isPresent()) {
-        return new InputBatch<>(Option.empty(),
-            lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
+        return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
       }
 
       // read the files out.
-      List<FileStatus> commitDeltaFiles = Arrays.asList(
-          fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
-      String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString())
-          .collect(Collectors.joining(","));
-      JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr,
-          AvroKeyInputFormat.class, AvroKey.class, NullWritable.class,
-          sparkContext.hadoopConfiguration());
+      List<FileStatus> commitDeltaFiles = Arrays.asList(fs.listStatus(new Path(incrPullRootPath, commitToPull.get())));
+      String pathStr = commitDeltaFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
+      JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
+          AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
       return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
           String.valueOf(commitToPull.get()));
     } catch (IOException ioe) {
-      throw new HoodieIOException(
-          "Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
+      throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }
   }
 }

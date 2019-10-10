@@ -51,13 +51,11 @@ public class IncrSourceHelper {
    * @param readLatestOnMissingBeginInstant when begin instant is missing, allow reading from latest committed instant
    * @return begin and end instants
    */
-  public static Pair<String, String> calculateBeginAndEndInstants(
-      JavaSparkContext jssc, String srcBasePath, int numInstantsPerFetch, Option<String> beginInstant,
-      boolean readLatestOnMissingBeginInstant) {
-    Preconditions.checkArgument(numInstantsPerFetch > 0, "Make sure the config"
-        + " hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
-    HoodieTableMetaClient srcMetaClient = new HoodieTableMetaClient(jssc.hadoopConfiguration(),
-        srcBasePath, true);
+  public static Pair<String, String> calculateBeginAndEndInstants(JavaSparkContext jssc, String srcBasePath,
+      int numInstantsPerFetch, Option<String> beginInstant, boolean readLatestOnMissingBeginInstant) {
+    Preconditions.checkArgument(numInstantsPerFetch > 0,
+        "Make sure the config" + " hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
+    HoodieTableMetaClient srcMetaClient = new HoodieTableMetaClient(jssc.hadoopConfiguration(), srcBasePath, true);
 
     final HoodieTimeline activeCommitTimeline =
         srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
@@ -72,11 +70,8 @@ public class IncrSourceHelper {
       }
     });
 
-    Option<HoodieInstant> nthInstant = Option.fromJavaOptional(
-        activeCommitTimeline
-            .findInstantsAfter(beginInstantTime, numInstantsPerFetch)
-            .getInstants()
-            .reduce((x, y) -> y));
+    Option<HoodieInstant> nthInstant = Option.fromJavaOptional(activeCommitTimeline
+        .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstants().reduce((x, y) -> y));
     return Pair.of(beginInstantTime, nthInstant.map(instant -> instant.getTimestamp()).orElse(beginInstantTime));
   }
 
@@ -90,14 +85,12 @@ public class IncrSourceHelper {
    */
   public static void validateInstantTime(Row row, String instantTime, String sinceInstant, String endInstant) {
     Preconditions.checkNotNull(instantTime);
-    Preconditions.checkArgument(HoodieTimeline.compareTimestamps(instantTime,
-        sinceInstant, HoodieTimeline.GREATER),
-        "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime
-            + "but expected to be between " + sinceInstant + "(excl) - "
-            + endInstant + "(incl)");
-    Preconditions.checkArgument(HoodieTimeline.compareTimestamps(instantTime,
-        endInstant, HoodieTimeline.LESSER_OR_EQUAL),
-        "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime
-            + "but expected to be between " + sinceInstant + "(excl) - " + endInstant + "(incl)");
+    Preconditions.checkArgument(HoodieTimeline.compareTimestamps(instantTime, sinceInstant, HoodieTimeline.GREATER),
+        "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime + "but expected to be between "
+            + sinceInstant + "(excl) - " + endInstant + "(incl)");
+    Preconditions.checkArgument(
+        HoodieTimeline.compareTimestamps(instantTime, endInstant, HoodieTimeline.LESSER_OR_EQUAL),
+        "Instant time(_hoodie_commit_time) in row (" + row + ") was : " + instantTime + "but expected to be between "
+            + sinceInstant + "(excl) - " + endInstant + "(incl)");
   }
 }

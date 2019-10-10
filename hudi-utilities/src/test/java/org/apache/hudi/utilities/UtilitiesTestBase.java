@@ -110,6 +110,7 @@ public class UtilitiesTestBase {
 
   /**
    * Helper to get hive sync config
+   * 
    * @param basePath
    * @param tableName
    * @return
@@ -130,6 +131,7 @@ public class UtilitiesTestBase {
 
   /**
    * Initialize Hive DB
+   * 
    * @throws IOException
    */
   private static void clearHiveDb() throws IOException {
@@ -151,8 +153,8 @@ public class UtilitiesTestBase {
     private static ClassLoader classLoader = Helpers.class.getClassLoader();
 
     public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
-      BufferedReader reader = new BufferedReader(
-          new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
+      BufferedReader reader =
+          new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
       PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
       String line;
       while ((line = reader.readLine()) != null) {

@@ -52,13 +52,12 @@ public class DatasetsCommand implements CommandMarker {
       @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "300000",
           help = "Max wait time for eventual consistency") final Integer maxConsistencyIntervalMs,
       @CliOption(key = {"maxCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "7",
-          help = "Max checks for eventual consistency") final Integer maxConsistencyChecks) throws IOException {
-    HoodieCLI.setConsistencyGuardConfig(
-        ConsistencyGuardConfig.newBuilder()
-            .withConsistencyCheckEnabled(eventuallyConsistent)
+          help = "Max checks for eventual consistency") final Integer maxConsistencyChecks)
+      throws IOException {
+    HoodieCLI
+        .setConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(eventuallyConsistent)
             .withInitialConsistencyCheckIntervalMs(initialConsistencyIntervalMs)
-            .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs)
-            .withMaxConsistencyChecks(maxConsistencyChecks)
+            .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs).withMaxConsistencyChecks(maxConsistencyChecks)
             .build());
     HoodieCLI.initConf();
     HoodieCLI.connectTo(path);
@@ -70,8 +69,8 @@ public class DatasetsCommand implements CommandMarker {
   /**
    * Create a Hoodie Table if it does not exist
    *
-   * @param path         Base Path
-   * @param name         Hoodie Table Name
+   * @param path Base Path
+   * @param name Hoodie Table Name
    * @param tableTypeStr Hoodie Table Type
    * @param payloadClass Payload Class
    */
@@ -82,7 +81,8 @@ public class DatasetsCommand implements CommandMarker {
       @CliOption(key = {"tableType"}, unspecifiedDefaultValue = "COPY_ON_WRITE",
           help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
       @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
-          help = "Payload Class") final String payloadClass) throws IOException {
+          help = "Payload Class") final String payloadClass)
+      throws IOException {
 
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -117,15 +117,13 @@ public class DatasetsCommand implements CommandMarker {
    */
   @CliCommand(value = "desc", help = "Describle Hoodie Table properties")
   public String descTable() {
-    TableHeader header = new TableHeader()
-        .addTableHeaderField("Property")
-        .addTableHeaderField("Value");
+    TableHeader header = new TableHeader().addTableHeaderField("Property").addTableHeaderField("Value");
     List<Comparable[]> rows = new ArrayList<>();
-    rows.add(new Comparable[]{"basePath", HoodieCLI.tableMetadata.getBasePath()});
-    rows.add(new Comparable[]{"metaPath", HoodieCLI.tableMetadata.getMetaPath()});
-    rows.add(new Comparable[]{"fileSystem", HoodieCLI.tableMetadata.getFs().getScheme()});
+    rows.add(new Comparable[] {"basePath", HoodieCLI.tableMetadata.getBasePath()});
+    rows.add(new Comparable[] {"metaPath", HoodieCLI.tableMetadata.getMetaPath()});
+    rows.add(new Comparable[] {"fileSystem", HoodieCLI.tableMetadata.getFs().getScheme()});
     HoodieCLI.tableMetadata.getTableConfig().getProps().entrySet().forEach(e -> {
-      rows.add(new Comparable[]{e.getKey(), e.getValue()});
+      rows.add(new Comparable[] {e.getKey(), e.getValue()});
     });
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
   }

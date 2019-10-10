@@ -62,8 +62,8 @@ public class SavepointsCommand implements CommandMarker {
 
   @CliAvailabilityIndicator({"savepoint rollback"})
   public boolean isRollbackToSavepointAvailable() {
-    return HoodieCLI.tableMetadata != null && !HoodieCLI.tableMetadata.getActiveTimeline().getSavePointTimeline()
-        .filterCompletedInstants().empty();
+    return HoodieCLI.tableMetadata != null
+        && !HoodieCLI.tableMetadata.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().empty();
   }
 
   @CliCommand(value = "savepoints show", help = "Show the savepoints")
@@ -137,8 +137,8 @@ public class SavepointsCommand implements CommandMarker {
   }
 
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config, false);
   }
 

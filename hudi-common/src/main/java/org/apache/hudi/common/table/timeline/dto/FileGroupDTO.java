@@ -50,8 +50,8 @@ public class FileGroupDTO {
   }
 
   public static HoodieFileGroup toFileGroup(FileGroupDTO dto, HoodieTableMetaClient metaClient) {
-    HoodieFileGroup fileGroup = new HoodieFileGroup(dto.partition, dto.id,
-        TimelineDTO.toTimeline(dto.timeline, metaClient));
+    HoodieFileGroup fileGroup =
+        new HoodieFileGroup(dto.partition, dto.id, TimelineDTO.toTimeline(dto.timeline, metaClient));
     dto.slices.stream().map(FileSliceDTO::toFileSlice).forEach(fileSlice -> fileGroup.addFileSlice(fileSlice));
     return fileGroup;
   }

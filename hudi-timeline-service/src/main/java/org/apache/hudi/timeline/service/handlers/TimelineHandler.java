@@ -32,14 +32,13 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
  */
 public class TimelineHandler extends Handler {
 
-  public TimelineHandler(Configuration conf,
-      FileSystemViewManager viewManager) throws IOException {
+  public TimelineHandler(Configuration conf, FileSystemViewManager viewManager) throws IOException {
     super(conf, viewManager);
   }
 
   public List<InstantDTO> getLastInstant(String basePath) {
-    return viewManager.getFileSystemView(basePath).getLastInstant()
-        .map(InstantDTO::fromInstant).map(dto -> Arrays.asList(dto)).orElse(new ArrayList<>());
+    return viewManager.getFileSystemView(basePath).getLastInstant().map(InstantDTO::fromInstant)
+        .map(dto -> Arrays.asList(dto)).orElse(new ArrayList<>());
   }
 
   public TimelineDTO getTimeline(String basePath) {

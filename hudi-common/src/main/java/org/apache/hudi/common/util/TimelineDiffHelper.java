@@ -55,19 +55,19 @@ public class TimelineDiffHelper {
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
       List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingCompactionTransitions(oldT, newT);
-      List<HoodieInstant> lostPendingCompactions =
-          compactionInstants.stream().filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey)
-              .collect(Collectors.toList());
+      List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
+          .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
       if (!lostPendingCompactions.isEmpty()) {
         // If a compaction is unscheduled, fall back to complete refresh of fs view since some log files could have been
         // moved. Its unsafe to incrementally sync in that case.
-        log.warn("Some pending compactions are no longer in new timeline (unscheduled ?)."
-            + "They are :" + lostPendingCompactions);
+        log.warn("Some pending compactions are no longer in new timeline (unscheduled ?)." + "They are :"
+            + lostPendingCompactions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream().filter(instantPair ->
-          instantPair.getValue().getAction().equals(HoodieTimeline.COMMIT_ACTION)
-              && instantPair.getValue().isCompleted()).map(Pair::getKey).collect(Collectors.toList());
+      List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream()
+          .filter(instantPair -> instantPair.getValue().getAction().equals(HoodieTimeline.COMMIT_ACTION)
+              && instantPair.getValue().isCompleted())
+          .map(Pair::getKey).collect(Collectors.toList());
 
       newT.getInstants().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
       return new TimelineDiffResult(newInstants, finishedCompactionInstants, true);
@@ -125,11 +125,8 @@ public class TimelineDiffHelper {
 
     @Override
     public String toString() {
-      return "TimelineDiffResult{"
-          + "newlySeenInstants=" + newlySeenInstants
-          + ", finishedCompactionInstants=" + finishedCompactionInstants
-          + ", canSyncIncrementally=" + canSyncIncrementally
-          + '}';
+      return "TimelineDiffResult{" + "newlySeenInstants=" + newlySeenInstants + ", finishedCompactionInstants="
+          + finishedCompactionInstants + ", canSyncIncrementally=" + canSyncIncrementally + '}';
     }
   }
 }

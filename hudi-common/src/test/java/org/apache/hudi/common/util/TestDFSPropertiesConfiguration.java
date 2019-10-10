@@ -53,25 +53,18 @@ public class TestDFSPropertiesConfiguration {
 
     // create some files.
     Path filePath = new Path(dfsBasePath + "/t1.props");
-    writePropertiesFile(filePath, new String[]{
-        "", "#comment", "abc",// to be ignored
-        "int.prop=123", "double.prop=113.4", "string.prop=str", "boolean.prop=true", "long.prop=1354354354"
-    });
+    writePropertiesFile(filePath, new String[] {"", "#comment", "abc", // to be ignored
+        "int.prop=123", "double.prop=113.4", "string.prop=str", "boolean.prop=true", "long.prop=1354354354"});
 
     filePath = new Path(dfsBasePath + "/t2.props");
-    writePropertiesFile(filePath, new String[]{
-        "string.prop=ignored", "include=t1.props"
-    });
+    writePropertiesFile(filePath, new String[] {"string.prop=ignored", "include=t1.props"});
 
     filePath = new Path(dfsBasePath + "/t3.props");
-    writePropertiesFile(filePath, new String[]{
-        "double.prop=838.3", "include = t2.props", "double.prop=243.4", "string.prop=t3.value"
-    });
+    writePropertiesFile(filePath,
+        new String[] {"double.prop=838.3", "include = t2.props", "double.prop=243.4", "string.prop=t3.value"});
 
     filePath = new Path(dfsBasePath + "/t4.props");
-    writePropertiesFile(filePath, new String[]{
-        "double.prop=838.3", "include = t4.props"
-    });
+    writePropertiesFile(filePath, new String[] {"double.prop=838.3", "include = t4.props"});
   }
 
   @AfterClass
@@ -98,7 +91,9 @@ public class TestDFSPropertiesConfiguration {
     try {
       props.getString("invalid.key");
       fail("Should error out here.");
-    } catch (IllegalArgumentException iae) { /* ignore */ }
+    } catch (IllegalArgumentException iae) {
+      // ignore
+    }
 
     assertEquals(123, props.getInteger("int.prop"));
     assertEquals(113.4, props.getDouble("double.prop"), 0.001);
@@ -133,6 +128,8 @@ public class TestDFSPropertiesConfiguration {
     try {
       new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t4.props"));
       fail("Should error out on a self-included file.");
-    } catch (IllegalStateException ise) { /* ignore */ }
+    } catch (IllegalStateException ise) {
+      // ignore
+    }
   }
 }

@@ -26,9 +26,7 @@ import org.apache.spark.sql.SparkSession;
 
 public abstract class JsonSource extends Source<JavaRDD<String>> {
 
-  public JsonSource(TypedProperties props,
-      JavaSparkContext sparkContext,
-      SparkSession sparkSession,
+  public JsonSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.JSON);
   }

@@ -28,8 +28,7 @@ public class RocksDBBasedIncrementalFSViewSyncTest extends IncrementalFSViewSync
   @Override
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
       throws IOException {
-    return new RocksDbBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withRocksDBPath(folder.newFolder().getAbsolutePath())
-            .withIncrementalTimelineSync(true).build());
+    return new RocksDbBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
+        .withRocksDBPath(folder.newFolder().getAbsolutePath()).withIncrementalTimelineSync(true).build());
   }
 }

@@ -37,9 +37,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * HoodieDefaultTimeline is a default implementation of the HoodieTimeline. It provides methods to
- * inspect a List[HoodieInstant]. Function to get the details of the instant is passed in as a
- * lamdba.
+ * HoodieDefaultTimeline is a default implementation of the HoodieTimeline. It provides methods to inspect a
+ * List[HoodieInstant]. Function to get the details of the instant is passed in as a lamdba.
  *
  * @see HoodieTimeline
  */
@@ -53,8 +52,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private List<HoodieInstant> instants;
   private String timelineHash;
 
-  public HoodieDefaultTimeline(Stream<HoodieInstant> instants,
-      Function<HoodieInstant, Option<byte[]>> details) {
+  public HoodieDefaultTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
     this.details = details;
     setInstants(instants.collect(Collectors.toList()));
   }
@@ -64,8 +62,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     final MessageDigest md;
     try {
       md = MessageDigest.getInstance(HASHING_ALGORITHM);
-      this.instants.stream().forEach(i -> md.update(
-          StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()).getBytes()));
+      this.instants.stream().forEach(i -> md
+          .update(StringUtils.joinUsingDelim("_", i.getTimestamp(), i.getAction(), i.getState().name()).getBytes()));
     } catch (NoSuchAlgorithmException nse) {
       throw new HoodieException(nse);
     }
@@ -78,13 +76,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    *
    * @deprecated
    */
-  public HoodieDefaultTimeline() {
-  }
+  public HoodieDefaultTimeline() {}
 
   @Override
   public HoodieTimeline filterInflights() {
-    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isInflight),
-        details);
+    return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isInflight), details);
   }
 
   @Override
@@ -115,24 +111,22 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filterPendingCompactionTimeline() {
     return new HoodieDefaultTimeline(
-        instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)),
-        details);
+        instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsInRange(String startTs, String endTs) {
-    return new HoodieDefaultTimeline(instants.stream().filter(
-        s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), startTs, GREATER)
-            && HoodieTimeline.compareTimestamps(
-            s.getTimestamp(), endTs, LESSER_OR_EQUAL)), details);
+    return new HoodieDefaultTimeline(
+        instants.stream().filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), startTs, GREATER)
+            && HoodieTimeline.compareTimestamps(s.getTimestamp(), endTs, LESSER_OR_EQUAL)),
+        details);
   }
 
   @Override
   public HoodieDefaultTimeline findInstantsAfter(String commitTime, int numCommits) {
-    return new HoodieDefaultTimeline(
-        instants.stream()
-            .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), commitTime, GREATER))
-            .limit(numCommits), details);
+    return new HoodieDefaultTimeline(instants.stream()
+        .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), commitTime, GREATER)).limit(numCommits),
+        details);
   }
 
   @Override
@@ -183,8 +177,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public boolean containsOrBeforeTimelineStarts(String instant) {
-    return instants.stream().anyMatch(s -> s.getTimestamp().equals(instant))
-        || isBeforeTimelineStarts(instant);
+    return instants.stream().anyMatch(s -> s.getTimestamp().equals(instant)) || isBeforeTimelineStarts(instant);
   }
 
   @Override
@@ -218,8 +211,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public String toString() {
-    return this.getClass().getName() + ": " + instants.stream().map(Object::toString)
-        .collect(Collectors.joining(","));
+    return this.getClass().getName() + ": " + instants.stream().map(Object::toString).collect(Collectors.joining(","));
   }
 
 }

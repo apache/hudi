@@ -79,20 +79,15 @@ public class TestHoodieRecordSizing {
   private static LinkedList<Option<byte[]>> generateCommitMetadataList() throws IOException {
     LinkedList<Option<byte[]>> commits = new LinkedList<>();
     // First commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(2000, 10000).toJsonString()
-        .getBytes(StandardCharsets.UTF_8)));
+    commits.push(Option.of(generateCommitMetadataWith(2000, 10000).toJsonString().getBytes(StandardCharsets.UTF_8)));
     // Second commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(1500, 7500).toJsonString()
-        .getBytes(StandardCharsets.UTF_8)));
+    commits.push(Option.of(generateCommitMetadataWith(1500, 7500).toJsonString().getBytes(StandardCharsets.UTF_8)));
     // Third commit with both zero records and zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(0, 0).toJsonString()
-        .getBytes(StandardCharsets.UTF_8)));
+    commits.push(Option.of(generateCommitMetadataWith(0, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
     // Fourth commit with zero records
-    commits.push(Option.of(generateCommitMetadataWith(0, 1500).toJsonString()
-        .getBytes(StandardCharsets.UTF_8)));
+    commits.push(Option.of(generateCommitMetadataWith(0, 1500).toJsonString().getBytes(StandardCharsets.UTF_8)));
     // Fifth commit with zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(2500, 0).toJsonString()
-        .getBytes(StandardCharsets.UTF_8)));
+    commits.push(Option.of(generateCommitMetadataWith(2500, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
     return commits;
   }
 

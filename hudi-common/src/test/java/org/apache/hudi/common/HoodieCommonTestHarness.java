@@ -39,14 +39,14 @@ public class HoodieCommonTestHarness {
 
   /**
    * Initializes basePath.
-  */
+   */
   protected void initPath() {
     this.basePath = folder.getRoot().getAbsolutePath();
   }
 
   /**
-   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type
-   * specified by {@code getTableType()}.
+   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
+   * {@code getTableType()}.
    *
    * @throws IOException
    */
@@ -67,8 +67,7 @@ public class HoodieCommonTestHarness {
     return new HoodieTableFileSystemView(metaClient, timeline, enableIncrementalTimelineSync);
   }
 
-  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient)
-      throws IOException {
+  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
     return getFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
   }
 
@@ -78,8 +77,8 @@ public class HoodieCommonTestHarness {
   }
 
   /**
-   * Gets a default {@link HoodieTableType#COPY_ON_WRITE} table type.
-   * Sub-classes can override this method to specify a new table type.
+   * Gets a default {@link HoodieTableType#COPY_ON_WRITE} table type. Sub-classes can override this method to specify a
+   * new table type.
    *
    * @return an instance of Hoodie table type.
    */

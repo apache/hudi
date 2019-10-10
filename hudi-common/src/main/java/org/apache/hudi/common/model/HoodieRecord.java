@@ -36,12 +36,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public static String FILENAME_METADATA_FIELD = "_hoodie_file_name";
 
   public static final List<String> HOODIE_META_COLUMNS =
-      new ImmutableList.Builder<String>().add(COMMIT_TIME_METADATA_FIELD)
-      .add(COMMIT_SEQNO_METADATA_FIELD)
-      .add(RECORD_KEY_METADATA_FIELD)
-      .add(PARTITION_PATH_METADATA_FIELD)
-      .add(FILENAME_METADATA_FIELD)
-      .build();
+      new ImmutableList.Builder<String>().add(COMMIT_TIME_METADATA_FIELD).add(COMMIT_SEQNO_METADATA_FIELD)
+          .add(RECORD_KEY_METADATA_FIELD).add(PARTITION_PATH_METADATA_FIELD).add(FILENAME_METADATA_FIELD).build();
 
   /**
    * Identifies the record across the table
@@ -95,8 +91,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   }
 
   /**
-   * Release the actual payload, to ease memory pressure. To be called after the record has been
-   * written to storage. Once deflated, cannot be inflated.
+   * Release the actual payload, to ease memory pressure. To be called after the record has been written to storage.
+   * Once deflated, cannot be inflated.
    */
   public void deflate() {
     this.data = null;
@@ -118,8 +114,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   }
 
   /**
-   * Sets the new currentLocation of the record, after being written. This again should happen
-   * exactly-once.
+   * Sets the new currentLocation of the record, after being written. This again should happen exactly-once.
    */
   public HoodieRecord setNewLocation(HoodieRecordLocation location) {
     checkState();
@@ -145,10 +140,8 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
       return false;
     }
     HoodieRecord that = (HoodieRecord) o;
-    return Objects.equal(key, that.key)
-        && Objects.equal(data, that.data)
-        && Objects.equal(currentLocation, that.currentLocation)
-        && Objects.equal(newLocation, that.newLocation);
+    return Objects.equal(key, that.key) && Objects.equal(data, that.data)
+        && Objects.equal(currentLocation, that.currentLocation) && Objects.equal(newLocation, that.newLocation);
   }
 
   @Override

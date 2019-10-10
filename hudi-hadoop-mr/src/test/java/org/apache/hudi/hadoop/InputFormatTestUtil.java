@@ -44,21 +44,20 @@ public class InputFormatTestUtil {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  public static File prepareDataset(TemporaryFolder basePath, int numberOfFiles,
-      String commitNumber) throws IOException {
+  public static File prepareDataset(TemporaryFolder basePath, int numberOfFiles, String commitNumber)
+      throws IOException {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
     for (int i = 0; i < numberOfFiles; i++) {
-      File dataFile = new File(partitionPath,
-          FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i));
+      File dataFile = new File(partitionPath, FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i));
       dataFile.createNewFile();
     }
     return partitionPath;
   }
 
-  public static void simulateUpdates(File directory, final String originalCommit,
-      int numberOfFilesUpdated, String newCommit, boolean randomize) throws IOException {
+  public static void simulateUpdates(File directory, final String originalCommit, int numberOfFilesUpdated,
+      String newCommit, boolean randomize) throws IOException {
     List<File> dataFiles = Arrays.asList(directory.listFiles(new FilenameFilter() {
       @Override
       public boolean accept(File dir, String name) {
@@ -69,8 +68,7 @@ public class InputFormatTestUtil {
     if (randomize) {
       Collections.shuffle(dataFiles);
     }
-    List<File> toUpdateList = dataFiles
-        .subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
+    List<File> toUpdateList = dataFiles.subList(0, Math.min(numberOfFilesUpdated, dataFiles.size()));
     for (File file : toUpdateList) {
       String fileId = FSUtils.getFileId(file.getName());
       File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
@@ -88,18 +86,17 @@ public class InputFormatTestUtil {
     new File(basePath.getRoot().toString() + "/.hoodie/", commitNumber + ".deltacommit").createNewFile();
   }
 
-  public static void setupIncremental(JobConf jobConf, String startCommit,
-      int numberOfCommitsToPull) {
-    String modePropertyName = String
-        .format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+  public static void setupIncremental(JobConf jobConf, String startCommit, int numberOfCommitsToPull) {
+    String modePropertyName =
+        String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.set(modePropertyName, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
 
-    String startCommitTimestampName = String
-        .format(HoodieHiveUtil.HOODIE_START_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    String startCommitTimestampName =
+        String.format(HoodieHiveUtil.HOODIE_START_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.set(startCommitTimestampName, startCommit);
 
-    String maxCommitPulls = String
-        .format(HoodieHiveUtil.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    String maxCommitPulls =
+        String.format(HoodieHiveUtil.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
@@ -107,8 +104,8 @@ public class InputFormatTestUtil {
     return new Schema.Parser().parse(InputFormatTestUtil.class.getResourceAsStream(location));
   }
 
-  public static File prepareParquetDataset(TemporaryFolder basePath, Schema schema,
-      int numberOfFiles, int numberOfRecords, String commitNumber) throws IOException {
+  public static File prepareParquetDataset(TemporaryFolder basePath, Schema schema, int numberOfFiles,
+      int numberOfRecords, String commitNumber) throws IOException {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
@@ -117,8 +114,8 @@ public class InputFormatTestUtil {
   }
 
 
-  public static File prepareSimpleParquetDataset(TemporaryFolder basePath, Schema schema,
-      int numberOfFiles, int numberOfRecords, String commitNumber) throws Exception {
+  public static File prepareSimpleParquetDataset(TemporaryFolder basePath, Schema schema, int numberOfFiles,
+      int numberOfRecords, String commitNumber) throws Exception {
     basePath.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.getRoot().toString());
     File partitionPath = basePath.newFolder("2016", "05", "01");
@@ -126,8 +123,8 @@ public class InputFormatTestUtil {
     return partitionPath;
   }
 
-  public static File prepareNonPartitionedParquetDataset(TemporaryFolder baseDir, Schema schema,
-      int numberOfFiles, int numberOfRecords, String commitNumber) throws IOException {
+  public static File prepareNonPartitionedParquetDataset(TemporaryFolder baseDir, Schema schema, int numberOfFiles,
+      int numberOfRecords, String commitNumber) throws IOException {
     baseDir.create();
     HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), baseDir.getRoot().toString());
     File basePath = baseDir.getRoot();
@@ -135,17 +132,15 @@ public class InputFormatTestUtil {
     return basePath;
   }
 
-  private static void createData(Schema schema,
-      File partitionPath,  int numberOfFiles, int numberOfRecords, String commitNumber)
-      throws IOException {
+  private static void createData(Schema schema, File partitionPath, int numberOfFiles, int numberOfRecords,
+      String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i);
       File dataFile = new File(partitionPath, fileId);
       parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
       try {
-        for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber,
-            fileId)) {
+        for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
           parquetWriter.write(record);
         }
       } finally {
@@ -154,9 +149,8 @@ public class InputFormatTestUtil {
     }
   }
 
-  private static void createSimpleData(Schema schema,
-      File partitionPath,  int numberOfFiles, int numberOfRecords, String commitNumber)
-      throws Exception {
+  private static void createSimpleData(Schema schema, File partitionPath, int numberOfFiles, int numberOfRecords,
+      String commitNumber) throws Exception {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
       String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i);
@@ -179,8 +173,8 @@ public class InputFormatTestUtil {
     }
   }
 
-  private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema,
-      int numberOfRecords, String commitTime, String fileId) throws IOException {
+  private static Iterable<? extends GenericRecord> generateAvroRecords(Schema schema, int numberOfRecords,
+      String commitTime, String fileId) throws IOException {
     List<GenericRecord> records = new ArrayList<>(numberOfRecords);
     for (int i = 0; i < numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, commitTime, fileId));
@@ -198,17 +192,14 @@ public class InputFormatTestUtil {
     })[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
     File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
-    AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()),
-        schema);
+    AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
     try {
-      for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit,
-          fileId)) {
+      for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit, fileId)) {
         if (numberOfRecordsToUpdate > 0) {
           // update this record
           record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, newCommit);
           String oldSeqNo = (String) record.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
-          record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-              oldSeqNo.replace(originalCommit, newCommit));
+          record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, oldSeqNo.replace(originalCommit, newCommit));
           numberOfRecordsToUpdate--;
         }
         parquetWriter.write(record);

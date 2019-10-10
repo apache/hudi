@@ -19,7 +19,9 @@
 package org.apache.hudi.exception;
 
 /**
- * <p> Exception thrown for HoodieIndex related errors. </p>
+ * <p>
+ * Exception thrown for HoodieIndex related errors.
+ * </p>
  */
 public class HoodieIndexException extends HoodieException {
 

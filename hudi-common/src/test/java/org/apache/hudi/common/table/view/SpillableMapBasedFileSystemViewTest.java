@@ -24,8 +24,8 @@ import org.apache.hudi.common.table.SyncableFileSystemView;
 public class SpillableMapBasedFileSystemViewTest extends HoodieTableFileSystemViewTest {
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {
-    return new SpillableMapBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
-            .withMaxMemoryForView(0L).build()); // pure disk base View
+    return new SpillableMapBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
+        // pure disk base View
+        .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).withMaxMemoryForView(0L).build());
   }
 }

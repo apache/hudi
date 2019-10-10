@@ -36,12 +36,12 @@ import org.junit.rules.TemporaryFolder;
 /**
  */
 public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
-  
+
   @Before
   public void setUp() throws Exception {
     initMetaClient();
   }
-  
+
   @Test
   public void testHoodiePaths() throws IOException {
     // Create a temp folder as the base path
@@ -61,28 +61,26 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     Path partitionPath = new Path("file://" + basePath + File.separator + "2017/01/01");
     assertTrue("Directories should be accepted", pathFilter.accept(partitionPath));
 
-    assertTrue(pathFilter.accept(new Path(
-        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
-    assertFalse(pathFilter.accept(new Path(
-        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
-    assertTrue(pathFilter.accept(new Path(
-        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
-    assertTrue(pathFilter.accept(new Path(
-        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
-    assertFalse(pathFilter.accept(new Path(
-        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+    assertTrue(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f1"))));
+    assertFalse(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f2"))));
+    assertTrue(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "001", "f3"))));
+    assertTrue(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "002", "f2"))));
+    assertFalse(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
     assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "001"))));
     assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getCommitFilePath(basePath, "002"))));
-    assertFalse(pathFilter.accept(new Path("file:///"
-        + HoodieTestUtils.getInflightCommitFilePath(basePath, "003"))));
-    assertFalse(pathFilter.accept(new Path("file:///"
-        + HoodieTestUtils.getRequestedCompactionFilePath(basePath, "004"))));
-    assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/"
-        + HoodieTableMetaClient.METAFOLDER_NAME + "/")));
+    assertFalse(pathFilter.accept(new Path("file:///" + HoodieTestUtils.getInflightCommitFilePath(basePath, "003"))));
+    assertFalse(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getRequestedCompactionFilePath(basePath, "004"))));
+    assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")));
     assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME)));
 
-    assertFalse(pathFilter.accept(new Path(
-        "file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
+    assertFalse(
+        pathFilter.accept(new Path("file:///" + HoodieTestUtils.getDataFilePath(basePath, "2017/01/01", "003", "f3"))));
 
   }
 

@@ -23,7 +23,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 /**
- * <p> Exception thrown to indicate that a hoodie dataset was not found on the path provided <p>
+ * <p>
+ * Exception thrown to indicate that a hoodie dataset was not found on the path provided
+ * <p>
  */
 public class DatasetNotFoundException extends HoodieException {
 
@@ -50,8 +52,7 @@ public class DatasetNotFoundException extends HoodieException {
       // if the base path is file:///, then we have a IllegalArgumentException
       throw new DatasetNotFoundException(metaPathDir.toString());
     } catch (IOException e) {
-      throw new HoodieIOException(
-          "Could not check if dataset " + basePathDir + " is valid dataset", e);
+      throw new HoodieIOException("Could not check if dataset " + basePathDir + " is valid dataset", e);
     }
   }
 }

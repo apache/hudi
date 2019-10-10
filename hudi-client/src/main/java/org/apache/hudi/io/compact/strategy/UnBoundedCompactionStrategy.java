@@ -24,9 +24,8 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
- * UnBoundedCompactionStrategy will not change ordering or filter any compaction. It is a
- * pass-through and will compact all the base files which has a log file. This usually means
- * no-intelligence on compaction.
+ * UnBoundedCompactionStrategy will not change ordering or filter any compaction. It is a pass-through and will compact
+ * all the base files which has a log file. This usually means no-intelligence on compaction.
  *
  * @see CompactionStrategy
  */

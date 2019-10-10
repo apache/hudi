@@ -29,11 +29,9 @@ import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 
 /**
- * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new
- * log files.
+ * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new log files.
  */
-public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extends
-    CopyOnWriteLazyInsertIterable<T> {
+public class MergeOnReadLazyInsertIterable<T extends HoodieRecordPayload> extends CopyOnWriteLazyInsertIterable<T> {
 
   public MergeOnReadLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr, HoodieWriteConfig config,
       String commitTime, HoodieTable<T> hoodieTable, String idPfx) {

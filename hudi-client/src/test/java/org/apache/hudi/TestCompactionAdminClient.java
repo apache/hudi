@@ -67,29 +67,23 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   @Test
   public void testUnscheduleCompactionPlan() throws Exception {
     int numEntriesPerInstant = 10;
-    CompactionTestUtils
-        .setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant, numEntriesPerInstant,
-            numEntriesPerInstant, numEntriesPerInstant);
+    CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
+        numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
     // THere are delta-commits after compaction instant
-    validateUnSchedulePlan(client,
-        "000", "001", numEntriesPerInstant, 2 * numEntriesPerInstant);
+    validateUnSchedulePlan(client, "000", "001", numEntriesPerInstant, 2 * numEntriesPerInstant);
     // THere are delta-commits after compaction instant
-    validateUnSchedulePlan(client,
-        "002", "003", numEntriesPerInstant, 2 * numEntriesPerInstant);
+    validateUnSchedulePlan(client, "002", "003", numEntriesPerInstant, 2 * numEntriesPerInstant);
     // THere are no delta-commits after compaction instant
-    validateUnSchedulePlan(client,
-        "004", "005", numEntriesPerInstant, 0);
+    validateUnSchedulePlan(client, "004", "005", numEntriesPerInstant, 0);
     // THere are no delta-commits after compaction instant
-    validateUnSchedulePlan(client,
-        "006", "007", numEntriesPerInstant, 0);
+    validateUnSchedulePlan(client, "006", "007", numEntriesPerInstant, 0);
   }
 
   @Test
   public void testUnscheduleCompactionFileId() throws Exception {
     int numEntriesPerInstant = 10;
-    CompactionTestUtils
-        .setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant, numEntriesPerInstant,
-            numEntriesPerInstant, numEntriesPerInstant);
+    CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
+        numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
     Map<String, CompactionOperation> instantsWithOp =
         Arrays.asList("001", "003", "005", "007").stream().map(instant -> {
           try {
@@ -97,29 +91,24 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
           } catch (IOException ioe) {
             throw new HoodieException(ioe);
           }
-        }).map(instantWithPlan -> instantWithPlan.getRight().getOperations().stream().map(op -> Pair.of(
-            instantWithPlan.getLeft(), CompactionOperation.convertFromAvroRecordInstance(op))).findFirst().get())
-            .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+        }).map(instantWithPlan -> instantWithPlan.getRight().getOperations().stream()
+            .map(op -> Pair.of(instantWithPlan.getLeft(), CompactionOperation.convertFromAvroRecordInstance(op)))
+            .findFirst().get()).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     // THere are delta-commits after compaction instant
-    validateUnScheduleFileId(client,
-        "000", "001", instantsWithOp.get("001"), 2);
+    validateUnScheduleFileId(client, "000", "001", instantsWithOp.get("001"), 2);
     // THere are delta-commits after compaction instant
-    validateUnScheduleFileId(client,
-        "002", "003", instantsWithOp.get("003"), 2);
+    validateUnScheduleFileId(client, "002", "003", instantsWithOp.get("003"), 2);
     // THere are no delta-commits after compaction instant
-    validateUnScheduleFileId(client,
-        "004", "005", instantsWithOp.get("005"), 0);
+    validateUnScheduleFileId(client, "004", "005", instantsWithOp.get("005"), 0);
     // THere are no delta-commits after compaction instant
-    validateUnScheduleFileId(client,
-        "006", "007", instantsWithOp.get("007"), 0);
+    validateUnScheduleFileId(client, "006", "007", instantsWithOp.get("007"), 0);
   }
 
   @Test
   public void testRepairCompactionPlan() throws Exception {
     int numEntriesPerInstant = 10;
-    CompactionTestUtils
-        .setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant, numEntriesPerInstant,
-            numEntriesPerInstant, numEntriesPerInstant);
+    CompactionTestUtils.setupAndValidateCompactionOperations(metaClient, false, numEntriesPerInstant,
+        numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
     // THere are delta-commits after compaction instant
     validateRepair("000", "001", numEntriesPerInstant, 2 * numEntriesPerInstant);
     // THere are delta-commits after compaction instant
@@ -140,23 +129,20 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
       Assert.assertTrue("Expect some failures in validation", result.stream().filter(r -> !r.isSuccess()).count() > 0);
     }
     // Now repair
-    List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles = result.stream().flatMap(r ->
-        client.getRenamingActionsToAlignWithCompactionOperation(metaClient,
-            compactionInstant, r.getOperation(), Option.empty()).stream())
-        .map(rn -> {
-          try {
-            client.renameLogFile(metaClient, rn.getKey(), rn.getValue());
-          } catch (IOException e) {
-            throw new HoodieIOException(e.getMessage(), e);
-          }
-          return rn;
-        }).collect(Collectors.toList());
-    Map<String, String> renameFilesFromUndo =
-        undoFiles.stream().collect(Collectors.toMap(p -> p.getRight().getPath().toString(),
-            x -> x.getLeft().getPath().toString()));
-    Map<String, String> expRenameFiles =
-        renameFiles.stream().collect(Collectors.toMap(p -> p.getLeft().getPath().toString(),
-            x -> x.getRight().getPath().toString()));
+    List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
+        result.stream().flatMap(r -> client.getRenamingActionsToAlignWithCompactionOperation(metaClient,
+            compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
+              try {
+                client.renameLogFile(metaClient, rn.getKey(), rn.getValue());
+              } catch (IOException e) {
+                throw new HoodieIOException(e.getMessage(), e);
+              }
+              return rn;
+            }).collect(Collectors.toList());
+    Map<String, String> renameFilesFromUndo = undoFiles.stream()
+        .collect(Collectors.toMap(p -> p.getRight().getPath().toString(), x -> x.getLeft().getPath().toString()));
+    Map<String, String> expRenameFiles = renameFiles.stream()
+        .collect(Collectors.toMap(p -> p.getLeft().getPath().toString(), x -> x.getRight().getPath().toString()));
     if (expNumRepairs > 0) {
       Assert.assertFalse("Rename Files must be non-empty", renameFiles.isEmpty());
     } else {
@@ -182,14 +168,13 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   private void ensureValidCompactionPlan(String compactionInstant) throws Exception {
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     // Ensure compaction-plan is good to begin with
-    List<ValidationOpResult> validationResults = client.validateCompactionPlan(metaClient,
-        compactionInstant, 1);
+    List<ValidationOpResult> validationResults = client.validateCompactionPlan(metaClient, compactionInstant, 1);
     Assert.assertFalse("Some validations failed",
         validationResults.stream().filter(v -> !v.isSuccess()).findAny().isPresent());
   }
 
-  private void validateRenameFiles(List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles,
-      String ingestionInstant, String compactionInstant, HoodieTableFileSystemView fsView) {
+  private void validateRenameFiles(List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles, String ingestionInstant,
+      String compactionInstant, HoodieTableFileSystemView fsView) {
     // Ensure new names of log-files are on expected lines
     Set<HoodieLogFile> uniqNewLogFiles = new HashSet<>();
     Set<HoodieLogFile> uniqOldLogFiles = new HashSet<>();
@@ -209,11 +194,10 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
       Assert.assertEquals("File Id is expected", oldLogFile.getFileId(), newLogFile.getFileId());
       HoodieLogFile lastLogFileBeforeCompaction =
           fsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
-              .filter(fs -> fs.getFileId().equals(oldLogFile.getFileId()))
-              .map(fs -> fs.getLogFiles().findFirst().get()).findFirst().get();
+              .filter(fs -> fs.getFileId().equals(oldLogFile.getFileId())).map(fs -> fs.getLogFiles().findFirst().get())
+              .findFirst().get();
       Assert.assertEquals("Log Version expected",
-          lastLogFileBeforeCompaction.getLogVersion() + oldLogFile.getLogVersion(),
-          newLogFile.getLogVersion());
+          lastLogFileBeforeCompaction.getLogVersion() + oldLogFile.getLogVersion(), newLogFile.getLogVersion());
       Assert.assertTrue("Log version does not collide",
           newLogFile.getLogVersion() > lastLogFileBeforeCompaction.getLogVersion());
     });
@@ -223,10 +207,9 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
    * Validate Unschedule operations
    */
   private List<Pair<HoodieLogFile, HoodieLogFile>> validateUnSchedulePlan(CompactionAdminClient client,
-      String ingestionInstant, String compactionInstant, int numEntriesPerInstant, int expNumRenames)
-      throws Exception {
-    return validateUnSchedulePlan(client, ingestionInstant, compactionInstant, numEntriesPerInstant,
-        expNumRenames, false);
+      String ingestionInstant, String compactionInstant, int numEntriesPerInstant, int expNumRenames) throws Exception {
+    return validateUnSchedulePlan(client, ingestionInstant, compactionInstant, numEntriesPerInstant, expNumRenames,
+        false);
   }
 
   /**
@@ -240,8 +223,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
 
     // Check suggested rename operations
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
-        client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1,
-            Option.empty(), false);
+        client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1, Option.empty(), false);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
 
     // Log files belonging to file-slices created because of compaction request must be renamed
@@ -250,8 +232,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     final HoodieTableFileSystemView fsView =
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
-        .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
-        .flatMap(fs -> fs.getLogFiles())
+        .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).flatMap(fs -> fs.getLogFiles())
         .collect(Collectors.toSet());
     Assert.assertEquals("Log files belonging to file-slices created because of compaction request must be renamed",
         expLogFilesToBeRenamed, gotLogFilesToBeRenamed);
@@ -286,7 +267,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).forEach(fs -> {
           Assert.assertFalse("No Data file must be present", fs.getDataFile().isPresent());
-          Assert.assertTrue("No Log Files", fs.getLogFiles().count() == 0); });
+          Assert.assertTrue("No Log Files", fs.getLogFiles().count() == 0);
+        });
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
@@ -295,8 +277,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    Assert.assertEquals("Each File Id has same number of log-files",
-        fileIdToCountsBeforeRenaming, fileIdToCountsAfterRenaming);
+    Assert.assertEquals("Each File Id has same number of log-files", fileIdToCountsBeforeRenaming,
+        fileIdToCountsAfterRenaming);
     Assert.assertEquals("Not Empty", numEntriesPerInstant, fileIdToCountsAfterRenaming.size());
     Assert.assertEquals("Expected number of renames", expNumRenames, renameFiles.size());
     return renameFiles;
@@ -305,15 +287,14 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   /**
    * Validate Unschedule operations
    */
-  private void validateUnScheduleFileId(CompactionAdminClient client, String ingestionInstant,
-      String compactionInstant, CompactionOperation op, int expNumRenames) throws Exception {
+  private void validateUnScheduleFileId(CompactionAdminClient client, String ingestionInstant, String compactionInstant,
+      CompactionOperation op, int expNumRenames) throws Exception {
 
     ensureValidCompactionPlan(compactionInstant);
 
     // Check suggested rename operations
-    List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
-        client.getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,
-            Option.empty(), false);
+    List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles = client
+        .getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op, Option.empty(), false);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
 
     // Log files belonging to file-slices created because of compaction request must be renamed
@@ -323,8 +304,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
         new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
-        .filter(fs -> fs.getFileId().equals(op.getFileId()))
-        .flatMap(fs -> fs.getLogFiles())
+        .filter(fs -> fs.getFileId().equals(op.getFileId())).flatMap(fs -> fs.getLogFiles())
         .collect(Collectors.toSet());
     Assert.assertEquals("Log files belonging to file-slices created because of compaction request must be renamed",
         expLogFilesToBeRenamed, gotLogFilesToBeRenamed);
@@ -359,8 +339,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-    Assert.assertEquals("Each File Id has same number of log-files",
-        fileIdToCountsBeforeRenaming, fileIdToCountsAfterRenaming);
+    Assert.assertEquals("Each File Id has same number of log-files", fileIdToCountsBeforeRenaming,
+        fileIdToCountsAfterRenaming);
     Assert.assertEquals("Not Empty", 1, fileIdToCountsAfterRenaming.size());
     Assert.assertEquals("Expected number of renames", expNumRenames, renameFiles.size());
   }

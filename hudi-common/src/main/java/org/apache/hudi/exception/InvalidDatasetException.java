@@ -19,7 +19,9 @@
 package org.apache.hudi.exception;
 
 /**
- * <p> Exception thrown to indicate that a hoodie dataset is invalid <p>
+ * <p>
+ * Exception thrown to indicate that a hoodie dataset is invalid
+ * <p>
  */
 public class InvalidDatasetException extends HoodieException {
 

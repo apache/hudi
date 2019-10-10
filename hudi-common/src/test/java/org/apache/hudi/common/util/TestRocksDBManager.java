@@ -42,7 +42,7 @@ public class TestRocksDBManager {
   @BeforeClass
   public static void setUpClass() {
     dbManager = new RocksDBDAO("/dummy/path",
-            FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
+        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
   }
 
   @AfterClass
@@ -121,8 +121,8 @@ public class TestRocksDBManager {
       prefixes.stream().forEach(prefix -> {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
-        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")",
-            0, gotPayloads.size());
+        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")", 0,
+            gotPayloads.size());
       });
     });
 
@@ -170,10 +170,8 @@ public class TestRocksDBManager {
         return false;
       }
       Payload payload = (Payload) o;
-      return Objects.equals(prefix, payload.prefix)
-          && Objects.equals(key, payload.key)
-          && Objects.equals(val, payload.val)
-          && Objects.equals(family, payload.family);
+      return Objects.equals(prefix, payload.prefix) && Objects.equals(key, payload.key)
+          && Objects.equals(val, payload.val) && Objects.equals(family, payload.family);
     }
 
     @Override

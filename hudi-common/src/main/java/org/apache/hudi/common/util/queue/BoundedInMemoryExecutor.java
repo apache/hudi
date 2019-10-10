@@ -37,9 +37,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory queue.
- * This class takes as input the size limit, queue producer(s), consumer and transformer
- * and exposes API to orchestrate concurrent execution of these actors communicating through a central bounded queue
+ * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory queue. This
+ * class takes as input the size limit, queue producer(s), consumer and transformer and exposes API to orchestrate
+ * concurrent execution of these actors communicating through a central bounded queue
  */
 public class BoundedInMemoryExecutor<I, O, E> {
 
@@ -54,17 +54,13 @@ public class BoundedInMemoryExecutor<I, O, E> {
   // Consumer
   private final Option<BoundedInMemoryQueueConsumer<O, E>> consumer;
 
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes,
-      BoundedInMemoryQueueProducer<I> producer,
-      Option<BoundedInMemoryQueueConsumer<O, E>> consumer,
-      final Function<I, O> transformFunction) {
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, BoundedInMemoryQueueProducer<I> producer,
+      Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction) {
     this(bufferLimitInBytes, Arrays.asList(producer), consumer, transformFunction, new DefaultSizeEstimator<>());
   }
 
-  public BoundedInMemoryExecutor(final long bufferLimitInBytes,
-      List<BoundedInMemoryQueueProducer<I>> producers,
-      Option<BoundedInMemoryQueueConsumer<O, E>> consumer,
-      final Function<I, O> transformFunction,
+  public BoundedInMemoryExecutor(final long bufferLimitInBytes, List<BoundedInMemoryQueueProducer<I>> producers,
+      Option<BoundedInMemoryQueueConsumer<O, E>> consumer, final Function<I, O> transformFunction,
       final SizeEstimator<O> sizeEstimator) {
     this.producers = producers;
     this.consumer = consumer;
@@ -74,8 +70,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Callback to implement environment specific behavior before executors (producers/consumer)
-   * run.
+   * Callback to implement environment specific behavior before executors (producers/consumer) run.
    */
   public void preExecute() {
     // Do Nothing in general context
@@ -118,20 +113,19 @@ public class BoundedInMemoryExecutor<I, O, E> {
    */
   private Future<E> startConsumer() {
     return consumer.map(consumer -> {
-      return executorService.submit(
-          () -> {
-            logger.info("starting consumer thread");
-            preExecute();
-            try {
-              E result = consumer.consume(queue);
-              logger.info("Queue Consumption is done; notifying producer threads");
-              return result;
-            } catch (Exception e) {
-              logger.error("error consuming records", e);
-              queue.markAsFailed(e);
-              throw e;
-            }
-          });
+      return executorService.submit(() -> {
+        logger.info("starting consumer thread");
+        preExecute();
+        try {
+          E result = consumer.consume(queue);
+          logger.info("Queue Consumption is done; notifying producer threads");
+          return result;
+        } catch (Exception e) {
+          logger.error("error consuming records", e);
+          queue.markAsFailed(e);
+          throw e;
+        }
+      });
     }).orElse(CompletableFuture.completedFuture(null));
   }
 

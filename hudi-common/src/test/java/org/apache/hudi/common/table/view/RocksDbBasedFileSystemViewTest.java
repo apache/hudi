@@ -26,7 +26,6 @@ public class RocksDbBasedFileSystemViewTest extends HoodieTableFileSystemViewTes
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
     return new RocksDbBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withRocksDBPath(folder.newFolder().getAbsolutePath())
-            .build());
+        FileSystemViewStorageConfig.newBuilder().withRocksDBPath(folder.newFolder().getAbsolutePath()).build());
   }
 }

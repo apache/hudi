@@ -59,18 +59,18 @@ public class DFSPathSelector {
     this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
   }
 
-  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(
-      Option<String> lastCheckpointStr, long sourceLimit) {
+  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
+      long sourceLimit) {
 
     try {
       // obtain all eligible files under root folder.
       List<FileStatus> eligibleFiles = new ArrayList<>();
-      RemoteIterator<LocatedFileStatus> fitr = fs.listFiles(
-          new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
+      RemoteIterator<LocatedFileStatus> fitr =
+          fs.listFiles(new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
       while (fitr.hasNext()) {
         LocatedFileStatus fileStatus = fitr.next();
-        if (fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
-                .anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
+        if (fileStatus.isDirectory()
+            || IGNORE_FILEPREFIX_LIST.stream().anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
           continue;
         }
         eligibleFiles.add(fileStatus);
@@ -83,8 +83,7 @@ public class DFSPathSelector {
       long maxModificationTime = Long.MIN_VALUE;
       List<FileStatus> filteredFiles = new ArrayList<>();
       for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(
-            lastCheckpointStr.get())) {
+        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get())) {
           // skip processed files
           continue;
         }
@@ -101,20 +100,15 @@ public class DFSPathSelector {
 
       // no data to read
       if (filteredFiles.size() == 0) {
-        return new ImmutablePair<>(Option.empty(),
-                lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
+        return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
       }
 
       // read the files out.
-      String pathStr = filteredFiles.stream().map(f -> f.getPath().toString())
-          .collect(Collectors.joining(","));
+      String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
-      return new ImmutablePair<>(
-          Option.ofNullable(pathStr),
-          String.valueOf(maxModificationTime));
+      return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(maxModificationTime));
     } catch (IOException ioe) {
-      throw new HoodieIOException(
-          "Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
+      throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }
   }
 }

@@ -83,9 +83,10 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
   /**
    * RandomAcessFile is not thread-safe. This API opens a new file handle per thread and returns.
+   * 
    * @return
    */
-  private RandomAccessFile getRandomAccessFile()  {
+  private RandomAccessFile getRandomAccessFile() {
     try {
       RandomAccessFile readHandle = randomAccessFile.get();
       if (readHandle == null) {
@@ -109,9 +110,9 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
       writeOnlyFile.getParentFile().mkdir();
     }
     writeOnlyFile.createNewFile();
-    log.info(
-        "Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host (" + InetAddress.getLocalHost()
-            .getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName() + ")");
+    log.info("Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host ("
+        + InetAddress.getLocalHost().getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName()
+        + ")");
     // Make sure file is deleted when JVM exits
     writeOnlyFile.deleteOnExit();
     addShutDownHook();
@@ -200,8 +201,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
   public static <R> R get(ValueMetadata entry, RandomAccessFile file) {
     try {
-      return SerializationUtils.deserialize(SpillableMapUtils.readBytesFromDisk(file,
-          entry.getOffsetOfValue(), entry.getSizeOfValue()));
+      return SerializationUtils
+          .deserialize(SpillableMapUtils.readBytesFromDisk(file, entry.getOffsetOfValue(), entry.getSizeOfValue()));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to readFromDisk Hoodie Record from disk", e);
     }
@@ -216,8 +217,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
       this.valueMetadataMap.put(key,
           new DiskBasedMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
-      filePosition.set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle,
-          new FileEntry(SpillableMapUtils.generateChecksum(val),
+      filePosition
+          .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
     } catch (IOException io) {
       throw new HoodieIOException("Unable to store data in Disk Based map", io);
@@ -258,8 +259,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
   public Stream<R> valueStream() {
     final RandomAccessFile file = getRandomAccessFile();
-    return valueMetadataMap.values().stream().sorted().sequential()
-        .map(valueMetaData -> (R)get(valueMetaData, file));
+    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file));
   }
 
   @Override
@@ -286,8 +286,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     // Current timestamp when the value was written to disk
     private Long timestamp;
 
-    public FileEntry(long crc, int sizeOfKey, int sizeOfValue, byte[] key, byte[] value,
-        long timestamp) {
+    public FileEntry(long crc, int sizeOfKey, int sizeOfValue, byte[] key, byte[] value, long timestamp) {
       this.crc = crc;
       this.sizeOfKey = sizeOfKey;
       this.sizeOfValue = sizeOfValue;

@@ -62,8 +62,8 @@ public class HoodieCleaner {
     this.cfg = cfg;
     this.jssc = jssc;
     this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs) :
-        UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
+        : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     log.info("Creating Cleaner with configs : " + props.toString());
   }
 
@@ -74,8 +74,7 @@ public class HoodieCleaner {
   }
 
   private HoodieWriteConfig getHoodieClientConfig() throws Exception {
-    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath)
-        .withAutoCommit(false)
+    return HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.basePath).withAutoCommit(false)
         .withProps(props).build();
   }
 
