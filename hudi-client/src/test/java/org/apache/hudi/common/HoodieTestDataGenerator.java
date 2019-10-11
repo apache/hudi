@@ -18,9 +18,18 @@
 
 package org.apache.hudi.common;
 
+import static org.apache.spark.sql.types.DataTypes.DateType;
+import static org.apache.spark.sql.types.DataTypes.DoubleType;
+import static org.apache.spark.sql.types.DataTypes.StringType;
+import static org.apache.spark.sql.types.DataTypes.TimestampType;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -55,6 +64,8 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.StructType;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
@@ -79,6 +90,45 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},"
       + "{\"name\":\"fare\",\"type\": \"double\"}]}";
   public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,double";
+  public static String EXTRA_TYPES_EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
+          + "{\"name\": \"timestamp\",\"type\": \"double\"},"
+          + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+          + "{\"name\": \"rider\", \"type\": \"string\"},"
+          + "{\"name\": \"driver\", \"type\": \"string\"},"
+          + "{\"name\": \"adate\",  \"type\": ["
+          + "                           \"null\", "
+          + "                           {"
+          + "                               \"type\" : \"int\", "
+          + "                               \"logicalType\": \"date\""
+          + "                           }"
+          + "                       ]"
+          + "},"
+          + "{\"name\": \"atimestamp\", \"type\" : ["
+          + "                               \"null\", "
+          + "                               {"
+          + "                                   \"type\" : \"long\", "
+          + "                                   \"logicalType\" : \"timestamp-millis\" "
+          + "                               }"
+          + "                           ]"
+          + "},"
+          + "{\"name\": \"adecimal\",   \"type\": ["
+          + "                               \"null\","
+          + "                               { "
+          + "                                   \"type\":\"bytes\","
+          + "                                   \"logicaltype\":\"decimal\","
+          + "                                   \"precision\":20,"
+          + "                                   \"scale\":10"
+          + "                               }"
+          + "                           ]"
+          + "}"
+          + "]}";
+  public static StructType schemaExtraTypes = (new StructType())
+          .add("_row_key",StringType).add("adate",DateType)
+          .add("atimestamp",TimestampType).add("adecimal", new DecimalType(20,10))
+          .add("driver",StringType).add("partition",StringType)
+          .add("rider",StringType).add("timestamp",DoubleType);
+
+  private static Schema extraTypeAvroSchema = new Schema.Parser().parse(EXTRA_TYPES_EXAMPLE_SCHEMA);
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
 
@@ -115,13 +165,44 @@ public class HoodieTestDataGenerator {
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
+  public static TestRawTripPayload generateExtraTypeRandomValue(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateExtraTypeGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), EXTRA_TYPES_EXAMPLE_SCHEMA);
+  }
+
   /**
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
-  public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime) throws IOException {
+  public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime)  {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
     return new HoodieAvroPayload(Option.of(rec));
   }
+
+  private static String randomTimestamp() {
+    return   LocalDateTime.ofInstant(randomInstant(), ZoneOffset.UTC).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+  }
+
+  private static String randomDate() {
+    return LocalDateTime.ofInstant(randomInstant(), ZoneOffset.UTC).format(DateTimeFormatter.ISO_LOCAL_DATE);
+  }
+
+  private static Instant randomInstant() {
+    return Instant.ofEpochSecond((long) (rand.nextDouble() * Instant.now().getEpochSecond()));
+  }
+
+  public static GenericRecord generateExtraTypeGenericRecord(String rowKey, String riderName, String driverName,
+                                                    double timestamp) {
+    GenericRecord rec = new GenericData.Record(extraTypeAvroSchema);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
+    rec.put("rider", riderName);
+    rec.put("driver", driverName);
+    rec.put("adate",randomDate());
+    rec.put("atimestamp", randomTimestamp());
+    rec.put("adecimal", rand.nextDouble());
+    return  rec;
+  }
+
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
       double timestamp) {
@@ -200,13 +281,17 @@ public class HoodieTestDataGenerator {
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
   public List<HoodieRecord> generateInserts(String commitTime, Integer n) throws IOException {
-    return generateInsertsStream(commitTime, n).collect(Collectors.toList());
+    return generateInsertsStream(commitTime, n,false).collect(Collectors.toList());
+  }
+
+  public List<HoodieRecord> generateExtraTypesInserts(String commitTime, Integer n) throws IOException {
+    return generateInsertsStream(commitTime, n,true).collect(Collectors.toList());
   }
 
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n) {
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, Boolean extraType)  {
     int currSize = getNumExistingKeys();
 
     return IntStream.range(0, n).boxed().map(i -> {
@@ -218,7 +303,13 @@ public class HoodieTestDataGenerator {
       existingKeys.put(currSize + i, kp);
       numExistingKeys++;
       try {
-        return new HoodieRecord(key, generateRandomValue(key, commitTime));
+        TestRawTripPayload trip;
+        if (extraType) {
+          trip = generateExtraTypeRandomValue(key, commitTime);
+        } else {
+          trip = generateRandomValue(key, commitTime);
+        }
+        return new HoodieRecord(key, trip);
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -292,6 +383,10 @@ public class HoodieTestDataGenerator {
     return new HoodieRecord(key, generateRandomValue(key, commitTime));
   }
 
+  public HoodieRecord generateExtraTypesUpdateRecord(HoodieKey key, String commitTime) throws IOException {
+    return new HoodieRecord(key, generateExtraTypeRandomValue(key, commitTime));
+  }
+
   public List<HoodieRecord> generateUpdates(String commitTime, List<HoodieRecord> baseRecords) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
@@ -309,10 +404,23 @@ public class HoodieTestDataGenerator {
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUpdates(String commitTime, Integer n) throws IOException {
+    return generateUpdates(commitTime,n,false);
+  }
+
+  public List<HoodieRecord> generateExtraTypesUpdates(String commitTime, Integer n) throws IOException {
+    return generateUpdates(commitTime,n,true);
+  }
+
+  public List<HoodieRecord> generateUpdates(String commitTime, Integer n, Boolean extraTypes) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (int i = 0; i < n; i++) {
       KeyPartition kp = existingKeys.get(rand.nextInt(numExistingKeys - 1));
-      HoodieRecord record = generateUpdateRecord(kp.key, commitTime);
+      HoodieRecord record;
+      if (extraTypes) {
+        record = generateExtraTypesUpdateRecord(kp.key, commitTime);
+      } else {
+        record = generateUpdateRecord(kp.key, commitTime);
+      }
       updates.add(record);
     }
     return updates;

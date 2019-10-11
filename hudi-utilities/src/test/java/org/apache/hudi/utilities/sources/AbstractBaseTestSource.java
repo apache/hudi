@@ -106,7 +106,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
     Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
         .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts)
+    Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts, false)
         .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     return Stream.concat(updateStream, insertStream);
   }
