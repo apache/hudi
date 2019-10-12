@@ -167,7 +167,7 @@ public class SchemaTestUtil {
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String commitTime,
       String fileId) throws IOException {
     TestRecord record = new TestRecord(commitTime, recordNumber, fileId);
-    MercifulJsonConverter converter = new MercifulJsonConverter(schema);
-    return converter.convert(record.toJsonString());
+    MercifulJsonConverter converter = new MercifulJsonConverter();
+    return converter.convert(record.toJsonString(), schema);
   }
 }
