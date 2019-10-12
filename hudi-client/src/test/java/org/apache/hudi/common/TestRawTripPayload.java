@@ -95,8 +95,8 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     if (isDeleted) {
       return Option.empty();
     } else {
-      MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-      return Option.of(jsonConverter.convert(getJsonData()));
+      MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
+      return Option.of(jsonConverter.convert(getJsonData(), schema));
     }
   }
 

@@ -168,6 +168,8 @@
           </execution>
         </executions>
       </plugin>
+<!--
+      See https://jira.apache.org/jira/browse/HUDI-304
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
@@ -180,13 +182,11 @@
             </eclipse>
           </java>
           <scala>
-            <!--<endWithNewLine/>-->
             <trimTrailingWhitespace/>
           </scala>
         </configuration>
         <executions>
           <execution>
-            <!-- Runs in compile phase to fail fast in case of formatting issues.-->
             <id>spotless-check</id>
             <phase>compile</phase>
             <goals>
@@ -195,6 +195,7 @@
           </execution>
         </executions>
       </plugin>
+-->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -343,7 +344,7 @@
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/target/**</exclude>
-              <excludes>**/generated-sources/**</excludes>
+              <exclude>**/generated-sources/**</exclude>
             </excludes>
           </configuration>
           <executions>
