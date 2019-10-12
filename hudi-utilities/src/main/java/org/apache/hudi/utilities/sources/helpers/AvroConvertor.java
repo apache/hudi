@@ -75,7 +75,7 @@ public class AvroConvertor implements Serializable {
 
   private void initJsonConvertor() {
     if (jsonConverter == null) {
-      jsonConverter = new MercifulJsonConverter(schema);
+      jsonConverter = new MercifulJsonConverter();
     }
   }
 
@@ -83,7 +83,7 @@ public class AvroConvertor implements Serializable {
   public GenericRecord fromJson(String json) throws IOException {
     initSchema();
     initJsonConvertor();
-    return jsonConverter.convert(json);
+    return jsonConverter.convert(json, schema);
   }
 
   public Schema getSchema() {

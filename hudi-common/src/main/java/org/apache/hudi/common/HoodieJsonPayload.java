@@ -56,8 +56,8 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-    return Option.of(jsonConverter.convert(getJsonData()));
+    MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
+    return Option.of(jsonConverter.convert(getJsonData(), schema));
   }
 
   private String getJsonData() throws IOException {
