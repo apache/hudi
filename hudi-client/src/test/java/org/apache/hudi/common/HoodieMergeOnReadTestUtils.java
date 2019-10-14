@@ -82,12 +82,23 @@ public class HoodieMergeOnReadTestUtils {
     String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
     String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+
+    String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
+        .map(Schema.Field::name).collect(Collectors.joining(","));
+    hiveColumnNames = hiveColumnNames + ",datestr";
+
+    String hiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
+    hiveColumnTypes = hiveColumnTypes + ",string";
+    jobConf.set("columns", hiveColumnNames);
+    jobConf.set("columns.types", hiveColumnTypes);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
     jobConf.set("partition_columns", "datestr");
+    conf.set("columns", hiveColumnNames);
     conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
     conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
     conf.set("partition_columns", "datestr");
+    conf.set("columns.types", hiveColumnTypes);
     inputFormat.setConf(conf);
     jobConf.addResource(conf);
   }
