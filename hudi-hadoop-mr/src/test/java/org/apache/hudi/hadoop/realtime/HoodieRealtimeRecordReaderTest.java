@@ -36,6 +36,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -170,9 +171,9 @@ public class HoodieRealtimeRecordReaderTest {
         .map(Field::name).collect(Collectors.joining(","));
     if (isPartitioned) {
       hiveOrderedColumnNames += "," + PARTITION_COLUMN;
-      jobConf.set("partition_columns", PARTITION_COLUMN);
+      jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, PARTITION_COLUMN);
     }
-    jobConf.set("columns", hiveOrderedColumnNames);
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveOrderedColumnNames);
   }
 
   private void testReader(boolean partitioned) throws Exception {

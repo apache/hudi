@@ -33,6 +33,7 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
@@ -96,7 +97,7 @@ public abstract class AbstractRealtimeRecordReader {
     this.jobConf = job;
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
     LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    LOG.info("partitioningColumns ==> " + job.get("partition_columns", ""));
+    LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     try {
       this.usesCustomPayload = usesCustomPayload();
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
@@ -326,7 +327,7 @@ public abstract class AbstractRealtimeRecordReader {
       LOG.debug("Writer Schema From Log => " + writerSchema.getFields());
     }
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-    String partitionFields = jobConf.get("partition_columns", "");
+    String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     List<String> partitioningFields =
         partitionFields.length() > 0 ? Arrays.stream(partitionFields.split(",")).collect(Collectors.toList())
             : new ArrayList<>();
@@ -345,7 +346,8 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
-    String hiveColumnString = jobConf.get("columns");
+    // Get all column names of hive table
+    String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
     String[] hiveColumns = hiveColumnString.split(",");
     List<Field> hiveSchemaFields = new ArrayList<>();
 
