@@ -104,11 +104,11 @@ fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### END: Binary Files Check
 
-### Checking for DISCLAIMER
-echo "Checking for DISCLAIMER"
-disclaimerFile="./DISCLAIMER"
+### Checking for DISCLAIMER-WIP
+echo "Checking for DISCLAIMERi-WIP"
+disclaimerFile="./DISCLAIMER-WIP"
 if [ ! -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file missing"
+  echo "DISCLAIMER-WIP file missing"
   exit -1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
@@ -131,10 +131,10 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
   echo "There were some source files that did not have Apache License"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
   exit -1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"
