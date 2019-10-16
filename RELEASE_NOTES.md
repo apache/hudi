@@ -26,6 +26,19 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Balaji Varadarajan** [HUDI-121] Fix licensing issues found during RC voting by general incubator group
+  * **Mehrotra** Shade and relocate Avro dependency in hadoop-mr-bundle
+  * **Wenning Ding** [HUDI-301] fix path error when update a non-partition MOR table
+  * **Udit Mehrotra** [HUDI-298] Fix issue with incorrect column mapping casusing bad data, during on-the-fly merge of Real Time tables (#956)
+  * **Anurag870** [Docs] Update README.md (#955)
+  * **leesf** [HUDI-292] Avoid consuming more entries from kafka than specified sourceLimit. (#947)
+  * **leesf** [HUDI-296] Explore use of spotless to auto fix formatting errors (#945)
+  * **Balaji Varadarajan** [MINOR] Add incubating to NOTICE and README.md
+  * **vinoth chandar** [HOTFIX] Move to openjdk to get travis passing (#944)
+  * **leesf** [HUDI-232] Implement sealing/unsealing for HoodieRecord class (#938)
+  * **Balaji Varadarajan** [HUDI-293] Remove KEYS file from github repository
+  * **Balaji Varadarajan** [HUDI-121] Prepare for 0.5.0-incubating-rc5
+  * **Balaji Varadarajan** [HUDI-121] Remove leftover notice file and replace com.uber.hoodie with org.apache.hudi in log4j properties
   * **leesf** [HUDI-285] Implement HoodieStorageWriter based on actual file type
   * **leesf** [HUDI-265] Failed to delete tmp dirs created in unit tests
   * **Balaji Varadarajan** [HUDI-287] Address comments during review of release candidate. Remove LICENSE and NOTICE files in hoodie child modules. 
