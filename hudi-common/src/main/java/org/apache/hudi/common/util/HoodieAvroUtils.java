@@ -130,6 +130,10 @@ public class HoodieAvroUtils {
     return mergedSchema;
   }
 
+  public static String addMetadataColumnTypes(String hiveColumnTypes) {
+    return "string,string,string,string,string," + hiveColumnTypes;
+  }
+
   private static Schema initRecordKeySchema() {
     Schema.Field recordKeyField =
         new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
