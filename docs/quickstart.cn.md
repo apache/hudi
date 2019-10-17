@@ -7,191 +7,158 @@ toc: false
 permalink: quickstart.html
 ---
 <br/>
-为快速了解Hudi的功能，我们制作了一个基于Docker设置、所有依赖系统都在本地运行的[演示视频](https://www.youtube.com/watch？V=vhngusxdrd0)。
-我们建议您复制相同的设置然后按照[这里](docker_demo.html)的步骤自己运行这个演示。另外，如果您正在寻找将现有数据迁移到Hudi的方法，请参阅[迁移指南](migration_guide.html)。
 
-如果您已经安装了hive、hadoop和spark，那么请继续阅读。
+本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新的Hudi默认存储类型数据集：
+[写时复制](https://hudi.apache.org/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量读取数据。
 
-## 下载Hudi
-
-Git检出[代码](https://github.com/apache/incubator-hudi)或下载[最新版本](https://github.com/apache/incubator-hudi/archive/hudi-0.4.5.zip)
-
-并通过命令行构建maven项目
+## 编译Hudi spark整包
+Hudi要求在*nix系统上安装Java 8。Git检出[代码](https://github.com/apache/incubator-hudi)，并通过命令行构建maven项目:
 
 ```
-$ mvn clean install -DskipTests -DskipITs
+# 检出和编译
+git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
+mvn clean install -DskipTests -DskipITs
+
+# 为后续使用导入hudi-spark-bundle位置
+mkdir -p /tmp/hudi && cp packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar  /tmp/hudi/hudi-spark-bundle.jar
+export HUDI_SPARK_BUNDLE_PATH=/tmp/hudi/hudi-spark-bundle.jar
 ```
 
-如果使用旧版本的Hive(Hive-1.2.1以前)，使用
-```
-$ mvn clean install -DskipTests -DskipITs -Dhive11
-```
-
-> 对于IDE，您可以将代码作为普通的maven项目导入IntelliJ。
-您可能需要将spark jars文件夹添加到 'Module Settings' 下的项目依赖中，以便能够在IDE运行。
-
-
-### 版本兼容性
-
-Hudi要求在*nix系统上安装Java 8。 Hudi使用Spark-2.x版本。此外，我们已经验证Hudi可使用以下Hadoop/Hive/Spark组合。
-
-| Hadoop | Hive  | Spark | 构建Hudi说明 |
-| ---- | ----- | ---- | ---- |
-| 2.6.0-cdh5.7.2 | 1.1.0-cdh5.7.2 | spark-2.[1-3].x | Use “mvn clean install -DskipTests -Dhadoop.version=2.6.0-cdh5.7.2 -Dhive.version=1.1.0-cdh5.7.2” |
-| Apache hadoop-2.8.4 | Apache hive-2.3.3 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
-| Apache hadoop-2.7.3 | Apache hive-1.2.1 | spark-2.[1-3].x | Use "mvn clean install -DskipTests" |
-
-> 如果你的环境有其他版本的hadoop/hive/spark，请使用Hudi并告诉我们是否存在任何问题。
-
-## 生成样本数据集
-
-### 环境变量
-
-请根据您的设置配置以下环境变量。我们给出了一个CDH版本的示例设置
+## 设置spark-shell
+Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
+在提取的目录中，使用spark-shell运行Hudi：
 
 ```
-cd incubator-hudi 
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre/
-export HIVE_HOME=/var/hadoop/setup/apache-hive-1.1.0-cdh5.7.2-bin
-export HADOOP_HOME=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
-export HADOOP_INSTALL=/var/hadoop/setup/hadoop-2.6.0-cdh5.7.2
-export HADOOP_CONF_DIR=$HADOOP_INSTALL/etc/hadoop
-export SPARK_HOME=/var/hadoop/setup/spark-2.3.1-bin-hadoop2.7
-export SPARK_INSTALL=$SPARK_HOME
-export SPARK_CONF_DIR=$SPARK_HOME/conf
-export PATH=$JAVA_HOME/bin:$HIVE_HOME/bin:$HADOOP_HOME/bin:$SPARK_INSTALL/bin:$PATH
+bin/spark-shell --jars $HUDI_SPARK_BUNDLE_PATH --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
-### 运行HoodieJavaApp
-
-运行 __hudi-spark/src/test/java/HoodieJavaApp.java__ 类，将两个提交(提交1 => 100个插入，提交2 => 100个更新到先前插入的100个记录)放到DFS/本地文件系统上。从命令行运行脚本
+设置表名、基本路径和数据生成器来为本指南生成记录。
 
 ```
-cd hudi-spark
-./run_hoodie_app.sh --help
-Usage: <main class> [options]
-  Options:
-    --help, -h
-       Default: false
-    --table-name, -n
-       table name for Hudi sample table
-       Default: hoodie_rt
-    --table-path, -p
-       path for Hudi sample table
-       Default: file:///tmp/hoodie/sample-table
-    --table-type, -t
-       One of COPY_ON_WRITE or MERGE_ON_READ
-       Default: COPY_ON_WRITE
+import org.apache.hudi.QuickstartUtils._
+import scala.collection.JavaConversions._
+import org.apache.spark.sql.SaveMode._
+import org.apache.hudi.DataSourceReadOptions._
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.config.HoodieWriteConfig._
+
+val tableName = "hudi_cow_table"
+val basePath = "file:///tmp/hudi_cow_table"
+val dataGen = new DataGenerator
 ```
 
-这个类允许您选择表名、输出路径和存储类型。在您自己的应用程序中，请确保包含`hudi-spark`模块依赖并遵循类似模式通过数据源写入/读取数据集。
+[数据生成器](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java)
+可以基于[行程样本模式](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+生成插入和更新的样本。
 
-## 查询Hudi数据集
-
-接下来，我们将样本数据集注册到Hive Metastore并尝试使用[Hive](#hive)、[Spark](#spark)和[Presto](#presto)进行查询
-
-### 本地启动Hive Server
-
-```
-hdfs namenode # start name node
-hdfs datanode # start data node
-
-bin/hive --service metastore  # start metastore
-bin/hiveserver2 \
-  --hiveconf hive.root.logger=INFO,console \
-  --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat \
-  --hiveconf hive.stats.autogather=false \
-  --hiveconf hive.aux.jars.path=/path/to/packaging/hudi-hive-bundle/target/hudi-hive-bundle-0.4.6-SNAPSHOT.jar
+## 插入数据 {#inserts}
+生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。
 
 ```
-
-### 运行Hive同步工具
-Hive同步工具将在hive Metastore中更新/创建必要的元数据(模式和分区)，这允许模式演变和新分区的增量添加。它使用一种增量方法，将最后一次的同步提交时间存储在TBLPROPERTIES中，并且只同步上次存储的同步提交时间后的提交。
-每次写入后， [Spark Datasource](writing_data.html #datasource-writer)和[DeltaStreamer](writing_data.html＃deltastreamer)都可执行此操作。
-
-
-```
-cd hudi-hive
-./run_sync_tool.sh
-  --user hive
-  --pass hive
-  --database default
-  --jdbc-url "jdbc:hive2://localhost:10010/"
-  --base-path tmp/hoodie/sample-table/
-  --table hoodie_test
-  --partitioned-by field1,field2
-
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+df.write.format("org.apache.hudi").
+    options(getQuickstartWriteConfigs).
+    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+    option(TABLE_NAME, tableName).
+    mode(Overwrite).
+    save(basePath);
 ```
 
-> 若你想亲手运行。请参考[这个](https://cwiki.apache.org/confluence/display/HUDI/Registering+sample+dataset+to+Hive+via+beeline).
+`mode(Overwrite)`覆盖并重新创建数据集(如果已经存在)。
+您可以检查在`/tmp/hudi_cow_table/<region>/<country>/<city>/`下生成的数据。我们提供了一个记录键
+([schema](#sample-schema)中的`uuid`)，分区字段(`region/county/city`）和组合逻辑(`ts`[schema](#sample-schema))
+以确保行程记录在每个分区中都是唯一的。更多信息请参阅
+[对Hudi中的数据进行建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)，
+有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](https://hudi.apache.org/writing_data.html)。
+这里我们使用默认的写操作：`插入更新`。 如果您的工作负载没有`更新`，也可以使用更快的`插入`或`批量插入`操作。
+想了解更多信息，请参阅[写操作](https://hudi.apache.org/writing_data.html#write-operations)
 
-### HiveQL {#hive}
+## 查询数据 {#query}
 
-我们首先对表的最新提交的快照进行查询
-
-```
-hive> set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
-hive> set hive.stats.autogather=false;
-hive> add jar file:///path/to/hudi-hive-bundle-0.4.6-SNAPSHOT.jar;
-hive> select count(*) from hoodie_test;
-...
-OK
-100
-Time taken: 18.05 seconds, Fetched: 1 row(s)
-hive>
-```
-
-### SparkSQL {#spark}
-
-只要你按上述方式让Hive工作起来，使用Spark将非常容易。只需启动Spark Shell，如下所示
+将数据文件加载到数据帧中。
 
 ```
-$ cd $SPARK_INSTALL
-$ spark-shell --jars $HUDI_SRC/packaging/hudi-spark-bundle/target/hudi-spark-bundle-0.4.6-SNAPSHOT.jar --driver-class-path $HADOOP_CONF_DIR  --conf spark.sql.hive.convertMetastoreParquet=false --packages com.databricks:spark-avro_2.11:4.0.0
-
-scala> val sqlContext = new org.apache.spark.sql.SQLContext(sc)
-scala> sqlContext.sql("show tables").show(10000)
-scala> sqlContext.sql("describe hoodie_test").show(10000)
-scala> sqlContext.sql("describe hoodie_test_rt").show(10000)
-scala> sqlContext.sql("select count(*) from hoodie_test").show(10000)
+val roViewDF = spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*")
+roViewDF.registerTempTable("hudi_ro_table")
+spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare > 20.0").show()
+spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
 ```
 
-### Presto {#presto}
+该查询提供已提取数据的读取优化视图。由于我们的分区路径(`region/country/city`)是嵌套的3个级别
+从基本路径开始，我们使用了`load(basePath + "/*/*/*/*")`。
+有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](https://hudi.apache.org/concepts.html#storage-types--views)。
 
-Git检出OSS Presto上的 'master' 分支，构建并安装。
+## 更新数据 {#updates}
 
-* 将hudi/packaging/hudi-presto-bundle/target/hudi-presto-bundle-*.jar 复制到 $PRESTO_INSTALL/plugin/hive-hadoop2/
-* 启动服务器，您应该能够通过Presto查询到相同的Hive表
-
-```
-show columns from hive.default.hoodie_test;
-select count(*) from hive.default.hoodie_test
-```
-
-### 增量 HiveQL
-
-现在我们执行一个查询，以获取自上次提交以来已更改的行。
+这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到数据帧并将数据帧写入hudi数据集。
 
 ```
-hive> set hoodie.hoodie_test.consume.mode=INCREMENTAL;
-hive> set hoodie.hoodie_test.consume.start.timestamp=001;
-hive> set hoodie.hoodie_test.consume.max.commits=10;
-hive> select `_hoodie_commit_time`, rider, driver from hoodie_test where `_hoodie_commit_time` > '001' limit 10;
-OK
-All commits :[001, 002]
-002	rider-001	driver-001
-002	rider-001	driver-001
-002	rider-002	driver-002
-002	rider-001	driver-001
-002	rider-001	driver-001
-002	rider-002	driver-002
-002	rider-001	driver-001
-002	rider-002	driver-002
-002	rider-002	driver-002
-002	rider-001	driver-001
-Time taken: 0.056 seconds, Fetched: 10 row(s)
-hive>
-hive>
+val updates = convertToStringList(dataGen.generateUpdates(10))
+val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));
+df.write.format("org.apache.hudi").
+    options(getQuickstartWriteConfigs).
+    option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+    option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+    option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+    option(TABLE_NAME, tableName).
+    mode(Append).
+    save(basePath);
 ```
 
-> 注意：当前只有读优化视图支持。
+注意，保存模式现在为`追加`。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
+[查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](http://hudi.incubator.apache.org/concepts.html)
+。在之前提交的相同的`_hoodie_record_key`中寻找`_hoodie_commit_time`, `rider`, `driver`字段变更。
+
+## 增量查询
+
+Hudi还提供了获取给定提交时间戳以来已更改的记录流的功能。
+这可以通过使用Hudi的增量视图并提供所需更改的开始时间来实现。
+如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。
+
+```
+val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
+val beginTime = commits(commits.length - 2) // commit time we are interested in
+
+// 增量查询数据
+val incViewDF = spark.
+    read.
+    format("org.apache.hudi").
+    option(VIEW_TYPE_OPT_KEY, VIEW_TYPE_INCREMENTAL_OPT_VAL).
+    option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+    load(basePath);
+incViewDF.registerTempTable("hudi_incr_table")
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()
+```
+
+这将提供在开始时间提交之后发生的所有更改，其中包含票价大于20.0的过滤器。关于此功能的独特之处在于，它现在使您可以在批量数据上创作流式管道。
+
+## 特定时间点查询
+
+让我们看一下如何查询特定时间的数据。可以通过将结束时间指向特定的提交时间，将开始时间指向"000"(表示最早的提交时间)来表示特定时间。
+
+```
+val beginTime = "000" // Represents all commits > this time.
+val endTime = commits(commits.length - 2) // commit time we are interested in
+
+// 增量查询数据
+val incViewDF = spark.read.format("org.apache.hudi").
+    option(VIEW_TYPE_OPT_KEY, VIEW_TYPE_INCREMENTAL_OPT_VAL).
+    option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+    option(END_INSTANTTIME_OPT_KEY, endTime).
+    load(basePath);
+incViewDF.registerTempTable("hudi_incr_table")
+spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()
+```
+
+## 从这开始下一步？
+
+这里我们使用Spark演示了Hudi的功能。但是，Hudi可以支持多种存储类型/视图，并且可以从Hive，Spark，Presto等查询引擎中查询Hudi数据集。
+我们制作了一个基于Docker设置、所有依赖系统都在本地运行的[演示视频](https://www.youtube.com/watch?v=VhNgUsxdrD0)，
+我们建议您复制相同的设置然后按照[这里](docker_demo.html)的步骤自己运行这个演示。
+另外，如果您正在寻找将现有数据迁移到Hudi的方法，请参考[迁移指南](migration_guide.html)。
