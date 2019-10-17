@@ -8,7 +8,7 @@ permalink: quickstart.html
 ---
 <br/>
 
-本指南简要介绍了使用spark-shell来快速浏览的Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新的Hudi默认存储类型数据集：
+本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新的Hudi默认存储类型数据集：
 [写时复制](https://hudi.apache.org/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量读取数据。
 
 ## 编译Hudi spark整包
@@ -25,14 +25,14 @@ export HUDI_SPARK_BUNDLE_PATH=/tmp/hudi/hudi-spark-bundle.jar
 ```
 
 ## 设置spark-shell
-Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)中的说明设置spark。
+Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```
 bin/spark-shell --jars $HUDI_SPARK_BUNDLE_PATH --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
-设置表名、基本路径和数据生成器以生成记录。
+设置表名、基本路径和数据生成器来为本指南生成记录。
 
 ```
 import org.apache.hudi.QuickstartUtils._
@@ -48,8 +48,8 @@ val dataGen = new DataGenerator
 ```
 
 [数据生成器](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java)
-可以基于行程样本模式生成插入和更新的样本。
-[这里](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+可以基于[行程样本模式](https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
+生成插入和更新的样本。
 
 ## 插入数据 {#inserts}
 生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。
@@ -67,11 +67,11 @@ df.write.format("org.apache.hudi").
     save(basePath);
 ```
 
-`模式(覆盖)`覆盖并重新创建数据集(如果已经存在)。
+`mode(Overwrite)`覆盖并重新创建数据集(如果已经存在)。
 您可以检查在`/tmp/hudi_cow_table/<region>/<country>/<city>/`下生成的数据。我们提供了一个记录键
-([schema](＃sample-schema)中的"uuid")，分区字段("region /county/city"）和组合逻辑("ts"[schema](＃sample-schema))
+([schema](#sample-schema)中的`uuid`)，分区字段(`region/county/city`）和组合逻辑(`ts`[schema](#sample-schema))
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
-[对Hudi中的数据进建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)
+[对Hudi中的数据进行建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)，
 有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](https://hudi.apache.org/writing_data.html)。
 这里我们使用默认的写操作：`插入更新`。 如果您的工作负载没有`更新`，也可以使用更快的`插入`或`批量插入`操作。
 想了解更多信息，请参阅[写操作](https://hudi.apache.org/writing_data.html#write-operations)
@@ -90,7 +90,7 @@ spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare 
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
 ```
 
-该查询提供已提取数据的读取优化视图。由于我们的分区路径("region/country/city")是嵌套的3个级别
+该查询提供已提取数据的读取优化视图。由于我们的分区路径(`region/country/city`)是嵌套的3个级别
 从基本路径开始，我们使用了`load(basePath + "/*/*/*/*")`。
 有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](https://hudi.apache.org/concepts.html#storage-types--views)。
 
@@ -112,14 +112,14 @@ df.write.format("org.apache.hudi").
 ```
 
 注意，保存模式现在为`追加`。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
-[查询](＃query)数据现在再次将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](http://hudi.incubator.apache.org/concepts.html)
+[查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](http://hudi.incubator.apache.org/concepts.html)
 。在之前提交的相同的`_hoodie_record_key`中寻找`_hoodie_commit_time`, `rider`, `driver`字段变更。
 
 ## 增量查询
 
 Hudi还提供了获取给定提交时间戳以来已更改的记录流的功能。
-这可以通过使用Hudi的增量视图并提供开始流进行更改的开始时间来实现。
-如果我们要在给定的提交之后进行所有更改(这是常见的情况)，则无需指定结束时间。
+这可以通过使用Hudi的增量视图并提供所需更改的开始时间来实现。
+如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。
 
 ```
 val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
@@ -138,7 +138,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 这将提供在开始时间提交之后发生的所有更改，其中包含票价大于20.0的过滤器。关于此功能的独特之处在于，它现在使您可以在批量数据上创作流式管道。
 
-## 时间查询的关键点
+## 特定时间点查询
 
 让我们看一下如何查询特定时间的数据。可以通过将结束时间指向特定的提交时间，将开始时间指向"000"(表示最早的提交时间)来表示特定时间。
 
@@ -157,7 +157,8 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```
 
 ## 从这开始下一步？
+
 这里我们使用Spark演示了Hudi的功能。但是，Hudi可以支持多种存储类型/视图，并且可以从Hive，Spark，Presto等查询引擎中查询Hudi数据集。
-我们制作了一个基于Docker设置、所有依赖系统都在本地运行的演示视频(https://www.youtube.com/watch?v=VhNgUsxdrD0)，
+我们制作了一个基于Docker设置、所有依赖系统都在本地运行的[演示视频](https://www.youtube.com/watch?v=VhNgUsxdrD0)，
 我们建议您复制相同的设置然后按照[这里](docker_demo.html)的步骤自己运行这个演示。
 另外，如果您正在寻找将现有数据迁移到Hudi的方法，请参考[迁移指南](migration_guide.html)。
