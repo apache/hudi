@@ -11,20 +11,20 @@ summary: 这一页里，我们将讨论一些可用的工具，这些工具可�
 以及通过使用[Hudi数据源](#datasource-writer)的upserts加快大型Spark作业的方法。
 对于此类数据集，我们可以使用各种查询引擎[查询](querying_data.html)它们。
 
-## 写入操作
+## 写操作
 
-在此之前，了解Hudi数据源及delta streamer工具提供的三种不同的写入操作以及如何最佳利用它们可能会有所帮助。
+在此之前，了解Hudi数据源及delta streamer工具提供的三种不同的写操作以及如何最佳利用它们可能会有所帮助。
 这些操作可以在针对数据集发出的每个提交/增量提交中进行选择/更改。
 
- - **UPSERT（索引归并）** ：这是默认操作，在该操作中，通过查找索引，首先将输入记录标记为插入或更新。
+ - **UPSERT（插入更新）** ：这是默认操作，在该操作中，通过查找索引，首先将输入记录标记为插入或更新。
  在运行启发式方法以确定如何最好地将这些记录放到存储上，如优化文件大小之类后，这些记录最终会被写入。
  对于诸如数据库更改捕获之类的用例，建议该操作，因为输入几乎肯定包含更新。
- - **INSERT（插入）** ：就使用启发式方法确定文件大小而言，此操作与索引归并（UPSERT）非常相似，但此操作完全跳过了索引查找步骤。
- 因此，对于日志重复数据删除等用例（结合下面提到的过滤重复项的选项），它可以比索引归并快得多。
+ - **INSERT（插入）** ：就使用启发式方法确定文件大小而言，此操作与插入更新（UPSERT）非常相似，但此操作完全跳过了索引查找步骤。
+ 因此，对于日志重复数据删除等用例（结合下面提到的过滤重复项的选项），它可以比插入更新快得多。
  插入也适用于这种用例，这种情况数据集可以允许重复项，但只需要Hudi的事务写/增量提取/存储管理功能。
- - **BULK_INSERT（批插入）** ：索引归并和插入操作都将输入记录保存在内存中，以加快存储优化启发式计算的速度（以及其它未提及的方面）。
+ - **BULK_INSERT（批插入）** ：插入更新和插入操作都将输入记录保存在内存中，以加快存储优化启发式计算的速度（以及其它未提及的方面）。
  所以对Hudi数据集进行初始加载/引导时这两种操作会很低效。批量插入提供与插入相同的语义，但同时实现了基于排序的数据写入算法，
- 该算法可以很好地扩展数百TB的初始负载。但是，相比于插入和索引归并能保证文件大小，批插入在调整文件大小上只能尽力而为。
+ 该算法可以很好地扩展数百TB的初始负载。但是，相比于插入和插入更新能保证文件大小，批插入在调整文件大小上只能尽力而为。
 
 ## DeltaStreamer
 
@@ -139,7 +139,7 @@ Usage: <main class> [options]
 ## Datasource Writer
 
 `hudi-spark`模块提供了DataSource API，可以将任何数据帧写入（也可以读取）到Hudi数据集中。
-以下是在指定需要使用的字段名称的之后，如何索引归并数据帧的方法，这些字段包括
+以下是在指定需要使用的字段名称的之后，如何插入更新数据帧的方法，这些字段包括
 `recordKey => _row_key`、`partitionPath => partition`和`precombineKey => timestamp`
 
 ```
@@ -187,9 +187,9 @@ Usage: <main class> [options]
 通过允许用户指定不同的数据记录负载实现，Hudi支持对存储在Hudi数据集中的数据执行两种类型的删除。
 
  - **Soft Deletes（软删除）** ：使用软删除时，用户希望保留键，但仅使所有其他字段的值都为空。
- 通过确保适当的字段在数据集模式中可以为空，并在将这些字段设置为null之后直接向数据集索引归并这些记录，即可轻松实现这一点。
+ 通过确保适当的字段在数据集模式中可以为空，并在将这些字段设置为null之后直接向数据集插入更新这些记录，即可轻松实现这一点。
  - **Hard Deletes（硬删除）** ：这种更强形式的删除是从数据集中彻底删除记录在存储上的任何痕迹。 
- 这可以通过触发一个带有自定义负载实现的索引归并来实现，这种实现可以使用总是返回Optional.Empty作为组合值的DataSource或DeltaStreamer。 
+ 这可以通过触发一个带有自定义负载实现的插入更新来实现，这种实现可以使用总是返回Optional.Empty作为组合值的DataSource或DeltaStreamer。 
  Hudi附带了一个内置的`org.apache.hudi.EmptyHoodieRecordPayload`类，它就是实现了这一功能。
  
 ```
@@ -212,11 +212,11 @@ Hudi还对存储在Hudi数据集中的数据执行几个关键的存储管理功
 
  - Hudi中的[小文件处理功能](configurations.html#compactionSmallFileSize)，可以分析传入的工作负载并将插入内容分配到现有文件组中，
  而不是创建新文件组。新文件组会生成小文件。
- - 可以[配置](configurations.html#retainCommits)Cleaner来清理较旧的文件片，清理的程度可以调整，
+ - 可以[配置](configurations.html#retainCommits)Cleaner来清理较旧的文件片，清理的程度可以调整，
  具体取决于查询所需的最长时间和增量拉取所需的回溯。
- - 用户还可以调整[基础/parquet文件](configurations.html#limitFileSize)、[日志文件](configurations.html#logFileMaxSize)的大小
+ - 用户还可以调整[基础/parquet文件](configurations.html#limitFileSize)、[日志文件](configurations.html#logFileMaxSize)的大小
  和预期的[压缩率](configurations.html#parquetCompressionRatio)，使足够数量的插入被分到同一个文件组中，最终产生大小合适的基础文件。
- - 智能调整[批插入并行度](configurations.html＃withBulkInsertParallelism)，可以产生大小合适的初始文件组。
+ - 智能调整[批插入并行度](configurations.html＃withBulkInsertParallelism)，可以产生大小合适的初始文件组。
  实际上，正确执行此操作非常关键，因为文件组一旦创建后就不能删除，只能如前所述对其进行扩展。
- - 对于具有大量更新的工作负载，[读取时合并存储](concepts.html#merge-on-read-storage)提供了一种很好的机制，
+ - 对于具有大量更新的工作负载，[读取时合并存储](concepts.html#merge-on-read-storage)提供了一种很好的机制，
  可以快速将其摄取到较小的文件中，之后通过压缩将它们合并为较大的基础文件。
