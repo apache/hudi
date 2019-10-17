@@ -66,11 +66,10 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
       createMarkerFile(partitionPath);
-      this.storageWriter = HoodieStorageWriterFactory
-          .getStorageWriter(commitTime, path, hoodieTable, config, writerSchema);
+      this.storageWriter =
+          HoodieStorageWriterFactory.getStorageWriter(commitTime, path, hoodieTable, config, writerSchema);
     } catch (IOException e) {
-      throw new HoodieInsertException(
-          "Failed to initialize HoodieStorageWriter for path " + path, e);
+      throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
     logger.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
@@ -101,7 +100,9 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
         storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
         // update the new location of record, so we know where to find it next
+        record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
+        record.seal();
         recordsWritten++;
         insertRecordsWritten++;
       } else {
@@ -134,8 +135,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
         }
       }
     } catch (IOException io) {
-      throw new HoodieInsertException(
-          "Failed to insert records for path " + path, io);
+      throw new HoodieInsertException("Failed to insert records for path " + path, io);
     }
   }
 
@@ -149,8 +149,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    */
   @Override
   public WriteStatus close() {
-    logger.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records "
-        + recordsWritten);
+    logger
+        .info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
       storageWriter.close();
@@ -172,8 +172,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       stat.setRuntimeStats(runtimeStats);
       writeStatus.setStat(stat);
 
-      logger.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
-          stat.getPartitionPath(), stat.getFileId(), runtimeStats.getTotalCreateTime()));
+      logger.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
+          stat.getFileId(), runtimeStats.getTotalCreateTime()));
 
       return writeStatus;
     } catch (IOException e) {

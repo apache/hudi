@@ -50,8 +50,8 @@ public class TimelineService {
     return serverPort;
   }
 
-  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager,
-      Configuration conf) throws IOException {
+  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager, Configuration conf)
+      throws IOException {
     this.conf = FSUtils.prepareHadoopConf(conf);
     this.fs = FileSystem.get(conf);
     this.serverPort = serverPort;
@@ -89,8 +89,7 @@ public class TimelineService {
         description = "Directory where spilled view entries will be stored. Used for SPILLABLE_DISK storage type")
     public String baseStorePathForFileGroups = FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR;
 
-    @Parameter(names = {"--rocksdb-path", "-rp"},
-        description = "Root directory for RocksDB")
+    @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
     public String rocksDBPath = FileSystemViewStorageConfig.DEFAULT_ROCKSDB_BASE_PATH;
 
     @Parameter(names = {"--help", "-h"})
@@ -155,7 +154,7 @@ public class TimelineService {
   public static void main(String[] args) throws Exception {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, args);
-    if (cfg.help || args.length == 0) {
+    if (cfg.help) {
       cmd.usage();
       System.exit(1);
     }

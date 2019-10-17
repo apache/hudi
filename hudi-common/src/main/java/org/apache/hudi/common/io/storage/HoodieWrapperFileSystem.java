@@ -59,21 +59,19 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 /**
- * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in
- * the file system to support getting the written size to each of the open streams.
+ * HoodieWrapperFileSystem wraps the default file system. It holds state about the open streams in the file system to
+ * support getting the written size to each of the open streams.
  */
 public class HoodieWrapperFileSystem extends FileSystem {
 
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
-  private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new
-      ConcurrentHashMap<>();
+  private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
-  public HoodieWrapperFileSystem() {
-  }
+  public HoodieWrapperFileSystem() {}
 
   public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard) {
     this.fileSystem = fileSystem;
@@ -94,8 +92,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
     URI oldURI = oldPath.toUri();
     URI newURI;
     try {
-      newURI = new URI(newScheme, oldURI.getUserInfo(), oldURI.getHost(), oldURI.getPort(),
-          oldURI.getPath(), oldURI.getQuery(), oldURI.getFragment());
+      newURI = new URI(newScheme, oldURI.getUserInfo(), oldURI.getHost(), oldURI.getPort(), oldURI.getPath(),
+          oldURI.getQuery(), oldURI.getFragment());
       return new Path(newURI);
     } catch (URISyntaxException e) {
       // TODO - Better Exception handling
@@ -108,8 +106,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     if (StorageSchemes.isSchemeSupported(scheme)) {
       newScheme = HOODIE_SCHEME_PREFIX + scheme;
     } else {
-      throw new IllegalArgumentException(
-          "BlockAlignedAvroParquetWriter does not support scheme " + scheme);
+      throw new IllegalArgumentException("BlockAlignedAvroParquetWriter does not support scheme " + scheme);
     }
     return newScheme;
   }
@@ -143,22 +140,21 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite,
-      int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
+  public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
+      short replication, long blockSize, Progressable progress) throws IOException {
     final Path translatedPath = convertToDefaultPath(f);
-    return wrapOutputStream(f, fileSystem
-        .create(translatedPath, permission, overwrite, bufferSize, replication, blockSize,
-            progress));
+    return wrapOutputStream(f,
+        fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
   }
 
-  private FSDataOutputStream wrapOutputStream(final Path path,
-      FSDataOutputStream fsDataOutputStream) throws IOException {
+  private FSDataOutputStream wrapOutputStream(final Path path, FSDataOutputStream fsDataOutputStream)
+      throws IOException {
     if (fsDataOutputStream instanceof SizeAwareFSDataOutputStream) {
       return fsDataOutputStream;
     }
 
-    SizeAwareFSDataOutputStream os = new SizeAwareFSDataOutputStream(path,
-            fsDataOutputStream, consistencyGuard, () -> openStreams.remove(path.getName()));
+    SizeAwareFSDataOutputStream os = new SizeAwareFSDataOutputStream(path, fsDataOutputStream, consistencyGuard,
+        () -> openStreams.remove(path.getName()));
     openStreams.put(path.getName(), os);
     return os;
   }
@@ -184,8 +180,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public FSDataOutputStream create(Path f, short replication, Progressable progress)
-      throws IOException {
+  public FSDataOutputStream create(Path f, short replication, Progressable progress) throws IOException {
     return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication, progress));
   }
 
@@ -201,39 +196,35 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication,
-      long blockSize, Progressable progress) throws IOException {
-    return wrapOutputStream(f, fileSystem
-        .create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
+  public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize,
+      Progressable progress) throws IOException {
+    return wrapOutputStream(f,
+        fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
   }
 
   @Override
-  public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags,
-      int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
-    return wrapOutputStream(f, fileSystem
-        .create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize,
-            progress));
+  public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
+      short replication, long blockSize, Progressable progress) throws IOException {
+    return wrapOutputStream(f,
+        fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
   }
 
   @Override
-  public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags,
-      int bufferSize, short replication, long blockSize, Progressable progress,
-      Options.ChecksumOpt checksumOpt) throws IOException {
-    return wrapOutputStream(f, fileSystem
-        .create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize,
-            progress, checksumOpt));
+  public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
+      short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
+    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
+        blockSize, progress, checksumOpt));
   }
 
   @Override
-  public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication,
-      long blockSize) throws IOException {
-    return wrapOutputStream(f, fileSystem
-        .create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
-  }
-
-  @Override
-  public FSDataOutputStream append(Path f, int bufferSize, Progressable progress)
+  public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize)
       throws IOException {
+    return wrapOutputStream(f,
+        fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
+  }
+
+  @Override
+  public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
     return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize, progress));
   }
 
@@ -341,8 +332,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public Token<?>[] addDelegationTokens(String renewer, Credentials credentials)
-      throws IOException {
+  public Token<?>[] addDelegationTokens(String renewer, Credentials credentials) throws IOException {
     return fileSystem.addDelegationTokens(renewer, credentials);
   }
 
@@ -352,8 +342,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len)
-      throws IOException {
+  public BlockLocation[] getFileBlockLocations(FileStatus file, long start, long len) throws IOException {
     return fileSystem.getFileBlockLocations(file, start, len);
   }
 
@@ -383,28 +372,27 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public FSDataOutputStream createNonRecursive(Path f, boolean overwrite, int bufferSize,
+  public FSDataOutputStream createNonRecursive(Path f, boolean overwrite, int bufferSize, short replication,
+      long blockSize, Progressable progress) throws IOException {
+    Path p = convertToDefaultPath(f);
+    return wrapOutputStream(p,
+        fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize, progress));
+  }
+
+  @Override
+  public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite, int bufferSize,
       short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
-    return wrapOutputStream(p, fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize,
-        progress));
+    return wrapOutputStream(p,
+        fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication, blockSize, progress));
   }
 
   @Override
-  public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite,
+  public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flags,
       int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
-    return wrapOutputStream(p, fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication,
-        blockSize, progress));
-  }
-
-  @Override
-  public FSDataOutputStream createNonRecursive(Path f, FsPermission permission,
-      EnumSet<CreateFlag> flags, int bufferSize, short replication, long blockSize,
-      Progressable progress) throws IOException {
-    Path p = convertToDefaultPath(f);
-    return wrapOutputStream(p, fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication,
-        blockSize, progress));
+    return wrapOutputStream(p,
+        fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication, blockSize, progress));
   }
 
   @Override
@@ -590,10 +578,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path[] srcs, Path dst)
-      throws IOException {
-    fileSystem
-        .copyFromLocalFile(delSrc, overwrite, convertLocalPaths(srcs), convertToDefaultPath(dst));
+  public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path[] srcs, Path dst) throws IOException {
+    fileSystem.copyFromLocalFile(delSrc, overwrite, convertLocalPaths(srcs), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -602,10 +588,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path src, Path dst)
-      throws IOException {
-    fileSystem
-        .copyFromLocalFile(delSrc, overwrite, convertToLocalPath(src), convertToDefaultPath(dst));
+  public void copyFromLocalFile(boolean delSrc, boolean overwrite, Path src, Path dst) throws IOException {
+    fileSystem.copyFromLocalFile(delSrc, overwrite, convertToLocalPath(src), convertToDefaultPath(dst));
     try {
       consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
     } catch (TimeoutException e) {
@@ -629,22 +613,19 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public void copyToLocalFile(boolean delSrc, Path src, Path dst, boolean useRawLocalFileSystem)
-      throws IOException {
-    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst),
-        useRawLocalFileSystem);
+  public void copyToLocalFile(boolean delSrc, Path src, Path dst, boolean useRawLocalFileSystem) throws IOException {
+    fileSystem.copyToLocalFile(delSrc, convertToDefaultPath(src), convertToLocalPath(dst), useRawLocalFileSystem);
   }
 
   @Override
   public Path startLocalOutput(Path fsOutputFile, Path tmpLocalFile) throws IOException {
-    return convertToHoodiePath(fileSystem
-        .startLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile)));
+    return convertToHoodiePath(
+        fileSystem.startLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile)));
   }
 
   @Override
   public void completeLocalOutput(Path fsOutputFile, Path tmpLocalFile) throws IOException {
-    fileSystem.completeLocalOutput(convertToDefaultPath(fsOutputFile),
-        convertToDefaultPath(tmpLocalFile));
+    fileSystem.completeLocalOutput(convertToDefaultPath(fsOutputFile), convertToDefaultPath(tmpLocalFile));
   }
 
   @Override
@@ -691,8 +672,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public void createSymlink(Path target, Path link, boolean createParent) throws IOException {
-    fileSystem
-        .createSymlink(convertToDefaultPath(target), convertToDefaultPath(link), createParent);
+    fileSystem.createSymlink(convertToDefaultPath(target), convertToDefaultPath(link), createParent);
   }
 
   @Override
@@ -761,8 +741,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public void renameSnapshot(Path path, String snapshotOldName, String snapshotNewName)
-      throws IOException {
+  public void renameSnapshot(Path path, String snapshotOldName, String snapshotNewName) throws IOException {
     fileSystem.renameSnapshot(convertToDefaultPath(path), snapshotOldName, snapshotNewName);
   }
 
@@ -807,8 +786,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   @Override
-  public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag)
-      throws IOException {
+  public void setXAttr(Path path, String name, byte[] value, EnumSet<XAttrSetFlag> flag) throws IOException {
     fileSystem.setXAttr(convertToDefaultPath(path), name, value, flag);
   }
 
@@ -899,8 +877,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
       return openStreams.get(file.getName()).getBytesWritten();
     }
     // When the file is first written, we do not have a track of it
-    throw new IllegalArgumentException(file.toString()
-        + " does not have a open stream. Cannot get the bytes written on the stream");
+    throw new IllegalArgumentException(
+        file.toString() + " does not have a open stream. Cannot get the bytes written on the stream");
   }
 
   public FileSystem getFileSystem() {

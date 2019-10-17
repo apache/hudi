@@ -26,10 +26,9 @@ import org.apache.hudi.common.table.SyncableFileSystemView;
 public class RocksDBBasedIncrementalFSViewSyncTest extends IncrementalFSViewSyncTest {
 
   @Override
-  protected SyncableFileSystemView getNewFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
+  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
       throws IOException {
-    return new RocksDbBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withRocksDBPath(tmpFolder.newFolder().getAbsolutePath())
-            .withIncrementalTimelineSync(true).build());
+    return new RocksDbBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
+        .withRocksDBPath(folder.newFolder().getAbsolutePath()).withIncrementalTimelineSync(true).build());
   }
 }

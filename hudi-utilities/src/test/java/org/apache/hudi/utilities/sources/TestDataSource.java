@@ -44,8 +44,7 @@ public class TestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr,
-      long sourceLimit) {
+  protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCheckpointStr, long sourceLimit) {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String commitTime = String.format("%05d", nextCommitNum);
@@ -56,8 +55,8 @@ public class TestDataSource extends AbstractBaseTestSource {
       return new InputBatch<>(Option.empty(), lastCheckpointStr.orElse(null));
     }
 
-    List<GenericRecord> records = fetchNextBatch(props, (int)sourceLimit, commitTime, DEFAULT_PARTITION_NUM)
-        .collect(Collectors.toList());
+    List<GenericRecord> records =
+        fetchNextBatch(props, (int) sourceLimit, commitTime, DEFAULT_PARTITION_NUM).collect(Collectors.toList());
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Option.of(avroRDD), commitTime);
   }

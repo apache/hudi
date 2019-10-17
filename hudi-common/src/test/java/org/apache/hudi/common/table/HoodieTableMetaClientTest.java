@@ -31,28 +31,20 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class HoodieTableMetaClientTest {
+public class HoodieTableMetaClientTest extends HoodieCommonTestHarness {
 
-  private HoodieTableMetaClient metaClient;
-  private String basePath;
-
-  @Rule
-  public TemporaryFolder tmpFolder = new TemporaryFolder();
-  
   @Before
   public void init() throws IOException {
-    metaClient = HoodieTestUtils.init(tmpFolder.getRoot().getAbsolutePath());
-    basePath = metaClient.getBasePath();
+    initMetaClient();
   }
 
   @Test
@@ -66,8 +58,8 @@ public class HoodieTableMetaClientTest {
   @Test
   public void checkSerDe() throws IOException, ClassNotFoundException {
     // check if this object is serialized and de-serialized, we are able to read from the file system
-    HoodieTableMetaClient deseralizedMetaClient = HoodieTestUtils
-        .serializeDeserialize(metaClient, HoodieTableMetaClient.class);
+    HoodieTableMetaClient deseralizedMetaClient =
+        HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
     assertNotNull(deseralizedMetaClient);
     HoodieActiveTimeline commitTimeline = deseralizedMetaClient.getActiveTimeline();
     HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
@@ -107,10 +99,9 @@ public class HoodieTableMetaClientTest {
   @Test
   public void checkArchiveCommitTimeline() throws IOException {
     Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
-    SequenceFile.Writer writer = SequenceFile
-        .createWriter(metaClient.getHadoopConf(), SequenceFile.Writer.file(archiveLogPath),
-            SequenceFile.Writer.keyClass(Text.class),
-            SequenceFile.Writer.valueClass(Text.class));
+    SequenceFile.Writer writer =
+        SequenceFile.createWriter(metaClient.getHadoopConf(), SequenceFile.Writer.file(archiveLogPath),
+            SequenceFile.Writer.keyClass(Text.class), SequenceFile.Writer.valueClass(Text.class));
 
     writer.append(new Text("1"), new Text("data1"));
     writer.append(new Text("2"), new Text("data2"));

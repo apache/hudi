@@ -21,9 +21,13 @@ package org.apache.hudi.exception;
 import java.io.Serializable;
 
 /**
- * <p> Exception thrown for Hoodie failures. The root of the exception hierarchy. </p> <p> Hoodie
- * Write/Read clients will throw this exception if any of its operations fail. This is a runtime
- * (unchecked) exception. </p>
+ * <p>
+ * Exception thrown for Hoodie failures. The root of the exception hierarchy.
+ * </p>
+ * <p>
+ * Hoodie Write/Read clients will throw this exception if any of its operations fail. This is a runtime (unchecked)
+ * exception.
+ * </p>
  */
 public class HoodieException extends RuntimeException implements Serializable {
 

@@ -88,13 +88,10 @@ public class TestRecord implements Serializable {
     this.favoriteFloatNumber = (float) ((recordNumber + commitHashCode) / 1024.0);
     this.favoriteDoubleNumber = (recordNumber + commitHashCode) / 1024.0;
     this.tags = new HashMap<>();
-    this.tags.put("mapItem1",
-        new TestMapItemRecord("item" + recordNumber, "item" + recordNumber + commitTimeSuffix));
-    this.tags.put("mapItem2",
-        new TestMapItemRecord("item2" + recordNumber, "item2" + recordNumber + commitTimeSuffix));
+    this.tags.put("mapItem1", new TestMapItemRecord("item" + recordNumber, "item" + recordNumber + commitTimeSuffix));
+    this.tags.put("mapItem2", new TestMapItemRecord("item2" + recordNumber, "item2" + recordNumber + commitTimeSuffix));
     this.testNestedRecord = new TestNestedRecord(false, "UserId" + recordNumber + commitTimeSuffix);
-    this.stringArray = new String[]{"stringArray0" + commitTimeSuffix,
-        "stringArray1" + commitTimeSuffix};
+    this.stringArray = new String[] {"stringArray0" + commitTimeSuffix, "stringArray1" + commitTimeSuffix};
   }
 
   public String toJsonString() throws IOException {

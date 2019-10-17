@@ -25,6 +25,7 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -55,7 +56,6 @@ import org.apache.hudi.utilities.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.TestDataSource;
-import org.apache.hudi.utilities.sources.config.TestSourceConfig;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.log4j.LogManager;
@@ -77,8 +77,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
- * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts,
- * upserts, inserts. Check counts at the end.
+ * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
  */
 public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
@@ -124,8 +123,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Source schema is the target schema of upstream table
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/target.avsc");
     downstreamProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
-    UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, dfs,
-        dfsBasePath + "/test-downstream-source.properties");
+    UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, dfs, dfsBasePath + "/test-downstream-source.properties");
 
     // Properties used for testing invalid key generator
     TypedProperties invalidProps = new TypedProperties();
@@ -135,8 +133,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     invalidProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
     invalidProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
-    UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs,
-        dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
+    UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
   }
 
   @AfterClass
@@ -235,7 +232,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
       log.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numCompactionCommits = (int)timeline.getInstants().count();
+      int numCompactionCommits = (int) timeline.getInstants().count();
       assertTrue("Got=" + numCompactionCommits + ", exp >=" + minExpected, minExpected <= numCompactionCommits);
     }
 
@@ -243,7 +240,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
       log.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
-      int numDeltaCommits = (int)timeline.getInstants().count();
+      int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue("Got=" + numDeltaCommits + ", exp >=" + minExpected, minExpected <= numDeltaCommits);
     }
 
@@ -252,8 +249,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
       HoodieInstant lastInstant = timeline.lastInstant().get();
-      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-          timeline.getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
+      HoodieCommitMetadata commitMetadata =
+          HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
       assertEquals(totalCommits, timeline.countInstants());
       assertEquals(expected, commitMetadata.getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY));
       return lastInstant.getTimestamp();
@@ -279,28 +276,25 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   @Test
   public void testProps() throws IOException {
-    TypedProperties props = new DFSPropertiesConfiguration(
-        dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
+    TypedProperties props =
+        new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getConfig();
     assertEquals(2, props.getInteger("hoodie.upsert.shuffle.parallelism"));
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
-    assertEquals(
-        "org.apache.hudi.utilities.TestHoodieDeltaStreamer$TestGenerator",
-        props.getString("hoodie.datasource.write.keygenerator.class")
-    );
+    assertEquals("org.apache.hudi.utilities.TestHoodieDeltaStreamer$TestGenerator",
+        props.getString("hoodie.datasource.write.keygenerator.class"));
   }
 
   @Test
   public void testPropsWithInvalidKeyGenerator() throws Exception {
     try {
       String datasetBasePath = dfsBasePath + "/test_dataset";
-      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-          TestHelpers.makeConfig(
-              datasetBasePath, Operation.BULK_INSERT, TripsWithDistanceTransformer.class.getName(),
-              PROPS_FILENAME_TEST_INVALID, false), jsc);
+      HoodieDeltaStreamer deltaStreamer =
+          new HoodieDeltaStreamer(TestHelpers.makeConfig(datasetBasePath, Operation.BULK_INSERT,
+              TripsWithDistanceTransformer.class.getName(), PROPS_FILENAME_TEST_INVALID, false), jsc);
       deltaStreamer.sync();
       fail("Should error out when setting the key generator class property to an invalid value");
     } catch (IOException e) {
-      //expected
+      // expected
       log.error("Expected error during getting the key generator", e);
       assertTrue(e.getMessage().contains("Could not load key generator class"));
     }
@@ -310,12 +304,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public void testDatasetCreation() throws Exception {
     try {
       dfs.mkdirs(new Path(dfsBasePath + "/not_a_dataset"));
-      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-          TestHelpers.makeConfig(dfsBasePath + "/not_a_dataset", Operation.BULK_INSERT), jsc);
+      HoodieDeltaStreamer deltaStreamer =
+          new HoodieDeltaStreamer(TestHelpers.makeConfig(dfsBasePath + "/not_a_dataset", Operation.BULK_INSERT), jsc);
       deltaStreamer.sync();
       fail("Should error out when pointed out at a dir thats not a dataset");
     } catch (DatasetNotFoundException e) {
-      //expected
+      // expected
       log.error("Expected error during dataset creation", e);
     }
   }
@@ -395,11 +389,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   /**
-   * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline
-   * The first step involves using a SQL template to transform a source
-   * TEST-DATA-SOURCE  ============================> HUDI TABLE 1   ===============>  HUDI TABLE 2
-   *                    (incr-pull with transform)                     (incr-pull)
-   * Hudi Table 1 is synced with Hive.
+   * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline The first
+   * step involves using a SQL template to transform a source TEST-DATA-SOURCE ============================> HUDI TABLE
+   * 1 ===============> HUDI TABLE 2 (incr-pull with transform) (incr-pull) Hudi Table 1 is synced with Hive.
    */
   @Test
   public void testBulkInsertsAndUpsertsWithSQLBasedTransformerFor2StepPipeline() throws Exception {
@@ -467,12 +459,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // Test Hive integration
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
-    assertTrue("Table " + hiveSyncConfig.tableName + " should exist",
-        hiveClient.doesTableExist());
+    assertTrue("Table " + hiveSyncConfig.tableName + " should exist", hiveClient.doesTableExist());
     assertEquals("Table partitions should match the number of partitions we wrote", 1,
         hiveClient.scanTablePartitions().size());
-    assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES",
-        lastInstantForUpstreamTable, hiveClient.getLastCommitTimeSynced().get());
+    assertEquals("The last commit that was sycned should be updated in the TBLPROPERTIES", lastInstantForUpstreamTable,
+        hiveClient.getLastCommitTimeSynced().get());
   }
 
   @Test
@@ -499,8 +490,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // Test with empty commits
     HoodieTableMetaClient mClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), datasetBasePath, true);
-    HoodieInstant lastFinished =
-        mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    HoodieInstant lastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(datasetBasePath, Operation.UPSERT);
     cfg2.filterDupes = true;
     cfg2.sourceLimit = 2000;
@@ -509,14 +499,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg2, jsc);
     ds2.sync();
     mClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), datasetBasePath, true);
-    HoodieInstant newLastFinished =
-        mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     Assert.assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), lastFinished.getTimestamp(),
         HoodieTimeline.GREATER));
 
     // Ensure it is empty
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-        mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
+    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+        .fromBytes(mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
     System.out.println("New Commit Metadata=" + commitMetadata);
     Assert.assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
   }
@@ -527,8 +516,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, "1000");
     props.setProperty(TestSourceConfig.NUM_SOURCE_PARTITIONS_PROP, "1");
     props.setProperty(TestSourceConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS, "true");
-    DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props,
-        jsc, sparkSession, null);
+    DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props, jsc, sparkSession, null);
     InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
     batch.getBatch().get().cache();
     long c = batch.getBatch().get().count();
@@ -541,35 +529,17 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static class DistanceUDF implements UDF4<Double, Double, Double, Double, Double> {
 
     /**
-     * Taken from https://stackoverflow.com/questions/3694380/calculating-distance-between-two-points-using-latitude-
-     * longitude-what-am-i-doi
-     * Calculate distance between two points in latitude and longitude taking
-     * into account height difference. If you are not interested in height
-     * difference pass 0.0. Uses Haversine method as its base.
-     *
-     * lat1, lon1 Start point lat2, lon2 End point el1 Start altitude in meters
-     * el2 End altitude in meters
-     *
-     * @returns Distance in Meters
+     * Returns some random number as distance between the points
+     * 
+     * @param lat1 Latitiude of source
+     * @param lat2 Latitude of destination
+     * @param lon1 Longitude of source
+     * @param lon2 Longitude of destination
+     * @return
      */
     @Override
     public Double call(Double lat1, Double lat2, Double lon1, Double lon2) {
-
-      final int R = 6371; // Radius of the earth
-
-      double latDistance = Math.toRadians(lat2 - lat1);
-      double lonDistance = Math.toRadians(lon2 - lon1);
-      double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
-          + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-          * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
-      double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      double distance = R * c * 1000; // convert to meters
-
-      double height = 0;
-
-      distance = Math.pow(distance, 2) + Math.pow(height, 2);
-
-      return Math.sqrt(distance);
+      return new Random().nextDouble();
     }
   }
 
@@ -579,12 +549,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static class TripsWithDistanceTransformer implements Transformer {
 
     @Override
-    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession,
-        Dataset<Row> rowDataset, TypedProperties properties) {
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+        TypedProperties properties) {
       rowDataset.sqlContext().udf().register("distance_udf", new DistanceUDF(), DataTypes.DoubleType);
-      return rowDataset.withColumn("haversine_distance",
-          functions.callUDF("distance_udf", functions.col("begin_lat"),
-              functions.col("end_lat"), functions.col("begin_lon"), functions.col("end_lat")));
+      return rowDataset.withColumn("haversine_distance", functions.callUDF("distance_udf", functions.col("begin_lat"),
+          functions.col("end_lat"), functions.col("begin_lon"), functions.col("end_lat")));
     }
   }
 

@@ -28,8 +28,7 @@
 
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-    <notice.file>HUDI_NOTICE.txt</notice.file>
+    <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
   <build>
@@ -52,6 +51,17 @@
               <createSourcesJar>true</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer">
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                    <addHeader>true</addHeader>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                  <resource>META-INF/LICENSE</resource>
+                  <file>target/classes/META-INF/LICENSE</file>
+                </transformer>
+              </transformers>
               <artifactSet>
                 <includes>
                   <include>org.apache.hudi:hudi-common</include>
@@ -73,9 +83,7 @@
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
-                    <!-- Use this jar's NOTICE and license file -->
-                    <exclude>META-INF/NOTICE*</exclude>
-                    <exclude>META-INF/LICENSE*</exclude>
+                    <exclude>META-INF/services/javax.*</exclude>
                   </excludes>
                 </filter>
               </filters>

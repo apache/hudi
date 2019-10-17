@@ -75,8 +75,8 @@ public class HDFSParquetImporter implements Serializable {
 
   public HDFSParquetImporter(Config cfg) throws IOException {
     this.cfg = cfg;
-    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs) :
-        UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
+        : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
     log.info("Creating Cleaner with configs : " + props.toString());
   }
 
@@ -88,8 +88,8 @@ public class HDFSParquetImporter implements Serializable {
       System.exit(1);
     }
     HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
-    JavaSparkContext jssc = UtilHelpers
-        .buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    JavaSparkContext jssc =
+        UtilHelpers.buildSparkContext("data-importer-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
     try {
       dataImporter.dataImport(jssc, cfg.retry);
     } finally {
@@ -123,18 +123,17 @@ public class HDFSParquetImporter implements Serializable {
         fs.delete(new Path(cfg.targetPath), true);
       }
 
-      //Get schema.
+      // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
 
       // Initialize target hoodie table.
       Properties properties = new Properties();
       properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
       properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
-      HoodieTableMetaClient
-          .initDatasetAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
+      HoodieTableMetaClient.initDatasetAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
 
-      HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr,
-          cfg.parallelism, Option.empty(), props);
+      HoodieWriteClient client =
+          UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
       // Get instant time.
@@ -147,66 +146,56 @@ public class HDFSParquetImporter implements Serializable {
     return -1;
   }
 
-  protected JavaRDD<HoodieRecord<HoodieRecordPayload>> buildHoodieRecordsForImport(
-      JavaSparkContext jsc, String schemaStr) throws IOException {
+  protected JavaRDD<HoodieRecord<HoodieRecordPayload>> buildHoodieRecordsForImport(JavaSparkContext jsc,
+      String schemaStr) throws IOException {
     Job job = Job.getInstance(jsc.hadoopConfiguration());
     // Allow recursive directories to be found
     job.getConfiguration().set(FileInputFormat.INPUT_DIR_RECURSIVE, "true");
     // To parallelize reading file status.
     job.getConfiguration().set(FileInputFormat.LIST_STATUS_NUM_THREADS, "1024");
-    AvroReadSupport
-        .setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
+    AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-    return jsc.newAPIHadoopFile(cfg.srcPath,
-        ParquetInputFormat.class, Void.class, GenericRecord.class, job.getConfiguration())
+    return jsc
+        .newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
+            job.getConfiguration())
         // To reduce large number of
         // tasks.
-        .coalesce(16 * cfg.parallelism)
-        .map(entry -> {
-          GenericRecord genericRecord
-              = ((Tuple2<Void, GenericRecord>) entry)._2();
-          Object partitionField =
-              genericRecord.get(cfg.partitionKey);
+        .coalesce(16 * cfg.parallelism).map(entry -> {
+          GenericRecord genericRecord = ((Tuple2<Void, GenericRecord>) entry)._2();
+          Object partitionField = genericRecord.get(cfg.partitionKey);
           if (partitionField == null) {
-            throw new HoodieIOException(
-                "partition key is missing. :"
-                    + cfg.partitionKey);
+            throw new HoodieIOException("partition key is missing. :" + cfg.partitionKey);
           }
           Object rowField = genericRecord.get(cfg.rowKey);
           if (rowField == null) {
-            throw new HoodieIOException(
-                "row field is missing. :" + cfg.rowKey);
+            throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
           }
           String partitionPath = partitionField.toString();
           logger.info("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
-              partitionPath =
-                  PARTITION_FORMATTER.format(new Date(ts));
+              partitionPath = PARTITION_FORMATTER.format(new Date(ts));
             } catch (NumberFormatException nfe) {
               logger.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
           }
-          return new HoodieRecord<>(
-              new HoodieKey(
-                  (String) rowField, partitionPath),
-              new HoodieJsonPayload(
-                  genericRecord.toString()));
+          return new HoodieRecord<>(new HoodieKey((String) rowField, partitionPath),
+              new HoodieJsonPayload(genericRecord.toString()));
         });
   }
 
   /**
    * Imports records to Hoodie dataset
    *
-   * @param client        Hoodie Client
-   * @param instantTime   Instant Time
+   * @param client Hoodie Client
+   * @param instantTime Instant Time
    * @param hoodieRecords Hoodie Records
-   * @param <T>           Type
+   * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client,
-      String instantTime, JavaRDD<HoodieRecord<T>> hoodieRecords) {
+  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client, String instantTime,
+      JavaRDD<HoodieRecord<T>> hoodieRecords) {
     if (cfg.command.toLowerCase().equals("insert")) {
       return client.insert(hoodieRecords, instantTime);
     }
@@ -220,48 +209,40 @@ public class HDFSParquetImporter implements Serializable {
     @Override
     public void validate(String name, String value) throws ParameterException {
       if (value == null || !validFormats.contains(value)) {
-        throw new ParameterException(String.format(
-            "Invalid format type: value:%s: supported formats:%s", value, validFormats));
+        throw new ParameterException(
+            String.format("Invalid format type: value:%s: supported formats:%s", value, validFormats));
       }
     }
   }
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--command", "-c"},
-        description = "Write command Valid values are insert(default)/upsert",
+    @Parameter(names = {"--command", "-c"}, description = "Write command Valid values are insert(default)/upsert",
         required = false)
     public String command = "INSERT";
-    @Parameter(names = {"--src-path",
-        "-sp"}, description = "Base path for the input dataset", required = true)
+    @Parameter(names = {"--src-path", "-sp"}, description = "Base path for the input dataset", required = true)
     public String srcPath = null;
-    @Parameter(names = {"--target-path",
-        "-tp"}, description = "Base path for the target hoodie dataset", required = true)
+    @Parameter(names = {"--target-path", "-tp"}, description = "Base path for the target hoodie dataset",
+        required = true)
     public String targetPath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
     @Parameter(names = {"--table-type", "-tt"}, description = "Table type", required = true)
     public String tableType = null;
-    @Parameter(names = {"--row-key-field",
-        "-rk"}, description = "Row key field name", required = true)
+    @Parameter(names = {"--row-key-field", "-rk"}, description = "Row key field name", required = true)
     public String rowKey = null;
-    @Parameter(names = {"--partition-key-field",
-        "-pk"}, description = "Partition key field name", required = true)
+    @Parameter(names = {"--partition-key-field", "-pk"}, description = "Partition key field name", required = true)
     public String partitionKey = null;
-    @Parameter(names = {"--parallelism",
-        "-pl"}, description = "Parallelism for hoodie insert", required = true)
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
     public int parallelism = 1;
-    @Parameter(names = {"--schema-file",
-        "-sf"}, description = "path for Avro schema file", required = true)
+    @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
     public String schemaFile = null;
-    @Parameter(names = {"--format",
-        "-f"}, description = "Format for the input data.", required = false, validateValueWith =
-        FormatValidator.class)
+    @Parameter(names = {"--format", "-f"}, description = "Format for the input data.", required = false,
+        validateValueWith = FormatValidator.class)
     public String format = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
-    @Parameter(names = {"--spark-memory",
-        "-sm"}, description = "spark memory to use", required = true)
+    @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;

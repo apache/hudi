@@ -23,23 +23,31 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.List;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.server.HiveServer2;
+import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.util.HiveTestService;
 import org.apache.hudi.utilities.sources.TestDataSource;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
@@ -110,6 +118,7 @@ public class UtilitiesTestBase {
 
   /**
    * Helper to get hive sync config
+   * 
    * @param basePath
    * @param tableName
    * @return
@@ -130,6 +139,7 @@ public class UtilitiesTestBase {
 
   /**
    * Initialize Hive DB
+   * 
    * @throws IOException
    */
   private static void clearHiveDb() throws IOException {
@@ -151,8 +161,8 @@ public class UtilitiesTestBase {
     private static ClassLoader classLoader = Helpers.class.getClassLoader();
 
     public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
-      BufferedReader reader = new BufferedReader(
-          new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
+      BufferedReader reader =
+          new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
       PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
       String line;
       while ((line = reader.readLine()) != null) {
@@ -176,11 +186,38 @@ public class UtilitiesTestBase {
       os.close();
     }
 
+    public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
+      try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
+          .withSchema(HoodieTestDataGenerator.avroSchema).withConf(HoodieTestUtils.getDefaultHadoopConf()).build()) {
+        for (GenericRecord record : records) {
+          writer.write(record);
+        }
+      }
+    }
+
     public static TypedProperties setupSchemaOnDFS() throws IOException {
       UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
       TypedProperties props = new TypedProperties();
       props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
       return props;
+    }
+
+    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {
+      try {
+        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(dataGenerator.avroSchema);
+        return (GenericRecord) recordOpt.get();
+      } catch (IOException e) {
+        return null;
+      }
+    }
+
+    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords,
+        HoodieTestDataGenerator dataGenerator) {
+      List<GenericRecord> records = new ArrayList<GenericRecord>();
+      for (HoodieRecord hoodieRecord : hoodieRecords) {
+        records.add(toGenericRecord(hoodieRecord, dataGenerator));
+      }
+      return records;
     }
 
     public static String toJsonString(HoodieRecord hr) {

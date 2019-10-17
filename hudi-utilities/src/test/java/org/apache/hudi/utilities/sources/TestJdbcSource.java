@@ -7,17 +7,13 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Comparator;
-import java.util.List;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -34,17 +30,17 @@ import org.slf4j.LoggerFactory;
 
 public class TestJdbcSource extends UtilitiesTestBase {
 
-  private final static String hdfsSecretDir = "file:///tmp/hudi/config/";
-  private final static String secretFileName = "secret";
-  private final static String fullPathToSecret = hdfsSecretDir + secretFileName;
-  private final static String secretString = "hudi";
-  private final static String derbyDatabase = "sales";
-  private final static String derbyDir = String.format("/tmp/derby/%s", derbyDatabase);
-  private final static String derbyUrl = String.format("jdbc:derby:%s;create=true", derbyDir);
+  private final String hdfsSecretDir = "file:///tmp/hudi/config/";
+  private final String secretFileName = "secret";
+  private final String fullPathToSecret = hdfsSecretDir + secretFileName;
+  private final String secretString = "hudi";
+  private final String derbyDatabase = "sales";
+  private final String derbyDir = String.format("/tmp/derby/%s", derbyDatabase);
+  private final String derbyUrl = String.format("jdbc:derby:%s;create=true", derbyDir);
+  Connection connection;
   PreparedStatement preparedStatement;
-  final HoodieTestDataGenerator generator= new HoodieTestDataGenerator();
-
-
+  final HoodieTestDataGenerator generator = new HoodieTestDataGenerator();
+  TestJdbcSource testJdbcSource;
 
   private static Logger LOG = LoggerFactory.getLogger(JDBCSource.class);
   private TypedProperties props = new TypedProperties();
@@ -52,36 +48,12 @@ public class TestJdbcSource extends UtilitiesTestBase {
   @BeforeClass
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass();
-    cleanDerby();
   }
 
   @AfterClass
   public static void cleanupClass() throws Exception {
     UtilitiesTestBase.cleanupClass();
-    cleanDerby();
   }
-
-  public static void cleanDerby()//Pair<Connection,Statement> qureyPair)
-  {
-    try {
-      /*if(qureyPair.getLeft()!=null)
-      {
-        qureyPair.getLeft().close();
-      }
-      if(qureyPair.getRight()!=null)
-      {
-        qureyPair.getRight().close();
-      }*/
-
-      Files.walk(Paths.get(derbyDir))
-          .sorted(Comparator.reverseOrder())
-          .map(java.nio.file.Path::toFile)
-          .forEach(File::delete);
-    } catch (Exception e) {
-      //close silently
-    }
-  }
-
 
   @Before
   @Override
@@ -95,27 +67,11 @@ public class TestJdbcSource extends UtilitiesTestBase {
   public void teardown() throws Exception {
     super.teardown();
     cleanDerby();
+    closeAllJdbcResources();
   }
 
   @Test
-  public void testJDBCSourceWithSecretFile() throws IOException {
-    clear(props);
-    prepareProps(props);
-    writeSecretToFs();
-    addSecretFileToProps(props);
-    Source jdbcSource = new JDBCSource(props, jsc, sparkSession, null);
-    InputBatch inputBatch = jdbcSource.fetchNewData(Option.empty(), Long.MAX_VALUE);
-    Dataset<Row> rowDataset = (Dataset<Row>) inputBatch.getBatch().get();
-    LOG.info("Reading test output");
-    rowDataset.show();
-    long count = rowDataset.count();
-    LOG.info("Num records in output {}", count);
-    Assert.assertEquals(count, 4L);
-
-  }
-
-  @Test
-  public void testJDBCSourceWithSerect() throws IOException {
+  public void testJDBCSourceWithSecret() {
     clear(props);
     prepareProps(props);
     addSecretStringToProps(props);
@@ -165,41 +121,40 @@ public class TestJdbcSource extends UtilitiesTestBase {
     outputStream.close();
   }
 
-  @Test
-  public void prepareDB()
-      throws Exception {
+  public void cleanDerby() {
     try {
-      final String contractDerbyTables = "CREATE TABLE contract (\n"
-          + "  contract_id INTEGER NOT NULL GENERATED ALWAYS AS IDENTITY (START WITH 1, INCREMENT BY 1),\n"
-          + "  contract_type VARCHAR(3) CONSTRAINT contract_type_ck CHECK (contract_type IN ('FUT','OPT','SPR')) DEFAULT NULL,\n"
-          + "  country VARCHAR(3) DEFAULT NULL,\n"
-          + "  on_asset VARCHAR(500) DEFAULT NULL,\n"
-          + "  contract_created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
-          + "  PRIMARY KEY (contract_id)"
-          + ")";
-      final String preparedStatementInsertQuery = "INSERT INTO contract(contract_type,country,on_asset) values(?,?,?)";
-      Connection connection = DriverManager.getConnection(derbyUrl);
-      Statement statement = connection.createStatement();
-      statement.executeUpdate(contractDerbyTables);
-     //  = connection.prepareStatement(preparedStatementInsertQuery);
-      ResultSet resultSet = statement.executeQuery("SELECT * FROM contract");
-      while (resultSet.next()) {
-        LOG.warn("{},{},{}", resultSet.getString(1), resultSet.getString(2), resultSet.getString(2));
-      }
-      List<HoodieRecord> hoodieRecords = generator.generateInserts("000", 2);
-      LOG.warn(hoodieRecords.toString());
-
+      Files.walk(Paths.get(derbyDir))
+          .sorted(Comparator.reverseOrder())
+          .map(java.nio.file.Path::toFile)
+          .forEach(File::delete);
     } catch (Exception e) {
-      throw e;
+      //close silently
+      return;
     }
   }
 
-  public void cleanUp(Connection connection, Statement statement) {
-    try {
-      statement.executeUpdate("drop table contract");
-      statement.close();
+  public void insertToDerby() {
 
+  }
+
+  public Connection getConnection() throws SQLException {
+    if (connection == null) {
+      connection = DriverManager.getConnection(derbyUrl);
+      return connection;
+    }
+    return connection;
+  }
+
+  public void closeAllJdbcResources() {
+    try {
+      if (preparedStatement != null) {
+        preparedStatement.close();
+      }
+      if (connection != null) {
+        connection.close();
+      }
     } catch (SQLException e) {
+      e.printStackTrace();
     }
   }
 }

@@ -26,11 +26,11 @@ import java.io.Serializable;
 public interface HBaseIndexQPSResourceAllocator extends Serializable {
 
   /**
-   * This method returns the QPS Fraction value that needs to be acquired such that the respective
-   * HBase index operation can be completed in desiredPutsTime.
+   * This method returns the QPS Fraction value that needs to be acquired such that the respective HBase index operation
+   * can be completed in desiredPutsTime.
    *
-   * @param numPuts                Number of inserts to be written to HBase index
-   * @param desiredPutsTimeInSecs  Total expected time for the HBase inserts operation
+   * @param numPuts Number of inserts to be written to HBase index
+   * @param desiredPutsTimeInSecs Total expected time for the HBase inserts operation
    * @return QPS fraction that needs to be acquired.
    */
   float calculateQPSFractionForPutsTime(final long numPuts, final int desiredPutsTimeInSecs);
@@ -38,8 +38,8 @@ public interface HBaseIndexQPSResourceAllocator extends Serializable {
   /**
    * This method acquires the requested QPS Fraction against HBase cluster for index operation.
    *
-   * @param desiredQPSFraction  QPS fraction that needs to be requested and acquired
-   * @param numPuts             Number of inserts to be written to HBase index
+   * @param desiredQPSFraction QPS fraction that needs to be requested and acquired
+   * @param numPuts Number of inserts to be written to HBase index
    * @return value of the acquired QPS Fraction.
    */
   float acquireQPSResources(final float desiredQPSFraction, final long numPuts);

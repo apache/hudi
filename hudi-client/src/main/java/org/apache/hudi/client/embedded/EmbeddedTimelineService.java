@@ -68,7 +68,7 @@ public class EmbeddedTimelineService {
   }
 
   public void startServer() throws IOException {
-    server = new TimelineService(0, viewManager, hadoopConf.get());
+    server = new TimelineService(0, viewManager, hadoopConf.newCopy());
     serverPort = server.startService();
     logger.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }

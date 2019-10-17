@@ -36,11 +36,15 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Represents the Archived Timeline for the HoodieDataset. Instants for the last 12 hours
- * (configurable) is in the ActiveTimeline and the rest are in ArchivedTimeline. <p></p> Instants
- * are read from the archive file during initialization and never refreshed. To refresh, clients
- * need to call reload() <p></p> This class can be serialized and de-serialized and on
- * de-serialization the FileSystem is re-initialized.
+ * Represents the Archived Timeline for the HoodieDataset. Instants for the last 12 hours (configurable) is in the
+ * ActiveTimeline and the rest are in ArchivedTimeline.
+ * <p>
+ * </p>
+ * Instants are read from the archive file during initialization and never refreshed. To refresh, clients need to call
+ * reload()
+ * <p>
+ * </p>
+ * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
 
@@ -54,8 +58,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     // Read back the commits to make sure
     Path archiveLogPath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     try (SequenceFile.Reader reader =
-        new SequenceFile.Reader(metaClient.getHadoopConf(),
-            SequenceFile.Reader.file(archiveLogPath))) {
+        new SequenceFile.Reader(metaClient.getHadoopConf(), SequenceFile.Reader.file(archiveLogPath))) {
       Text key = new Text();
       Text val = new Text();
       while (reader.next(key, val)) {
@@ -63,17 +66,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
         // This is okay because only tooling will load the archived commit timeline today
         readCommits.put(key.toString(), Arrays.copyOf(val.getBytes(), val.getLength()));
       }
-      this.setInstants(readCommits.keySet().stream().map(
-          s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s)).collect(
-          Collectors.toList()));
+      this.setInstants(readCommits.keySet().stream().map(s -> new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, s))
+          .collect(Collectors.toList()));
     } catch (IOException e) {
-      throw new HoodieIOException(
-          "Could not load archived commit timeline from path " + archiveLogPath, e);
+      throw new HoodieIOException("Could not load archived commit timeline from path " + archiveLogPath, e);
     }
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details =
-        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
     this.metaClient = metaClient;
   }
 
@@ -82,16 +82,14 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieArchivedTimeline() {
-  }
+  public HoodieArchivedTimeline() {}
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
    *
    * @deprecated
    */
-  private void readObject(java.io.ObjectInputStream in)
-      throws IOException, ClassNotFoundException {
+  private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
   }
 

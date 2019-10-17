@@ -28,25 +28,21 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * A container that can potentially hold one or more dataset's
- * file-system views. There is one view for each dataset. This is a view built against a timeline containing completed
- * actions. In an embedded timeline-server mode, this typically holds only one dataset's view.
- * In a stand-alone server mode, this can hold more than one dataset's views.
+ * A container that can potentially hold one or more dataset's file-system views. There is one view for each dataset.
+ * This is a view built against a timeline containing completed actions. In an embedded timeline-server mode, this
+ * typically holds only one dataset's view. In a stand-alone server mode, this can hold more than one dataset's views.
  *
- * FileSystemView can be stored "locally" using the following storage mechanisms:
- *  a. In Memory
- *  b. Spillable Map
- *  c. RocksDB
+ * FileSystemView can be stored "locally" using the following storage mechanisms: a. In Memory b. Spillable Map c.
+ * RocksDB
  *
  * But there can be cases where the file-system view is managed remoted. For example : Embedded Timeline Server). In
  * this case, the clients will configure a remote filesystem view client (RemoteHoodieTableFileSystemView) for the
  * dataset which can connect to the remote file system view and fetch views. THere are 2 modes here : REMOTE_FIRST and
- * REMOTE_ONLY
- *    REMOTE_FIRST : The file-system view implementation on client side will act as a remote proxy. In case, if there
- *                   is problem (or exceptions) querying remote file-system view, a backup local file-system view(using
- *                   either one of in-memory, spillable, rocksDB) is used to server file-system view queries
- *    REMOTE_ONLY  : In this case, there is no backup local file-system view. If there is problem (or exceptions)
- *                   querying remote file-system view, then the exceptions are percolated back to client.
+ * REMOTE_ONLY REMOTE_FIRST : The file-system view implementation on client side will act as a remote proxy. In case, if
+ * there is problem (or exceptions) querying remote file-system view, a backup local file-system view(using either one
+ * of in-memory, spillable, rocksDB) is used to server file-system view queries REMOTE_ONLY : In this case, there is no
+ * backup local file-system view. If there is problem (or exceptions) querying remote file-system view, then the
+ * exceptions are percolated back to client.
  *
  * FileSystemViewManager is designed to encapsulate the file-system view storage from clients using the file-system
  * view. FileSystemViewManager uses a factory to construct specific implementation of file-system view and passes it to
@@ -73,6 +69,7 @@ public class FileSystemViewManager {
 
   /**
    * Drops reference to File-System Views. Future calls to view results in creating a new view
+   * 
    * @param basePath
    */
   public void clearFileSystemView(String basePath) {
@@ -84,12 +81,12 @@ public class FileSystemViewManager {
 
   /**
    * Main API to get the file-system view for the base-path
+   * 
    * @param basePath
    * @return
    */
   public SyncableFileSystemView getFileSystemView(String basePath) {
-    return globalViewMap.computeIfAbsent(basePath,
-        (path) -> viewCreator.apply(path, viewStorageConfig));
+    return globalViewMap.computeIfAbsent(basePath, (path) -> viewCreator.apply(path, viewStorageConfig));
   }
 
   /**
@@ -104,29 +101,31 @@ public class FileSystemViewManager {
 
   /**
    * Create RocksDB based file System view for a dataset
+   * 
    * @param conf Hadoop Configuration
-   * @param viewConf  View Storage Configuration
-   * @param basePath  Base Path of dataset
+   * @param viewConf View Storage Configuration
+   * @param basePath Base Path of dataset
    * @return
    */
   private static RocksDbBasedFileSystemView createRocksDBBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.get(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new RocksDbBasedFileSystemView(metaClient, timeline, viewConf);
   }
 
   /**
    * Create a spillable Map based file System view for a dataset
+   * 
    * @param conf Hadoop Configuration
-   * @param viewConf  View Storage Configuration
-   * @param basePath  Base Path of dataset
+   * @param viewConf View Storage Configuration
+   * @param basePath Base Path of dataset
    * @return
    */
   private static SpillableMapBasedFileSystemView createSpillableMapBasedFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
     logger.info("Creating SpillableMap based view for basePath " + basePath);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.get(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf);
   }
@@ -134,42 +133,45 @@ public class FileSystemViewManager {
 
   /**
    * Create an in-memory file System view for a dataset
+   * 
    * @param conf Hadoop Configuration
-   * @param viewConf  View Storage Configuration
-   * @param basePath  Base Path of dataset
+   * @param viewConf View Storage Configuration
+   * @param basePath Base Path of dataset
    * @return
    */
   private static HoodieTableFileSystemView createInMemoryFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, String basePath) {
     logger.info("Creating InMemory based view for basePath " + basePath);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.get(), basePath, true);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), basePath, true);
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 
   /**
    * Create a remote file System view for a dataset
+   * 
    * @param conf Hadoop Configuration
-   * @param viewConf  View Storage Configuration
-   * @param metaClient  Hoodie Table MetaClient for the dataset.
+   * @param viewConf View Storage Configuration
+   * @param metaClient Hoodie Table MetaClient for the dataset.
    * @return
    */
   private static RemoteHoodieTableFileSystemView createRemoteFileSystemView(SerializableConfiguration conf,
       FileSystemViewStorageConfig viewConf, HoodieTableMetaClient metaClient) {
     logger.info("Creating remote view for basePath " + metaClient.getBasePath() + ". Server="
         + viewConf.getRemoteViewServerHost() + ":" + viewConf.getRemoteViewServerPort());
-    return new RemoteHoodieTableFileSystemView(viewConf.getRemoteViewServerHost(),
-        viewConf.getRemoteViewServerPort(), metaClient);
+    return new RemoteHoodieTableFileSystemView(viewConf.getRemoteViewServerHost(), viewConf.getRemoteViewServerPort(),
+        metaClient);
   }
 
   /**
    * Main Factory method for building file-system views
-   * @param conf  Hadoop Configuration
+   * 
+   * @param conf Hadoop Configuration
    * @param config View Storage Configuration
    * @return
    */
-  public static FileSystemViewManager createViewManager(
-      final SerializableConfiguration conf, final FileSystemViewStorageConfig config) {
+  public static FileSystemViewManager createViewManager(final SerializableConfiguration conf,
+      final FileSystemViewStorageConfig config) {
     logger.info("Creating View Manager with storage type :" + config.getStorageType());
     switch (config.getStorageType()) {
       case EMBEDDED_KV_STORE:
@@ -186,14 +188,13 @@ public class FileSystemViewManager {
             (basePath, viewConfig) -> createInMemoryFileSystemView(conf, viewConfig, basePath));
       case REMOTE_ONLY:
         logger.info("Creating remote only table view");
-        return new FileSystemViewManager(conf, config,
-            (basePath, viewConfig) -> createRemoteFileSystemView(conf, viewConfig,
-                new HoodieTableMetaClient(conf.get(), basePath)));
+        return new FileSystemViewManager(conf, config, (basePath, viewConfig) -> createRemoteFileSystemView(conf,
+            viewConfig, new HoodieTableMetaClient(conf.newCopy(), basePath)));
       case REMOTE_FIRST:
         logger.info("Creating remote first table view");
         return new FileSystemViewManager(conf, config, (basePath, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
-              createRemoteFileSystemView(conf, viewConfig, new HoodieTableMetaClient(conf.get(), basePath));
+              createRemoteFileSystemView(conf, viewConfig, new HoodieTableMetaClient(conf.newCopy(), basePath));
           SyncableFileSystemView secondaryView = null;
           switch (viewConfig.getSecondaryStorageType()) {
             case MEMORY:

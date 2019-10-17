@@ -41,7 +41,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Driver program that uses the Hoodie client with synthetic workload, and performs basic operations. <p>
+ * Driver program that uses the Hoodie client with synthetic workload, and performs basic operations.
+ * <p>
  */
 public class HoodieClientExample {
 
@@ -82,18 +83,15 @@ public class HoodieClientExample {
     Path path = new Path(tablePath);
     FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
     if (!fs.exists(path)) {
-      HoodieTableMetaClient
-          .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
-              HoodieAvroPayload.class.getName());
+      HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
+          tableName, HoodieAvroPayload.class.getName());
     }
 
     // Create the write client to write some records in
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable(tableName)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
-        .withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3).build()).build();
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3).build()).build();
     HoodieWriteClient client = new HoodieWriteClient(jsc, cfg);
 
     /**

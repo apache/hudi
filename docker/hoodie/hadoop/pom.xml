@@ -56,6 +56,7 @@
     <docker.presto.version>0.217</docker.presto.version>
     <dockerfile.maven.version>1.4.3</dockerfile.maven.version>
     <checkstyle.skip>true</checkstyle.skip>
+    <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
   <build>

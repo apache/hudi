@@ -30,7 +30,7 @@
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
   <version>0.5.1-SNAPSHOT</version>
-  <description>Apache Hudi brings stream style processing on big data</description>
+  <description>Apache Hudi (incubating) brings stream style processing on big data</description>
   <url>https://github.com/apache/incubator-hudi</url>
   <name>Hudi</name>
 
@@ -58,7 +58,6 @@
       <name>Apache License, Version 2.0</name>
       <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
-      <comments>A business-friendly OSS license</comments>
     </license>
   </licenses>
 
@@ -66,67 +65,6 @@
     <name>The Apache Software Foundation</name>
     <url>https://www.apache.org</url>
   </organization>
-
-  <developers>
-    <developer>
-      <id>vinothchandar</id>
-      <name>Vinoth Chandar</name>
-      <organization>Confluent Inc</organization>
-    </developer>
-    <developer>
-      <id>prasannarajaperumal</id>
-      <name>Prasanna Rajaperumal</name>
-      <organization>Snowflake</organization>
-    </developer>
-    <developer>
-      <id>n3nash</id>
-      <name>Nishith Agarwal</name>
-      <organization>Uber</organization>
-    </developer>
-    <developer>
-      <id>bvaradar</id>
-      <name>Balaji Varadharajan</name>
-      <organization>Uber</organization>
-    </developer>
-  </developers>
-
-  <contributors>
-    <contributor>
-      <name>Wei Yan</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Siddhartha Gunda</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Omkar Joshi</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Zeeshan Qureshi</name>
-      <organization>Shopify</organization>
-    </contributor>
-    <contributor>
-      <name>Kathy Ge</name>
-      <organization>Shopify</organization>
-    </contributor>
-    <contributor>
-      <name>Kaushik Devarajaiah</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Anbu Cheeralan</name>
-      <organization>DoubleVerify</organization>
-    </contributor>
-    <contributor>
-      <name>Jiale Tan</name>
-      <organization>Vungle</organization>
-    </contributor>
-  </contributors>
-
-  <inceptionYear>2016</inceptionYear>
-
 
   <properties>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
@@ -157,12 +95,13 @@
     <jetty.version>7.6.0.v20120127</jetty.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
-    <notice.dir>${project.basedir}</notice.dir>
-    <notice.file>NOTICE.txt</notice.file>
     <skipTests>false</skipTests>
     <skipITs>${skipTests}</skipITs>
     <skipUTs>${skipTests}</skipUTs>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <main.basedir>${project.basedir}</main.basedir>
+    <mr.bundle.avro.scope>provided</mr.bundle.avro.scope>
+    <mr.bundle.avro.shade.prefix></mr.bundle.avro.shade.prefix>
   </properties>
 
   <scm>
@@ -174,31 +113,6 @@
 
   <build>
     <plugins>
-      <plugin>
-        <groupId>org.jasig.maven</groupId>
-        <artifactId>maven-notice-plugin</artifactId>
-        <version>1.1.0</version>
-        <executions>
-          <execution>
-            <id>generate-notice</id>
-            <!-- Generate notice before packaging so that they can be added to jar -->
-            <!-- <phase>generate-resources</phase> -->
-            <phase>none</phase>
-            <goals>
-              <goal>generate</goal>
-              <goal>check</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <noticeTemplate>${maven.multiModuleProjectDirectory}/release/config/NOTICE.template</noticeTemplate>
-          <licenseMapping>
-            <param>${maven.multiModuleProjectDirectory}/release/config/license-mappings.xml</param>
-          </licenseMapping>
-          <outputDir>${notice.dir}</outputDir>
-          <fileName>${notice.file}</fileName>
-        </configuration>
-      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
@@ -244,7 +158,7 @@
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
           <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
-          <configLocation>${maven.multiModuleProjectDirectory}/style/scalastyle-config.xml</configLocation>
+          <configLocation>${main.basedir}/style/scalastyle-config.xml</configLocation>
           <outputEncoding>UTF-8</outputEncoding>
         </configuration>
         <executions>
@@ -256,6 +170,34 @@
           </execution>
         </executions>
       </plugin>
+<!--
+      See https://jira.apache.org/jira/browse/HUDI-304
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>1.24.3</version>
+        <configuration>
+          <java>
+            <eclipse>
+              <file>${main.basedir}/style/eclipse-java-google-style.xml</file>
+              <version>4.10.0</version>
+            </eclipse>
+          </java>
+          <scala>
+            <trimTrailingWhitespace/>
+          </scala>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+-->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -394,18 +336,18 @@
               </licenseFamily>
             </licenseFamilies>
             <excludes>
+              <exclude>NOTICE</exclude>
+              <exclude>DISCLAIMER-WIP</exclude>
               <exclude>**/.*</exclude>
-              <exclude>**/*.txt</exclude>
-              <exclude>**/*.sh</exclude>
-              <exclude>**/*.log</exclude>
+              <exclude>**/*.json</exclude>
+              <exclude>**/*.sqltemplate</exclude>
+              <exclude>**/compose_env</exclude>
+              <exclude>**/*NOTICE*</exclude>
+              <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
-              <exclude>**/test/resources/*.avsc</exclude>
               <exclude>**/test/resources/*.data</exclude>
-              <exclude>**/test/resources/*.schema</exclude>
-              <exclude>**/test/resources/*.csv</exclude>
-              <exclude>**/main/avro/*.avsc</exclude>
-              <exclude>**/target/*</exclude>
-              <exclude>**/style/*</exclude>
+              <exclude>**/target/**</exclude>
+              <exclude>**/generated-sources/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -966,6 +908,13 @@
       </activation>
       <properties>
         <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties</surefire-log4j.file>
+      </properties>
+    </profile>
+    <profile>
+      <id>aws-emr-profile</id>
+      <properties>
+        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
+        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
       </properties>
     </profile>
   </profiles>

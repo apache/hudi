@@ -67,15 +67,15 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
   /**
    * Given a list of row keys and one file, return only row keys existing in that file.
    */
-  public static List<String> checkCandidatesAgainstFile(Configuration configuration,
-      List<String> candidateRecordKeys, Path filePath) throws HoodieIndexException {
+  public static List<String> checkCandidatesAgainstFile(Configuration configuration, List<String> candidateRecordKeys,
+      Path filePath) throws HoodieIndexException {
     List<String> foundRecordKeys = new ArrayList<>();
     try {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = new HoodieTimer().startTimer();
-        Set<String> fileRowKeys = ParquetUtils.filterParquetRowKeys(configuration, filePath,
-            new HashSet<>(candidateRecordKeys));
+        Set<String> fileRowKeys =
+            ParquetUtils.filterParquetRowKeys(configuration, filePath, new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
         logger.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
@@ -112,11 +112,11 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
     }
 
     HoodieDataFile dataFile = getLatestDataFile();
-    List<String> matchingKeys = checkCandidatesAgainstFile(hoodieTable.getHadoopConf(), candidateRecordKeys,
-        new Path(dataFile.getPath()));
-    logger.info(String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)",
-        totalKeysChecked, candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(),
-        matchingKeys.size()));
+    List<String> matchingKeys =
+        checkCandidatesAgainstFile(hoodieTable.getHadoopConf(), candidateRecordKeys, new Path(dataFile.getPath()));
+    logger.info(
+        String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
+            candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
     return new KeyLookupResult(partitionPathFilePair.getRight(), partitionPathFilePair.getLeft(),
         dataFile.getCommitTime(), matchingKeys);
   }

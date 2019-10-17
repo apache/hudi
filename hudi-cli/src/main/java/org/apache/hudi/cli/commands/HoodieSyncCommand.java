@@ -44,19 +44,16 @@ public class HoodieSyncCommand implements CommandMarker {
   public String validateSync(
       @CliOption(key = {"mode"}, unspecifiedDefaultValue = "complete", help = "Check mode") final String mode,
       @CliOption(key = {"sourceDb"}, unspecifiedDefaultValue = "rawdata", help = "source database") final String srcDb,
-      @CliOption(key = {
-          "targetDb"}, unspecifiedDefaultValue = "dwh_hoodie", help = "target database") final String tgtDb,
-      @CliOption(key = {
-          "partitionCount"}, unspecifiedDefaultValue = "5", help = "total number of recent partitions to validate")
-      final int partitionCount,
-      @CliOption(key = {
-          "hiveServerUrl"}, mandatory = true, help = "hiveServerURL to connect to") final String hiveServerUrl,
-      @CliOption(key = {
-          "hiveUser"}, mandatory = false, unspecifiedDefaultValue = "", help = "hive username to connect to") final
-      String hiveUser,
-      @CliOption(key = {
-          "hivePass"}, mandatory = true, unspecifiedDefaultValue = "", help = "hive password to connect to") final
-      String hivePass)
+      @CliOption(key = {"targetDb"}, unspecifiedDefaultValue = "dwh_hoodie",
+          help = "target database") final String tgtDb,
+      @CliOption(key = {"partitionCount"}, unspecifiedDefaultValue = "5",
+          help = "total number of recent partitions to validate") final int partitionCount,
+      @CliOption(key = {"hiveServerUrl"}, mandatory = true,
+          help = "hiveServerURL to connect to") final String hiveServerUrl,
+      @CliOption(key = {"hiveUser"}, mandatory = false, unspecifiedDefaultValue = "",
+          help = "hive username to connect to") final String hiveUser,
+      @CliOption(key = {"hivePass"}, mandatory = true, unspecifiedDefaultValue = "",
+          help = "hive password to connect to") final String hivePass)
       throws Exception {
     HoodieTableMetaClient target = HoodieCLI.syncTableMetadata;
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline();
@@ -77,8 +74,8 @@ public class HoodieSyncCommand implements CommandMarker {
     String sourceLatestCommit =
         sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get().getTimestamp();
 
-    if (sourceLatestCommit != null && HoodieTimeline.compareTimestamps(targetLatestCommit, sourceLatestCommit,
-        HoodieTimeline.GREATER)) {
+    if (sourceLatestCommit != null
+        && HoodieTimeline.compareTimestamps(targetLatestCommit, sourceLatestCommit, HoodieTimeline.GREATER)) {
       // source is behind the target
       List<HoodieInstant> commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE)
           .getInstants().collect(Collectors.toList());
@@ -89,8 +86,8 @@ public class HoodieSyncCommand implements CommandMarker {
         long newInserts = CommitUtil.countNewRecords(target,
             commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
         return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
-            + source.getTableConfig().getTableName()
-            + ") == " + (targetCount - sourceCount) + ". Catch up count is " + newInserts;
+            + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount) + ". Catch up count is "
+            + newInserts;
       }
     } else {
       List<HoodieInstant> commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE)
@@ -102,8 +99,8 @@ public class HoodieSyncCommand implements CommandMarker {
         long newInserts = CommitUtil.countNewRecords(source,
             commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
         return "Count difference now is (count(" + source.getTableConfig().getTableName() + ") - count("
-            + target.getTableConfig().getTableName()
-            + ") == " + (sourceCount - targetCount) + ". Catch up count is " + newInserts;
+            + target.getTableConfig().getTableName() + ") == " + (sourceCount - targetCount) + ". Catch up count is "
+            + newInserts;
       }
 
     }

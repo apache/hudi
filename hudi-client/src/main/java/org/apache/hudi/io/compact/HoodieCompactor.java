@@ -37,23 +37,20 @@ public interface HoodieCompactor extends Serializable {
   /**
    * Generate a new compaction plan for scheduling
    *
-   * @param jsc                  Spark Context
-   * @param hoodieTable          Hoodie Table
-   * @param config               Hoodie Write Configuration
+   * @param jsc Spark Context
+   * @param hoodieTable Hoodie Table
+   * @param config Hoodie Write Configuration
    * @param compactionCommitTime scheduled compaction commit time
    * @param fgIdsInPendingCompactions partition-fileId pairs for which compaction is pending
    * @return Compaction Plan
    * @throws IOException when encountering errors
    */
-  HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc,
-      HoodieTable hoodieTable, HoodieWriteConfig config, String compactionCommitTime,
-      Set<HoodieFileGroupId> fgIdsInPendingCompactions)
-      throws IOException;
+  HoodieCompactionPlan generateCompactionPlan(JavaSparkContext jsc, HoodieTable hoodieTable, HoodieWriteConfig config,
+      String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactions) throws IOException;
 
   /**
    * Execute compaction operations and report back status
    */
-  JavaRDD<WriteStatus> compact(JavaSparkContext jsc,
-      HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable, HoodieWriteConfig config,
-      String compactionInstantTime) throws IOException;
+  JavaRDD<WriteStatus> compact(JavaSparkContext jsc, HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable,
+      HoodieWriteConfig config, String compactionInstantTime) throws IOException;
 }

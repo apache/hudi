@@ -27,12 +27,11 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
- * UnBoundedPartitionAwareCompactionStrategy is a custom UnBounded Strategy.
- * This will filter all the partitions that are eligible to be compacted by a
- * {@link BoundedPartitionAwareCompactionStrategy} and return the result.
- * This is done so that a long running UnBoundedPartitionAwareCompactionStrategy does not step over partitions
- * in a shorter running BoundedPartitionAwareCompactionStrategy. Essentially, this is an inverse of the
- * partitions chosen in BoundedPartitionAwareCompactionStrategy
+ * UnBoundedPartitionAwareCompactionStrategy is a custom UnBounded Strategy. This will filter all the partitions that
+ * are eligible to be compacted by a {@link BoundedPartitionAwareCompactionStrategy} and return the result. This is done
+ * so that a long running UnBoundedPartitionAwareCompactionStrategy does not step over partitions in a shorter running
+ * BoundedPartitionAwareCompactionStrategy. Essentially, this is an inverse of the partitions chosen in
+ * BoundedPartitionAwareCompactionStrategy
  *
  * @see CompactionStrategy
  */
@@ -41,10 +40,10 @@ public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrateg
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig config,
       final List<HoodieCompactionOperation> operations, final List<HoodieCompactionPlan> pendingCompactionWorkloads) {
-    BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy
-        = new BoundedPartitionAwareCompactionStrategy();
-    List<HoodieCompactionOperation> operationsToExclude = boundedPartitionAwareCompactionStrategy
-        .orderAndFilter(config, operations, pendingCompactionWorkloads);
+    BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy =
+        new BoundedPartitionAwareCompactionStrategy();
+    List<HoodieCompactionOperation> operationsToExclude =
+        boundedPartitionAwareCompactionStrategy.orderAndFilter(config, operations, pendingCompactionWorkloads);
     List<HoodieCompactionOperation> allOperations = new ArrayList<>(operations);
     allOperations.removeAll(operationsToExclude);
     return allOperations;
@@ -52,13 +51,13 @@ public class UnBoundedPartitionAwareCompactionStrategy extends CompactionStrateg
 
   @Override
   public List<String> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
-    List<String> allPartitionPaths = partitionPaths.stream().map(partition -> partition.replace("/", "-"))
-        .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
-        .collect(Collectors.toList());
-    BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy
-        = new BoundedPartitionAwareCompactionStrategy();
-    List<String> partitionsToExclude = boundedPartitionAwareCompactionStrategy.filterPartitionPaths(writeConfig,
-        partitionPaths);
+    List<String> allPartitionPaths =
+        partitionPaths.stream().map(partition -> partition.replace("/", "-")).sorted(Comparator.reverseOrder())
+            .map(partitionPath -> partitionPath.replace("-", "/")).collect(Collectors.toList());
+    BoundedPartitionAwareCompactionStrategy boundedPartitionAwareCompactionStrategy =
+        new BoundedPartitionAwareCompactionStrategy();
+    List<String> partitionsToExclude =
+        boundedPartitionAwareCompactionStrategy.filterPartitionPaths(writeConfig, partitionPaths);
     allPartitionPaths.removeAll(partitionsToExclude);
     return allPartitionPaths;
   }

@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 
 /**
  * Interval Tree based index look up for Global Index. Builds an {@link KeyRangeLookupTree} for all index files (across
- * all partitions)  and uses it to search for matching index files for any given recordKey that needs to be looked up.
+ * all partitions) and uses it to search for matching index files for any given recordKey that needs to be looked up.
  */
 class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
 
@@ -41,16 +41,16 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */
   IntervalTreeBasedGlobalIndexFileFilter(final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
-    List<BloomIndexFileInfo> allIndexFiles = partitionToFileIndexInfo.values().stream().flatMap(Collection::stream)
-        .collect(Collectors.toList());
+    List<BloomIndexFileInfo> allIndexFiles =
+        partitionToFileIndexInfo.values().stream().flatMap(Collection::stream).collect(Collectors.toList());
     // Note that the interval tree implementation doesn't have auto-balancing to ensure logN search time.
     // So, we are shuffling the input here hoping the tree will not have any skewness. If not, the tree could be skewed
     // which could result in N search time instead of NlogN.
     Collections.shuffle(allIndexFiles);
     allIndexFiles.forEach(indexFile -> {
       if (indexFile.hasKeyRanges()) {
-        indexLookUpTree.insert(new KeyRangeNode(indexFile.getMinRecordKey(),
-            indexFile.getMaxRecordKey(), indexFile.getFileId()));
+        indexLookUpTree
+            .insert(new KeyRangeNode(indexFile.getMinRecordKey(), indexFile.getMaxRecordKey(), indexFile.getFileId()));
       } else {
         filesWithNoRanges.add(indexFile.getFileId());
       }

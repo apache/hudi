@@ -68,10 +68,8 @@ import scala.Tuple2;
  */
 public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
-  public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME =
-      "spark.executor.instances";
-  public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME =
-      "spark.dynamicAllocation.enabled";
+  public static final String DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME = "spark.executor.instances";
+  public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME = "spark.dynamicAllocation.enabled";
   public static final String DEFAULT_SPARK_DYNAMIC_ALLOCATION_MAX_EXECUTORS_CONFIG_NAME =
       "spark.dynamicAllocation.maxExecutors";
 
@@ -114,9 +112,8 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   public HBaseIndexQPSResourceAllocator createQPSResourceAllocator(HoodieWriteConfig config) {
     try {
       logger.info("createQPSResourceAllocator :" + config.getHBaseQPSResourceAllocatorClass());
-      final HBaseIndexQPSResourceAllocator resourceAllocator =
-          (HBaseIndexQPSResourceAllocator) ReflectionUtils.loadClass(
-              config.getHBaseQPSResourceAllocatorClass(), config);
+      final HBaseIndexQPSResourceAllocator resourceAllocator = (HBaseIndexQPSResourceAllocator) ReflectionUtils
+          .loadClass(config.getHBaseQPSResourceAllocatorClass(), config);
       return resourceAllocator;
     } catch (Exception e) {
       logger.warn("error while instantiating HBaseIndexQPSResourceAllocator", e);
@@ -143,14 +140,14 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     try {
       return ConnectionFactory.createConnection(hbaseConfig);
     } catch (IOException e) {
-      throw new HoodieDependentSystemUnavailableException(
-          HoodieDependentSystemUnavailableException.HBASE, quorum + ":" + port);
+      throw new HoodieDependentSystemUnavailableException(HoodieDependentSystemUnavailableException.HBASE,
+          quorum + ":" + port);
     }
   }
 
   /**
-   * Since we are sharing the HbaseConnection across tasks in a JVM, make sure the HbaseConnectio is
-   * closed when JVM exits
+   * Since we are sharing the HbaseConnection across tasks in a JVM, make sure the HbaseConnectio is closed when JVM
+   * exits
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -172,101 +169,95 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   private Get generateStatement(String key) throws IOException {
-    return new Get(Bytes.toBytes(key)).setMaxVersions(1)
-        .addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
-        .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN)
-        .addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
+    return new Get(Bytes.toBytes(key)).setMaxVersions(1).addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN)
+        .addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN).addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN);
   }
 
   private boolean checkIfValidCommit(HoodieTableMetaClient metaClient, String commitTs) {
     HoodieTimeline commitTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
     // Check if the last commit ts for this row is 1) present in the timeline or
     // 2) is less than the first commit ts in the timeline
-    return !commitTimeline.empty() && (commitTimeline
-        .containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))
-        || HoodieTimeline
-        .compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(), commitTs,
-            HoodieTimeline.GREATER));
+    return !commitTimeline.empty()
+        && (commitTimeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTs))
+            || HoodieTimeline.compareTimestamps(commitTimeline.firstInstant().get().getTimestamp(), commitTs,
+                HoodieTimeline.GREATER));
   }
 
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
-  private Function2<Integer, Iterator<HoodieRecord<T>>,
-      Iterator<HoodieRecord<T>>> locationTagFunction(HoodieTableMetaClient metaClient) {
+  private Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> locationTagFunction(
+      HoodieTableMetaClient metaClient) {
 
-    return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>)
-        (partitionNum, hoodieRecordIterator) -> {
+    return (Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>>) (partitionNum,
+        hoodieRecordIterator) -> {
 
-          Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
+      Integer multiGetBatchSize = config.getHbaseIndexGetBatchSize();
 
-          // Grab the global HBase connection
-          synchronized (HBaseIndex.class) {
-            if (hbaseConnection == null || hbaseConnection.isClosed()) {
-              hbaseConnection = getHBaseConnection();
-            }
-          }
-          List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
-          HTable hTable = null;
-          try {
-            hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
-            List<Get> statements = new ArrayList<>();
-            List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
-            // Do the tagging.
-            while (hoodieRecordIterator.hasNext()) {
-              HoodieRecord rec = hoodieRecordIterator.next();
-              statements.add(generateStatement(rec.getRecordKey()));
-              currentBatchOfRecords.add(rec);
-              // iterator till we reach batch size
-              if (statements.size() >= multiGetBatchSize || !hoodieRecordIterator.hasNext()) {
-                // get results for batch from Hbase
-                Result[] results = doGet(hTable, statements);
-                // clear statements to be GC'd
-                statements.clear();
-                for (Result result : results) {
-                  // first, attempt to grab location from HBase
-                  HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
-                  if (result.getRow() != null) {
-                    String keyFromResult = Bytes.toString(result.getRow());
-                    String commitTs = Bytes
-                        .toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
-                    String fileId = Bytes
-                        .toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
-                    String partitionPath = Bytes
-                        .toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
+      // Grab the global HBase connection
+      synchronized (HBaseIndex.class) {
+        if (hbaseConnection == null || hbaseConnection.isClosed()) {
+          hbaseConnection = getHBaseConnection();
+        }
+      }
+      List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
+      HTable hTable = null;
+      try {
+        hTable = (HTable) hbaseConnection.getTable(TableName.valueOf(tableName));
+        List<Get> statements = new ArrayList<>();
+        List<HoodieRecord> currentBatchOfRecords = new LinkedList<>();
+        // Do the tagging.
+        while (hoodieRecordIterator.hasNext()) {
+          HoodieRecord rec = hoodieRecordIterator.next();
+          statements.add(generateStatement(rec.getRecordKey()));
+          currentBatchOfRecords.add(rec);
+          // iterator till we reach batch size
+          if (statements.size() >= multiGetBatchSize || !hoodieRecordIterator.hasNext()) {
+            // get results for batch from Hbase
+            Result[] results = doGet(hTable, statements);
+            // clear statements to be GC'd
+            statements.clear();
+            for (Result result : results) {
+              // first, attempt to grab location from HBase
+              HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
+              if (result.getRow() != null) {
+                String keyFromResult = Bytes.toString(result.getRow());
+                String commitTs = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
+                String fileId = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
+                String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
 
-                    if (checkIfValidCommit(metaClient, commitTs)) {
-                      currentRecord = new HoodieRecord(
-                          new HoodieKey(currentRecord.getRecordKey(), partitionPath),
-                          currentRecord.getData());
-                      currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
-                      taggedRecords.add(currentRecord);
-                      // the key from Result and the key being processed should be same
-                      assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
-                    } else { //if commit is invalid, treat this as a new taggedRecord
-                      taggedRecords.add(currentRecord);
-                    }
-                  } else {
-                    taggedRecords.add(currentRecord);
-                  }
+                if (checkIfValidCommit(metaClient, commitTs)) {
+                  currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                      currentRecord.getData());
+                  currentRecord.unseal();
+                  currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+                  currentRecord.seal();
+                  taggedRecords.add(currentRecord);
+                  // the key from Result and the key being processed should be same
+                  assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
+                } else { // if commit is invalid, treat this as a new taggedRecord
+                  taggedRecords.add(currentRecord);
                 }
+              } else {
+                taggedRecords.add(currentRecord);
               }
             }
-          } catch (IOException e) {
-            throw new HoodieIndexException(
-                "Failed to Tag indexed locations because of exception with HBase Client", e);
-          } finally {
-            if (hTable != null) {
-              try {
-                hTable.close();
-              } catch (IOException e) {
-                // Ignore
-              }
-            }
-
           }
-          return taggedRecords.iterator();
-        };
+        }
+      } catch (IOException e) {
+        throw new HoodieIndexException("Failed to Tag indexed locations because of exception with HBase Client", e);
+      } finally {
+        if (hTable != null) {
+          try {
+            hTable.close();
+          } catch (IOException e) {
+            // Ignore
+          }
+        }
+
+      }
+      return taggedRecords.iterator();
+    };
   }
 
   private Result[] doGet(HTable hTable, List<Get> keys) throws IOException {
@@ -308,15 +299,12 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
                     continue;
                   }
                   Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN,
-                      Bytes.toBytes(loc.get().getInstantTime()));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN,
-                      Bytes.toBytes(loc.get().getFileId()));
-                  put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN,
-                      Bytes.toBytes(rec.getPartitionPath()));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN, Bytes.toBytes(loc.get().getInstantTime()));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
+                  put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
                   puts.add(put);
                 } else {
-                  //Delete existing index for a deleted record
+                  // Delete existing index for a deleted record
                   Delete delete = new Delete(Bytes.toBytes(rec.getRecordKey()));
                   deletes.add(delete);
                 }
@@ -326,7 +314,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
               }
               doPutsAndDeletes(hTable, puts, deletes);
             }
-            //process remaining puts and deletes, if any
+            // process remaining puts and deletes, if any
             doPutsAndDeletes(hTable, puts, deletes);
           } catch (Exception e) {
             Exception we = new Exception("Error updating index for " + writeStatus, e);
@@ -336,8 +324,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
           writeStatusList.add(writeStatus);
         }
       } catch (IOException e) {
-        throw new HoodieIndexException(
-            "Failed to Update Index locations because of exception with HBase Client", e);
+        throw new HoodieIndexException("Failed to Update Index locations because of exception with HBase Client", e);
       } finally {
         if (hTable != null) {
           try {
@@ -354,8 +341,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   /**
    * Helper method to facilitate performing puts and deletes in Hbase
    */
-  private void doPutsAndDeletes(HTable hTable, List<Put> puts, List<Delete> deletes)
-      throws IOException {
+  private void doPutsAndDeletes(HTable hTable, List<Put> puts, List<Delete> deletes) throws IOException {
     if (puts.size() > 0) {
       hTable.put(puts);
     }
@@ -383,58 +369,49 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     final HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
     setPutBatchSize(writeStatusRDD, hBaseIndexQPSResourceAllocator, jsc);
     logger.info("multiPutBatchSize: before hbase puts" + multiPutBatchSize);
-    JavaRDD<WriteStatus> writeStatusJavaRDD = writeStatusRDD.mapPartitionsWithIndex(
-        updateLocationFunction(), true);
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeStatusRDD.mapPartitionsWithIndex(updateLocationFunction(), true);
     // caching the index updated status RDD
     writeStatusJavaRDD = writeStatusJavaRDD.persist(config.getWriteStatusStorageLevel());
     return writeStatusJavaRDD;
   }
 
   private void setPutBatchSize(JavaRDD<WriteStatus> writeStatusRDD,
-                               HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator,
-                               final JavaSparkContext jsc) {
+      HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator, final JavaSparkContext jsc) {
     if (config.getHbaseIndexPutBatchSizeAutoCompute()) {
       SparkConf conf = jsc.getConf();
       int maxExecutors = conf.getInt(DEFAULT_SPARK_EXECUTOR_INSTANCES_CONFIG_NAME, 1);
       if (conf.getBoolean(DEFAULT_SPARK_DYNAMIC_ALLOCATION_ENABLED_CONFIG_NAME, false)) {
-        maxExecutors = Math.max(maxExecutors, conf.getInt(
-            DEFAULT_SPARK_DYNAMIC_ALLOCATION_MAX_EXECUTORS_CONFIG_NAME, 1));
+        maxExecutors =
+            Math.max(maxExecutors, conf.getInt(DEFAULT_SPARK_DYNAMIC_ALLOCATION_MAX_EXECUTORS_CONFIG_NAME, 1));
       }
 
       /*
-        Each writeStatus represents status information from a write done in one of the IOHandles.
-        If a writeStatus has any insert, it implies that the corresponding task contacts HBase for
-        doing puts, since we only do puts for inserts from HBaseIndex.
+       * Each writeStatus represents status information from a write done in one of the IOHandles. If a writeStatus has
+       * any insert, it implies that the corresponding task contacts HBase for doing puts, since we only do puts for
+       * inserts from HBaseIndex.
        */
-      final Tuple2<Long, Integer> numPutsParallelismTuple  = getHBasePutAccessParallelism(writeStatusRDD);
+      final Tuple2<Long, Integer> numPutsParallelismTuple = getHBasePutAccessParallelism(writeStatusRDD);
       final long numPuts = numPutsParallelismTuple._1;
       final int hbasePutsParallelism = numPutsParallelismTuple._2;
       this.numRegionServersForTable = getNumRegionServersAliveForTable();
-      final float desiredQPSFraction = hBaseIndexQPSResourceAllocator
-                                           .calculateQPSFractionForPutsTime(numPuts, this.numRegionServersForTable);
+      final float desiredQPSFraction =
+          hBaseIndexQPSResourceAllocator.calculateQPSFractionForPutsTime(numPuts, this.numRegionServersForTable);
       logger.info("Desired QPSFraction :" + desiredQPSFraction);
       logger.info("Number HBase puts :" + numPuts);
       logger.info("Hbase Puts Parallelism :" + hbasePutsParallelism);
-      final float availableQpsFraction = hBaseIndexQPSResourceAllocator
-                                             .acquireQPSResources(desiredQPSFraction, numPuts);
+      final float availableQpsFraction =
+          hBaseIndexQPSResourceAllocator.acquireQPSResources(desiredQPSFraction, numPuts);
       logger.info("Allocated QPS Fraction :" + availableQpsFraction);
-      multiPutBatchSize = putBatchSizeCalculator
-          .getBatchSize(
-              numRegionServersForTable,
-              maxQpsPerRegionServer,
-              hbasePutsParallelism,
-              maxExecutors,
-              SLEEP_TIME_MILLISECONDS,
-              availableQpsFraction);
+      multiPutBatchSize = putBatchSizeCalculator.getBatchSize(numRegionServersForTable, maxQpsPerRegionServer,
+          hbasePutsParallelism, maxExecutors, SLEEP_TIME_MILLISECONDS, availableQpsFraction);
       logger.info("multiPutBatchSize :" + multiPutBatchSize);
     }
   }
 
   @VisibleForTesting
   public Tuple2<Long, Integer> getHBasePutAccessParallelism(final JavaRDD<WriteStatus> writeStatusRDD) {
-    final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD =
-        writeStatusRDD.filter(w -> w.getStat().getNumInserts() > 0)
-            .mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
+    final JavaPairRDD<Long, Integer> insertOnlyWriteStatusRDD = writeStatusRDD
+        .filter(w -> w.getStat().getNumInserts() > 0).mapToPair(w -> new Tuple2<>(w.getStat().getNumInserts(), 1));
     return insertOnlyWriteStatusRDD.fold(new Tuple2<>(0L, 0), (w, c) -> new Tuple2<>(w._1 + c._1, w._2 + c._2));
   }
 
@@ -458,21 +435,25 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
      * 16000. We assume requests get distributed to Region Servers uniformly, so each RS gets 1600 requests which
      * happens to be 10% of 16667 (maxQPSPerRegionServer), as expected.
      * </p>
-     * <p> Assumptions made here <li> In a batch, writes get evenly distributed to each RS for that
-     * table. Since we do writes only in the case of inserts and not updates, for this assumption to fail, inserts would
-     * have to be skewed towards few RS, likelihood of which is less if Hbase table is pre-split and rowKeys are UUIDs
-     * (random strings). If this assumption fails, then it is possible for some RS to receive more than
-     * maxQpsPerRegionServer QPS, but for simplicity, we are going ahead with this model, since this is meant to be a
-     * lightweight distributed throttling mechanism without maintaining a global context. So if this assumption breaks,
-     * we are hoping the HBase Master relocates hot-spot regions to new Region Servers.
+     * <p>
+     * Assumptions made here
+     * <li>In a batch, writes get evenly distributed to each RS for that table. Since we do writes only in the case of
+     * inserts and not updates, for this assumption to fail, inserts would have to be skewed towards few RS, likelihood
+     * of which is less if Hbase table is pre-split and rowKeys are UUIDs (random strings). If this assumption fails,
+     * then it is possible for some RS to receive more than maxQpsPerRegionServer QPS, but for simplicity, we are going
+     * ahead with this model, since this is meant to be a lightweight distributed throttling mechanism without
+     * maintaining a global context. So if this assumption breaks, we are hoping the HBase Master relocates hot-spot
+     * regions to new Region Servers.
      *
-     * </li> <li> For Region Server stability, throttling at a second level granularity is fine.
-     * Although, within a second, the sum of queries might be within maxQpsPerRegionServer, there could be peaks at some
-     * sub second intervals. So, the assumption is that these peaks are tolerated by the Region Server (which at max can
-     * be maxQpsPerRegionServer). </li> </p>
+     * </li>
+     * <li>For Region Server stability, throttling at a second level granularity is fine. Although, within a second, the
+     * sum of queries might be within maxQpsPerRegionServer, there could be peaks at some sub second intervals. So, the
+     * assumption is that these peaks are tolerated by the Region Server (which at max can be maxQpsPerRegionServer).
+     * </li>
+     * </p>
      */
-    public int getBatchSize(int numRegionServersForTable, int maxQpsPerRegionServer,
-        int numTasksDuringPut, int maxExecutors, int sleepTimeMs, float qpsFraction) {
+    public int getBatchSize(int numRegionServersForTable, int maxQpsPerRegionServer, int numTasksDuringPut,
+        int maxExecutors, int sleepTimeMs, float qpsFraction) {
       int numRSAlive = numRegionServersForTable;
       int maxReqPerSec = (int) (qpsFraction * numRSAlive * maxQpsPerRegionServer);
       int numTasks = numTasksDuringPut;
@@ -497,11 +478,9 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
     // from the driver, so ok to use a local connection variable.
     if (numRegionServersForTable == null) {
       try (Connection conn = getHBaseConnection()) {
-        RegionLocator regionLocator = conn
-            .getRegionLocator(TableName.valueOf(tableName));
-        numRegionServersForTable = Math.toIntExact(
-            regionLocator.getAllRegionLocations().stream().map(e -> e.getServerName()).distinct()
-                .count());
+        RegionLocator regionLocator = conn.getRegionLocator(TableName.valueOf(tableName));
+        numRegionServersForTable = Math
+            .toIntExact(regionLocator.getAllRegionLocations().stream().map(e -> e.getServerName()).distinct().count());
         return numRegionServersForTable;
       } catch (IOException e) {
         logger.error(e);

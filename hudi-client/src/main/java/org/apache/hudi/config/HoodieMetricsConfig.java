@@ -35,8 +35,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String METRICS_ON = METRIC_PREFIX + ".on";
   public static final boolean DEFAULT_METRICS_ON = false;
   public static final String METRICS_REPORTER_TYPE = METRIC_PREFIX + ".reporter.type";
-  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = MetricsReporterType
-      .GRAPHITE;
+  public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = MetricsReporterType.GRAPHITE;
 
   // Graphite
   public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
@@ -103,8 +102,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
     public HoodieMetricsConfig build() {
       HoodieMetricsConfig config = new HoodieMetricsConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(METRICS_ON), METRICS_ON,
-          String.valueOf(DEFAULT_METRICS_ON));
+      setDefaultOnCondition(props, !props.containsKey(METRICS_ON), METRICS_ON, String.valueOf(DEFAULT_METRICS_ON));
       setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_TYPE), METRICS_REPORTER_TYPE,
           DEFAULT_METRICS_REPORTER_TYPE.name());
       setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_HOST), GRAPHITE_SERVER_HOST,

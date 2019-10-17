@@ -27,8 +27,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.MercifulJsonConverter;
 
 /**
- * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy
- * fields to circumvent issues around serializing these objects from driver to executors
+ * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
+ * serializing these objects from driver to executors
  */
 public class AvroConvertor implements Serializable {
 
@@ -75,7 +75,7 @@ public class AvroConvertor implements Serializable {
 
   private void initJsonConvertor() {
     if (jsonConverter == null) {
-      jsonConverter = new MercifulJsonConverter(schema);
+      jsonConverter = new MercifulJsonConverter();
     }
   }
 
@@ -83,7 +83,7 @@ public class AvroConvertor implements Serializable {
   public GenericRecord fromJson(String json) throws IOException {
     initSchema();
     initJsonConvertor();
-    return jsonConverter.convert(json);
+    return jsonConverter.convert(json, schema);
   }
 
   public Schema getSchema() {

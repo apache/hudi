@@ -22,14 +22,20 @@ import java.io.Serializable;
 
 /**
  * (NOTE: Adapted from Apache commons-lang3)
- * <p>A triple consisting of three elements.</p>
+ * <p>
+ * A triple consisting of three elements.
+ * </p>
  *
- * <p>This class is an abstract implementation defining the basic API.
- * It refers to the elements as 'left', 'middle' and 'right'.</p>
+ * <p>
+ * This class is an abstract implementation defining the basic API. It refers to the elements as 'left', 'middle' and
+ * 'right'.
+ * </p>
  *
- * <p>Subclass implementations may be mutable or immutable.
- * However, there is no restriction on the type of the stored objects that may be stored.
- * If mutable objects are stored in the triple, then the triple itself effectively becomes mutable.</p>
+ * <p>
+ * Subclass implementations may be mutable or immutable. However, there is no restriction on the type of the stored
+ * objects that may be stored. If mutable objects are stored in the triple, then the triple itself effectively becomes
+ * mutable.
+ * </p>
  *
  * @param <L> the left element type
  * @param <M> the middle element type
@@ -43,10 +49,13 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
   private static final long serialVersionUID = 1L;
 
   /**
-   * <p>Obtains an immutable triple of from three objects inferring the generic types.</p>
+   * <p>
+   * Obtains an immutable triple of from three objects inferring the generic types.
+   * </p>
    *
-   * <p>This factory allows the triple to be created using inference to
-   * obtain the generic types.</p>
+   * <p>
+   * This factory allows the triple to be created using inference to obtain the generic types.
+   * </p>
    *
    * @param <L> the left element type
    * @param <M> the middle element type
@@ -60,35 +69,42 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
     return new ImmutableTriple<L, M, R>(left, middle, right);
   }
 
-  //-----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   /**
-   * <p>Gets the left element from this triple.</p>
+   * <p>
+   * Gets the left element from this triple.
+   * </p>
    *
    * @return the left element, may be null
    */
   public abstract L getLeft();
 
   /**
-   * <p>Gets the middle element from this triple.</p>
+   * <p>
+   * Gets the middle element from this triple.
+   * </p>
    *
    * @return the middle element, may be null
    */
   public abstract M getMiddle();
 
   /**
-   * <p>Gets the right element from this triple.</p>
+   * <p>
+   * Gets the right element from this triple.
+   * </p>
    *
    * @return the right element, may be null
    */
   public abstract R getRight();
 
-  //-----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   /**
-   * <p>Compares the triple based on the left element, followed by the middle element,
-   * finally the right element.
-   * The types must be {@code Comparable}.</p>
+   * <p>
+   * Compares the triple based on the left element, followed by the middle element, finally the right element. The types
+   * must be {@code Comparable}.
+   * </p>
    *
    * @param other the other triple, not null
    * @return negative if this is less, zero if equal, positive if greater
@@ -109,7 +125,9 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
   }
 
   /**
-   * <p>Compares this triple to another based on the three elements.</p>
+   * <p>
+   * Compares this triple to another based on the three elements.
+   * </p>
    *
    * @param obj the object to compare to, null returns false
    * @return true if the elements of the triple are equal
@@ -122,27 +140,29 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
     }
     if (obj instanceof Triple<?, ?, ?>) {
       final Triple<?, ?, ?> other = (Triple<?, ?, ?>) obj;
-      return getLeft().equals(other.getLeft())
-          && getMiddle().equals(other.getMiddle())
+      return getLeft().equals(other.getLeft()) && getMiddle().equals(other.getMiddle())
           && getRight().equals(other.getRight());
     }
     return false;
   }
 
   /**
-   * <p>Returns a suitable hash code.</p>
+   * <p>
+   * Returns a suitable hash code.
+   * </p>
    *
    * @return the hash code
    */
   @Override
   public int hashCode() {
-    return (getLeft() == null ? 0 : getLeft().hashCode())
-        ^ (getMiddle() == null ? 0 : getMiddle().hashCode())
+    return (getLeft() == null ? 0 : getLeft().hashCode()) ^ (getMiddle() == null ? 0 : getMiddle().hashCode())
         ^ (getRight() == null ? 0 : getRight().hashCode());
   }
 
   /**
-   * <p>Returns a String representation of this triple using the format {@code ($left,$middle,$right)}.</p>
+   * <p>
+   * Returns a String representation of this triple using the format {@code ($left,$middle,$right)}.
+   * </p>
    *
    * @return a string describing this object, not null
    */
@@ -153,12 +173,15 @@ public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Se
   }
 
   /**
-   * <p>Formats the receiver using the given format.</p>
+   * <p>
+   * Formats the receiver using the given format.
+   * </p>
    *
-   * <p>This uses {@link java.util.Formattable} to perform the formatting. Three variables may
-   * be used to embed the left and right elements. Use {@code %1$s} for the left
-   * element, {@code %2$s} for the middle and {@code %3$s} for the right element.
-   * The default format used by {@code toString()} is {@code (%1$s,%2$s,%3$s)}.</p>
+   * <p>
+   * This uses {@link java.util.Formattable} to perform the formatting. Three variables may be used to embed the left
+   * and right elements. Use {@code %1$s} for the left element, {@code %2$s} for the middle and {@code %3$s} for the
+   * right element. The default format used by {@code toString()} is {@code (%1$s,%2$s,%3$s)}.
+   * </p>
    *
    * @param format the format string, optionally containing {@code %1$s}, {@code %2$s} and {@code %3$s}, not null
    * @return the formatted string, not null

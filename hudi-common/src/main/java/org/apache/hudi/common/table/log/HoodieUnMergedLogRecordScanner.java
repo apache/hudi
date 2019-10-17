@@ -29,9 +29,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
   private final LogRecordScannerCallback callback;
 
-  public HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath,
-      List<String> logFilePaths, Schema readerSchema, String latestInstantTime,
-      boolean readBlocksLazily, boolean reverseReader, int bufferSize,
+  public HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
       LogRecordScannerCallback callback) {
     super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize);
     this.callback = callback;

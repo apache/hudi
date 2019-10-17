@@ -25,8 +25,8 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
- * CompactionStrategy which looks at total IO to be done for the compaction (read + write) and
- * limits the list of compactions to be under a configured limit on the IO
+ * CompactionStrategy which looks at total IO to be done for the compaction (read + write) and limits the list of
+ * compactions to be under a configured limit on the IO
  *
  * @see CompactionStrategy
  */

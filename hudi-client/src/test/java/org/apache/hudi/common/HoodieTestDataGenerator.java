@@ -69,22 +69,16 @@ public class HoodieTestDataGenerator {
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
   public static final String DEFAULT_THIRD_PARTITION_PATH = "2015/03/17";
 
-  public static final String[] DEFAULT_PARTITION_PATHS = {
-      DEFAULT_FIRST_PARTITION_PATH,
-      DEFAULT_SECOND_PARTITION_PATH,
-      DEFAULT_THIRD_PARTITION_PATH
-  };
+  public static final String[] DEFAULT_PARTITION_PATHS =
+      {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
   public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
-      + "{\"name\": \"timestamp\",\"type\": \"double\"},"
-      + "{\"name\": \"_row_key\", \"type\": \"string\"},"
-      + "{\"name\": \"rider\", \"type\": \"string\"},"
-      + "{\"name\": \"driver\", \"type\": \"string\"},"
-      + "{\"name\": \"begin_lat\", \"type\": \"double\"},"
-      + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
-      + "{\"name\": \"end_lat\", \"type\": \"double\"},"
-      + "{\"name\": \"end_lon\", \"type\": \"double\"},"
+      + "{\"name\": \"timestamp\",\"type\": \"double\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
+      + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},"
       + "{\"name\":\"fare\",\"type\": \"double\"}]}";
+  public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,double";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
   public static Schema avroSchemaWithMetadataFields = HoodieAvroUtils.addMetadataFields(avroSchema);
 
@@ -174,8 +168,8 @@ public class HoodieTestDataGenerator {
 
   public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
       Configuration configuration) throws IOException {
-    Path commitFile = new Path(
-        basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
+    Path commitFile =
+        new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCompactionPlan workload = new HoodieCompactionPlan();
@@ -189,8 +183,8 @@ public class HoodieTestDataGenerator {
 
   public static void createSavepointFile(String basePath, String commitTime, Configuration configuration)
       throws IOException {
-    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
-        + "/" + HoodieTimeline.makeSavePointFileName(commitTime));
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + HoodieTimeline.makeSavePointFileName(commitTime));
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     FSDataOutputStream os = fs.create(commitFile, true);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -212,7 +206,7 @@ public class HoodieTestDataGenerator {
   /**
    * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n)  {
+  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n) {
     int currSize = getNumExistingKeys();
 
     return IntStream.range(0, n).boxed().map(i -> {
@@ -233,16 +227,15 @@ public class HoodieTestDataGenerator {
 
   public List<HoodieRecord> generateSameKeyInserts(String commitTime, List<HoodieRecord> origin) throws IOException {
     List<HoodieRecord> copy = new ArrayList<>();
-    for (HoodieRecord r: origin) {
+    for (HoodieRecord r : origin) {
       HoodieKey key = r.getKey();
-      HoodieRecord record = new HoodieRecord(key,  generateRandomValue(key, commitTime));
+      HoodieRecord record = new HoodieRecord(key, generateRandomValue(key, commitTime));
       copy.add(record);
     }
     return copy;
   }
 
-  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String commitTime, int limit) throws
-      IOException {
+  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String commitTime, int limit) throws IOException {
     List<HoodieRecord> inserts = new ArrayList<>();
     int currSize = getNumExistingKeys();
     for (int i = 0; i < limit; i++) {
@@ -290,8 +283,8 @@ public class HoodieTestDataGenerator {
   }
 
   public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
-    TestRawTripPayload payload = new TestRawTripPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(),
-        null, true);
+    TestRawTripPayload payload =
+        new TestRawTripPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true);
     return new HoodieRecord(key, payload);
   }
 

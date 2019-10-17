@@ -38,6 +38,5 @@ public interface Transformer {
    * @param properties Config properties
    * @return Transformed Dataset
    */
-  Dataset apply(JavaSparkContext jsc, SparkSession sparkSession,
-      Dataset<Row> rowDataset, TypedProperties properties);
+  Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
 }

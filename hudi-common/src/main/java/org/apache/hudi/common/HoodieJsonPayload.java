@@ -50,15 +50,14 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema)
-      throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    MercifulJsonConverter jsonConverter = new MercifulJsonConverter(schema);
-    return Option.of(jsonConverter.convert(getJsonData()));
+    MercifulJsonConverter jsonConverter = new MercifulJsonConverter();
+    return Option.of(jsonConverter.convert(getJsonData(), schema));
   }
 
   private String getJsonData() throws IOException {
@@ -68,8 +67,7 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
   private byte[] compressData(String jsonData) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
-    DeflaterOutputStream dos =
-        new DeflaterOutputStream(baos, deflater, true);
+    DeflaterOutputStream dos = new DeflaterOutputStream(baos, deflater, true);
     try {
       dos.write(jsonData.getBytes());
     } finally {

@@ -37,17 +37,17 @@ public class SpillableMapTestUtils {
   public static List<String> upsertRecords(List<IndexedRecord> iRecords,
       Map<String, HoodieRecord<? extends HoodieRecordPayload>> records) {
     List<String> recordKeys = new ArrayList<>();
-    iRecords
-        .stream()
-        .forEach(r -> {
-          String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-          String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
-          recordKeys.add(key);
-          HoodieRecord record = new HoodieRecord<>(new HoodieKey(key, partitionPath),
-              new HoodieAvroPayload(Option.of((GenericRecord) r)));
-          record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));
-          records.put(key, record);
-        });
+    iRecords.stream().forEach(r -> {
+      String key = ((GenericRecord) r).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      String partitionPath = ((GenericRecord) r).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+      recordKeys.add(key);
+      HoodieRecord record =
+          new HoodieRecord<>(new HoodieKey(key, partitionPath), new HoodieAvroPayload(Option.of((GenericRecord) r)));
+      record.unseal();
+      record.setCurrentLocation(new HoodieRecordLocation("DUMMY_COMMIT_TIME", "DUMMY_FILE_ID"));
+      record.seal();
+      records.put(key, record);
+    });
     return recordKeys;
   }
 }

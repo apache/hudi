@@ -34,7 +34,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String INDEX_TYPE_PROP = "hoodie.index.type";
   public static final String DEFAULT_INDEX_TYPE = HoodieIndex.IndexType.BLOOM.name();
 
-  // *****  Bloom Index configs *****
+  // ***** Bloom Index configs *****
   public static final String BLOOM_FILTER_NUM_ENTRIES = "hoodie.index.bloom.num_entries";
   public static final String DEFAULT_BLOOM_FILTER_NUM_ENTRIES = "60000";
   public static final String BLOOM_FILTER_FPP = "hoodie.index.bloom.fpp";
@@ -42,8 +42,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_PARALLELISM_PROP = "hoodie.bloom.index.parallelism";
   // Disable explicit bloom index parallelism setting by default - hoodie auto computes
   public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = "0";
-  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP =
-      "hoodie.bloom.index.prune.by" + ".ranges";
+  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = "hoodie.bloom.index.prune.by" + ".ranges";
   public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = "true";
   public static final String BLOOM_INDEX_USE_CACHING_PROP = "hoodie.bloom.index.use.caching";
   public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
@@ -67,8 +66,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
 
 
-  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL =
-      "hoodie.bloom.index.input.storage" + ".level";
+  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage" + ".level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
   private HoodieIndexConfig(Properties props) {
@@ -175,20 +173,18 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP,
-          DEFAULT_INDEX_TYPE);
-      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES),
-          BLOOM_FILTER_NUM_ENTRIES, DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
-      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP), BLOOM_FILTER_FPP,
-          DEFAULT_BLOOM_FILTER_FPP);
-      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PARALLELISM_PROP),
-          BLOOM_INDEX_PARALLELISM_PROP, DEFAULT_BLOOM_INDEX_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES), BLOOM_FILTER_NUM_ENTRIES,
+          DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_FPP), BLOOM_FILTER_FPP, DEFAULT_BLOOM_FILTER_FPP);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PARALLELISM_PROP), BLOOM_INDEX_PARALLELISM_PROP,
+          DEFAULT_BLOOM_INDEX_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_PRUNE_BY_RANGES_PROP),
           BLOOM_INDEX_PRUNE_BY_RANGES_PROP, DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES);
-      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_USE_CACHING_PROP),
-          BLOOM_INDEX_USE_CACHING_PROP, DEFAULT_BLOOM_INDEX_USE_CACHING);
-      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_INPUT_STORAGE_LEVEL),
-          BLOOM_INDEX_INPUT_STORAGE_LEVEL, DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_USE_CACHING_PROP), BLOOM_INDEX_USE_CACHING_PROP,
+          DEFAULT_BLOOM_INDEX_USE_CACHING);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_INPUT_STORAGE_LEVEL), BLOOM_INDEX_INPUT_STORAGE_LEVEL,
+          DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_TREE_BASED_FILTER_PROP),
           BLOOM_INDEX_TREE_BASED_FILTER_PROP, DEFAULT_BLOOM_INDEX_TREE_BASED_FILTER);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_BUCKETIZED_CHECKING_PROP),

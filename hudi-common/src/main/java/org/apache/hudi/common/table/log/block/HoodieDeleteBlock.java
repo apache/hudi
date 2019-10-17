@@ -40,16 +40,15 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
 
   private HoodieKey[] keysToDelete;
 
-  public HoodieDeleteBlock(HoodieKey[] keysToDelete,
-      Map<HeaderMetadataType, String> header) {
+  public HoodieDeleteBlock(HoodieKey[] keysToDelete, Map<HeaderMetadataType, String> header) {
     this(Option.empty(), null, false, Option.empty(), header, new HashMap<>());
     this.keysToDelete = keysToDelete;
   }
 
 
-  private HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream,
-      boolean readBlockLazily, Option<HoodieLogBlockContentLocation> blockContentLocation,
-      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+  private HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
+      Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+      Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, content, inputStream, readBlockLazily);
   }
 
@@ -81,8 +80,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
           inflate();
         }
         SizeAwareDataInputStream dis =
-            new SizeAwareDataInputStream(
-                new DataInputStream(new ByteArrayInputStream(getContent().get())));
+            new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(getContent().get())));
         int version = dis.readInt();
         int dataLength = dis.readInt();
         byte[] data = new byte[dataLength];
@@ -101,18 +99,11 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     return HoodieLogBlockType.DELETE_BLOCK;
   }
 
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile,
-      FSDataInputStream inputStream,
-      Option<byte[]> content,
-      boolean readBlockLazily,
-      long position,
-      long blockSize,
-      long blockEndPos,
-      Map<HeaderMetadataType, String> header,
+  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
+      boolean readBlockLazily, long position, long blockSize, long blockEndPos, Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer) throws IOException {
 
     return new HoodieDeleteBlock(content, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
-        header, footer);
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
   }
 }

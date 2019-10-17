@@ -33,11 +33,15 @@ public class SerializableConfiguration implements Serializable {
   }
 
   public SerializableConfiguration(SerializableConfiguration configuration) {
-    this.configuration = configuration.get();
+    this.configuration = configuration.newCopy();
+  }
+
+  public Configuration newCopy() {
+    return new Configuration(configuration);
   }
 
   public Configuration get() {
-    return new Configuration(configuration);
+    return configuration;
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {
@@ -53,8 +57,7 @@ public class SerializableConfiguration implements Serializable {
   @Override
   public String toString() {
     StringBuilder str = new StringBuilder();
-    configuration.iterator().forEachRemaining(e ->
-        str.append(String.format("%s => %s \n", e.getKey(), e.getValue())));
+    configuration.iterator().forEachRemaining(e -> str.append(String.format("%s => %s \n", e.getKey(), e.getValue())));
     return configuration.toString();
   }
 }

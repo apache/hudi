@@ -34,8 +34,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
  */
 public class FileSliceHandler extends Handler {
 
-  public FileSliceHandler(Configuration conf,
-      FileSystemViewManager viewManager) throws IOException {
+  public FileSliceHandler(Configuration conf, FileSystemViewManager viewManager) throws IOException {
     super(conf, viewManager);
   }
 
@@ -49,16 +48,17 @@ public class FileSliceHandler extends Handler {
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
-  public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOn(String basePath,
-      String partitionPath, String maxInstantTime) {
+  public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOn(String basePath, String partitionPath,
+      String maxInstantTime) {
     return viewManager.getFileSystemView(basePath).getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
-  public List<FileSliceDTO> getLatestFileSlicesBeforeOrOn(String basePath, String partitionPath,
-      String maxInstantTime, boolean includeFileSlicesInPendingCompaction) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime,
-        includeFileSlicesInPendingCompaction).map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
+  public List<FileSliceDTO> getLatestFileSlicesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime,
+      boolean includeFileSlicesInPendingCompaction) {
+    return viewManager.getFileSystemView(basePath)
+        .getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime, includeFileSlicesInPendingCompaction)
+        .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestUnCompactedFileSlices(String basePath, String partitionPath) {
@@ -67,8 +67,8 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileSliceDTO> getLatestFileSlices(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlices(partitionPath)
-        .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
+    return viewManager.getFileSystemView(basePath).getLatestFileSlices(partitionPath).map(FileSliceDTO::fromFileSlice)
+        .collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
@@ -83,8 +83,8 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
-        .map(FileGroupDTO::fromFileGroup).collect(Collectors.toList());
+    return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+        .collect(Collectors.toList());
   }
 
   public boolean refreshDataset(String basePath) {

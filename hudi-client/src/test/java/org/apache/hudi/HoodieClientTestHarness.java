@@ -17,7 +17,6 @@
 
 package org.apache.hudi;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.ExecutorService;
@@ -29,34 +28,32 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.common.HoodieClientTestUtils;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.minicluster.HdfsTestService;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
-import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * The test harness for resource initialization and cleanup.
  */
-public abstract class HoodieClientTestHarness implements Serializable {
+public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
   private static final Logger logger = LoggerFactory.getLogger(HoodieClientTestHarness.class);
 
   protected transient JavaSparkContext jsc = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
-  protected String basePath = null;
-  protected TemporaryFolder folder = null;
   protected transient HoodieTestDataGenerator dataGen = null;
   protected transient ExecutorService executorService;
+  protected transient HoodieTableMetaClient metaClient;
 
-  //dfs
+  // dfs
   protected String dfsBasePath;
   protected transient HdfsTestService hdfsTestService;
   protected transient MiniDFSCluster dfsCluster;
@@ -68,28 +65,27 @@ public abstract class HoodieClientTestHarness implements Serializable {
    * @throws IOException
    */
   public void initResources() throws IOException {
-    initTempFolderAndPath();
+    initPath();
     initSparkContexts();
     initTestDataGenerator();
     initFileSystem();
-    initTableType();
+    initMetaClient();
   }
 
   /**
    * Cleanups resource group for the subclasses of {@link TestHoodieClientBase}.
+   * 
    * @throws IOException
    */
   public void cleanupResources() throws IOException {
-    cleanupTableType();
+    cleanupMetaClient();
     cleanupSparkContexts();
     cleanupTestDataGenerator();
     cleanupFileSystem();
-    cleanupTempFolderAndPath();
   }
 
   /**
-   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext})
-   * with the given application name.
+   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) with the given application name.
    *
    * @param appName The specified application name.
    */
@@ -98,13 +94,13 @@ public abstract class HoodieClientTestHarness implements Serializable {
     jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(appName));
     jsc.setLogLevel("ERROR");
 
-    //SQLContext stuff
+    // SQLContext stuff
     sqlContext = new SQLContext(jsc);
   }
 
   /**
-   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext})
-   * with a default name <b>TestHoodieClient</b>.
+   * Initializes the Spark contexts ({@link JavaSparkContext} and {@link SQLContext}) with a default name
+   * <b>TestHoodieClient</b>.
    */
   protected void initSparkContexts() {
     initSparkContexts("TestHoodieClient");
@@ -125,33 +121,6 @@ public abstract class HoodieClientTestHarness implements Serializable {
       jsc.close();
       jsc.stop();
       jsc = null;
-    }
-  }
-
-  /**
-   * Initializes a temporary folder and base path.
-   *
-   * @throws IOException
-   */
-  protected void initTempFolderAndPath() throws IOException {
-    folder = new TemporaryFolder();
-    folder.create();
-    basePath = folder.getRoot().getAbsolutePath();
-  }
-
-  /**
-   * Cleanups the temporary folder and base path.
-   *
-   * @throws IOException
-   */
-  protected void cleanupTempFolderAndPath() throws IOException {
-    if (basePath != null) {
-      new File(basePath).delete();
-    }
-
-    if (folder != null) {
-      logger.info("Explicitly removing workspace used in previously run test-case");
-      folder.delete();
     }
   }
 
@@ -186,12 +155,12 @@ public abstract class HoodieClientTestHarness implements Serializable {
   }
 
   /**
-   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type
-   * specified by {@code getTableType()}.
+   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
+   * {@code getTableType()}.
    *
    * @throws IOException
    */
-  protected void initTableType() throws IOException {
+  protected void initMetaClient() throws IOException {
     if (basePath == null) {
       throw new IllegalStateException("The base path has not been initialized.");
     }
@@ -200,14 +169,14 @@ public abstract class HoodieClientTestHarness implements Serializable {
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
 
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
+    metaClient = HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath, getTableType());
   }
 
   /**
    * Cleanups table type.
    */
-  protected void cleanupTableType() {
-
+  protected void cleanupMetaClient() {
+    metaClient = null;
   }
 
   /**
@@ -226,16 +195,6 @@ public abstract class HoodieClientTestHarness implements Serializable {
    */
   protected void cleanupTestDataGenerator() throws IOException {
     dataGen = null;
-  }
-
-  /**
-   * Gets a default {@link HoodieTableType#COPY_ON_WRITE} table type.
-   * Sub-classes can override this method to specify a new table type.
-   *
-   * @return an instance of Hoodie table type.
-   */
-  protected HoodieTableType getTableType() {
-    return HoodieTableType.COPY_ON_WRITE;
   }
 
   /**

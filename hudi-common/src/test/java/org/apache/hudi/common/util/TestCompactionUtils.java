@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.model.HoodieTestUtils.getDefaultHadoopConf;
 import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
 import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
 import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
@@ -35,75 +34,62 @@ import java.util.stream.IntStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieDataFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
-public class TestCompactionUtils {
+public class TestCompactionUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   private static final Map<String, Double> metrics =
-      new ImmutableMap.Builder<String, Double>()
-          .put("key1", 1.0)
-          .put("key2", 3.0).build();
-  @Rule
-  public TemporaryFolder tmpFolder = new TemporaryFolder();
-  private HoodieTableMetaClient metaClient;
-  private String basePath;
+      new ImmutableMap.Builder<String, Double>().put("key1", 1.0).put("key2", 3.0).build();
   private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> metrics;
 
   @Before
   public void init() throws IOException {
-    metaClient = HoodieTestUtils.init(getDefaultHadoopConf(),
-        tmpFolder.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    basePath = metaClient.getBasePath();
+    initMetaClient();
   }
 
   @Test
   public void testBuildFromFileSlice() {
     // Empty File-Slice with no data and log files
-    FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "empty1");
-    HoodieCompactionOperation op = CompactionUtils.buildFromFileSlice(
-        DEFAULT_PARTITION_PATHS[0], emptyFileSlice, Option.of(metricsCaptureFn));
+    FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "empty1");
+    HoodieCompactionOperation op =
+        CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], emptyFileSlice, Option.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(emptyFileSlice, op, DEFAULT_PARTITION_PATHS[0]);
 
     // File Slice with data-file but no log files
-    FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noLog1");
+    FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noLog1");
     noLogFileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
-    op = CompactionUtils.buildFromFileSlice(
-        DEFAULT_PARTITION_PATHS[0], noLogFileSlice, Option.of(metricsCaptureFn));
+    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], noLogFileSlice, Option.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(noLogFileSlice, op, DEFAULT_PARTITION_PATHS[0]);
 
-    //File Slice with no data-file but log files present
-    FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
-    noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
-    noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
-    op = CompactionUtils.buildFromFileSlice(
-        DEFAULT_PARTITION_PATHS[0], noDataFileSlice, Option.of(metricsCaptureFn));
+    // File Slice with no data-file but log files present
+    FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
+    noDataFileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
+    noDataFileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
+    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], noDataFileSlice, Option.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(noDataFileSlice, op, DEFAULT_PARTITION_PATHS[0]);
 
-    //File Slice with data-file and log files present
-    FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
+    // File Slice with data-file and log files present
+    FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
     fileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
-    fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
-    fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
-    op = CompactionUtils.buildFromFileSlice(
-        DEFAULT_PARTITION_PATHS[0], fileSlice, Option.of(metricsCaptureFn));
+    fileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
+    fileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
+    op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], fileSlice, Option.of(metricsCaptureFn));
     testFileSliceCompactionOpEquality(fileSlice, op, DEFAULT_PARTITION_PATHS[0]);
   }
 
@@ -111,23 +97,23 @@ public class TestCompactionUtils {
    * Generate input for compaction plan tests
    */
   private Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> buildCompactionPlan() {
-    FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "empty1");
-    FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
+    FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "empty1");
+    FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
     fileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
-    fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
-    fileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
-    FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noLog1");
+    fileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
+    fileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
+    FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noLog1");
     noLogFileSlice.setDataFile(new TestHoodieDataFile("/tmp/noLog_1_000.parquet"));
-    FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0],"000", "noData1");
-    noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
-    noDataFileSlice.addLogFile(new HoodieLogFile(new Path(
-        FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
+    FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
+    noDataFileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN))));
+    noDataFileSlice.addLogFile(
+        new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     List<FileSlice> fileSliceList = Arrays.asList(emptyFileSlice, noDataFileSlice, fileSlice, noLogFileSlice);
-    List<Pair<String, FileSlice>> input = fileSliceList.stream().map(f -> Pair.of(DEFAULT_PARTITION_PATHS[0], f))
-        .collect(Collectors.toList());
+    List<Pair<String, FileSlice>> input =
+        fileSliceList.stream().map(f -> Pair.of(DEFAULT_PARTITION_PATHS[0], f)).collect(Collectors.toList());
     return Pair.of(input, CompactionUtils.buildFromFileSlices(input, Option.empty(), Option.of(metricsCaptureFn)));
   }
 
@@ -143,14 +129,13 @@ public class TestCompactionUtils {
     Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> inputAndPlan = buildCompactionPlan();
     HoodieCompactionPlan plan = inputAndPlan.getRight();
     List<HoodieCompactionOperation> originalOps = plan.getOperations();
-    List<HoodieCompactionOperation> regeneratedOps =
-        originalOps.stream().map(op -> {
-          // Convert to CompactionOperation
-          return CompactionUtils.buildCompactionOperation(op);
-        }).map(op2 -> {
-          // Convert back to HoodieCompactionOperation and check for equality
-          return CompactionUtils.buildHoodieCompactionOperation(op2);
-        }).collect(Collectors.toList());
+    List<HoodieCompactionOperation> regeneratedOps = originalOps.stream().map(op -> {
+      // Convert to CompactionOperation
+      return CompactionUtils.buildCompactionOperation(op);
+    }).map(op2 -> {
+      // Convert back to HoodieCompactionOperation and check for equality
+      return CompactionUtils.buildHoodieCompactionOperation(op2);
+    }).collect(Collectors.toList());
     Assert.assertTrue("Transformation did get tested", originalOps.size() > 0);
     Assert.assertEquals("All fields set correctly in transformations", originalOps, regeneratedOps);
   }
@@ -203,24 +188,22 @@ public class TestCompactionUtils {
   }
 
   /**
-   * Validates if  generated compaction plan matches with input file-slices
+   * Validates if generated compaction plan matches with input file-slices
    *
    * @param input File Slices with partition-path
-   * @param plan  Compaction Plan
+   * @param plan Compaction Plan
    */
-  private void testFileSlicesCompactionPlanEquality(List<Pair<String, FileSlice>> input,
-      HoodieCompactionPlan plan) {
+  private void testFileSlicesCompactionPlanEquality(List<Pair<String, FileSlice>> input, HoodieCompactionPlan plan) {
     Assert.assertEquals("All file-slices present", input.size(), plan.getOperations().size());
-    IntStream.range(0, input.size()).boxed().forEach(idx ->
-        testFileSliceCompactionOpEquality(input.get(idx).getValue(), plan.getOperations().get(idx),
-            input.get(idx).getKey()));
+    IntStream.range(0, input.size()).boxed().forEach(idx -> testFileSliceCompactionOpEquality(input.get(idx).getValue(),
+        plan.getOperations().get(idx), input.get(idx).getKey()));
   }
 
   /**
    * Validates if generated compaction operation matches with input file slice and partition path
    *
-   * @param slice            File Slice
-   * @param op               HoodieCompactionOperation
+   * @param slice File Slice
+   * @param op HoodieCompactionOperation
    * @param expPartitionPath Partition path
    */
   private void testFileSliceCompactionOpEquality(FileSlice slice, HoodieCompactionOperation op,
@@ -236,5 +219,10 @@ public class TestCompactionUtils {
       Assert.assertEquals("Log File Index " + idx, paths.get(idx), op.getDeltaFilePaths().get(idx));
     });
     Assert.assertEquals("Metrics set", metrics, op.getMetrics());
+  }
+
+  @Override
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }

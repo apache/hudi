@@ -56,9 +56,8 @@ public class HoodieAvroUtils {
   private static ThreadLocal<BinaryDecoder> reuseDecoder = ThreadLocal.withInitial(() -> null);
 
   // All metadata fields are optional strings.
-  private static final Schema METADATA_FIELD_SCHEMA = Schema.createUnion(Arrays.asList(
-      Schema.create(Schema.Type.NULL),
-      Schema.create(Schema.Type.STRING)));
+  private static final Schema METADATA_FIELD_SCHEMA =
+      Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)));
 
   private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
@@ -66,8 +65,7 @@ public class HoodieAvroUtils {
    * Convert a given avro record to bytes
    */
   public static byte[] avroToBytes(GenericRecord record) throws IOException {
-    GenericDatumWriter<GenericRecord> writer =
-        new GenericDatumWriter<>(record.getSchema());
+    GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<>(record.getSchema());
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(out, reuseEncoder.get());
     reuseEncoder.set(encoder);
@@ -101,16 +99,16 @@ public class HoodieAvroUtils {
   public static Schema addMetadataFields(Schema schema) {
     List<Schema.Field> parentFields = new ArrayList<>();
 
-    Schema.Field commitTimeField = new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
-    Schema.Field commitSeqnoField = new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
-    Schema.Field recordKeyField = new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
-    Schema.Field partitionPathField = new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
-    Schema.Field fileNameField = new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field commitTimeField =
+        new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field commitSeqnoField =
+        new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field recordKeyField =
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field partitionPathField =
+        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field fileNameField =
+        new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
 
     parentFields.add(commitTimeField);
     parentFields.add(commitSeqnoField);
@@ -127,15 +125,18 @@ public class HoodieAvroUtils {
       }
     }
 
-    Schema mergedSchema = Schema
-        .createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
+    Schema mergedSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     mergedSchema.setFields(parentFields);
     return mergedSchema;
   }
 
+  public static String addMetadataColumnTypes(String hiveColumnTypes) {
+    return "string,string,string,string,string," + hiveColumnTypes;
+  }
+
   private static Schema initRecordKeySchema() {
-    Schema.Field recordKeyField = new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+    Schema.Field recordKeyField =
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
     recordKeySchema.setFields(Arrays.asList(recordKeyField));
     return recordKeySchema;
@@ -145,8 +146,8 @@ public class HoodieAvroUtils {
     return RECORD_KEY_SCHEMA;
   }
 
-  public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey,
-      String partitionPath, String fileName) {
+  public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
+      String fileName) {
     record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
     record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
     record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
@@ -154,9 +155,9 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Add null fields to passed in schema. Caller is responsible for ensuring there is no duplicates.
-   * As different query engines have varying constraints regarding treating the case-sensitivity of fields, its best
-   * to let caller determine that.
+   * Add null fields to passed in schema. Caller is responsible for ensuring there is no duplicates. As different query
+   * engines have varying constraints regarding treating the case-sensitivity of fields, its best to let caller
+   * determine that.
    *
    * @param schema Passed in schema
    * @param newFieldNames Null Field names to be added
@@ -176,8 +177,7 @@ public class HoodieAvroUtils {
   /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
-  public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String commitTime,
-      String commitSeqno) {
+  public static GenericRecord addCommitMetadataToRecord(GenericRecord record, String commitTime, String commitSeqno) {
     record.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime);
     record.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, commitSeqno);
     return record;
@@ -207,8 +207,7 @@ public class HoodieAvroUtils {
     }
     if (!GenericData.get().validate(newSchema, newRecord)) {
       throw new SchemaCompatabilityException(
-          "Unable to validate the rewritten record " + record + " against schema "
-              + newSchema);
+          "Unable to validate the rewritten record " + record + " against schema " + newSchema);
     }
     return newRecord;
   }

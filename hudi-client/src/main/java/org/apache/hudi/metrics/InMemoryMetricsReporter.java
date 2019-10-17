@@ -26,12 +26,10 @@ import java.io.Closeable;
 public class InMemoryMetricsReporter extends MetricsReporter {
 
   @Override
-  public void start() {
-  }
+  public void start() {}
 
   @Override
-  public void report() {
-  }
+  public void report() {}
 
   @Override
   public Closeable getReporter() {

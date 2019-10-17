@@ -29,8 +29,6 @@ public class JDBCSource extends RowSource {
 
   private static Logger LOG = LoggerFactory.getLogger(JDBCSource.class);
 
-  private final static String ppdQuery = "(select * from %s where %s >= \" %s \") rdbms_table";
-
 
   public JDBCSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
@@ -102,6 +100,7 @@ public class JDBCSource extends RowSource {
 
   @Override
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+    final String ppdQuery = "(select * from %s where %s >= \" %s \") rdbms_table";
     try {
       DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.URL, Config.DRIVER_CLASS, Config.USER,
           Config.RDBMS_TABLE_NAME, Config.IS_INCREMENTAL));

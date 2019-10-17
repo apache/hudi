@@ -109,9 +109,7 @@ public class HoodieLogFile implements Serializable {
     String baseCommitTime = getBaseCommitTime();
     Path path = getPath();
     String extension = "." + FSUtils.getFileExtensionFromLog(path);
-    int newVersion = FSUtils
-        .computeNextLogVersion(fs, path.getParent(), fileId,
-            extension, baseCommitTime);
+    int newVersion = FSUtils.computeNextLogVersion(fs, path.getParent(), fileId, extension, baseCommitTime);
     return new HoodieLogFile(new Path(path.getParent(),
         FSUtils.makeLogFileName(fileId, extension, baseCommitTime, newVersion, logWriteToken)));
   }
@@ -179,9 +177,6 @@ public class HoodieLogFile implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieLogFile{"
-        + "pathStr='" + pathStr + '\''
-        + ", fileLen=" + fileLen
-        + '}';
+    return "HoodieLogFile{" + "pathStr='" + pathStr + '\'' + ", fileLen=" + fileLen + '}';
   }
 }

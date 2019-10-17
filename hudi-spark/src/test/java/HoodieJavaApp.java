@@ -97,9 +97,7 @@ public class HoodieJavaApp {
 
     // Spark session setup..
     SparkSession spark = SparkSession.builder().appName("Hoodie Spark APP")
-        .config("spark.serializer",
-            "org.apache.spark.serializer.KryoSerializer").master("local[1]")
-        .getOrCreate();
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer").master("local[1]").getOrCreate();
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
     FileSystem fs = FileSystem.get(jssc.hadoopConfiguration());
 
@@ -107,7 +105,7 @@ public class HoodieJavaApp {
     HoodieTestDataGenerator dataGen = null;
     if (nonPartitionedTable) {
       // All data goes to base-path
-      dataGen = new HoodieTestDataGenerator(new String[]{""});
+      dataGen = new HoodieTestDataGenerator(new String[] {""});
     } else {
       dataGen = new HoodieTestDataGenerator();
     }
@@ -116,31 +114,34 @@ public class HoodieJavaApp {
      * Commit with only inserts
      */
     // Generate some input..
-    List<String> records1 = DataSourceTestUtils.convertToStringList(
-        dataGen.generateInserts("001"/* ignore */, 100));
+    List<String> records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("001"/* ignore */, 100));
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
 
     // Save as hoodie dataset (copy on write)
-    DataFrameWriter<Row> writer = inputDF1.write().format("org.apache.hudi") // specify the hoodie source
-        .option("hoodie.insert.shuffle.parallelism",
-            "2") // any hoodie client config can be passed like this
-        .option("hoodie.upsert.shuffle.parallelism",
-            "2") // full list in HoodieWriteConfig & its package
-        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType) // Hoodie Table Type
-        .option(DataSourceWriteOptions.OPERATION_OPT_KEY(),
-            DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL()) // insert
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(),
-            "_row_key") // This is the record key
-        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(),
-            "partition") // this is the partition to place it into
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(),
-            "timestamp") // use to combine duplicate records in input/with disk val
-        .option(HoodieWriteConfig.TABLE_NAME, tableName) // Used by hive sync and queries
+    // specify the hoodie source
+    DataFrameWriter<Row> writer = inputDF1.write().format("org.apache.hudi")
+        // any hoodie client config can be passed like this
+        .option("hoodie.insert.shuffle.parallelism", "2")
+        // full list in HoodieWriteConfig & its package
+        .option("hoodie.upsert.shuffle.parallelism", "2")
+        // Hoodie Table Type
+        .option(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY(), tableType)
+        // insert
+        .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())
+        // This is the record key
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
+        // this is the partition to place it into
+        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
+        // use to combine duplicate records in input/with disk val
+        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
+        // Used by hive sync and queries
+        .option(HoodieWriteConfig.TABLE_NAME, tableName)
+        // Add Key Extractor
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
-                SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
-        .mode(
-            SaveMode.Overwrite); // This will remove any existing data at path below, and create a
+            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
+                : SimpleKeyGenerator.class.getCanonicalName())
+        // This will remove any existing data at path below, and create a
+        .mode(SaveMode.Overwrite);
 
     updateHiveSyncConfig(writer);
     // new dataset if needed
@@ -151,8 +152,7 @@ public class HoodieJavaApp {
     /**
      * Commit that updates records
      */
-    List<String> records2 = DataSourceTestUtils.convertToStringList(
-        dataGen.generateUpdates("002"/* ignore */, 100));
+    List<String> records2 = DataSourceTestUtils.convertToStringList(dataGen.generateUpdates("002"/* ignore */, 100));
     Dataset<Row> inputDF2 = spark.read().json(jssc.parallelize(records2, 2));
     writer = inputDF2.write().format("org.apache.hudi").option("hoodie.insert.shuffle.parallelism", "2")
         .option("hoodie.upsert.shuffle.parallelism", "2")
@@ -161,8 +161,8 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName() :
-                SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
+            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
+                : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieWriteConfig.TABLE_NAME, tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
@@ -180,20 +180,18 @@ public class HoodieJavaApp {
     hoodieROViewDF.registerTempTable("hoodie_ro");
     spark.sql("describe hoodie_ro").show();
     // all trips whose fare was greater than 2.
-    spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0")
-        .show();
+    spark.sql("select fare, begin_lon, begin_lat, timestamp from hoodie_ro where fare > 2.0").show();
 
     if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) {
       /**
        * Consume incrementally, only changes in commit 2 above. Currently only supported for COPY_ON_WRITE TABLE
        */
       Dataset<Row> hoodieIncViewDF = spark.read().format("org.apache.hudi")
-          .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
-              DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
-              commitInstantTime1) // Only changes in write 2 above
-          .load(
-              tablePath); // For incremental view, pass in the root/base path of dataset
+          .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(), DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
+          // Only changes in write 2 above
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(), commitInstantTime1)
+          // For incremental view, pass in the root/base path of dataset
+          .load(tablePath);
 
       logger.info("You will only see records from : " + commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
@@ -202,6 +200,7 @@ public class HoodieJavaApp {
 
   /**
    * Setup configs for syncing to hive
+   * 
    * @param writer
    * @return
    */
@@ -215,12 +214,13 @@ public class HoodieJavaApp {
           .option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY(), hivePass)
           .option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY(), "true");
       if (nonPartitionedTable) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
-            NonPartitionedExtractor.class.getCanonicalName())
+        writer = writer
+            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+                NonPartitionedExtractor.class.getCanonicalName())
             .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "");
       } else if (useMultiPartitionKeys) {
-        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "year,month,day")
-            .option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+        writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "year,month,day").option(
+            DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             MultiPartKeysValueExtractor.class.getCanonicalName());
       } else {
         writer = writer.option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "dateStr");

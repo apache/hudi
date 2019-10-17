@@ -61,6 +61,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
 
   /**
    * Wait till the service shutdown. If the service shutdown with exception, it will be thrown
+   * 
    * @throws ExecutionException
    * @throws InterruptedException
    */
@@ -76,6 +77,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
   /**
    * Request shutdown either forcefully or gracefully. Graceful shutdown allows the service to finish up the current
    * round of work and shutdown. For graceful shutdown, it waits till the service is shutdown
+   * 
    * @param force Forcefully shutdown
    */
   void shutdown(boolean force) {
@@ -98,8 +100,9 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
   }
 
   /**
-   * Start the service. Runs the service in a different thread and returns. Also starts a monitor thread
-   * to run-callbacks in case of shutdown
+   * Start the service. Runs the service in a different thread and returns. Also starts a monitor thread to
+   * run-callbacks in case of shutdown
+   * 
    * @param onShutdownCallback
    */
   public void start(Function<Boolean, Boolean> onShutdownCallback) {
@@ -112,12 +115,14 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
 
   /**
    * Service implementation
+   * 
    * @return
    */
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
   /**
    * A monitor thread is started which would trigger a callback if the service is shutdown
+   * 
    * @param onShutdownCallback
    */
   private void monitorThreads(Function<Boolean, Boolean> onShutdownCallback) {
@@ -128,8 +133,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
         log.info("Monitoring thread(s) !!");
         future.get();
       } catch (ExecutionException ex) {
-        log.error("Monitor noticed one or more threads failed."
-            + " Requesting graceful shutdown of other threads", ex);
+        log.error("Monitor noticed one or more threads failed." + " Requesting graceful shutdown of other threads", ex);
         error = true;
         shutdown(false);
       } catch (InterruptedException ie) {

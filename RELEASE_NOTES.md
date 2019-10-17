@@ -1,3 +1,21 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+
 Release 0.5.0-incubating
 ------------------------------------
 
@@ -8,6 +26,35 @@ Release 0.5.0-incubating
  * Bug fixes in query side integration, hive-sync, deltaStreamer, compaction, rollbacks, restore
 
 ### Full PR List
+  * **Balaji Varadarajan** [HUDI-121] Fix licensing issues found during RC voting by general incubator group
+  * **Mehrotra** Shade and relocate Avro dependency in hadoop-mr-bundle
+  * **Wenning Ding** [HUDI-301] fix path error when update a non-partition MOR table
+  * **Udit Mehrotra** [HUDI-298] Fix issue with incorrect column mapping casusing bad data, during on-the-fly merge of Real Time tables (#956)
+  * **Anurag870** [Docs] Update README.md (#955)
+  * **leesf** [HUDI-292] Avoid consuming more entries from kafka than specified sourceLimit. (#947)
+  * **leesf** [HUDI-296] Explore use of spotless to auto fix formatting errors (#945)
+  * **Balaji Varadarajan** [MINOR] Add incubating to NOTICE and README.md
+  * **vinoth chandar** [HOTFIX] Move to openjdk to get travis passing (#944)
+  * **leesf** [HUDI-232] Implement sealing/unsealing for HoodieRecord class (#938)
+  * **Balaji Varadarajan** [HUDI-293] Remove KEYS file from github repository
+  * **Balaji Varadarajan** [HUDI-121] Prepare for 0.5.0-incubating-rc5
+  * **Balaji Varadarajan** [HUDI-121] Remove leftover notice file and replace com.uber.hoodie with org.apache.hudi in log4j properties
+  * **leesf** [HUDI-285] Implement HoodieStorageWriter based on actual file type
+  * **leesf** [HUDI-265] Failed to delete tmp dirs created in unit tests
+  * **Balaji Varadarajan** [HUDI-287] Address comments during review of release candidate. Remove LICENSE and NOTICE files in hoodie child modules. 
+  * **Balaji Varadarajan** [HUDI-121] Fix bugs in Release Scripts found during RC creation
+  * **Balaji Varadarajan** [HUDI-121] : Address comments during RC2 voting
+  * **Bhavani Sudha Saktheeswaran** [HUDI-271] Create QuickstartUtils for simplifying quickstart guide
+  * **vinoyang** [HUDI-247] Unify the re-initialization of HoodieTableMetaClient in test for hoodie-client module (#930)
+  * **Balaji Varadarajan** [HUDI-279] Fix regression in Schema Evolution due to PR-755
+  * **Xing Pan** [HUDI-269] Limit sync frequency (#921)
+  * **vinoth chandar** [MINOR] : Further updates to .mailmap for vinoth (#919)
+  * **PanXing** [MINOR] support reading cfg file in another s3 bucket (#914)
+  * **vinoyang** HUDI-267 Refactor bad method name HoodieTestUtils#initTableType and HoodieTableMetaClient#initializePathAsHoodieDataset (#916)
+  * **Nishith Agarwal** HUDI-180 : Adding support for hive registration using metastore along with JDBC
+  * **Balaji Varadarajan** Fix  mailmap to allow mapping of defunct emailIds to active emailIds
+  * **Balaji Varadarajan** Adding mailmap to allow mapping of defunct emailIds to active emailIds
+  * **Balaji Varadarajan** Updating release notes and preparing for 0.5.0-incubating-rc2 release
   * **Vinoth Chandar** [HUDI-254]: Bundle and shade databricks/avro with spark bundle
   * **Balaji Varadarajan** [HUDI-257] Fix Bloom Index unit-test failures
   * **Balaji Varadarajan** [HUDI-252] Add Disclaimer and cleanup NOTICE and LICENSE files in hudi. Identify packages which are under non-apache license in LICENSE file

@@ -135,19 +135,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-all</artifactId>
-            <scope>test</scope>
-        </dependency>
-
     </dependencies>
 
     <build>
@@ -170,12 +157,54 @@
                             <exclude>META-INF/*.SF</exclude>
                             <exclude>META-INF/*.DSA</exclude>
                             <exclude>META-INF/*.RSA</exclude>
-                            <!-- Use this jar's NOTICE and license file -->
-                            <exclude>META-INF/NOTICE*</exclude>
-                            <exclude>META-INF/LICENSE*</exclude>
+                            <exclude>META-INF/services/javax.*</exclude>
                         </excludes>
                     </filter>
                 </filters>
+                <artifactSet>
+                  <includes>
+                      <!-- 
+                         Include hudi-timeline-server with javalin dependencies. 
+                         hadoop deps are to be provided at runtime. see run_server.sh 
+                      -->
+                      <include>org.apache.hudi:hudi-common</include>
+                      <include>org.apache.hudi:hudi-timeline-service</include>
+                      <include>org.apache.httpcomponents:httpclient</include>
+                      <include>org.apache.httpcomponents:httpcore</include>
+                      <include>org.mortbay.jetty:jetty</include>
+                      <include>org.mortbay.jetty:jetty-util</include>
+                      <include>org.apache.httpcomponents:fluent-hc</include>
+                      <include>io.javalin:javalin</include>
+                      <include>org.jetbrains.kotlin:kotlin-stdlib-jdk8</include>
+                      <include>org.jetbrains.kotlin:kotlin-stdlib</include>
+                      <include>org.jetbrains.kotlin:kotlin-stdlib-common</include>
+                      <include>org.jetbrains:annotations</include>
+                      <include>org.jetbrains.kotlin:kotlin-stdlib-jdk7</include>
+                      <include>org.eclipse.jetty:jetty-server</include>
+                      <include>org.eclipse.jetty:jetty-http</include>
+                      <include>org.eclipse.jetty:jetty-util</include>
+                      <include>org.eclipse.jetty:jetty-io</include>
+                      <include>org.eclipse.jetty:jetty-webapp</include>
+                      <include>org.eclipse.jetty:jetty-xml</include>
+                      <include>org.eclipse.jetty:jetty-servlet</include>
+                      <include>org.eclipse.jetty:jetty-security</include>
+                      <include>org.eclipse.jetty.websocket:websocket-server</include>
+                      <include>org.eclipse.jetty.websocket:websocket-common</include>
+                      <include>org.eclipse.jetty.websocket:websocket-api</include>
+                      <include>org.eclipse.jetty.websocket:websocket-client</include>
+                      <include>org.eclipse.jetty:jetty-client</include>
+                      <include>org.eclipse.jetty.websocket:websocket-servlet</include>
+                      <include>com.beust:jcommander</include>
+                      <include>org.rocksdb:rocksdbjni</include>
+                      <include>org.codehaus.jackson:jackson-core-asl</include>
+                      <include>org.codehaus.jackson:jackson-mapper-asl</include>
+                      <include>com.fasterxml.jackson.core:jackson-annotations</include>
+                      <include>com.fasterxml.jackson.core:jackson-core</include>
+                      <include>com.fasterxml.jackson.core:jackson-databind</include>
+                      <include>org.apache.htrace:htrace-core</include>
+                      <include>log4j:log4j</include>
+                  </includes>
+                </artifactSet>
             </configuration>
             <executions>
                 <execution>
@@ -200,8 +229,7 @@
 
     <properties>
         <checkstyle.skip>true</checkstyle.skip>
-        <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-        <notice.file>HUDI_NOTICE.txt</notice.file>
+        <main.basedir>${project.parent.basedir}</main.basedir>
     </properties>
 
 

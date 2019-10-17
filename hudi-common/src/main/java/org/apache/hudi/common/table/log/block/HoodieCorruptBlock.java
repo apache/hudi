@@ -25,14 +25,14 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Corrupt block is emitted whenever the scanner finds the length of the block written at the
- * beginning does not match (did not find a EOF or a sync marker after the length)
+ * Corrupt block is emitted whenever the scanner finds the length of the block written at the beginning does not match
+ * (did not find a EOF or a sync marker after the length)
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 
-  private HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream,
-      boolean readBlockLazily, Option<HoodieLogBlockContentLocation> blockContentLocation,
-      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+  private HoodieCorruptBlock(Option<byte[]> corruptedBytes, FSDataInputStream inputStream, boolean readBlockLazily,
+      Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
+      Map<HeaderMetadataType, String> footer) {
     super(header, footer, blockContentLocation, corruptedBytes, inputStream, readBlockLazily);
   }
 
@@ -51,18 +51,11 @@ public class HoodieCorruptBlock extends HoodieLogBlock {
     return HoodieLogBlockType.CORRUPT_BLOCK;
   }
 
-  public static HoodieLogBlock getBlock(HoodieLogFile logFile,
-      FSDataInputStream inputStream,
-      Option<byte[]> corruptedBytes,
-      boolean readBlockLazily,
-      long position,
-      long blockSize,
-      long blockEndPos,
-      Map<HeaderMetadataType, String> header,
-      Map<HeaderMetadataType, String> footer) {
+  public static HoodieLogBlock getBlock(HoodieLogFile logFile, FSDataInputStream inputStream,
+      Option<byte[]> corruptedBytes, boolean readBlockLazily, long position, long blockSize, long blockEndPos,
+      Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
 
     return new HoodieCorruptBlock(corruptedBytes, inputStream, readBlockLazily,
-        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)),
-        header, footer);
+        Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndPos)), header, footer);
   }
 }

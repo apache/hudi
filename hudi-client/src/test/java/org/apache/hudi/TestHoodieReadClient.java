@@ -113,8 +113,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    */
   @Test
   public void testTagLocationAfterInsert() throws Exception {
-    testTagLocation(getConfig(), HoodieWriteClient::insert,
-        HoodieWriteClient::upsert, false);
+    testTagLocation(getConfig(), HoodieWriteClient::insert, HoodieWriteClient::upsert, false);
   }
 
   /**
@@ -122,8 +121,8 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    */
   @Test
   public void testTagLocationAfterInsertPrepped() throws Exception {
-    testTagLocation(getConfig(), HoodieWriteClient::insertPreppedRecords,
-        HoodieWriteClient::upsertPreppedRecords, true);
+    testTagLocation(getConfig(), HoodieWriteClient::insertPreppedRecords, HoodieWriteClient::upsertPreppedRecords,
+        true);
   }
 
   /**
@@ -140,9 +139,9 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    */
   @Test
   public void testTagLocationAfterBulkInsertPrepped() throws Exception {
-    testTagLocation(getConfigBuilder().withBulkInsertParallelism(1).build(),
-        (writeClient, recordRDD, commitTime)
-            -> writeClient.bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
+    testTagLocation(
+        getConfigBuilder().withBulkInsertParallelism(1).build(), (writeClient, recordRDD, commitTime) -> writeClient
+            .bulkInsertPreppedRecords(recordRDD, commitTime, Option.empty()),
         HoodieWriteClient::upsertPreppedRecords, true);
   }
 
@@ -155,27 +154,22 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
    * @param isPrepped isPrepped flag.
    * @throws Exception in case of error
    */
-  private void testTagLocation(
-      HoodieWriteConfig hoodieWriteConfig,
+  private void testTagLocation(HoodieWriteConfig hoodieWriteConfig,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> updateFn,
-      boolean isPrepped)
+      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> updateFn, boolean isPrepped)
       throws Exception {
     try (HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);) {
-      //Write 1 (only inserts)
+      // Write 1 (only inserts)
       String newCommitTime = "001";
       String initCommitTime = "000";
       int numRecords = 200;
-      JavaRDD<WriteStatus> result =
-          insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, insertFn, isPrepped,
-              true, numRecords);
+      JavaRDD<WriteStatus> result = insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime,
+          numRecords, insertFn, isPrepped, true, numRecords);
       // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
       // since they have been modified in the DAG
       JavaRDD<HoodieRecord> recordRDD =
-          jsc.parallelize(
-              result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
-                  .map(record -> new HoodieRecord(record.getKey(), null))
-                  .collect(Collectors.toList()));
+          jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+              .map(record -> new HoodieRecord(record.getKey(), null)).collect(Collectors.toList()));
       // Should have 100 records in table (check using Index), all in locations marked at commit
       HoodieReadClient readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
       List<HoodieRecord> taggedRecords = readClient.tagLocation(recordRDD).collect();
@@ -187,14 +181,11 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
       numRecords = 100;
       String commitTimeBetweenPrevAndNew = "002";
       result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-          Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)),
-          initCommitTime, numRecords, updateFn, isPrepped,
-          true, numRecords, 200, 2);
+          Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, updateFn, isPrepped, true,
+          numRecords, 200, 2);
       recordRDD =
-          jsc.parallelize(
-              result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
-                  .map(record -> new HoodieRecord(record.getKey(), null))
-                  .collect(Collectors.toList()));
+          jsc.parallelize(result.collect().stream().map(WriteStatus::getWrittenRecords).flatMap(Collection::stream)
+              .map(record -> new HoodieRecord(record.getKey(), null)).collect(Collectors.toList()));
       // Index should be able to locate all updates in correct locations.
       readClient = getHoodieReadClient(hoodieWriteConfig.getBasePath());
       taggedRecords = readClient.tagLocation(recordRDD).collect();

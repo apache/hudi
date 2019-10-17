@@ -19,53 +19,99 @@
 package org.apache.hudi.avro;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 
 /**
- * Marjority of this is copied from
- * https://github.com/jwills/avro-json/blob/master/src/main/java/com/cloudera/science/avro/
- * common/JsonConverter.java Adjusted for expected behavior of our use cases
+ * Converts Json record to Avro Generic Record
  */
 public class MercifulJsonConverter {
 
-  private final ObjectMapper mapper = new ObjectMapper();
-  private final Schema baseSchema;
+  private static final Map<Schema.Type, JsonToAvroFieldProcessor> fieldTypeProcessors = getFieldTypeProcessors();
 
-  public MercifulJsonConverter(Schema schema) {
-    this.baseSchema = schema;
+  private final ObjectMapper mapper;
+
+  /**
+   * Build type processor map for each avro type.
+   */
+  private static Map<Schema.Type, JsonToAvroFieldProcessor> getFieldTypeProcessors() {
+    Map<Schema.Type, JsonToAvroFieldProcessor> processorMap =
+        new ImmutableMap.Builder<Schema.Type, JsonToAvroFieldProcessor>().put(Type.STRING, generateStringTypeHandler())
+            .put(Type.BOOLEAN, generateBooleanTypeHandler()).put(Type.DOUBLE, generateDoubleTypeHandler())
+            .put(Type.FLOAT, generateFloatTypeHandler()).put(Type.INT, generateIntTypeHandler())
+            .put(Type.LONG, generateLongTypeHandler()).put(Type.ARRAY, generateArrayTypeHandler())
+            .put(Type.RECORD, generateRecordTypeHandler()).put(Type.ENUM, generateEnumTypeHandler())
+            .put(Type.MAP, generateMapTypeHandler()).put(Type.BYTES, generateBytesTypeHandler())
+            .put(Type.FIXED, generateFixedTypeHandler()).build();
+    return processorMap;
   }
 
+  /**
+   * Uses a default objectMapper to deserialize a json string
+   */
+  public MercifulJsonConverter() {
+    this(new ObjectMapper());
+  }
 
-  public GenericRecord convert(String json) throws IOException {
+  /**
+   * Allows a configured ObjectMapper to be passed for converting json records to avro record
+   */
+  public MercifulJsonConverter(ObjectMapper mapper) {
+    this.mapper = mapper;
+  }
+
+  /**
+   * Converts json to Avro generic record
+   *
+   * @param json Json record
+   * @param schema Schema
+   */
+  public GenericRecord convert(String json, Schema schema) {
     try {
-      return convert(mapper.readValue(json, Map.class), baseSchema);
+      Map<String, Object> jsonObjectMap = mapper.readValue(json, Map.class);
+      return convertJsonToAvro(jsonObjectMap, schema);
     } catch (IOException e) {
-      throw new IOException("Failed to parse as Json: " + json + "\n\n" + e.getMessage());
+      throw new HoodieIOException(e.getMessage(), e);
     }
   }
 
-  private GenericRecord convert(Map<String, Object> raw, Schema schema)
-      throws IOException {
-    GenericRecord result = new GenericData.Record(schema);
+  private static GenericRecord convertJsonToAvro(Map<String, Object> inputJson, Schema schema) {
+    GenericRecord avroRecord = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
-      String name = f.name();
-      Object rawValue = raw.get(name);
-      if (rawValue != null) {
-        result.put(f.pos(), typeConvert(rawValue, name, f.schema()));
+      Object val = inputJson.get(f.name());
+      if (val != null) {
+        avroRecord.put(f.pos(), convertJsonToAvroField(val, f.name(), f.schema()));
       }
     }
-
-    return result;
+    return avroRecord;
   }
 
-  private Object typeConvert(Object value, String name, Schema schema) throws IOException {
+  private static Schema getNonNull(Schema schema) {
+    List<Schema> types = schema.getTypes();
+    Schema.Type firstType = types.get(0).getType();
+    return firstType.equals(Schema.Type.NULL) ? types.get(1) : types.get(0);
+  }
+
+  private static boolean isOptional(Schema schema) {
+    return schema.getType().equals(Schema.Type.UNION) && schema.getTypes().size() == 2
+        && (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)
+            || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
+  }
+
+  private static Object convertJsonToAvroField(Object value, String name, Schema schema) {
+
     if (isOptional(schema)) {
       if (value == null) {
         return null;
@@ -74,85 +120,204 @@ public class MercifulJsonConverter {
       }
     } else if (value == null) {
       // Always fail on null for non-nullable schemas
-      throw new JsonConversionException(null, name, schema);
+      throw new HoodieJsonToAvroConversionException(null, name, schema);
     }
 
-    switch (schema.getType()) {
-      case BOOLEAN:
+    JsonToAvroFieldProcessor processor = fieldTypeProcessors.get(schema.getType());
+    if (null != processor) {
+      return processor.convertToAvro(value, name, schema);
+    }
+    throw new IllegalArgumentException("JsonConverter cannot handle type: " + schema.getType());
+  }
+
+  /**
+   * Base Class for converting json to avro fields
+   */
+  private abstract static class JsonToAvroFieldProcessor implements Serializable {
+
+    public Object convertToAvro(Object value, String name, Schema schema) {
+      Pair<Boolean, Object> res = convert(value, name, schema);
+      if (!res.getLeft()) {
+        throw new HoodieJsonToAvroConversionException(value, name, schema);
+      }
+      return res.getRight();
+    }
+
+    protected abstract Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+        throws HoodieJsonToAvroConversionException;
+  }
+
+  private static JsonToAvroFieldProcessor generateBooleanTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         if (value instanceof Boolean) {
-          return value;
+          return Pair.of(true, value);
         }
-        break;
-      case DOUBLE:
+        return Pair.of(false, null);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateIntTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         if (value instanceof Number) {
-          return ((Number) value).doubleValue();
+          return Pair.of(true, ((Number) value).intValue());
+        } else if (value instanceof String) {
+          return Pair.of(true, Integer.valueOf((String) value));
         }
-        break;
-      case FLOAT:
+        return Pair.of(false, null);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateDoubleTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         if (value instanceof Number) {
-          return ((Number) value).floatValue();
+          return Pair.of(true, ((Number) value).doubleValue());
+        } else if (value instanceof String) {
+          return Pair.of(true, Double.valueOf((String) value));
         }
-        break;
-      case INT:
+        return Pair.of(false, null);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateFloatTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         if (value instanceof Number) {
-          return ((Number) value).intValue();
+          return Pair.of(true, ((Number) value).floatValue());
+        } else if (value instanceof String) {
+          return Pair.of(true, Float.valueOf((String) value));
         }
-        break;
-      case LONG:
+        return Pair.of(false, null);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateLongTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         if (value instanceof Number) {
-          return ((Number) value).longValue();
+          return Pair.of(true, ((Number) value).longValue());
+        } else if (value instanceof String) {
+          return Pair.of(true, Long.valueOf((String) value));
         }
-        break;
-      case STRING:
-        return value.toString();
-      case ENUM:
+        return Pair.of(false, null);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateStringTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
+        return Pair.of(true, value.toString());
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateBytesTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
+        return Pair.of(true, value.toString().getBytes());
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateFixedTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
+        byte[] src = value.toString().getBytes();
+        byte[] dst = new byte[schema.getFixedSize()];
+        System.arraycopy(src, 0, dst, 0, Math.min(schema.getFixedSize(), src.length));
+        return Pair.of(true, dst);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateEnumTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         if (schema.getEnumSymbols().contains(value.toString())) {
-          return new GenericData.EnumSymbol(schema, value.toString());
+          return Pair.of(true, new GenericData.EnumSymbol(schema, value.toString()));
         }
-        throw new JsonConversionException(String.format("Symbol %s not in enum", value.toString()),
+        throw new HoodieJsonToAvroConversionException(String.format("Symbol %s not in enum", value.toString()),
             schema.getFullName(), schema);
-      case RECORD:
-        return convert((Map<String, Object>) value, schema);
-      case ARRAY:
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateRecordTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
+        GenericRecord result = new GenericData.Record(schema);
+        return Pair.of(true, convertJsonToAvro((Map<String, Object>) value, schema));
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateArrayTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         Schema elementSchema = schema.getElementType();
         List listRes = new ArrayList();
         for (Object v : (List) value) {
-          listRes.add(typeConvert(v, name, elementSchema));
+          listRes.add(convertJsonToAvroField(v, name, elementSchema));
         }
-        return listRes;
-      case MAP:
+        return Pair.of(true, listRes);
+      }
+    };
+  }
+
+  private static JsonToAvroFieldProcessor generateMapTypeHandler() {
+    return new JsonToAvroFieldProcessor() {
+      @Override
+      public Pair<Boolean, Object> convert(Object value, String name, Schema schema)
+          throws HoodieJsonToAvroConversionException {
         Schema valueSchema = schema.getValueType();
         Map<String, Object> mapRes = new HashMap<String, Object>();
         for (Map.Entry<String, Object> v : ((Map<String, Object>) value).entrySet()) {
-          mapRes.put(v.getKey(), typeConvert(v.getValue(), name, valueSchema));
+          mapRes.put(v.getKey(), convertJsonToAvroField(v.getValue(), name, valueSchema));
         }
-        return mapRes;
-      default:
-        throw new IllegalArgumentException(
-            "JsonConverter cannot handle type: " + schema.getType());
-    }
-    throw new JsonConversionException(value, name, schema);
+        return Pair.of(true, mapRes);
+      }
+    };
   }
 
-  private boolean isOptional(Schema schema) {
-    return schema.getType().equals(Schema.Type.UNION)
-        && schema.getTypes().size() == 2
-        && (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)
-        || schema.getTypes().get(1).getType().equals(Schema.Type.NULL));
-  }
-
-  private Schema getNonNull(Schema schema) {
-    List<Schema> types = schema.getTypes();
-    return types.get(0).getType().equals(Schema.Type.NULL) ? types.get(1) : types.get(0);
-  }
-
-  public static class JsonConversionException extends RuntimeException {
+  /**
+   * Exception Class for any schema conversion issue
+   */
+  public static class HoodieJsonToAvroConversionException extends HoodieException {
 
     private Object value;
     private String fieldName;
     private Schema schema;
 
-    public JsonConversionException(Object value, String fieldName, Schema schema) {
+    public HoodieJsonToAvroConversionException(Object value, String fieldName, Schema schema) {
       this.value = value;
       this.fieldName = fieldName;
       this.schema = schema;
@@ -160,8 +325,7 @@ public class MercifulJsonConverter {
 
     @Override
     public String toString() {
-      return String.format("Type conversion error for field %s, %s for %s",
-          fieldName, value, schema);
+      return String.format("Json to Avro Type conversion error for field %s, %s for %s", fieldName, value, schema);
     }
   }
 }

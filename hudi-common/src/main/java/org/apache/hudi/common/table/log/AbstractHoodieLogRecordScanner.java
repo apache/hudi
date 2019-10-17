@@ -51,15 +51,16 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Implements logic to scan log blocks and expose valid and deleted log records to subclass implementation.
- * Subclass is free to either apply merging or expose raw data back to the caller.
+ * Implements logic to scan log blocks and expose valid and deleted log records to subclass implementation. Subclass is
+ * free to either apply merging or expose raw data back to the caller.
  *
- * NOTE:  If readBlockLazily is
- * turned on, does not merge, instead keeps reading log blocks and merges everything at once This is an optimization to
- * avoid seek() back and forth to read new block (forward seek()) and lazily read content of seen block (reverse and
- * forward seek()) during merge |            | Read Block 1 Metadata |            | Read Block 1 Data | | | Read Block 2
- * Metadata |            | Read Block 2 Data | | I/O Pass 1 | ..................... | I/O Pass 2 | ................. | |
- * | Read Block N Metadata | | Read Block N Data | <p> This results in two I/O passes over the log file.
+ * NOTE: If readBlockLazily is turned on, does not merge, instead keeps reading log blocks and merges everything at once
+ * This is an optimization to avoid seek() back and forth to read new block (forward seek()) and lazily read content of
+ * seen block (reverse and forward seek()) during merge | | Read Block 1 Metadata | | Read Block 1 Data | | | Read Block
+ * 2 Metadata | | Read Block 2 Data | | I/O Pass 1 | ..................... | I/O Pass 2 | ................. | | | Read
+ * Block N Metadata | | Read Block N Data |
+ * <p>
+ * This results in two I/O passes over the log file.
  */
 public abstract class AbstractHoodieLogRecordScanner {
 
@@ -122,10 +123,9 @@ public abstract class AbstractHoodieLogRecordScanner {
     HoodieLogFormatReader logFormatReaderWrapper = null;
     try {
       // iterate over the paths
-      logFormatReaderWrapper =
-          new HoodieLogFormatReader(fs,
-              logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile)))
-                  .collect(Collectors.toList()), readerSchema, readBlocksLazily, reverseReader, bufferSize);
+      logFormatReaderWrapper = new HoodieLogFormatReader(fs,
+          logFilePaths.stream().map(logFile -> new HoodieLogFile(new Path(logFile))).collect(Collectors.toList()),
+          readerSchema, readBlocksLazily, reverseReader, bufferSize);
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
         HoodieLogFile logFile = logFormatReaderWrapper.getLogFile();
@@ -136,10 +136,9 @@ public abstract class AbstractHoodieLogRecordScanner {
         HoodieLogBlock r = logFormatReaderWrapper.next();
         totalLogBlocks.incrementAndGet();
         if (r.getBlockType() != CORRUPT_BLOCK
-            && !HoodieTimeline.compareTimestamps(r.getLogBlockHeader().get(INSTANT_TIME),
-            this.latestInstantTime,
-            HoodieTimeline.LESSER_OR_EQUAL)) {
-          //hit a block with instant time greater than should be processed, stop processing further
+            && !HoodieTimeline.compareTimestamps(r.getLogBlockHeader().get(INSTANT_TIME), this.latestInstantTime,
+                HoodieTimeline.LESSER_OR_EQUAL)) {
+          // hit a block with instant time greater than should be processed, stop processing further
           break;
         }
         switch (r.getBlockType()) {
@@ -167,7 +166,7 @@ public abstract class AbstractHoodieLogRecordScanner {
             // Consider the following scenario
             // (Time 0, C1, Task T1) -> Running
             // (Time 1, C1, Task T1) -> Failed (Wrote either a corrupt block or a correct
-            //                                  DataBlock (B1) with commitTime C1
+            // DataBlock (B1) with commitTime C1
             // (Time 2, C1, Task T1.2) -> Running (Task T1 was retried and the attempt number is 2)
             // (Time 3, C1, Task T1.2) -> Finished (Wrote a correct DataBlock B2)
             // Now a logFile L1 can have 2 correct Datablocks (B1 and B2) which are the same.
@@ -179,8 +178,8 @@ public abstract class AbstractHoodieLogRecordScanner {
             log.info("Reading a command block from file " + logFile.getPath());
             // This is a command block - take appropriate action based on the command
             HoodieCommandBlock commandBlock = (HoodieCommandBlock) r;
-            String targetInstantForCommandBlock = r.getLogBlockHeader()
-                .get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME);
+            String targetInstantForCommandBlock =
+                r.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME);
             switch (commandBlock.getType()) { // there can be different types of command blocks
               case ROLLBACK_PREVIOUS_BLOCK:
                 // Rollback the last read log block
@@ -195,20 +194,17 @@ public abstract class AbstractHoodieLogRecordScanner {
                   HoodieLogBlock lastBlock = currentInstantLogBlocks.peek();
                   // handle corrupt blocks separately since they may not have metadata
                   if (lastBlock.getBlockType() == CORRUPT_BLOCK) {
-                    log.info(
-                        "Rolling back the last corrupted log block read in " + logFile.getPath());
+                    log.info("Rolling back the last corrupted log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
                   } else if (lastBlock.getBlockType() != CORRUPT_BLOCK
-                      && targetInstantForCommandBlock
-                      .contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
+                      && targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
                     // rollback last data block or delete block
                     log.info("Rolling back the last log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
                   } else if (!targetInstantForCommandBlock
-                      .contentEquals(
-                          currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
+                      .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
                     // invalid or extra rollback block
                     log.warn("TargetInstantTime " + targetInstantForCommandBlock
                         + " invalid or extra rollback command block in " + logFile.getPath());
@@ -260,15 +256,14 @@ public abstract class AbstractHoodieLogRecordScanner {
    * Checks if the current logblock belongs to a later instant
    */
   private boolean isNewInstantBlock(HoodieLogBlock logBlock) {
-    return currentInstantLogBlocks.size() > 0
-        && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
+    return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
         && !logBlock.getLogBlockHeader().get(INSTANT_TIME)
-        .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
+            .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME));
   }
 
   /**
-   * Iterate over the GenericRecord in the block, read the hoodie key and partition path and
-   * call subclass processors to handle it.
+   * Iterate over the GenericRecord in the block, read the hoodie key and partition path and call subclass processors to
+   * handle it.
    */
   private void processAvroDataBlock(HoodieAvroDataBlock dataBlock) throws Exception {
     // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
@@ -286,8 +281,7 @@ public abstract class AbstractHoodieLogRecordScanner {
    *
    * @param hoodieRecord Hoodie Record to process
    */
-  protected abstract void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord)
-      throws Exception;
+  protected abstract void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception;
 
   /**
    * Process next deleted key
@@ -299,8 +293,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   /**
    * Process the set of log blocks belonging to the last instant which is read fully.
    */
-  private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> lastBlocks, int numLogFilesSeen)
-      throws Exception {
+  private void processQueuedBlocksForInstant(Deque<HoodieLogBlock> lastBlocks, int numLogFilesSeen) throws Exception {
     while (!lastBlocks.isEmpty()) {
       log.info("Number of remaining logblocks to merge " + lastBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted

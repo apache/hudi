@@ -30,15 +30,12 @@ import org.apache.spark.sql.SparkSession;
 
 public abstract class RowSource extends Source<Dataset<Row>> {
 
-  public RowSource(TypedProperties props,
-      JavaSparkContext sparkContext,
-      SparkSession sparkSession,
+  public RowSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider, SourceType.ROW);
   }
 
-  protected abstract Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr,
-      long sourceLimit);
+  protected abstract Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit);
 
   @Override
   protected final InputBatch<Dataset<Row>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {

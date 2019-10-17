@@ -83,10 +83,7 @@ public class FSUtils {
     for (Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
         LOG.info("Picking up value for hoodie env var :" + prop.getKey());
-        conf.set(prop.getKey()
-                .replace(HOODIE_ENV_PROPS_PREFIX, "")
-                .replaceAll("_DOT_", "."),
-            prop.getValue());
+        conf.set(prop.getKey().replace(HOODIE_ENV_PROPS_PREFIX, "").replaceAll("_DOT_", "."), prop.getValue());
       }
     }
     return conf;
@@ -98,12 +95,10 @@ public class FSUtils {
     try {
       fs = new Path(path).getFileSystem(conf);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(),
-          e);
+      throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(), e);
     }
-    LOG.info(
-        String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
-            conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
+    LOG.info(String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
+        conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
     return fs;
   }
 
@@ -125,11 +120,11 @@ public class FSUtils {
 
   public static String translateMarkerToDataPath(String basePath, String markerPath, String instantTs) {
     Preconditions.checkArgument(markerPath.endsWith(HoodieTableMetaClient.MARKER_EXTN));
-    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(new Path(
-        String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTs))).toString();
+    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
+        new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTs))).toString();
     int begin = markerPath.indexOf(markerRootPath);
-    Preconditions.checkArgument(begin >= 0, "Not in marker dir. Marker Path=" + markerPath
-        + ", Expected Marker Root=" + markerRootPath);
+    Preconditions.checkArgument(begin >= 0,
+        "Not in marker dir. Marker Path=" + markerPath + ", Expected Marker Root=" + markerRootPath);
     String rPath = markerPath.substring(begin + markerRootPath.length() + 1);
     return String.format("%s/%s%s", basePath, rPath.replace(HoodieTableMetaClient.MARKER_EXTN, ""),
         HoodieFileFormat.PARQUET.getFileExtension());
@@ -159,42 +154,38 @@ public class FSUtils {
   /**
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.
    */
-  public static List<String> getAllPartitionFoldersThreeLevelsDown(FileSystem fs, String basePath)
-      throws IOException {
+  public static List<String> getAllPartitionFoldersThreeLevelsDown(FileSystem fs, String basePath) throws IOException {
     List<String> datePartitions = new ArrayList<>();
     // Avoid listing and including any folders under the metafolder
     PathFilter filter = getExcludeMetaPathFilter();
     FileStatus[] folders = fs.globStatus(new Path(basePath + "/*/*/*"), filter);
     for (FileStatus status : folders) {
       Path path = status.getPath();
-      datePartitions.add(String.format("%s/%s/%s", path.getParent().getParent().getName(),
-          path.getParent().getName(), path.getName()));
+      datePartitions.add(String.format("%s/%s/%s", path.getParent().getParent().getName(), path.getParent().getName(),
+          path.getName()));
     }
     return datePartitions;
   }
 
   /**
-   * Given a base partition and a partition path, return
-   * relative path of partition path to the base path
+   * Given a base partition and a partition path, return relative path of partition path to the base path
    */
   public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
     basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
     partitionPath = Path.getPathWithoutSchemeAndAuthority(partitionPath);
     String partitionFullPath = partitionPath.toString();
-    int partitionStartIndex = partitionFullPath.indexOf(
-        basePath.getName(),
+    int partitionStartIndex = partitionFullPath.indexOf(basePath.getName(),
         basePath.getParent() == null ? 0 : basePath.getParent().toString().length());
     // Partition-Path could be empty for non-partitioned tables
-    return partitionStartIndex + basePath.getName().length() == partitionFullPath.length() ? "" :
-        partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);
+    return partitionStartIndex + basePath.getName().length() == partitionFullPath.length() ? ""
+        : partitionFullPath.substring(partitionStartIndex + basePath.getName().length() + 1);
   }
 
   /**
-   * Obtain all the partition paths, that are present in this table, denoted by presence of {@link
-   * HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
+   * Obtain all the partition paths, that are present in this table, denoted by presence of
+   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
    */
-  public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr)
-      throws IOException {
+  public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
     final Path basePath = new Path(basePathStr);
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
@@ -221,17 +212,18 @@ public class FSUtils {
   }
 
   /**
-   * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its
-   * subdirs are skipped
-   * @param fs           File System
-   * @param basePathStr  Base-Path
-   * @param consumer     Callback for processing
+   * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
+   * are skipped
+   * 
+   * @param fs File System
+   * @param basePathStr Base-Path
+   * @param consumer Callback for processing
    * @param excludeMetaFolder Exclude .hoodie folder
    * @throws IOException
    */
   @VisibleForTesting
-  static void processFiles(FileSystem fs, String basePathStr,
-      Function<FileStatus, Boolean> consumer, boolean excludeMetaFolder) throws IOException {
+  static void processFiles(FileSystem fs, String basePathStr, Function<FileStatus, Boolean> consumer,
+      boolean excludeMetaFolder) throws IOException {
     PathFilter pathFilter = excludeMetaFolder ? getExcludeMetaPathFilter() : ALLOW_ALL_FILTER;
     FileStatus[] topLevelStatuses = fs.listStatus(new Path(basePathStr));
     for (int i = 0; i < topLevelStatuses.length; i++) {
@@ -254,8 +246,7 @@ public class FSUtils {
     }
   }
 
-  public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr,
-      boolean assumeDatePartitioning)
+  public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr, boolean assumeDatePartitioning)
       throws IOException {
     if (assumeDatePartitioning) {
       return getAllPartitionFoldersThreeLevelsDown(fs, basePathStr);
@@ -304,8 +295,8 @@ public class FSUtils {
   }
 
   /**
-   * Get the first part of the file name in the log file. That will be the fileId. Log file do not
-   * have commitTime in the file name.
+   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have commitTime in
+   * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -326,8 +317,8 @@ public class FSUtils {
   }
 
   /**
-   * Get the first part of the file name in the log file. That will be the fileId. Log file do not
-   * have commitTime in the file name.
+   * Get the first part of the file name in the log file. That will be the fileId. Log file do not have commitTime in
+   * the file name.
    */
   public static String getBaseCommitTimeFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -395,10 +386,11 @@ public class FSUtils {
     return Integer.parseInt(matcher.group(4));
   }
 
-  public static String makeLogFileName(String fileId, String logFileExtension,
-      String baseCommitTime, int version, String writeToken) {
-    String suffix = (writeToken == null) ? String.format("%s_%s%s.%d",fileId, baseCommitTime, logFileExtension, version)
-        : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
+  public static String makeLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version,
+      String writeToken) {
+    String suffix =
+        (writeToken == null) ? String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version)
+            : String.format("%s_%s%s.%d_%s", fileId, baseCommitTime, logFileExtension, version, writeToken);
     return LOG_FILE_PREFIX + suffix;
   }
 
@@ -420,12 +412,11 @@ public class FSUtils {
   /**
    * Get all the log files for the passed in FileId in the partition path
    */
-  public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath,
-      final String fileId, final String logFileExtension, final String baseCommitTime)
-      throws IOException {
-    return Arrays.stream(fs.listStatus(partitionPath,
-        path -> path.getName().startsWith("." + fileId) && path.getName()
-            .contains(logFileExtension)))
+  public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
+      final String logFileExtension, final String baseCommitTime) throws IOException {
+    return Arrays
+        .stream(fs.listStatus(partitionPath,
+            path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
         .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
   }
 
@@ -433,14 +424,12 @@ public class FSUtils {
    * Get the latest log version for the fileId in the partition path
    */
   public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
-      final String fileId, final String logFileExtension, final String baseCommitTime)
-      throws IOException {
+      final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
     Option<HoodieLogFile> latestLogFile =
-        getLatestLogFile(
-            getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
+        getLatestLogFile(getAllLogFiles(fs, partitionPath, fileId, logFileExtension, baseCommitTime));
     if (latestLogFile.isPresent()) {
-      return Option.of(Pair.of(latestLogFile.get().getLogVersion(),
-          getWriteTokenFromLogPath(latestLogFile.get().getPath())));
+      return Option
+          .of(Pair.of(latestLogFile.get().getLogVersion(), getWriteTokenFromLogPath(latestLogFile.get().getPath())));
     }
     return Option.empty();
   }
@@ -450,7 +439,7 @@ public class FSUtils {
    */
   public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
-    Option<Pair<Integer, String>>  currentVersionWithWriteToken =
+    Option<Pair<Integer, String>> currentVersionWithWriteToken =
         getLatestLogVersion(fs, partitionPath, fileId, logFileExtension, baseCommitTime);
     // handle potential overflow
     return (currentVersionWithWriteToken.isPresent()) ? currentVersionWithWriteToken.get().getKey() + 1
@@ -466,10 +455,9 @@ public class FSUtils {
   }
 
   /**
-   * When a file was opened and the task died without closing the stream, another task executor
-   * cannot open because the existing lease will be active. We will try to recover the lease, from
-   * HDFS. If a data node went down, it takes about 10 minutes for the lease to be rocovered. But if
-   * the client dies, this should be instant.
+   * When a file was opened and the task died without closing the stream, another task executor cannot open because the
+   * existing lease will be active. We will try to recover the lease, from HDFS. If a data node went down, it takes
+   * about 10 minutes for the lease to be rocovered. But if the client dies, this should be instant.
    */
   public static boolean recoverDFSFileLease(final DistributedFileSystem dfs, final Path p)
       throws IOException, InterruptedException {
@@ -489,44 +477,38 @@ public class FSUtils {
     return recovered;
   }
 
-  public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath,
-      Stream<HoodieInstant> instants) {
-    //TODO - this should be archived when archival is made general for all meta-data
+  public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
+    // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_CLEAN_TO_KEEP and delete rest
     instants.skip(MIN_CLEAN_TO_KEEP).map(s -> {
       try {
         return fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
-        throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(),
-            e);
+        throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(), e);
       }
     });
   }
 
-  public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath,
-      Stream<HoodieInstant> instants) {
-    //TODO - this should be archived when archival is made general for all meta-data
+  public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
+    // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_ROLLBACK_TO_KEEP and delete rest
     instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
       try {
         return fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
-        throw new HoodieIOException(
-            "Could not delete rollback meta files " + s.getFileName(), e);
+        throw new HoodieIOException("Could not delete rollback meta files " + s.getFileName(), e);
       }
     });
   }
 
-  public static void deleteOlderRestoreMetaFiles(FileSystem fs, String metaPath,
-      Stream<HoodieInstant> instants) {
-    //TODO - this should be archived when archival is made general for all meta-data
+  public static void deleteOlderRestoreMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
+    // TODO - this should be archived when archival is made general for all meta-data
     // skip MIN_ROLLBACK_TO_KEEP and delete rest
     instants.skip(MIN_ROLLBACK_TO_KEEP).map(s -> {
       try {
         return fs.delete(new Path(metaPath, s.getFileName()), false);
       } catch (IOException e) {
-        throw new HoodieIOException(
-            "Could not delete restore meta files " + s.getFileName(), e);
+        throw new HoodieIOException("Could not delete restore meta files " + s.getFileName(), e);
       }
     });
   }
@@ -547,18 +529,18 @@ public class FSUtils {
 
   public static Path getPartitionPath(Path basePath, String partitionPath) {
     // FOr non-partitioned table, return only base-path
-    return ((partitionPath == null) || (partitionPath.isEmpty())) ? basePath :
-        new Path(basePath, partitionPath);
+    return ((partitionPath == null) || (partitionPath.isEmpty())) ? basePath : new Path(basePath, partitionPath);
   }
 
   /**
    * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
+   * 
    * @param inputStream FSDataInputStream
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
   public static boolean isGCSInputStream(FSDataInputStream inputStream) {
     return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
         || inputStream.getWrappedStream().getClass().getCanonicalName()
-        .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
+            .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
   }
 }

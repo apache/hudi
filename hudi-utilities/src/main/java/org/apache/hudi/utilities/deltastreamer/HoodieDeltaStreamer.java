@@ -71,13 +71,9 @@ import org.apache.spark.sql.SparkSession;
  * dataset. Does not maintain any state, queries at runtime to see how far behind the target dataset is from the source
  * dataset. This can be overriden to force sync from a timestamp.
  *
- * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations
- *    (a) pull-from-source
- *    (b) write-to-sink
- *    (c) Schedule Compactions if needed
- *    (d) Conditionally Sync to Hive
- *  each cycle. For MOR table with continuous mode enabled, a seperate compactor thread is allocated to execute
- *  compactions
+ * In continuous mode, DeltaStreamer runs in loop-mode going through the below operations (a) pull-from-source (b)
+ * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
+ * continuous mode enabled, a seperate compactor thread is allocated to execute compactions
  */
 public class HoodieDeltaStreamer implements Serializable {
 
@@ -111,6 +107,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
   /**
    * Main method to start syncing
+   * 
    * @throws Exception
    */
   public void sync() throws Exception {
@@ -146,8 +143,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public static class Config implements Serializable {
 
-    @Parameter(names = {"--target-base-path"}, description = "base path for the target hoodie dataset. "
-        + "(Will be created if did not exist first time around. If exists, expected to be a hoodie dataset)",
+    @Parameter(names = {"--target-base-path"},
+        description = "base path for the target hoodie dataset. "
+            + "(Will be created if did not exist first time around. If exists, expected to be a hoodie dataset)",
         required = true)
     public String targetBasePath;
 
@@ -155,8 +153,8 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
-    @Parameter(names = {"--storage-type"}, description = "Type of Storage. "
-        + "COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
+    @Parameter(names = {"--storage-type"}, description = "Type of Storage. " + "COPY_ON_WRITE (or) MERGE_ON_READ",
+        required = true)
     public String storageType;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
@@ -170,9 +168,10 @@ public class HoodieDeltaStreamer implements Serializable {
         + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
     public List<String> configs = new ArrayList<>();
 
-    @Parameter(names = {"--source-class"}, description = "Subclass of org.apache.hudi.utilities.sources to read data. "
-        + "Built-in options: org.apache.hudi.utilities.sources.{JsonDFSSource (default), AvroDFSSource, "
-        + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
+    @Parameter(names = {"--source-class"},
+        description = "Subclass of org.apache.hudi.utilities.sources to read data. "
+            + "Built-in options: org.apache.hudi.utilities.sources.{JsonDFSSource (default), AvroDFSSource, "
+            + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
 
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
@@ -203,12 +202,11 @@ public class HoodieDeltaStreamer implements Serializable {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)",
-        converter = OperationConvertor.class)
+        + "is purely new data/inserts to gain speed)", converter = OperationConvertor.class)
     public Operation operation = Operation.UPSERT;
 
-    @Parameter(names = {"--filter-dupes"}, description = "Should duplicate records from source be dropped/filtered out"
-        + "before insert/bulk-insert")
+    @Parameter(names = {"--filter-dupes"},
+        description = "Should duplicate records from source be dropped/filtered out" + "before insert/bulk-insert")
     public Boolean filterDupes = false;
 
     @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
@@ -223,14 +221,18 @@ public class HoodieDeltaStreamer implements Serializable {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
+    @Parameter(names = {"--min-sync-interval-seconds"},
+        description = "the min sync interval of each sync in " + "continuous mode")
+    public Integer minSyncIntervalSeconds = 0;
+
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";
 
     @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
 
-    @Parameter(names = {"--delta-sync-scheduling-weight"}, description =
-        "Scheduling weight for delta sync as defined in "
+    @Parameter(names = {"--delta-sync-scheduling-weight"},
+        description = "Scheduling weight for delta sync as defined in "
             + "https://spark.apache.org/docs/latest/job-scheduling.html")
     public Integer deltaSyncSchedulingWeight = 1;
 
@@ -249,8 +251,8 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Compaction is enabled for MoR table by default. This flag disables it
      */
-    @Parameter(names = {"--disable-compaction"}, description = "Compaction is enabled for MoR table by default."
-        + "This flag disables it ")
+    @Parameter(names = {"--disable-compaction"},
+        description = "Compaction is enabled for MoR table by default." + "This flag disables it ")
     public Boolean forceDisableCompaction = false;
 
     /**
@@ -284,8 +286,8 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName,
-        cfg.sparkMaster, additionalSparkConfigs);
+    JavaSparkContext jssc =
+        UtilHelpers.buildSparkContext("delta-streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
     try {
       new HoodieDeltaStreamer(cfg, jssc).sync();
     } finally {
@@ -345,8 +347,8 @@ public class HoodieDeltaStreamer implements Serializable {
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
-        HoodieTableMetaClient meta = new HoodieTableMetaClient(
-            new Configuration(fs.getConf()), cfg.targetBasePath, false);
+        HoodieTableMetaClient meta =
+            new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
         tableType = meta.getTableType();
         // This will guarantee there is no surprise with table type
         Preconditions.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.storageType)),
@@ -363,8 +365,8 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
       }
 
-      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType,
-          props, jssc, fs, hiveConf, this::onInitializingWriteClient);
+      deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, tableType, props, jssc, fs, hiveConf,
+          this::onInitializingWriteClient);
     }
 
     public DeltaSync getDeltaSync() {
@@ -384,13 +386,19 @@ public class HoodieDeltaStreamer implements Serializable {
         try {
           while (!isShutdownRequested()) {
             try {
+              long start = System.currentTimeMillis();
               Option<String> scheduledCompactionInstant = deltaSync.syncOnce();
               if (scheduledCompactionInstant.isPresent()) {
                 log.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
-                asyncCompactService.enqueuePendingCompaction(new HoodieInstant(
-                    State.REQUESTED, HoodieTimeline.COMPACTION_ACTION,
-                    scheduledCompactionInstant.get()));
+                asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
+                    HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstant.get()));
                 asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
+              }
+              long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
+              if (toSleepMs > 0) {
+                log.info("Last sync ran less than min sync interval: " + cfg.minSyncIntervalSeconds + " s, sleep: "
+                    + toSleepMs + " ms.");
+                Thread.sleep(toSleepMs);
               }
             } catch (Exception e) {
               log.error("Shutting down delta-sync due to exception", e);
@@ -418,6 +426,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Callback to initialize write client and start compaction service if required
+     * 
      * @param writeClient HoodieWriteClient
      * @return
      */
@@ -425,8 +434,8 @@ public class HoodieDeltaStreamer implements Serializable {
       if (cfg.isAsyncCompactionEnabled()) {
         asyncCompactService = new AsyncCompactService(jssc, writeClient);
         // Enqueue existing pending compactions first
-        HoodieTableMetaClient meta = new HoodieTableMetaClient(
-            new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
+        HoodieTableMetaClient meta =
+            new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
         List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
         pending.stream().forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
         asyncCompactService.start((error) -> {
@@ -488,7 +497,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public AsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
       this.jssc = jssc;
       this.compactor = new Compactor(client, jssc);
-      //TODO: HUDI-157 : Only allow 1 compactor to run in parallel till Incremental View on MOR is fully implemented.
+      // TODO: HUDI-157 : Only allow 1 compactor to run in parallel till Incremental View on MOR is fully implemented.
       this.maxConcurrentCompaction = 1;
     }
 
@@ -501,6 +510,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Wait till outstanding pending compactions reduces to the passed in value
+     * 
      * @param numPendingCompactions Maximum pending compactions allowed
      * @throws InterruptedException
      */
@@ -517,6 +527,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     /**
      * Fetch Next pending compaction if available
+     * 
      * @return
      * @throws InterruptedException
      */

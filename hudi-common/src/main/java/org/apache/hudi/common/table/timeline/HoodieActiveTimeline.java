@@ -43,22 +43,25 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Represents the Active Timeline for the HoodieDataset. Instants for the last 12 hours
- * (configurable) is in the ActiveTimeline and the rest are Archived. ActiveTimeline is a special
- * timeline that allows for creation of instants on the timeline. <p></p> The timeline is not
- * automatically reloaded on any mutation operation, clients have to manually call reload() so that
- * they can chain multiple mutations to the timeline and then call reload() once. <p></p> This class
- * can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
+ * Represents the Active Timeline for the HoodieDataset. Instants for the last 12 hours (configurable) is in the
+ * ActiveTimeline and the rest are Archived. ActiveTimeline is a special timeline that allows for creation of instants
+ * on the timeline.
+ * <p>
+ * </p>
+ * The timeline is not automatically reloaded on any mutation operation, clients have to manually call reload() so that
+ * they can chain multiple mutations to the timeline and then call reload() once.
+ * <p>
+ * </p>
+ * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
-  public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
-      new String[]{COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
-          INFLIGHT_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION,
-          CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
-          INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
+  public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(new String[] {
+      COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION,
+      SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
+      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
   private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
@@ -83,14 +86,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
-    this.details =
-        (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
+    this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
-    this(metaClient,
-        new ImmutableSet.Builder<String>()
-            .addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build());
+    this(metaClient, new ImmutableSet.Builder<String>().addAll(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE).build());
   }
 
   /**
@@ -98,16 +98,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieActiveTimeline() {
-  }
+  public HoodieActiveTimeline() {}
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
    *
    * @deprecated
    */
-  private void readObject(java.io.ObjectInputStream in)
-      throws IOException, ClassNotFoundException {
+  private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
   }
 
@@ -116,29 +114,25 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    */
   public HoodieTimeline getCommitsTimeline() {
-    return getTimelineOfActions(
-        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
+    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
   }
 
   /**
    * Get all instants (commits, delta commits, in-flight/request compaction) that produce new data, in the active
-   * timeline *
-   * With Async compaction a requested/inflight compaction-instant is a valid baseInstant for a file-slice as there
-   * could be delta-commits with that baseInstant.
+   * timeline * With Async compaction a requested/inflight compaction-instant is a valid baseInstant for a file-slice as
+   * there could be delta-commits with that baseInstant.
    */
   public HoodieTimeline getCommitsAndCompactionTimeline() {
-    return getTimelineOfActions(
-        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION));
+    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION));
   }
 
   /**
-   * Get all instants (commits, delta commits, clean, savepoint, rollback) that result in actions,
-   * in the active timeline *
+   * Get all instants (commits, delta commits, clean, savepoint, rollback) that result in actions, in the active
+   * timeline *
    */
   public HoodieTimeline getAllCommitsTimeline() {
-    return getTimelineOfActions(
-        Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
-            SAVEPOINT_ACTION, ROLLBACK_ACTION));
+    return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
+        SAVEPOINT_ACTION, ROLLBACK_ACTION));
   }
 
   /**
@@ -157,8 +151,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple
-   * actions
+   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions
    *
    * @param actions actions allowed in the timeline
    */
@@ -246,8 +239,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         throw new HoodieIOException("Could not delete in-flight instant " + instant);
       }
     } catch (IOException e) {
-      throw new HoodieIOException(
-          "Could not remove inflight commit " + inFlightCommitFilePath, e);
+      throw new HoodieIOException("Could not remove inflight commit " + inFlightCommitFilePath, e);
     }
   }
 
@@ -299,7 +291,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Transition Compaction State from inflight to Committed
    *
    * @param inflightInstant Inflight instant
-   * @param data            Extra Metadata
+   * @param data Extra Metadata
    * @return commit instant
    */
   public HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
@@ -319,8 +311,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * END - COMPACTION RELATED META-DATA MANAGEMENT
    **/
 
-  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant,
-      Option<byte[]> data) {
+  private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
     Preconditions.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     Path commitFilePath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
     try {
@@ -329,8 +320,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       createFileInMetaPath(fromInstant.getFileName(), data);
       boolean success = metaClient.getFs().rename(inflightCommitFile, commitFilePath);
       if (!success) {
-        throw new HoodieIOException(
-            "Could not rename " + inflightCommitFile + " to " + commitFilePath);
+        throw new HoodieIOException("Could not rename " + inflightCommitFile + " to " + commitFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);
@@ -345,8 +335,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         Path commitFilePath = new Path(metaClient.getMetaPath(), completed.getFileName());
         boolean success = metaClient.getFs().rename(commitFilePath, inFlightCommitFilePath);
         if (!success) {
-          throw new HoodieIOException(
-              "Could not rename " + commitFilePath + " to " + inFlightCommitFilePath);
+          throw new HoodieIOException("Could not rename " + commitFilePath + " to " + inFlightCommitFilePath);
         }
       }
     } catch (IOException e) {

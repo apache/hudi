@@ -36,6 +36,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
@@ -76,6 +77,8 @@ import org.junit.rules.TemporaryFolder;
 
 public class HoodieRealtimeRecordReaderTest {
 
+  private static final String PARTITION_COLUMN = "datestr";
+
   private JobConf jobConf;
   private FileSystem fs;
   private Configuration hadoopConf;
@@ -91,28 +94,22 @@ public class HoodieRealtimeRecordReaderTest {
   @Rule
   public TemporaryFolder basePath = new TemporaryFolder();
 
-  private Writer writeLogFile(File partitionDir, Schema schema, String fileId,
-      String baseCommit, String newCommit, int numberOfRecords)
-      throws InterruptedException, IOException {
+  private Writer writeLogFile(File partitionDir, Schema schema, String fileId, String baseCommit, String newCommit,
+      int numberOfRecords) throws InterruptedException, IOException {
     return writeDataBlockToLogFile(partitionDir, schema, fileId, baseCommit, newCommit, numberOfRecords, 0, 0);
   }
 
-  private Writer writeRollback(File partitionDir, Schema schema, String fileId,
-      String baseCommit, String newCommit, String rolledBackInstant, int logVersion)
-      throws InterruptedException, IOException {
-    Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new Path(partitionDir.getPath()))
-        .withFileId(fileId).overBaseCommit(baseCommit)
-        .withFs(fs)
-        .withLogVersion(logVersion)
-        .withLogWriteToken("1-0-1")
+  private Writer writeRollback(File partitionDir, Schema schema, String fileId, String baseCommit, String newCommit,
+      String rolledBackInstant, int logVersion) throws InterruptedException, IOException {
+    Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath())).withFileId(fileId)
+        .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withLogWriteToken("1-0-1")
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
     Map<HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HeaderMetadataType.TARGET_INSTANT_TIME, rolledBackInstant);
-    header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE, String.valueOf(HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK
-        .ordinal()));
+    header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,
+        String.valueOf(HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     // if update belongs to an existing log file
     writer = writer.appendBlock(new HoodieCommandBlock(header));
     return writer;
@@ -121,12 +118,9 @@ public class HoodieRealtimeRecordReaderTest {
   private HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir, Schema schema, String fileId,
       String baseCommit, String newCommit, int numberOfRecords, int offset, int logVersion)
       throws InterruptedException, IOException {
-    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new Path(partitionDir.getPath()))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .withLogVersion(logVersion)
-        .withLogWriteToken("1-0-1")
-        .overBaseCommit(baseCommit).withFs(fs).build();
+    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withLogVersion(logVersion)
+        .withLogWriteToken("1-0-1").overBaseCommit(baseCommit).withFs(fs).build();
     List<IndexedRecord> records = new ArrayList<>();
     for (int i = offset; i < offset + numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -141,19 +135,17 @@ public class HoodieRealtimeRecordReaderTest {
   }
 
   private HoodieLogFormat.Writer writeRollbackBlockToLogFile(File partitionDir, Schema schema, String fileId,
-      String baseCommit, String newCommit, String oldCommit, int logVersion)
-      throws InterruptedException, IOException {
-    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-        .onParentPath(new Path(partitionDir.getPath()))
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
-        .overBaseCommit(baseCommit).withLogVersion(logVersion).withFs(fs).build();
+      String baseCommit, String newCommit, String oldCommit, int logVersion) throws InterruptedException, IOException {
+    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).overBaseCommit(baseCommit)
+        .withLogVersion(logVersion).withFs(fs).build();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header = Maps.newHashMap();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, oldCommit);
-    header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE, String.valueOf(HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK
-        .ordinal()));
+    header.put(HeaderMetadataType.COMMAND_BLOCK_TYPE,
+        String.valueOf(HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     HoodieCommandBlock rollbackBlock = new HoodieCommandBlock(header);
     writer = writer.appendBlock(rollbackBlock);
     return writer;
@@ -169,15 +161,28 @@ public class HoodieRealtimeRecordReaderTest {
     testReader(false);
   }
 
-  public void testReader(boolean partitioned) throws Exception {
+  private void setHiveColumnNameProps(List<Schema.Field> fields, JobConf jobConf, boolean isPartitioned) {
+    String names = fields.stream().map(Field::name).collect(Collectors.joining(","));
+    String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+
+    String hiveOrderedColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase(PARTITION_COLUMN))
+        .map(Field::name).collect(Collectors.joining(","));
+    if (isPartitioned) {
+      hiveOrderedColumnNames += "," + PARTITION_COLUMN;
+      jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, PARTITION_COLUMN);
+    }
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveOrderedColumnNames);
+  }
+
+  private void testReader(boolean partitioned) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
-        HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
-    File partitionDir =
-        partitioned ? InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 100, baseInstant)
-            : InputFormatTestUtil.prepareNonPartitionedParquetDataset(basePath, schema, 1, 100, baseInstant);
+    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, 100, baseInstant)
+        : InputFormatTestUtil.prepareNonPartitionedParquetDataset(basePath, schema, 1, 100, baseInstant);
     InputFormatTestUtil.commit(basePath, baseInstant);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -187,9 +192,9 @@ public class HoodieRealtimeRecordReaderTest {
     logVersionsWithAction.add(Pair.of(HoodieTimeline.DELTA_COMMIT_ACTION, 2));
     // TODO: HUDI-154 Once Hive 2.x PR (PR-674) is merged, enable this change
     // logVersionsWithAction.add(Pair.of(HoodieTimeline.ROLLBACK_ACTION, 3));
-    FileSlice fileSlice = new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(
-        basePath.getRoot().getAbsolutePath()), new Path(partitionDir.getAbsolutePath())) : "default",
-        baseInstant, "fileid0");
+    FileSlice fileSlice =
+        new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(basePath.getRoot().getAbsolutePath()),
+            new Path(partitionDir.getAbsolutePath())) : "default", baseInstant, "fileid0");
     logVersionsWithAction.stream().forEach(logVersionWithAction -> {
       try {
         // update files or generate new log file
@@ -197,55 +202,47 @@ public class HoodieRealtimeRecordReaderTest {
         String action = logVersionWithAction.getKey();
         int baseInstantTs = Integer.parseInt(baseInstant);
         String instantTime = String.valueOf(baseInstantTs + logVersion);
-        String latestInstant = action.equals(HoodieTimeline.ROLLBACK_ACTION)
-            ? String.valueOf(baseInstantTs + logVersion - 2) : instantTime;
+        String latestInstant =
+            action.equals(HoodieTimeline.ROLLBACK_ACTION) ? String.valueOf(baseInstantTs + logVersion - 2)
+                : instantTime;
 
         HoodieLogFormat.Writer writer = null;
         if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          writer = writeRollback(partitionDir, schema, "fileid0", baseInstant,
-              instantTime, String.valueOf(baseInstantTs + logVersion - 1), logVersion);
+          writer = writeRollback(partitionDir, schema, "fileid0", baseInstant, instantTime,
+              String.valueOf(baseInstantTs + logVersion - 1), logVersion);
         } else {
-          writer = writeDataBlockToLogFile(partitionDir, schema, "fileid0", baseInstant,
-              instantTime, 100, 0, logVersion);
+          writer =
+              writeDataBlockToLogFile(partitionDir, schema, "fileid0", baseInstant, instantTime, 100, 0, logVersion);
         }
         long size = writer.getCurrentSize();
         writer.close();
         assertTrue("block - size should be > 0", size > 0);
 
-        //create a split with baseFile (parquet file written earlier) and new log file(s)
+        // create a split with baseFile (parquet file written earlier) and new log file(s)
         fileSlice.addLogFile(writer.getLogFile());
         HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-            new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1,
-                jobConf), basePath.getRoot().getPath(),
-            fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(h -> h.getPath().toString())
-                .collect(Collectors.toList()), instantTime);
+            new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + baseInstant + ".parquet"), 0, 1, jobConf),
+            basePath.getRoot().getPath(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+                .map(h -> h.getPath().toString()).collect(Collectors.toList()),
+            instantTime);
 
-        //create a RecordReader to be used by HoodieRealtimeRecordReader
-        RecordReader<NullWritable, ArrayWritable> reader =
-            new MapredParquetInputFormat().getRecordReader(
-                new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
-                jobConf, null);
+        // create a RecordReader to be used by HoodieRealtimeRecordReader
+        RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
+            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null), jobConf, null);
         JobConf jobConf = new JobConf();
         List<Schema.Field> fields = schema.getFields();
-        String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
-        String postions = fields.stream().map(f -> String.valueOf(f.pos()))
-            .collect(Collectors.joining(","));
-        jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-        jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
-        if (partitioned) {
-          jobConf.set("partition_columns", "datestr");
-        }
+        setHiveColumnNameProps(fields, jobConf, partitioned);
 
-        //validate record reader compaction
+        // validate record reader compaction
         HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
 
-        //use reader to read base Parquet File and log file, merge in flight and return latest commit
-        //here all 100 records should be updated, see above
+        // use reader to read base Parquet File and log file, merge in flight and return latest commit
+        // here all 100 records should be updated, see above
         NullWritable key = recordReader.createKey();
         ArrayWritable value = recordReader.createValue();
         while (recordReader.next(key, value)) {
           Writable[] values = value.get();
-          //check if the record written is with latest commit, here "101"
+          // check if the record written is with latest commit, here "101"
           Assert.assertEquals(latestInstant, values[0].toString());
           key = recordReader.createKey();
           value = recordReader.createValue();
@@ -263,53 +260,44 @@ public class HoodieRealtimeRecordReaderTest {
   public void testUnMergedReader() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
-        HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     final int numRecords = 1000;
     final int firstBatchLastRecordKey = numRecords - 1;
     final int secondBatchLastRecordKey = 2 * numRecords - 1;
-    File partitionDir = InputFormatTestUtil
-        .prepareParquetDataset(basePath, schema, 1, numRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, numRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
 
     // insert new records to log file
     String newCommitTime = "101";
-    HoodieLogFormat.Writer writer = writeDataBlockToLogFile(partitionDir, schema, "fileid0", commitTime,
-        newCommitTime, numRecords, numRecords, 0);
+    HoodieLogFormat.Writer writer =
+        writeDataBlockToLogFile(partitionDir, schema, "fileid0", commitTime, newCommitTime, numRecords, numRecords, 0);
     long size = writer.getCurrentSize();
     writer.close();
     assertTrue("block - size should be > 0", size > 0);
 
-    //create a split with baseFile (parquet file written earlier) and new log file(s)
+    // create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-        new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + commitTime + ".parquet"), 0, 1,
-            jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
+        new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + commitTime + ".parquet"), 0, 1, jobConf),
+        basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
 
-    //create a RecordReader to be used by HoodieRealtimeRecordReader
-    RecordReader<NullWritable, ArrayWritable> reader =
-        new MapredParquetInputFormat().getRecordReader(
-            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
-            jobConf, null);
+    // create a RecordReader to be used by HoodieRealtimeRecordReader
+    RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
+        new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null), jobConf, null);
     JobConf jobConf = new JobConf();
     List<Schema.Field> fields = schema.getFields();
-    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
-    String postions = fields.stream().map(f -> String.valueOf(f.pos()))
-        .collect(Collectors.joining(","));
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
-    jobConf.set("partition_columns", "datestr");
+    setHiveColumnNameProps(fields, jobConf, true);
     // Enable merge skipping.
     jobConf.set("hoodie.realtime.merge.skip", "true");
 
-    //validate unmerged record reader
+    // validate unmerged record reader
     RealtimeUnmergedRecordReader recordReader = new RealtimeUnmergedRecordReader(split, jobConf, reader);
 
-    //use reader to read base Parquet File and log file
-    //here all records should be present. Also ensure log records are in order.
+    // use reader to read base Parquet File and log file
+    // here all records should be present. Also ensure log records are in order.
     NullWritable key = recordReader.createKey();
     ArrayWritable value = recordReader.createValue();
     int numRecordsAtCommit1 = 0;
@@ -347,46 +335,36 @@ public class HoodieRealtimeRecordReaderTest {
   public void testReaderWithNestedAndComplexSchema() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
-        HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
-    File partitionDir = InputFormatTestUtil
-        .prepareParquetDataset(basePath, schema, 1, numberOfRecords, commitTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetDataset(basePath, schema, 1, numberOfRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
 
     // update files or generate new log file
     String newCommitTime = "101";
-    HoodieLogFormat.Writer writer = writeLogFile(partitionDir, schema, "fileid0", commitTime,
-        newCommitTime, numberOfLogRecords);
+    HoodieLogFormat.Writer writer =
+        writeLogFile(partitionDir, schema, "fileid0", commitTime, newCommitTime, numberOfLogRecords);
     long size = writer.getCurrentSize();
     writer.close();
     assertTrue("block - size should be > 0", size > 0);
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
-    //create a split with baseFile (parquet file written earlier) and new log file(s)
+    // create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-        new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + commitTime + ".parquet"), 0, 1,
-            jobConf), basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
+        new FileSplit(new Path(partitionDir + "/fileid0_1-0-1_" + commitTime + ".parquet"), 0, 1, jobConf),
+        basePath.getRoot().getPath(), Arrays.asList(logFilePath), newCommitTime);
 
-    //create a RecordReader to be used by HoodieRealtimeRecordReader
-    RecordReader<NullWritable, ArrayWritable> reader =
-        new MapredParquetInputFormat().getRecordReader(
-            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
-            jobConf, null);
+    // create a RecordReader to be used by HoodieRealtimeRecordReader
+    RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
+        new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null), jobConf, null);
     JobConf jobConf = new JobConf();
     List<Schema.Field> fields = schema.getFields();
-
-    String names = fields.stream().map(f -> f.name()).collect(Collectors.joining(","));
-    String positions = fields.stream().map(f -> String.valueOf(f.pos()))
-        .collect(Collectors.joining(","));
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
-    jobConf.set("partition_columns", "datestr");
+    setHiveColumnNameProps(fields, jobConf, true);
 
     // validate record reader compaction
     HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
@@ -401,7 +379,7 @@ public class HoodieRealtimeRecordReaderTest {
       ++numRecordsRead;
       Writable[] values = value.get();
       String recordCommitTime;
-      //check if the record written is with latest commit, here "101"
+      // check if the record written is with latest commit, here "101"
       if (numRecordsRead > numberOfLogRecords) {
         recordCommitTime = commitTime;
       } else {
@@ -414,12 +392,10 @@ public class HoodieRealtimeRecordReaderTest {
       value = recordReader.createValue();
 
       // Assert type STRING
-      Assert.assertEquals("test value for field: field1", values[5].toString(),
-          "field" + currentRecordNo);
+      Assert.assertEquals("test value for field: field1", values[5].toString(), "field" + currentRecordNo);
       Assert.assertEquals("test value for field: field2", values[6].toString(),
           "field" + currentRecordNo + recordCommitTimeSuffix);
-      Assert.assertEquals("test value for field: name", values[7].toString(),
-          "name" + currentRecordNo);
+      Assert.assertEquals("test value for field: name", values[7].toString(), "name" + currentRecordNo);
 
       // Assert type INT
       IntWritable intWritable = (IntWritable) values[8];
@@ -459,20 +435,17 @@ public class HoodieRealtimeRecordReaderTest {
       Assert.assertEquals("test value for field: tags[\"mapItem2\"].item1",
           ((ArrayWritable) mapItemValue2value).get()[0].toString(), "item2" + currentRecordNo);
       Assert.assertEquals("test value for field: tags[\"mapItem1\"].item2",
-          ((ArrayWritable) mapItemValue1value).get()[1].toString(),
-          "item" + currentRecordNo + recordCommitTimeSuffix);
+          ((ArrayWritable) mapItemValue1value).get()[1].toString(), "item" + currentRecordNo + recordCommitTimeSuffix);
       Assert.assertEquals("test value for field: tags[\"mapItem2\"].item2",
-          ((ArrayWritable) mapItemValue2value).get()[1].toString(),
-          "item2" + currentRecordNo + recordCommitTimeSuffix);
+          ((ArrayWritable) mapItemValue2value).get()[1].toString(), "item2" + currentRecordNo + recordCommitTimeSuffix);
 
       // Assert type RECORD
       ArrayWritable recordItem = (ArrayWritable) values[13];
       Writable[] nestedRecord = recordItem.get();
-      Assert.assertEquals("test value for field: testNestedRecord.isAdmin",
-          ((BooleanWritable) nestedRecord[0]).get(), false);
-      Assert
-          .assertEquals("test value for field: testNestedRecord.userId", nestedRecord[1].toString(),
-              "UserId" + currentRecordNo + recordCommitTimeSuffix);
+      Assert.assertEquals("test value for field: testNestedRecord.isAdmin", ((BooleanWritable) nestedRecord[0]).get(),
+          false);
+      Assert.assertEquals("test value for field: testNestedRecord.userId", nestedRecord[1].toString(),
+          "UserId" + currentRecordNo + recordCommitTimeSuffix);
 
       // Assert type ARRAY
       ArrayWritable arrayValue = (ArrayWritable) values[14];
@@ -489,13 +462,12 @@ public class HoodieRealtimeRecordReaderTest {
     // initial commit
     List<String> logFilePaths = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(),
-        HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(hadoopConf, basePath.getRoot().getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     String commitTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
-    File partitionDir = InputFormatTestUtil
-        .prepareSimpleParquetDataset(basePath, schema, 1, numberOfRecords, commitTime);
+    File partitionDir =
+        InputFormatTestUtil.prepareSimpleParquetDataset(basePath, schema, 1, numberOfRecords, commitTime);
     InputFormatTestUtil.commit(basePath, commitTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -504,8 +476,8 @@ public class HoodieRealtimeRecordReaderTest {
     // update files and generate new log file but don't commit
     schema = SchemaTestUtil.getComplexEvolvedSchema();
     String newCommitTime = "101";
-    HoodieLogFormat.Writer writer = writeDataBlockToLogFile(partitionDir, schema, "fileid0", commitTime,
-        newCommitTime, numberOfLogRecords, 0, 1);
+    HoodieLogFormat.Writer writer =
+        writeDataBlockToLogFile(partitionDir, schema, "fileid0", commitTime, newCommitTime, numberOfLogRecords, 0, 1);
     long size = writer.getCurrentSize();
     logFilePaths.add(writer.getLogFile().getPath().toString());
     writer.close();
@@ -513,35 +485,27 @@ public class HoodieRealtimeRecordReaderTest {
 
     // write rollback for the previous block in new log file version
     newCommitTime = "102";
-    writer = writeRollbackBlockToLogFile(partitionDir, schema, "fileid0", commitTime,
-        newCommitTime, "101", 1);
+    writer = writeRollbackBlockToLogFile(partitionDir, schema, "fileid0", commitTime, newCommitTime, "101", 1);
     logFilePaths.add(writer.getLogFile().getPath().toString());
     writer.close();
     assertTrue("block - size should be > 0", size > 0);
     InputFormatTestUtil.deltaCommit(basePath, newCommitTime);
 
-    //create a split with baseFile (parquet file written earlier) and new log file(s)
+    // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-        new FileSplit(new Path(partitionDir + "/fileid0_1_" + commitTime + ".parquet"), 0, 1,
-            jobConf), basePath.getRoot().getPath(), logFilePaths, newCommitTime);
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + commitTime + ".parquet"), 0, 1, jobConf),
+        basePath.getRoot().getPath(), logFilePaths, newCommitTime);
 
-    //create a RecordReader to be used by HoodieRealtimeRecordReader
-    RecordReader<NullWritable, ArrayWritable> reader =
-        new MapredParquetInputFormat().getRecordReader(
-            new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null),
-            jobConf, null);
+    // create a RecordReader to be used by HoodieRealtimeRecordReader
+    RecordReader<NullWritable, ArrayWritable> reader = new MapredParquetInputFormat().getRecordReader(
+        new FileSplit(split.getPath(), 0, fs.getLength(split.getPath()), (String[]) null), jobConf, null);
     JobConf jobConf = new JobConf();
     List<Schema.Field> fields = schema.getFields();
 
     assert (firstSchemaFields.containsAll(fields) == false);
 
     // Try to read all the fields passed by the new schema
-    String names = fields.stream().map(f -> f.name()).collect(Collectors.joining(","));
-    String positions = fields.stream().map(f -> String.valueOf(f.pos()))
-        .collect(Collectors.joining(","));
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
-    jobConf.set("partition_columns", "datestr");
+    setHiveColumnNameProps(fields, jobConf, true);
 
     HoodieRealtimeRecordReader recordReader = null;
     try {
@@ -553,12 +517,7 @@ public class HoodieRealtimeRecordReaderTest {
     }
 
     // Try to read all the fields passed by the new schema
-    names = firstSchemaFields.stream().map(f -> f.name()).collect(Collectors.joining(","));
-    positions = firstSchemaFields.stream().map(f -> String.valueOf(f.pos()))
-        .collect(Collectors.joining(","));
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
-    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
-    jobConf.set("partition_columns", "datestr");
+    setHiveColumnNameProps(firstSchemaFields, jobConf, true);
     // This time read only the fields which are part of parquet
     recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
     // use reader to read base Parquet File and log file
