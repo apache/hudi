@@ -34,7 +34,7 @@ public abstract class Source<T> implements Serializable {
   protected static volatile Logger log = LogManager.getLogger(Source.class);
 
   public enum SourceType {
-    JSON, AVRO, ROW
+    JSON, AVRO, ROW, PARQUET
   }
 
   protected transient TypedProperties props;
