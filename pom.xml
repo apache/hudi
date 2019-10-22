@@ -76,7 +76,7 @@
     <java.version>1.8</java.version>
     <fasterxml.version>2.6.7</fasterxml.version>
     <glassfish.version>2.17</glassfish.version>
-    <parquet.version>1.8.1</parquet.version>
+    <parquet.version>1.10.1</parquet.version>
     <junit.version>4.11</junit.version>
     <junit-dep.version>4.10</junit-dep.version>
     <mockito.version>1.10.19</mockito.version>
@@ -88,8 +88,8 @@
     <hive.version>2.3.1</hive.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
-    <spark.version>2.1.0</spark.version>
-    <avro.version>1.7.7</avro.version>
+    <spark.version>2.4.4</spark.version>
+    <avro.version>1.8.2</avro.version>
     <scala.version>2.11.8</scala.version>
     <scala.libversion>2.11</scala.libversion>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
@@ -105,8 +105,6 @@
     <skipUTs>${skipTests}</skipUTs>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
-    <mr.bundle.avro.scope>provided</mr.bundle.avro.scope>
-    <mr.bundle.avro.shade.prefix></mr.bundle.avro.shade.prefix>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
     <spark.bundle.hive.shade.prefix></spark.bundle.hive.shade.prefix>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
@@ -485,9 +483,10 @@
 
       <!-- Spark (Packages) -->
       <dependency>
-        <groupId>com.databricks</groupId>
+        <groupId>org.apache.spark</groupId>
         <artifactId>spark-avro_2.11</artifactId>
-        <version>4.0.0</version>
+        <version>${spark.version}</version>
+        <scope>provided</scope>
       </dependency>
 
       <!-- Dropwizard Metrics -->
@@ -932,13 +931,6 @@
       </activation>
       <properties>
         <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties</surefire-log4j.file>
-      </properties>
-    </profile>
-    <profile>
-      <id>aws-emr-profile</id>
-      <properties>
-        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
-        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
       </properties>
     </profile>
     <profile>

@@ -161,7 +161,7 @@
     </dependency>
 
     <dependency>
-      <groupId>com.databricks</groupId>
+      <groupId>org.apache.spark</groupId>
       <artifactId>spark-avro_2.11</artifactId>
       <scope>provided</scope>
     </dependency>
