@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -94,7 +95,9 @@ public abstract class CompactionStrategy implements Serializable {
       List<HoodieCompactionOperation> operations, List<HoodieCompactionPlan> pendingCompactionPlans) {
     // Strategy implementation can overload this method to set specific compactor-id
     return HoodieCompactionPlan.newBuilder()
-        .setOperations(orderAndFilter(writeConfig, operations, pendingCompactionPlans)).build();
+        .setOperations(orderAndFilter(writeConfig, operations, pendingCompactionPlans))
+        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
+        .build();
   }
 
   /**

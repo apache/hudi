@@ -126,6 +126,11 @@
             "type":"map",
             "values":"string"
          }]
+      },
+      {
+         "name":"version",
+         "type":["int", "null"],
+         "default": 1
       }
    ]
 }

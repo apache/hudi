@@ -67,6 +67,11 @@
       {
          "name":"actionType",
          "type":["null","string"]
+      },
+      {
+         "name":"version",
+         "type":["int", "null"],
+         "default": 1
       }
    ]
 }

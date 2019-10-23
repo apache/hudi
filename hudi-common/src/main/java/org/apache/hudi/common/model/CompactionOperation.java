@@ -39,8 +39,8 @@ public class CompactionOperation implements Serializable {
 
   private String baseInstantTime;
   private Option<String> dataFileCommitTime;
-  private List<String> deltaFilePaths;
-  private Option<String> dataFilePath;
+  private List<String> deltaFileNames;
+  private Option<String> dataFileName;
   private HoodieFileGroupId id;
   private Map<String, Double> metrics;
 
@@ -49,12 +49,12 @@ public class CompactionOperation implements Serializable {
   public CompactionOperation() {}
 
   public CompactionOperation(String fileId, String partitionPath, String baseInstantTime,
-      Option<String> dataFileCommitTime, List<String> deltaFilePaths, Option<String> dataFilePath,
+      Option<String> dataFileCommitTime, List<String> deltaFileNames, Option<String> dataFileName,
       Map<String, Double> metrics) {
     this.baseInstantTime = baseInstantTime;
     this.dataFileCommitTime = dataFileCommitTime;
-    this.deltaFilePaths = deltaFilePaths;
-    this.dataFilePath = dataFilePath;
+    this.deltaFileNames = deltaFileNames;
+    this.dataFileName = dataFileName;
     this.id = new HoodieFileGroupId(partitionPath, fileId);
     this.metrics = metrics;
   }
@@ -63,18 +63,18 @@ public class CompactionOperation implements Serializable {
       Map<String, Double> metrics) {
     if (dataFile.isPresent()) {
       this.baseInstantTime = dataFile.get().getCommitTime();
-      this.dataFilePath = Option.of(dataFile.get().getPath());
+      this.dataFileName = Option.of(dataFile.get().getFileName());
       this.id = new HoodieFileGroupId(partitionPath, dataFile.get().getFileId());
       this.dataFileCommitTime = Option.of(dataFile.get().getCommitTime());
     } else {
       assert logFiles.size() > 0;
-      this.dataFilePath = Option.empty();
+      this.dataFileName = Option.empty();
       this.baseInstantTime = FSUtils.getBaseCommitTimeFromLogPath(logFiles.get(0).getPath());
       this.id = new HoodieFileGroupId(partitionPath, FSUtils.getFileIdFromLogPath(logFiles.get(0).getPath()));
       this.dataFileCommitTime = Option.empty();
     }
 
-    this.deltaFilePaths = logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList());
+    this.deltaFileNames = logFiles.stream().map(s -> s.getPath().getName()).collect(Collectors.toList());
     this.metrics = metrics;
   }
 
@@ -86,12 +86,12 @@ public class CompactionOperation implements Serializable {
     return dataFileCommitTime;
   }
 
-  public List<String> getDeltaFilePaths() {
-    return deltaFilePaths;
+  public List<String> getDeltaFileNames() {
+    return deltaFileNames;
   }
 
-  public Option<String> getDataFilePath() {
-    return dataFilePath;
+  public Option<String> getDataFileName() {
+    return dataFileName;
   }
 
   public String getFileId() {
@@ -110,9 +110,9 @@ public class CompactionOperation implements Serializable {
     return id;
   }
 
-  public Option<HoodieDataFile> getBaseFile() {
-    // TODO: HUDI-130 - Paths return in compaction plan needs to be relative to base-path
-    return dataFilePath.map(df -> new HoodieDataFile(df));
+  public Option<HoodieDataFile> getBaseFile(String basePath, String partitionPath) {
+    Path dirPath = FSUtils.getPartitionPath(basePath, partitionPath);
+    return dataFileName.map(df -> new HoodieDataFile(new Path(dirPath, df).toString()));
   }
 
   /**
@@ -124,9 +124,9 @@ public class CompactionOperation implements Serializable {
   public static CompactionOperation convertFromAvroRecordInstance(HoodieCompactionOperation operation) {
     CompactionOperation op = new CompactionOperation();
     op.baseInstantTime = operation.getBaseInstantTime();
-    op.dataFilePath = Option.ofNullable(operation.getDataFilePath());
-    op.dataFileCommitTime = op.dataFilePath.map(p -> FSUtils.getCommitTime(new Path(p).getName()));
-    op.deltaFilePaths = new ArrayList<>(operation.getDeltaFilePaths());
+    op.dataFileName = Option.ofNullable(operation.getDataFilePath());
+    op.dataFileCommitTime = op.dataFileName.map(p -> FSUtils.getCommitTime(new Path(p).getName()));
+    op.deltaFileNames = new ArrayList<>(operation.getDeltaFilePaths());
     op.id = new HoodieFileGroupId(operation.getPartitionPath(), operation.getFileId());
     op.metrics = operation.getMetrics() == null ? new HashMap<>() : new HashMap<>(operation.getMetrics());
     return op;
@@ -134,9 +134,14 @@ public class CompactionOperation implements Serializable {
 
   @Override
   public String toString() {
-    return "CompactionOperation{" + "baseInstantTime='" + baseInstantTime + '\'' + ", dataFileCommitTime="
-        + dataFileCommitTime + ", deltaFilePaths=" + deltaFilePaths + ", dataFilePath=" + dataFilePath + ", id='" + id
-        + '\'' + ", metrics=" + metrics + '}';
+    return "CompactionOperation{"
+        + "baseInstantTime='" + baseInstantTime + '\''
+        + ", dataFileCommitTime=" + dataFileCommitTime
+        + ", deltaFileNames=" + deltaFileNames
+        + ", dataFileName=" + dataFileName
+        + ", id='" + id + '\''
+        + ", metrics=" + metrics
+        + '}';
   }
 
   @Override
@@ -150,8 +155,9 @@ public class CompactionOperation implements Serializable {
     CompactionOperation operation = (CompactionOperation) o;
     return Objects.equals(baseInstantTime, operation.baseInstantTime)
         && Objects.equals(dataFileCommitTime, operation.dataFileCommitTime)
-        && Objects.equals(deltaFilePaths, operation.deltaFilePaths)
-        && Objects.equals(dataFilePath, operation.dataFilePath) && Objects.equals(id, operation.id);
+        && Objects.equals(deltaFileNames, operation.deltaFileNames)
+        && Objects.equals(dataFileName, operation.dataFileName)
+        && Objects.equals(id, operation.id);
   }
 
   @Override

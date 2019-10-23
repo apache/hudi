@@ -61,8 +61,8 @@ public class CompactionOpDTO {
     dto.compactionInstantTime = compactionInstantTime;
     dto.baseInstantTime = op.getBaseInstantTime();
     dto.dataFileCommitTime = op.getDataFileCommitTime().orElse(null);
-    dto.dataFilePath = op.getDataFilePath().orElse(null);
-    dto.deltaFilePaths = new ArrayList<>(op.getDeltaFilePaths());
+    dto.dataFilePath = op.getDataFileName().orElse(null);
+    dto.deltaFilePaths = new ArrayList<>(op.getDeltaFileNames());
     dto.partitionPath = op.getPartitionPath();
     dto.metrics = op.getMetrics() == null ? new HashMap<>() : new HashMap<>(op.getMetrics());
     return dto;
