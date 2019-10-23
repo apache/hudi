@@ -46,12 +46,12 @@ import org.junit.runners.Parameterized;
 
 @SuppressWarnings("ConstantConditions")
 @RunWith(Parameterized.class)
-public class HiveSyncToolTest {
+public class TestHiveSyncTool {
 
   // Test sync tool using both jdbc and metastore client
   private boolean useJdbc;
 
-  public HiveSyncToolTest(Boolean useJdbc) {
+  public TestHiveSyncTool(Boolean useJdbc) {
     this.useJdbc = useJdbc;
   }
 

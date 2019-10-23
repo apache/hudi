@@ -107,7 +107,7 @@ public class TestUtil {
     hiveSyncConfig.hivePass = "";
     hiveSyncConfig.databaseName = "testdb";
     hiveSyncConfig.tableName = "test1";
-    hiveSyncConfig.basePath = "/tmp/hdfs/HiveSyncToolTest/";
+    hiveSyncConfig.basePath = "/tmp/hdfs/TestHiveSyncTool/";
     hiveSyncConfig.assumeDatePartitioning = true;
     hiveSyncConfig.usePreApacheInputFormat = false;
     hiveSyncConfig.partitionFields = Lists.newArrayList("datestr");

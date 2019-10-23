@@ -69,9 +69,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class IncrementalFSViewSyncTest extends HoodieCommonTestHarness {
+public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
-  private static final transient Logger log = LogManager.getLogger(IncrementalFSViewSyncTest.class);
+  private static final transient Logger log = LogManager.getLogger(TestIncrementalFSViewSync.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 

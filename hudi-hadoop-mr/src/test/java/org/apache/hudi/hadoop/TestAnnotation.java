@@ -16,17 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.view;
+package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.SyncableFileSystemView;
+import static org.junit.Assert.assertTrue;
 
-public class SpillableMapBasedIncrementalFSViewSyncTest extends IncrementalFSViewSyncTest {
+import java.lang.annotation.Annotation;
+import org.junit.Test;
 
-  @Override
-  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline) {
-    return new SpillableMapBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withMaxMemoryForView(0L).withIncrementalTimelineSync(true).build());
+public class TestAnnotation {
+
+  @Test
+  public void testAnnotation() {
+    assertTrue(HoodieParquetInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
+    Annotation[] annotations = HoodieParquetInputFormat.class.getAnnotations();
+    boolean found = false;
+    for (Annotation annotation : annotations) {
+      if ("UseFileSplitsFromInputFormat".equals(annotation.annotationType().getSimpleName())) {
+        found = true;
+      }
+    }
+    assertTrue(found);
   }
 }

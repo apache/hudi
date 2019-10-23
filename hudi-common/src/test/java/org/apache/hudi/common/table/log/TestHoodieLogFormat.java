@@ -77,7 +77,7 @@ import org.junit.runners.Parameterized;
 
 @SuppressWarnings("Duplicates")
 @RunWith(Parameterized.class)
-public class HoodieLogFormatTest extends HoodieCommonTestHarness {
+public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private static String BASE_OUTPUT_PATH = "/tmp/";
   private FileSystem fs;
@@ -85,7 +85,7 @@ public class HoodieLogFormatTest extends HoodieCommonTestHarness {
   private int bufferSize = 4096;
   private Boolean readBlocksLazily = true;
 
-  public HoodieLogFormatTest(Boolean readBlocksLazily) {
+  public TestHoodieLogFormat(Boolean readBlocksLazily) {
     this.readBlocksLazily = readBlocksLazily;
   }
 

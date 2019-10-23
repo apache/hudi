@@ -75,7 +75,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-public class HoodieRealtimeRecordReaderTest {
+public class TestHoodieRealtimeRecordReader {
 
   private static final String PARTITION_COLUMN = "datestr";
 

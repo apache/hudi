@@ -19,13 +19,16 @@
 package org.apache.hudi.common.table.view;
 
 import java.io.IOException;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 
-public class RocksDbBasedFileSystemViewTest extends HoodieTableFileSystemViewTest {
+public class TestRocksDBBasedIncrementalFSViewSync extends TestIncrementalFSViewSync {
 
-  protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
-    return new RocksDbBasedFileSystemView(metaClient, timeline,
-        FileSystemViewStorageConfig.newBuilder().withRocksDBPath(folder.newFolder().getAbsolutePath()).build());
+  @Override
+  protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline)
+      throws IOException {
+    return new RocksDbBasedFileSystemView(metaClient, timeline, FileSystemViewStorageConfig.newBuilder()
+        .withRocksDBPath(folder.newFolder().getAbsolutePath()).withIncrementalTimelineSync(true).build());
   }
 }

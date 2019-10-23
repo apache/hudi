@@ -16,25 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop;
+package org.apache.hudi.common.table.view;
 
-import static org.junit.Assert.assertTrue;
+import java.io.IOException;
+import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.SyncableFileSystemView;
 
-import java.lang.annotation.Annotation;
-import org.junit.Test;
+public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemView {
 
-public class AnnotationTest {
-
-  @Test
-  public void testAnnotation() {
-    assertTrue(HoodieParquetInputFormat.class.isAnnotationPresent(UseFileSplitsFromInputFormat.class));
-    Annotation[] annotations = HoodieParquetInputFormat.class.getAnnotations();
-    boolean found = false;
-    for (Annotation annotation : annotations) {
-      if ("UseFileSplitsFromInputFormat".equals(annotation.annotationType().getSimpleName())) {
-        found = true;
-      }
-    }
-    assertTrue(found);
+  protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
+    return new RocksDbBasedFileSystemView(metaClient, timeline,
+        FileSystemViewStorageConfig.newBuilder().withRocksDBPath(folder.newFolder().getAbsolutePath()).build());
   }
 }
