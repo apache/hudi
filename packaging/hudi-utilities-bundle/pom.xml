@@ -175,13 +175,6 @@
     </resources>
   </build>
 
-  <repositories>
-    <repository>
-      <id>confluent</id>
-      <url>https://packages.confluent.io/maven/</url>
-    </repository>
-  </repositories>
-
   <dependencies>
     <!-- Hoodie -->
     <dependency>

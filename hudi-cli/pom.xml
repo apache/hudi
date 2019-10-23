@@ -32,17 +32,6 @@
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
-  <repositories>
-    <repository>
-      <id>libs-milestone</id>
-      <url>https://repo.spring.io/libs-milestone/</url>
-    </repository>
-    <repository>
-      <id>libs-release</id>
-      <url>https://repo.spring.io/libs-release/</url>
-    </repository>
-  </repositories>
-
   <build>
     <resources>
       <resource>
