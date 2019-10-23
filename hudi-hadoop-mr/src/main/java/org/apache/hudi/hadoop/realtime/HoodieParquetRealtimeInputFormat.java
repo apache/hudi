@@ -197,10 +197,27 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     return configuration;
   }
 
+  /**
+   * Hive will append read columns' ids to old columns' ids during getRecordReader. In some cases, e.g. SELECT COUNT(*),
+   * the read columns' id is an empty string and Hive will combine it with Hoodie required projection ids and becomes
+   * e.g. ",2,0,3" and will cause an error. This method is used to avoid this situation.
+   */
+  private static synchronized Configuration cleanProjectionColumnIds(Configuration conf) {
+    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
+    if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
+      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
+      }
+    }
+    return conf;
+  }
+
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
       final Reporter reporter) throws IOException {
 
+    this.conf = cleanProjectionColumnIds(job);
     LOG.info("Before adding Hoodie columns, Projections :" + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
