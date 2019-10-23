@@ -34,6 +34,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
+import org.apache.hudi.common.versioning.compaction.CompactionV1MigrationHandler;
+import org.apache.hudi.common.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -44,6 +47,10 @@ import org.apache.log4j.Logger;
 public class CompactionUtils {
 
   private static final Logger LOG = LogManager.getLogger(CompactionUtils.class);
+
+  public static final Integer COMPACTION_METADATA_VERSION_1 = CompactionV1MigrationHandler.VERSION;
+  public static final Integer COMPACTION_METADATA_VERSION_2 = CompactionV2MigrationHandler.VERSION;
+  public static final Integer LATEST_COMPACTION_METADATA_VERSION = COMPACTION_METADATA_VERSION_2;
 
   /**
    * Generate compaction operation from file-slice
@@ -59,9 +66,9 @@ public class CompactionUtils {
     builder.setPartitionPath(partitionPath);
     builder.setFileId(fileSlice.getFileId());
     builder.setBaseInstantTime(fileSlice.getBaseInstantTime());
-    builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getPath().toString()).collect(Collectors.toList()));
+    builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getPath().getName()).collect(Collectors.toList()));
     if (fileSlice.getDataFile().isPresent()) {
-      builder.setDataFilePath(fileSlice.getDataFile().get().getPath());
+      builder.setDataFilePath(fileSlice.getDataFile().get().getFileName());
     }
 
     if (metricsCaptureFunction.isPresent()) {
@@ -82,9 +89,11 @@ public class CompactionUtils {
       Option<Function<Pair<String, FileSlice>, Map<String, Double>>> metricsCaptureFunction) {
     HoodieCompactionPlan.Builder builder = HoodieCompactionPlan.newBuilder();
     extraMetadata.ifPresent(m -> builder.setExtraMetadata(m));
+
     builder.setOperations(partitionFileSlicePairs.stream()
         .map(pfPair -> buildFromFileSlice(pfPair.getKey(), pfPair.getValue(), metricsCaptureFunction))
         .collect(Collectors.toList()));
+    builder.setVersion(LATEST_COMPACTION_METADATA_VERSION);
     return builder.build();
   }
 
@@ -94,8 +103,8 @@ public class CompactionUtils {
   public static HoodieCompactionOperation buildHoodieCompactionOperation(CompactionOperation op) {
     return HoodieCompactionOperation.newBuilder().setFileId(op.getFileId()).setBaseInstantTime(op.getBaseInstantTime())
         .setPartitionPath(op.getPartitionPath())
-        .setDataFilePath(op.getDataFilePath().isPresent() ? op.getDataFilePath().get() : null)
-        .setDeltaFilePaths(op.getDeltaFilePaths()).setMetrics(op.getMetrics()).build();
+        .setDataFilePath(op.getDataFileName().isPresent() ? op.getDataFileName().get() : null)
+        .setDeltaFilePaths(op.getDeltaFileNames()).setMetrics(op.getMetrics()).build();
   }
 
   /**
@@ -127,9 +136,10 @@ public class CompactionUtils {
 
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
+    CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(metaClient.getActiveTimeline()
         .getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
-    return compactionPlan;
+    return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
   }
 
   /**

@@ -171,7 +171,8 @@ public class CompactionTestUtils {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }).collect(Collectors.toList());
-    return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>());
+    return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>(),
+        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION);
   }
 
   public static class TestHoodieDataFile extends HoodieDataFile {
@@ -179,7 +180,7 @@ public class CompactionTestUtils {
     private final String path;
 
     public TestHoodieDataFile(String path) {
-      super("/tmp/ce481ee7-9e53-4a2e-9992-f9e295fa79c0_11_20180918020003.parquet");
+      super(path);
       this.path = path;
     }
 

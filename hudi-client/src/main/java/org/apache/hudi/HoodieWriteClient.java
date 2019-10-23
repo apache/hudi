@@ -57,6 +57,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -1176,13 +1177,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   private JavaRDD<WriteStatus> runCompaction(HoodieInstant compactionInstant, HoodieActiveTimeline activeTimeline,
       boolean autoCommit) throws IOException {
-    HoodieCompactionPlan compactionPlan =
-        AvroUtils.deserializeCompactionPlan(activeTimeline.getInstantAuxiliaryDetails(compactionInstant).get());
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(metaClient,
+        compactionInstant.getTimestamp());
+
     // Mark instant as compaction inflight
     activeTimeline.transitionCompactionRequestedToInflight(compactionInstant);
     compactionTimer = metrics.getCompactionCtx();
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTableMetaClient metaClient = createMetaClient(true);
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     JavaRDD<WriteStatus> statuses = table.compact(jsc, compactionInstant.getTimestamp(), compactionPlan);
     // Force compaction action

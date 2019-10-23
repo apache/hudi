@@ -47,6 +47,8 @@ import org.apache.hudi.common.HoodieRollbackStat;
 
 public class AvroUtils {
 
+  private static final Integer DEFAULT_VERSION = 1;
+
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime, Option<Long> durationInMs,
       List<HoodieCleanStat> cleanStats) {
     ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
@@ -64,7 +66,7 @@ public class AvroUtils {
       }
     }
     return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-        earliestCommitToRetain, partitionMetadataBuilder.build());
+        earliestCommitToRetain, partitionMetadataBuilder.build(), DEFAULT_VERSION);
   }
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime, Option<Long> durationInMs,
@@ -75,7 +77,7 @@ public class AvroUtils {
           Arrays.asList(convertRollbackMetadata(startRestoreTime, durationInMs, commits, commitToStat.getValue())));
     }
     return new HoodieRestoreMetadata(startRestoreTime, durationInMs.orElseGet(() -> -1L), commits,
-        commitToStatBuilder.build());
+        commitToStatBuilder.build(), DEFAULT_VERSION);
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
@@ -88,8 +90,9 @@ public class AvroUtils {
       partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
     }
+
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted, commits,
-        partitionMetadataBuilder.build());
+        partitionMetadataBuilder.build(), DEFAULT_VERSION);
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
@@ -99,7 +102,8 @@ public class AvroUtils {
       HoodieSavepointPartitionMetadata metadata = new HoodieSavepointPartitionMetadata(stat.getKey(), stat.getValue());
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
-    return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment, partitionMetadataBuilder.build());
+    return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment, partitionMetadataBuilder.build(),
+        DEFAULT_VERSION);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {

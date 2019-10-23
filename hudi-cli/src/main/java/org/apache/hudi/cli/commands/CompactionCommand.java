@@ -290,9 +290,10 @@ public class CompactionCommand implements CommandMarker {
         String message = "\n\n\t COMPACTION PLAN " + (valid ? "VALID" : "INVALID") + "\n\n";
         List<Comparable[]> rows = new ArrayList<>();
         res.stream().forEach(r -> {
-          Comparable[] row = new Comparable[] {r.getOperation().getFileId(), r.getOperation().getBaseInstantTime(),
-              r.getOperation().getDataFilePath().isPresent() ? r.getOperation().getDataFilePath().get() : "",
-              r.getOperation().getDeltaFilePaths().size(), r.isSuccess(),
+          Comparable[] row = new Comparable[]{r.getOperation().getFileId(),
+              r.getOperation().getBaseInstantTime(),
+              r.getOperation().getDataFileName().isPresent() ? r.getOperation().getDataFileName().get() : "",
+              r.getOperation().getDeltaFileNames().size(), r.isSuccess(),
               r.getException().isPresent() ? r.getException().get().getMessage() : ""};
           rows.add(row);
         });

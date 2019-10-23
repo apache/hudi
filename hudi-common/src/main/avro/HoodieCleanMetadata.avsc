@@ -36,6 +36,11 @@
         ]
      }
      }
+     },
+     {
+        "name":"version",
+        "type":["int", "null"],
+        "default": 1
      }
  ]
 }
