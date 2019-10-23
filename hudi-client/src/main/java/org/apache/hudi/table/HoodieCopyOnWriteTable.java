@@ -32,10 +32,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -74,7 +72,6 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import scala.Tuple2;
@@ -294,45 +291,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     }
   }
 
-  /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
-   */
-  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, String partitionPath,
-      PathFilter filter) throws IOException {
-    logger.info("Cleaning path " + partitionPath);
-    FileSystem fs = getMetaClient().getFs();
-    FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
-    for (FileStatus file : toBeDeleted) {
-      boolean success = fs.delete(file.getPath(), false);
-      results.put(file, success);
-      logger.info("Delete file " + file.getPath() + "\t" + success);
-    }
-    return results;
-  }
-
-  /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
-   */
-  protected Map<FileStatus, Boolean> deleteCleanedFiles(Map<FileStatus, Boolean> results, String commit,
-      String partitionPath) throws IOException {
-    logger.info("Cleaning path " + partitionPath);
-    FileSystem fs = getMetaClient().getFs();
-    PathFilter filter = (path) -> {
-      if (path.toString().contains(".parquet")) {
-        String fileCommitTime = FSUtils.getCommitTime(path.getName());
-        return commit.equals(fileCommitTime);
-      }
-      return false;
-    };
-    FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
-    for (FileStatus file : toBeDeleted) {
-      boolean success = fs.delete(file.getPath(), false);
-      results.put(file, success);
-      logger.info("Delete file " + file.getPath() + "\t" + success);
-    }
-    return results;
-  }
-
   @Override
   public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, String commit, boolean deleteInstants)
       throws IOException {
@@ -342,30 +300,38 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         this.getInflightCommitTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     // Atomically unpublish the commits
     if (!inflights.contains(commit)) {
+      logger.info("Unpublishing " + commit);
       activeTimeline.revertToInflight(new HoodieInstant(false, actionType, commit));
     }
-    logger.info("Unpublished " + commit);
+
+    HoodieInstant instantToRollback = new HoodieInstant(false, actionType, commit);
+    Long startTime = System.currentTimeMillis();
 
     // delete all the data files for this commit
     logger.info("Clean out all parquet files generated for commit: " + commit);
+    List<RollbackRequest> rollbackRequests = generateRollbackRequests(instantToRollback);
+
+    //TODO: We need to persist this as rollback workload and use it in case of partial failures
     List<HoodieRollbackStat> stats =
-        jsc.parallelize(FSUtils.getAllPartitionPaths(metaClient.getFs(), getMetaClient().getBasePath(),
-            config.shouldAssumeDatePartitioning())).map((Function<String, HoodieRollbackStat>) partitionPath -> {
-              // Scan all partitions files with this commit time
-              final Map<FileStatus, Boolean> filesToDeletedStatus = new HashMap<>();
-              deleteCleanedFiles(filesToDeletedStatus, commit, partitionPath);
-              return HoodieRollbackStat.newBuilder().withPartitionPath(partitionPath)
-                  .withDeletedFileResults(filesToDeletedStatus).build();
-            }).collect();
+        new RollbackExecutor(metaClient, config).performRollback(jsc, instantToRollback, rollbackRequests);
 
     // Delete Inflight instant if enabled
     deleteInflightInstant(deleteInstants, activeTimeline, new HoodieInstant(true, actionType, commit));
+    logger.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
     return stats;
+  }
+
+  private List<RollbackRequest> generateRollbackRequests(HoodieInstant instantToRollback)
+      throws IOException {
+    return FSUtils.getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
+        config.shouldAssumeDatePartitioning()).stream().map(partitionPath -> {
+          return RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback);
+        }).collect(Collectors.toList());
   }
 
   /**
    * Delete Inflight instant if enabled
-   * 
+   *
    * @param deleteInstant Enable Deletion of Inflight instant
    * @param activeTimeline Hoodie active timeline
    * @param instantToBeDeleted Instant to be deleted
