@@ -437,6 +437,17 @@
 
 
 {
+"title": "Releases",
+"tags": "",
+"keywords": "apache, hudi, release, data lake, upsert,",
+"url": "releases.html",
+"summary": "Apache Hudi (incubating) Releases Page"
+}
+,
+
+
+
+{
 "title": "S3 Filesystem",
 "tags": "",
 "keywords": "hudi, hive, aws, s3, spark, presto",
@@ -485,11 +496,11 @@
 
 
 {
-"title": "Writing Hudi Datasets",
+"title": "写入 Hudi 数据集",
 "tags": "",
 "keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
 "url": "cnwriting_data.html",
-"summary": "In this page, we will discuss some available tools for incrementally ingesting & storing data."
+"summary": "这一页里，我们将讨论一些可用的工具，这些工具可用于增量摄取和存储数据。"
 }
 ,
 
