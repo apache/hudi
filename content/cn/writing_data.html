@@ -3,9 +3,9 @@
     <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="In this page, we will discuss some available tools for incrementally ingesting & storing data.">
+<meta name="description" content="这一页里，我们将讨论一些可用的工具，这些工具可用于增量摄取和存储数据。">
 <meta name="keywords" content="hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL">
-<title>Writing Hudi Datasets | Hudi</title>
+<title>写入 Hudi 数据集 | Hudi</title>
 <link rel="stylesheet" href="/css/syntax.css">
 
 
@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -164,7 +164,7 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the Writing Hudi Datasets page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the 写入 Hudi 数据集 page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
@@ -187,7 +187,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: '/search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="Writing Hudi Datasets">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="写入 Hudi 数据集">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -324,7 +324,7 @@
     <!-- Content Column -->
     <div class="col-md-9">
         <div class="post-header">
-   <h1 class="post-title-main">Writing Hudi Datasets</h1>
+   <h1 class="post-title-main">写入 Hudi 数据集</h1>
 </div>
 
 
@@ -332,7 +332,7 @@
 <div class="post-content">
 
    
-    <div class="summary">In this page, we will discuss some available tools for incrementally ingesting & storing data.</div>
+    <div class="summary">这一页里，我们将讨论一些可用的工具，这些工具可用于增量摄取和存储数据。</div>
    
 
     
@@ -340,39 +340,41 @@
 
     
 
-  <p>In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the <a href="#deltastreamer">DeltaStreamer</a> tool, as well as 
-speeding up large Spark jobs via upserts using the <a href="#datasource-writer">Hudi datasource</a>. Such datasets can then be <a href="querying_data.html">queried</a> using various query engines.</p>
+  <p>这一节我们将介绍使用<a href="#deltastreamer">DeltaStreamer</a>工具从外部源甚至其他Hudi数据集摄取新更改的方法，
+以及通过使用<a href="#datasource-writer">Hudi数据源</a>的upserts加快大型Spark作业的方法。
+对于此类数据集，我们可以使用各种查询引擎<a href="querying_data.html">查询</a>它们。</p>
 
-<h2 id="write-operations">Write Operations</h2>
+<h2 id="写操作">写操作</h2>
 
-<p>Before that, it may be helpful to understand the 3 different write operations provided by Hudi datasource or the delta streamer tool and how best to leverage them. These operations
-can be chosen/changed across each commit/deltacommit issued against the dataset.</p>
+<p>在此之前，了解Hudi数据源及delta streamer工具提供的三种不同的写操作以及如何最佳利用它们可能会有所帮助。
+这些操作可以在针对数据集发出的每个提交/增量提交中进行选择/更改。</p>
 
 <ul>
-  <li><strong>UPSERT</strong> : This is the default operation where the input records are first tagged as inserts or updates by looking up the index and 
- the records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
- This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.</li>
-  <li><strong>INSERT</strong> : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
- for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the dataset can tolerate duplicates, but just 
- need the transactional writes/incremental pull/storage management capabilities of Hudi.</li>
-  <li><strong>BULK_INSERT</strong> : Both upsert and insert operations keep input records in memory to speed up storage heuristics computations faster (among other things) and thus can be cumbersome for 
- initial loading/bootstrapping a Hudi dataset at first. Bulk insert provides the same semantics as insert, while implementing a sort-based data writing algorithm, which can scale very well for several hundred TBs 
- of initial load. However, this just does a best-effort job at sizing files vs guaranteeing file sizes like inserts/upserts do.</li>
+  <li><strong>UPSERT（插入更新）</strong> ：这是默认操作，在该操作中，通过查找索引，首先将输入记录标记为插入或更新。
+ 在运行启发式方法以确定如何最好地将这些记录放到存储上，如优化文件大小之类后，这些记录最终会被写入。
+ 对于诸如数据库更改捕获之类的用例，建议该操作，因为输入几乎肯定包含更新。</li>
+  <li><strong>INSERT（插入）</strong> ：就使用启发式方法确定文件大小而言，此操作与插入更新（UPSERT）非常相似，但此操作完全跳过了索引查找步骤。
+ 因此，对于日志重复数据删除等用例（结合下面提到的过滤重复项的选项），它可以比插入更新快得多。
+ 插入也适用于这种用例，这种情况数据集可以允许重复项，但只需要Hudi的事务写/增量提取/存储管理功能。</li>
+  <li><strong>BULK_INSERT（批插入）</strong> ：插入更新和插入操作都将输入记录保存在内存中，以加快存储优化启发式计算的速度（以及其它未提及的方面）。
+ 所以对Hudi数据集进行初始加载/引导时这两种操作会很低效。批量插入提供与插入相同的语义，但同时实现了基于排序的数据写入算法，
+ 该算法可以很好地扩展数百TB的初始负载。但是，相比于插入和插入更新能保证文件大小，批插入在调整文件大小上只能尽力而为。</li>
 </ul>
 
 <h2 id="deltastreamer">DeltaStreamer</h2>
 
-<p>The <code class="highlighter-rouge">HoodieDeltaStreamer</code> utility (part of hudi-utilities-bundle) provides the way to ingest from different sources such as DFS or Kafka, with the following capabilities.</p>
+<p><code class="highlighter-rouge">HoodieDeltaStreamer</code>实用工具 (hudi-utilities-bundle中的一部分) 提供了从DFS或Kafka等不同来源进行摄取的方式，并具有以下功能。</p>
 
 <ul>
-  <li>Exactly once ingestion of new events from Kafka, <a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">incremental imports</a> from Sqoop or output of <code class="highlighter-rouge">HiveIncrementalPuller</code> or files under a DFS folder</li>
-  <li>Support json, avro or a custom record types for the incoming data</li>
-  <li>Manage checkpoints, rollback &amp; recovery</li>
-  <li>Leverage Avro schemas from DFS or Confluent <a href="https://github.com/confluentinc/schema-registry">schema registry</a>.</li>
-  <li>Support for plugging in transformations</li>
+  <li>从Kafka单次摄取新事件，从Sqoop、HiveIncrementalPuller输出或DFS文件夹中的多个文件
+ <a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">增量导入</a></li>
+  <li>支持json、avro或自定义记录类型的传入数据</li>
+  <li>管理检查点，回滚和恢复</li>
+  <li>利用DFS或Confluent <a href="https://github.com/confluentinc/schema-registry">schema注册表</a>的Avro模式。</li>
+  <li>支持自定义转换操作</li>
 </ul>
 
-<p>Command line options describe capabilities in more detail</p>
+<p>命令行选项更详细地描述了这些功能：</p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: &lt;main class&gt; [options]
@@ -445,15 +447,17 @@ Usage: &lt;main class&gt; [options]
       allows a SQL query template to be passed as a transformation function)
 </code></pre></div></div>
 
-<p>The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
-provided under <code class="highlighter-rouge">hudi-utilities/src/test/resources/delta-streamer-config</code>.</p>
+<p>该工具采用层次结构组成的属性文件，并具有可插拔的接口，用于提取数据、生成密钥和提供模式。
+从Kafka和DFS摄取数据的示例配置在这里：<code class="highlighter-rouge">hudi-utilities/src/test/resources/delta-streamer-config</code>。</p>
 
-<p>For e.g: once you have Confluent Kafka, Schema registry up &amp; running, produce some test data using (<a href="https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html">impressions.avro</a> provided by schema-registry repo)</p>
+<p>例如：当您让Confluent Kafka、Schema注册表启动并运行后，可以用这个命令产生一些测试数据
+（<a href="https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html">impressions.avro</a>，
+由schema-registry代码库提供）</p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
 </code></pre></div></div>
 
-<p>and then ingest it as follows.</p>
+<p>然后用如下命令摄取这些数据。</p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
@@ -464,17 +468,17 @@ provided under <code class="highlighter-rouge">hudi-utilities/src/test/resources
   --op BULK_INSERT
 </code></pre></div></div>
 
-<p>In some cases, you may want to migrate your existing dataset into Hudi beforehand. Please refer to <a href="migration_guide.html">migration guide</a>.</p>
+<p>在某些情况下，您可能需要预先将现有数据集迁移到Hudi。 请参考<a href="migration_guide.html">迁移指南</a>。</p>
 
 <h2 id="datasource-writer">Datasource Writer</h2>
 
-<p>The <code class="highlighter-rouge">hudi-spark</code> module offers the DataSource API to write (and also read) any data frame into a Hudi dataset.
-Following is how we can upsert a dataframe, while specifying the field names that need to be used
-for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class="highlighter-rouge">partitionPath =&gt; partition</code> and <code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
+<p><code class="highlighter-rouge">hudi-spark</code>模块提供了DataSource API，可以将任何数据帧写入（也可以读取）到Hudi数据集中。
+以下是在指定需要使用的字段名称的之后，如何插入更新数据帧的方法，这些字段包括
+<code class="highlighter-rouge">recordKey =&gt; _row_key</code>、<code class="highlighter-rouge">partitionPath =&gt; partition</code>和<code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>inputDF.write()
        .format("org.apache.hudi")
-       .options(clientOpts) // any of the Hudi client opts can be passed in as well
+       .options(clientOpts) // 可以传入任何Hudi客户端参数
        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
        .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
        .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
@@ -483,11 +487,11 @@ for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class
        .save(basePath);
 </code></pre></div></div>
 
-<h2 id="syncing-to-hive">Syncing to Hive</h2>
+<h2 id="与hive同步">与Hive同步</h2>
 
-<p>Both tools above support syncing of the dataset’s latest schema to Hive metastore, such that queries can pick up new columns and partitions.
-In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a <code class="highlighter-rouge">HiveSyncTool</code>, which can be invoked as below, 
-once you have built the hudi-hive module.</p>
+<p>上面的两个工具都支持将数据集的最新模式同步到Hive Metastore，以便查询新的列和分区。
+如果需要从命令行或在独立的JVM中运行它，Hudi提供了一个<code class="highlighter-rouge">HiveSyncTool</code>，
+在构建了hudi-hive模块之后，可以按以下方式调用它。</p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd hudi-hive
 ./run_sync_tool.sh
@@ -510,43 +514,46 @@ Usage: &lt;main class&gt; [options]
        Hive username
 </code></pre></div></div>
 
-<h2 id="deletes">Deletes</h2>
+<h2 id="删除数据">删除数据</h2>
 
-<p>Hudi supports implementing two types of deletes on data stored in Hudi datasets, by enabling the user to specify a different record payload implementation.</p>
+<p>通过允许用户指定不同的数据记录负载实现，Hudi支持对存储在Hudi数据集中的数据执行两种类型的删除。</p>
 
 <ul>
-  <li><strong>Soft Deletes</strong> : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
- This can be simply achieved by ensuring the appropriate fields are nullable in the dataset schema and simply upserting the dataset after setting these fields to null.</li>
-  <li><strong>Hard Deletes</strong> : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
- via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in <code class="highlighter-rouge">org.apache.hudi.EmptyHoodieRecordPayload</code> class that does exactly this.</li>
+  <li><strong>Soft Deletes（软删除）</strong> ：使用软删除时，用户希望保留键，但仅使所有其他字段的值都为空。
+ 通过确保适当的字段在数据集模式中可以为空，并在将这些字段设置为null之后直接向数据集插入更新这些记录，即可轻松实现这一点。</li>
+  <li><strong>Hard Deletes（硬删除）</strong> ：这种更强形式的删除是从数据集中彻底删除记录在存储上的任何痕迹。 
+ 这可以通过触发一个带有自定义负载实现的插入更新来实现，这种实现可以使用总是返回Optional.Empty作为组合值的DataSource或DeltaStreamer。 
+ Hudi附带了一个内置的<code class="highlighter-rouge">org.apache.hudi.EmptyHoodieRecordPayload</code>类，它就是实现了这一功能。</li>
 </ul>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> deleteDF // dataframe containing just records to be deleted
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> deleteDF // 仅包含要删除的记录的数据帧
    .write().format("org.apache.hudi")
-   .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
-   // specify record_key, partition_key, precombine_fieldkey &amp; usual params
+   .option(...) // 根据设置需要添加HUDI参数，例如记录键、分区路径和其他参数
+   // 指定record_key，partition_key，precombine_fieldkey和常规参数
    .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
  
 </code></pre></div></div>
 
-<h2 id="storage-management">Storage Management</h2>
+<h2 id="存储管理">存储管理</h2>
 
-<p>Hudi also performs several key storage management functions on the data stored in a Hudi dataset. A key aspect of storing data on DFS is managing file sizes and counts
-and reclaiming storage space. For e.g HDFS is infamous for its handling of small files, which exerts memory/RPC pressure on the Name Node and can potentially destabilize
-the entire cluster. In general, query engines provide much better performance on adequately sized columnar files, since they can effectively amortize cost of obtaining 
-column statistics etc. Even on some cloud data stores, there is often cost to listing directories with large number of small files.</p>
+<p>Hudi还对存储在Hudi数据集中的数据执行几个关键的存储管理功能。在DFS上存储数据的关键方面是管理文件大小和数量以及回收存储空间。 
+例如，HDFS在处理小文件上性能很差，这会对Name Node的内存及RPC施加很大的压力，并可能破坏整个集群的稳定性。
+通常，查询引擎可在较大的列文件上提供更好的性能，因为它们可以有效地摊销获得列统计信息等的成本。
+即使在某些云数据存储上，列出具有大量小文件的目录也常常比较慢。</p>
 
-<p>Here are some ways to efficiently manage the storage of your Hudi datasets.</p>
+<p>以下是一些有效管理Hudi数据集存储的方法。</p>
 
 <ul>
-  <li>The <a href="configurations.html#compactionSmallFileSize">small file handling feature</a> in Hudi, profiles incoming workload 
-and distributes inserts to existing file groups instead of creating new file groups, which can lead to small files.</li>
-  <li>Cleaner can be <a href="configurations.html#retainCommits">configured</a> to clean up older file slices, more or less aggressively depending on maximum time for queries to run &amp; lookback needed for incremental pull</li>
-  <li>User can also tune the size of the <a href="configurations.html#limitFileSize">base/parquet file</a>, <a href="configurations.html#logFileMaxSize">log files</a> &amp; expected <a href="configurations.html#parquetCompressionRatio">compression ratio</a>, 
-such that sufficient number of inserts are grouped into the same file group, resulting in well sized base files ultimately.</li>
-  <li>Intelligently tuning the <a href="configurations.html#withBulkInsertParallelism">bulk insert parallelism</a>, can again in nicely sized initial file groups. It is in fact critical to get this right, since the file groups
-once created cannot be deleted, but simply expanded as explained before.</li>
-  <li>For workloads with heavy updates, the <a href="concepts.html#merge-on-read-storage">merge-on-read storage</a> provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.</li>
+  <li>Hudi中的<a href="configurations.html#compactionSmallFileSize">小文件处理功能</a>，可以分析传入的工作负载并将插入内容分配到现有文件组中，
+ 而不是创建新文件组。新文件组会生成小文件。</li>
+  <li>可以<a href="configurations.html#retainCommits">配置</a>Cleaner来清理较旧的文件片，清理的程度可以调整，
+ 具体取决于查询所需的最长时间和增量拉取所需的回溯。</li>
+  <li>用户还可以调整<a href="configurations.html#limitFileSize">基础/parquet文件</a>、<a href="configurations.html#logFileMaxSize">日志文件</a>的大小
+ 和预期的<a href="configurations.html#parquetCompressionRatio">压缩率</a>，使足够数量的插入被分到同一个文件组中，最终产生大小合适的基础文件。</li>
+  <li>智能调整<a href="configurations.html＃withBulkInsertParallelism">批插入并行度</a>，可以产生大小合适的初始文件组。
+ 实际上，正确执行此操作非常关键，因为文件组一旦创建后就不能删除，只能如前所述对其进行扩展。</li>
+  <li>对于具有大量更新的工作负载，<a href="concepts.html#merge-on-read-storage">读取时合并存储</a>提供了一种很好的机制，
+ 可以快速将其摄取到较小的文件中，之后通过压缩将它们合并为较大的基础文件。</li>
 </ul>
 
 
