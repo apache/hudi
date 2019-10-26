@@ -3,7 +3,6 @@
 
 {
 "title": "Connect with us at Strata San Jose March 2017",
-"tags": "news",
 "keywords": "",
 "url": "cnevents2016-12-30-strata-talk-2017.html",
 "summary": ""
@@ -14,7 +13,6 @@
 
 {
 "title": "Connect with us at Strata San Jose March 2017",
-"tags": "news",
 "keywords": "",
 "url": "events2016-12-30-strata-talk-2017.html",
 "summary": ""
@@ -25,7 +23,6 @@
 
 {
 "title": "Hudi entered Apache Incubator",
-"tags": "news",
 "keywords": "",
 "url": "cnevents2019-01-18-asf-incubation.html",
 "summary": ""
@@ -36,7 +33,6 @@
 
 {
 "title": "Hudi entered Apache Incubator",
-"tags": "news",
 "keywords": "",
 "url": "events2019-01-18-asf-incubation.html",
 "summary": ""
@@ -51,7 +47,6 @@
 
 {
 "title": "Administering Hudi Pipelines",
-"tags": "",
 "keywords": "hudi, administration, operation, devops",
 "url": "cnadmin_guide.html",
 "summary": "本节概述了可用于操作Hudi数据集生态系统的工具"
@@ -62,7 +57,6 @@
 
 {
 "title": "Administering Hudi Pipelines",
-"tags": "",
 "keywords": "hudi, administration, operation, devops",
 "url": "admin_guide.html",
 "summary": "This section offers an overview of tools available to operate an ecosystem of Hudi datasets"
@@ -73,7 +67,6 @@
 
 {
 "title": "Community",
-"tags": "",
 "keywords": "hudi, use cases, big data, apache",
 "url": "cncommunity.html",
 "summary": ""
@@ -84,7 +77,6 @@
 
 {
 "title": "Community",
-"tags": "",
 "keywords": "hudi, use cases, big data, apache",
 "url": "community.html",
 "summary": ""
@@ -95,7 +87,6 @@
 
 {
 "title": "Comparison",
-"tags": "",
 "keywords": "apache, hudi, kafka, kudu, hive, hbase, stream processing",
 "url": "cncomparison.html",
 "summary": ""
@@ -106,7 +97,6 @@
 
 {
 "title": "Comparison",
-"tags": "",
 "keywords": "apache, hudi, kafka, kudu, hive, hbase, stream processing",
 "url": "comparison.html",
 "summary": ""
@@ -117,7 +107,6 @@
 
 {
 "title": "Concepts",
-"tags": "",
 "keywords": "hudi, design, storage, views, timeline",
 "url": "cnconcepts.html",
 "summary": "Here we introduce some basic concepts & give a broad technical overview of Hudi"
@@ -128,7 +117,6 @@
 
 {
 "title": "Concepts",
-"tags": "",
 "keywords": "hudi, design, storage, views, timeline",
 "url": "concepts.html",
 "summary": "Here we introduce some basic concepts & give a broad technical overview of Hudi"
@@ -139,7 +127,6 @@
 
 {
 "title": "Configurations",
-"tags": "",
 "keywords": "garbage collection, hudi, jvm, configs, tuning",
 "url": "cnconfigurations.html",
 "summary": "Here we list all possible configurations and what they mean"
@@ -150,7 +137,6 @@
 
 {
 "title": "Configurations",
-"tags": "",
 "keywords": "garbage collection, hudi, jvm, configs, tuning",
 "url": "configurations.html",
 "summary": "Here we list all possible configurations and what they mean"
@@ -161,7 +147,6 @@
 
 {
 "title": "Developer Setup",
-"tags": "",
 "keywords": "hudi, ide, developer, setup",
 "url": "cncontributing.html",
 "summary": ""
@@ -172,7 +157,6 @@
 
 {
 "title": "Developer Setup",
-"tags": "",
 "keywords": "hudi, ide, developer, setup",
 "url": "contributing.html",
 "summary": ""
@@ -183,7 +167,6 @@
 
 {
 "title": "Docker Demo",
-"tags": "hudidemo",
 "keywords": "hudi, docker, demo",
 "url": "cndocker_demo.html",
 "summary": ""
@@ -194,7 +177,6 @@
 
 {
 "title": "Docker Demo",
-"tags": "hudidemo",
 "keywords": "hudi, docker, demo",
 "url": "docker_demo.html",
 "summary": ""
@@ -207,7 +189,6 @@
 
 {
 "title": "GCS Filesystem",
-"tags": "",
 "keywords": "hudi, hive, google cloud, storage, spark, presto",
 "url": "cngcs_hoodie.html",
 "summary": "In this page, we go over how to configure hudi with Google Cloud Storage."
@@ -218,7 +199,6 @@
 
 {
 "title": "GCS Filesystem",
-"tags": "",
 "keywords": "hudi, hive, google cloud, storage, spark, presto",
 "url": "gcs_hoodie.html",
 "summary": "In this page, we go over how to configure hudi with Google Cloud Storage."
@@ -229,7 +209,6 @@
 
 {
 "title": "什么是Hudi?",
-"tags": "getting_started",
 "keywords": "big data, stream processing, cloud, hdfs, storage, upserts, change capture",
 "url": "cnindex.html",
 "summary": "Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。"
@@ -240,7 +219,6 @@
 
 {
 "title": "What is Hudi?",
-"tags": "getting_started",
 "keywords": "big data, stream processing, cloud, hdfs, storage, upserts, change capture",
 "url": "index.html",
 "summary": "Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing."
@@ -251,7 +229,6 @@
 
 {
 "title": "Migration Guide",
-"tags": "",
 "keywords": "hudi, migration, use case",
 "url": "cnmigration_guide.html",
 "summary": "In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset"
@@ -262,7 +239,6 @@
 
 {
 "title": "Migration Guide",
-"tags": "",
 "keywords": "hudi, migration, use case",
 "url": "migration_guide.html",
 "summary": "In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset"
@@ -273,7 +249,6 @@
 
 {
 "title": "Scroll layout",
-"tags": "special_layouts",
 "keywords": "json, scrolling, scrollto, jquery plugin",
 "url": "jsmydoc_scroll.html",
 "summary": "This page demonstrates how you the integration of a script called ScrollTo, which is used here to link definitions of a JSON code sample to a list of definitions for that particular term. The scenario here is that the JSON blocks are really long, with extensive nesting and subnesting, which makes it difficult for tables below the JSON to adequately explain the term in a usable way."
@@ -284,7 +259,6 @@
 
 {
 "title": "News",
-"tags": "",
 "keywords": "apache, hudi, news, blog, updates, release notes, announcements",
 "url": "cnnews.html",
 "summary": ""
@@ -295,7 +269,6 @@
 
 {
 "title": "News",
-"tags": "",
 "keywords": "apache, hudi, news, blog, updates, release notes, announcements",
 "url": "news.html",
 "summary": ""
@@ -306,7 +279,6 @@
 
 {
 "title": "News",
-"tags": "",
 "keywords": "news, blog, updates, release notes, announcements",
 "url": "cnnews_archive.html",
 "summary": ""
@@ -317,7 +289,6 @@
 
 {
 "title": "News",
-"tags": "",
 "keywords": "news, blog, updates, release notes, announcements",
 "url": "news_archive.html",
 "summary": ""
@@ -328,7 +299,6 @@
 
 {
 "title": "Performance",
-"tags": "",
 "keywords": "hudi, index, storage, compaction, cleaning, implementation",
 "url": "cnperformance.html",
 "summary": ""
@@ -339,7 +309,6 @@
 
 {
 "title": "Performance",
-"tags": "",
 "keywords": "hudi, index, storage, compaction, cleaning, implementation",
 "url": "performance.html",
 "summary": ""
@@ -350,7 +319,6 @@
 
 {
 "title": "Talks &amp; Powered By",
-"tags": "",
 "keywords": "hudi, talks, presentation",
 "url": "cnpowered_by.html",
 "summary": ""
@@ -361,7 +329,6 @@
 
 {
 "title": "Talks &amp; Powered By",
-"tags": "",
 "keywords": "hudi, talks, presentation",
 "url": "powered_by.html",
 "summary": ""
@@ -372,7 +339,6 @@
 
 {
 "title": "Privacy Policy",
-"tags": "",
 "keywords": "hudi, privacy",
 "url": "cnprivacy.html",
 "summary": ""
@@ -383,7 +349,6 @@
 
 {
 "title": "Privacy Policy",
-"tags": "",
 "keywords": "hudi, privacy",
 "url": "privacy.html",
 "summary": ""
@@ -394,7 +359,6 @@
 
 {
 "title": "Querying Hudi Datasets",
-"tags": "",
 "keywords": "hudi, hive, spark, sql, presto",
 "url": "cnquerying_data.html",
 "summary": "In this page, we go over how to enable SQL queries on Hudi built tables."
@@ -405,7 +369,6 @@
 
 {
 "title": "Querying Hudi Datasets",
-"tags": "",
 "keywords": "hudi, hive, spark, sql, presto",
 "url": "querying_data.html",
 "summary": "In this page, we go over how to enable SQL queries on Hudi built tables."
@@ -416,7 +379,6 @@
 
 {
 "title": "Quickstart",
-"tags": "quickstart",
 "keywords": "hudi, quickstart",
 "url": "cnquickstart.html",
 "summary": ""
@@ -427,7 +389,6 @@
 
 {
 "title": "Quickstart",
-"tags": "quickstart",
 "keywords": "hudi, quickstart",
 "url": "quickstart.html",
 "summary": ""
@@ -438,7 +399,6 @@
 
 {
 "title": "Releases",
-"tags": "",
 "keywords": "apache, hudi, release, data lake, upsert,",
 "url": "releases.html",
 "summary": "Apache Hudi (incubating) Releases Page"
@@ -449,7 +409,6 @@
 
 {
 "title": "S3 Filesystem",
-"tags": "",
 "keywords": "hudi, hive, aws, s3, spark, presto",
 "url": "cns3_hoodie.html",
 "summary": "In this page, we go over how to configure Hudi with S3 filesystem."
@@ -460,7 +419,6 @@
 
 {
 "title": "S3 Filesystem",
-"tags": "",
 "keywords": "hudi, hive, aws, s3, spark, presto",
 "url": "s3_hoodie.html",
 "summary": "In this page, we go over how to configure Hudi with S3 filesystem."
@@ -475,7 +433,6 @@
 
 {
 "title": "Use Cases",
-"tags": "",
 "keywords": "hudi, data ingestion, etl, real time, use cases",
 "url": "cnuse_cases.html",
 "summary": "以下是一些使用Hudi的示例，说明了加快处理速度和提高效率的好处"
@@ -486,7 +443,6 @@
 
 {
 "title": "Use Cases",
-"tags": "",
 "keywords": "hudi, data ingestion, etl, real time, use cases",
 "url": "use_cases.html",
 "summary": "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
@@ -497,7 +453,6 @@
 
 {
 "title": "写入 Hudi 数据集",
-"tags": "",
 "keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
 "url": "cnwriting_data.html",
 "summary": "这一页里，我们将讨论一些可用的工具，这些工具可用于增量摄取和存储数据。"
@@ -508,7 +463,6 @@
 
 {
 "title": "Writing Hudi Datasets",
-"tags": "",
 "keywords": "hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL",
 "url": "writing_data.html",
 "summary": "In this page, we will discuss some available tools for incrementally ingesting & storing data."

@@ -1,7 +1,6 @@
 ---
 title: "Hudi entered Apache Incubator"
 categories:  update
-tags: [news]
 date: 2019-01-18
 ---
 

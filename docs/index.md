@@ -1,7 +1,6 @@
 ---
 title: What is Hudi?
 keywords: big data, stream processing, cloud, hdfs, storage, upserts, change capture
-tags: [getting_started]
 sidebar: mydoc_sidebar
 permalink: index.html
 summary: "Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing."

@@ -1,7 +1,6 @@
 ---
 title: Quickstart
 keywords: hudi, quickstart
-tags: [quickstart]
 sidebar: mydoc_sidebar
 toc: false
 permalink: quickstart.html
