@@ -27,8 +27,8 @@ folder: news
             {% endif %}
             {% endunless %}
             <li><time>{{ post.date | date:"%d %b" }}</time><a href="{{ post.url | remove: "/"}}">{{ post.title }}</a></li>
-            {% endfor %}
         </ul>
+        {% endfor %}
     </section>
 
 

@@ -1,7 +1,6 @@
 ---
 title: Docker Demo
 keywords: hudi, docker, demo
-tags: [hudi, demo]
 sidebar: mydoc_sidebar
 toc: false
 permalink: docker_demo.html

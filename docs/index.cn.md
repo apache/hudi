@@ -1,7 +1,6 @@
 ---
 title: 什么是Hudi?
 keywords: big data, stream processing, cloud, hdfs, storage, upserts, change capture
-tags: [getting_started]
 sidebar: mydoc_sidebar
 permalink: index.html
 summary: "Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。"
