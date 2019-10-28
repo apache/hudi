@@ -51,6 +51,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
+  private static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
+  private static final String ROLLBACK_PARALLELISM = "hoodie.rollback.parallelism";
   private static final String WRITE_BUFFER_LIMIT_BYTES = "hoodie.write.buffer.limit.bytes";
   private static final String DEFAULT_WRITE_BUFFER_LIMIT_BYTES = String.valueOf(4 * 1024 * 1024);
   private static final String COMBINE_BEFORE_INSERT_PROP = "hoodie.combine.before.insert";
@@ -140,6 +142,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public int getUpsertShuffleParallelism() {
     return Integer.parseInt(props.getProperty(UPSERT_PARALLELISM));
   }
+
+  public int getRollbackParallelism() {
+    return Integer.parseInt(props.getProperty(ROLLBACK_PARALLELISM));
+  }
+
 
   public int getWriteBufferLimitBytes() {
     return Integer.parseInt(props.getProperty(WRITE_BUFFER_LIMIT_BYTES, DEFAULT_WRITE_BUFFER_LIMIT_BYTES));
@@ -562,6 +569,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withRollbackParallelism(int rollbackParallelism) {
+      props.setProperty(ROLLBACK_PARALLELISM, String.valueOf(rollbackParallelism));
+      return this;
+    }
+
     public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
       props.setProperty(WRITE_BUFFER_LIMIT_BYTES, String.valueOf(writeBufferLimit));
       return this;
@@ -651,6 +663,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM, DEFAULT_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,
           DEFAULT_COMBINE_BEFORE_INSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_UPSERT_PROP), COMBINE_BEFORE_UPSERT_PROP,
