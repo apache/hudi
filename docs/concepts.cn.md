@@ -4,168 +4,151 @@ keywords: hudi, design, storage, views, timeline
 sidebar: mydoc_sidebar
 permalink: concepts.html
 toc: false
-summary: "Here we introduce some basic concepts & give a broad technical overview of Hudi"
+summary: "这里我们将介绍Hudi的一些基本概念并提供关于Hudi的技术概述"
 ---
 
-Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over datasets on DFS
+Apache Hudi(发音为“Hudi”)在DFS的数据集上提供以下流原语
 
- * Upsert                     (how do I change the dataset?)
- * Incremental pull           (how do I fetch data that changed?)
+ * 插入更新           (如何改变数据集?)
+ * 增量拉取           (如何获取变更的数据?)
 
-In this section, we will discuss key concepts & terminologies that are important to understand, to be able to effectively use these primitives.
+在本节中，我们将讨论重要的概念和术语，这些概念和术语有助于理解并有效使用这些原语。
 
-## Timeline
-At its core, Hudi maintains a `timeline` of all actions performed on the dataset at different `instants` of time that helps provide instantaneous views of the dataset,
-while also efficiently supporting retrieval of data in the order of arrival. A Hudi instant consists of the following components 
+## 时间轴
+在它的核心，Hudi维护一条包含在不同的`即时`时间所有对数据集操作的`时间轴`，从而提供，从不同时间点出发得到不同的视图下的数据集。Hudi即时包含以下组件
 
- * `Action type` : Type of action performed on the dataset
- * `Instant time` : Instant time is typically a timestamp (e.g: 20190117010349), which monotonically increases in the order of action's begin time.
- * `state` : current state of the instant
- 
-Hudi guarantees that the actions performed on the timeline are atomic & timeline consistent based on the instant time.
+ * `操作类型` : 对数据集执行的操作类型
+ * `即时时间` : 即时时间通常是一个时间戳(例如：20190117010349)，该时间戳按操作开始时间的顺序单调增加。
+ * `状态` : 即时的状态
 
-Key actions performed include
+Hudi保证在时间轴上执行的操作的原子性和基于即时时间的时间轴一致性。
 
- * `COMMITS` - A commit denotes an **atomic write** of a batch of records into a dataset.
- * `CLEANS` - Background activity that gets rid of older versions of files in the dataset, that are no longer needed.
- * `DELTA_COMMIT` - A delta commit refers to an **atomic write** of a batch of records into a  MergeOnRead storage type of dataset, where some/all of the data could be just written to delta logs.
- * `COMPACTION` - Background activity to reconcile differential data structures within Hudi e.g: moving updates from row based log files to columnar formats. Internally, compaction manifests as a special commit on the timeline
- * `ROLLBACK` - Indicates that a commit/delta commit was unsuccessful & rolled back, removing any partial files produced during such a write
- * `SAVEPOINT` - Marks certain file groups as "saved", such that cleaner will not delete them. It helps restore the dataset to a point on the timeline, in case of disaster/data recovery scenarios.
+执行的关键操作包括
 
-Any given instant can be 
-in one of the following states
+ * `COMMITS` - 一次提交表示将一组记录**原子写入**到数据集中。
+ * `CLEANS` - 删除数据集中不再需要的旧文件版本的后台活动。
+ * `DELTA_COMMIT` - 增量提交是指将一批记录**原子写入**到MergeOnRead存储类型的数据集中，其中一些/所有数据都可以只写到增量日志中。
+ * `COMPACTION` - 协调Hudi中差异数据结构的后台活动，例如：将更新从基于行的日志文件变成列格式。在内部，压缩表现为时间轴上的特殊提交。
+ * `ROLLBACK` - 表示提交/增量提交不成功且已回滚，删除在写入过程中产生的所有部分文件。
+ * `SAVEPOINT` - 将某些文件组标记为"已保存"，以便清理程序不会将其删除。在发生灾难/数据恢复的情况下，它有助于将数据集还原到时间轴上的某个点。
 
- * `REQUESTED` - Denotes an action has been scheduled, but has not initiated
- * `INFLIGHT` - Denotes that the action is currently being performed
- * `COMPLETED` - Denotes completion of an action on the timeline
+任何给定的即时都可以处于以下状态之一
+
+ * `REQUESTED` - 表示已调度但尚未启动的操作。
+ * `INFLIGHT` - 表示当前正在执行该操作。
+ * `COMPLETED` - 表示在时间轴上完成了该操作。
 
 <figure>
     <img class="docimage" src="/images/hudi_timeline.png" alt="hudi_timeline.png" />
 </figure>
 
-Example above shows upserts happenings between 10:00 and 10:20 on a Hudi dataset, roughly every 5 mins, leaving commit metadata on the Hudi timeline, along
-with other background cleaning/compactions. One key observation to make is that the commit time indicates the `arrival time` of the data (10:20AM), while the actual data
-organization reflects the actual time or `event time`, the data was intended for (hourly buckets from 07:00). These are two key concepts when reasoning about tradeoffs between latency and completeness of data.
+上面的示例显示了在Hudi数据集上大约10:00到10:20之间发生的更新事件，大约每5分钟一次，将提交元数据以及其他后台清理/压缩保留在Hudi时间轴上。
+观察的关键点是：提交时间指示数据的`到达时间`（上午10:20），而实际数据组织则反映了实际时间或`事件时间`，即数据所反映的（从07:00开始的每小时时段）。在权衡数据延迟和完整性时，这是两个关键概念。
 
-When there is late arriving data (data intended for 9:00 arriving >1 hr late at 10:20), we can see the upsert producing new data into even older time buckets/folders.
-With the help of the timeline, an incremental query attempting to get all new data that was committed successfully since 10:00 hours, is able to very efficiently consume
-only the changed files without say scanning all the time buckets > 07:00.
+如果有延迟到达的数据（事件时间为9:00的数据在10:20达到，延迟 >1 小时），我们可以看到upsert将新数据生成到更旧的时间段/文件夹中。
+在时间轴的帮助下，增量查询可以只提取10:00以后成功提交的新数据，并非常高效地只消费更改过的文件，且无需扫描更大的文件范围，例如07:00后的所有时间段。
 
-## File management
-Hudi organizes a datasets into a directory structure under a `basepath` on DFS. Dataset is broken up into partitions, which are folders containing data files for that partition,
-very similar to Hive tables. Each partition is uniquely identified by its `partitionpath`, which is relative to the basepath.
+## 文件组织
+Hudi将DFS上的数据集组织到`基本路径`下的目录结构中。数据集分为多个分区，这些分区是包含该分区的数据文件的文件夹，这与Hive表非常相似。
+每个分区被相对于基本路径的特定`分区路径`区分开来。
 
-Within each partition, files are organized into `file groups`, uniquely identified by a `file id`. Each file group contains several
-`file slices`, where each slice contains a base columnar file (`*.parquet`) produced at a certain commit/compaction instant time,
- along with set of log files (`*.log.*`) that contain inserts/updates to the base file since the base file was produced. 
-Hudi adopts a MVCC design, where compaction action merges logs and base files to produce new file slices and cleaning action gets rid of 
-unused/older file slices to reclaim space on DFS. 
+在每个分区内，文件被组织为`文件组`，由`文件id`唯一标识。
+每个文件组包含多个`文件切片`，其中每个切片包含在某个提交/压缩即时时间生成的基本列文件（`*.parquet`）以及一组日志文件（`*.log*`），该文件包含自生成基本文件以来对基本文件的插入/更新。
+Hudi采用MVCC设计，其中压缩操作将日志和基本文件合并以产生新的文件片，而清理操作则将未使用的/较旧的文件片删除以回收DFS上的空间。
 
-Hudi provides efficient upserts, by mapping a given hoodie key (record key + partition path) consistently to a file group, via an indexing mechanism. 
-This mapping between record key and file group/file id, never changes once the first version of a record has been written to a file. In short, the 
-mapped file group contains all versions of a group of records.
+Hudi通过索引机制将给定的hoodie键（记录键+分区路径）映射到文件组，从而提供了高效的Upsert。
+一旦将记录的第一个版本写入文件，记录键和文件组/文件id之间的映射就永远不会改变。 简而言之，映射的文件组包含一组记录的所有版本。
 
-## Storage Types & Views
-Hudi storage types define how data is indexed & laid out on the DFS and how the above primitives and timeline activities are implemented on top of such organization (i.e how data is written). 
-In turn, `views` define how the underlying data is exposed to the queries (i.e how data is read). 
+## 存储类型和视图
+Hudi存储类型定义了如何在DFS上对数据进行索引和布局以及如何在这种组织之上实现上述原语和时间轴活动（即如何写入数据）。
+反过来，`视图`定义了基础数据如何暴露给查询（即如何读取数据）。
 
-| Storage Type  | Supported Views |
+| 存储类型  | 支持的视图 |
 |-------------- |------------------|
-| Copy On Write | Read Optimized + Incremental   |
-| Merge On Read | Read Optimized + Incremental + Near Real-time |
+| 写时复制 | 读优化 + 增量   |
+| 读时合并 | 读优化 + 增量 + 近实时 |
 
-### Storage Types
-Hudi supports the following storage types.
+### 存储类型
+Hudi支持以下存储类型。
 
-  - [Copy On Write](#copy-on-write-storage) : Stores data using exclusively columnar file formats (e.g parquet). Updates simply version & rewrite the files by performing a synchronous merge during write.
-  - [Merge On Read](#merge-on-read-storage) : Stores data using a combination of columnar (e.g parquet) + row based (e.g avro) file formats. Updates are logged to delta files & later compacted to produce new versions of columnar files synchronously or asynchronously.
+  - [写时复制](#copy-on-write-storage) : 仅使用列文件格式（例如parquet）存储数据。通过在写入过程中执行同步合并以更新版本并重写文件。
+
+  - [读时合并](#merge-on-read-storage) : 使用列式（例如parquet）+ 基于行（例如avro）的文件格式组合来存储数据。 更新记录到增量文件中，然后进行同步或异步压缩以生成列文件的新版本。
     
-Following table summarizes the trade-offs between these two storage types
+下表总结了这两种存储类型之间的权衡
 
-| Trade-off | CopyOnWrite | MergeOnRead |
+| 权衡 | 写时复制 | 读时合并 |
 |-------------- |------------------| ------------------|
-| Data Latency | Higher   | Lower |
-| Update cost (I/O) | Higher (rewrite entire parquet) | Lower (append to delta log) |
-| Parquet File Size | Smaller (high update(I/0) cost) | Larger (low update cost) |
-| Write Amplification | Higher | Lower (depending on compaction strategy) |
+| 数据延迟 | 更高   | 更低 |
+| 更新代价(I/O) | 更高（重写整个parquet文件） | 更低（追加到增量日志） |
+| Parquet文件大小 | 更小（高更新代价（I/o）） | 更大（低更新代价） |
+| 写放大 | 更高 | 更低（取决于压缩策略） |
 
 
-### Views
-Hudi supports the following views of stored data
+### 视图
+Hudi支持以下存储数据的视图
 
- - **Read Optimized View** : Queries on this view see the latest snapshot of the dataset as of a given commit or compaction action. 
-    This view exposes only the base/columnar files in latest file slices to the queries and guarantees the same columnar query performance compared to a non-hudi columnar dataset. 
- - **Incremental View** : Queries on this view only see new data written to the dataset, since a given commit/compaction. This view effectively provides change streams to enable incremental data pipelines. 
- - **Realtime View** : Queries on this view see the latest snapshot of dataset as of a given delta commit action. This view provides near-real time datasets (few mins)
-     by merging the base and delta files of the latest file slice on-the-fly.
+ - **读优化视图** : 在此视图上的查询将查看给定提交或压缩操作中数据集的最新快照。
+    该视图仅将最新文件切片中的基本/列文件暴露给查询，并保证与非Hudi列式数据集相比，具有相同的列式查询性能。
+ - **增量视图** : 对该视图的查询只能看到从某个提交/压缩后写入数据集的新数据。该视图有效地提供了更改流，来支持增量数据管道。
+ - **实时视图** : 在此视图上的查询将查看某个增量提交操作中数据集的最新快照。该视图通过动态合并最新的基本文件(例如parquet)和增量文件(例如avro)来提供近实时数据集（几分钟的延迟）。
 
-Following table summarizes the trade-offs between the different views.
 
-| Trade-off | ReadOptimized | RealTime |
+下表总结了不同视图之间的权衡。
+
+| 权衡 | 读优化 | 实时 |
 |-------------- |------------------| ------------------|
-| Data Latency | Higher   | Lower |
-| Query Latency | Lower (raw columnar performance) | Higher (merge columnar + row based delta) |
+| 数据延迟 | 更高   | 更低 |
+| 查询延迟 | 更低（原始列式性能）| 更高（合并列式 + 基于行的增量） |
 
 
-## Copy On Write Storage
+## 写时复制存储
 
-File slices in Copy-On-Write storage only contain the base/columnar file and each commit produces new versions of base files. 
-In other words, we implicitly compact on every commit, such that only columnar data exists. As a result, the write amplification 
-(number of bytes written for 1 byte of incoming data) is much higher, where read amplification is zero. 
-This is a much desired property for analytical workloads, which is predominantly read-heavy.
+写时复制存储中的文件片仅包含基本/列文件，并且每次提交都会生成新版本的基本文件。
+换句话说，我们压缩每个提交，从而所有的数据都是以列数据的形式储存。在这种情况下，写入数据非常昂贵（我们需要重写整个列数据文件，即使只有一个字节的新数据被提交），而读取数据的成本则没有增加。
+这种视图有利于读取繁重的分析工作。
 
-Following illustrates how this works conceptually, when  data written into copy-on-write storage  and two queries running on top of it.
-
+以下内容说明了将数据写入写时复制存储并在其上运行两个查询时，它是如何工作的。
 
 <figure>
     <img class="docimage" src="/images/hudi_cow.png" alt="hudi_cow.png" />
 </figure>
 
 
-As data gets written, updates to existing file groups produce a new slice for that file group stamped with the commit instant time, 
-while inserts allocate a new file group and write its first slice for that file group. These file slices and their commit instant times are color coded above.
-SQL queries running against such a dataset (eg: `select count(*)` counting the total records in that partition), first checks the timeline for the latest commit
-and filters all but latest file slices of each file group. As you can see, an old query does not see the current inflight commit's files color coded in pink,
-but a new query starting after the commit picks up the new data. Thus queries are immune to any write failures/partial writes and only run on committed data.
+随着数据的写入，对现有文件组的更新将为该文件组生成一个带有提交即时时间标记的新切片，而插入分配一个新文件组并写入该文件组的第一个切片。
+这些文件切片及其提交即时时间在上面用颜色编码。
+针对这样的数据集运行SQL查询（例如：`select count(*)`统计该分区中的记录数目），首先检查时间轴上的最新提交并过滤每个文件组中除最新文件片以外的所有文件片。
+如您所见，旧查询不会看到以粉红色标记的当前进行中的提交的文件，但是在该提交后的新查询会获取新数据。因此，查询不受任何写入失败/部分写入的影响，仅运行在已提交数据上。
 
-The intention of copy on write storage, is to fundamentally improve how datasets are managed today through
+写时复制存储的目的是从根本上改善当前管理数据集的方式，通过以下方法来实现
 
-  - First class support for atomically updating data at file-level, instead of rewriting whole tables/partitions
-  - Ability to incremental consume changes, as opposed to wasteful scans or fumbling with heuristics
-  - Tight control file sizes to keep query performance excellent (small files hurt query performance considerably).
+  - 优先支持在文件级原子更新数据，而无需重写整个表/分区
+  - 能够只读取更新的部分，而不是进行低效的扫描或搜索
+  - 严格控制文件大小来保持出色的查询性能（小的文件会严重损害查询性能）。
 
+## 读时合并存储
 
-## Merge On Read Storage
+读时合并存储是写时复制的升级版，从某种意义上说，它仍然可以通过读优化表提供数据集的读取优化视图（写时复制的功能）。
+此外，它将每个文件组的更新插入存储到基于行的增量日志中，通过文件id，将增量日志和最新版本的基本文件进行合并，从而提供近实时的数据查询。因此，此存储类型智能地平衡了读和写的成本，以提供近乎实时的查询。
+这里最重要的一点是压缩器，它现在可以仔细挑选需要压缩到其列式基础文件中的增量日志（根据增量日志的文件大小），以保持查询性能（较大的增量日志将会提升近实时的查询时间，并同时需要更长的合并时间）。
 
-Merge on read storage is a superset of copy on write, in the sense it still provides a read optimized view of the dataset via the Read Optmized table.
-Additionally, it stores incoming upserts for each file group, onto a row based delta log, that enables providing near real-time data to the queries
- by applying the delta log, onto the latest version of each file id on-the-fly during query time. Thus, this storage type attempts to balance read and write amplication intelligently, to provide near real-time queries.
-The most significant change here, would be to the compactor, which now carefully chooses which delta logs need to be compacted onto
-their columnar base file, to keep the query performance in check (larger delta logs would incur longer merge times with merge data on query side)
-
-Following illustrates how the storage works, and shows queries on both near-real time table and read optimized table.
+以下内容说明了存储的工作方式，并显示了对近实时表和读优化表的查询。
 
 <figure>
     <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 1000px" />
 </figure>
 
-There are lot of interesting things happening in this example, which bring out the subtleties in the approach.
+此示例中发生了很多有趣的事情，这些带出了该方法的微妙之处。
 
- - We now have commits every 1 minute or so, something we could not do in the other storage type.
- - Within each file id group, now there is an delta log, which holds incoming updates to records in the base columnar files. In the example, the delta logs hold
- all the data from 10:05 to 10:10. The base columnar files are still versioned with the commit, as before.
- Thus, if one were to simply look at base files alone, then the storage layout looks exactly like a copy on write table.
- - A periodic compaction process reconciles these changes from the delta log and produces a new version of base file, just like what happened at 10:05 in the example.
- - There are two ways of querying the same underlying storage: ReadOptimized (RO) Table and Near-Realtime (RT) table, depending on whether we chose query performance or freshness of data.
- - The semantics around when data from a commit is available to a query changes in a subtle way for the RO table. Note, that such a query
- running at 10:10, wont see data after 10:05 above, while a query on the RT table always sees the freshest data.
- - When we trigger compaction & what it decides to compact hold all the key to solving these hard problems. By implementing a compacting
- strategy, where we aggressively compact the latest partitions compared to older partitions, we could ensure the RO Table sees data
- published within X minutes in a consistent fashion.
+ - 现在，我们每1分钟左右就有一次提交，这是其他存储类型无法做到的。
+ - 现在，在每个文件id组中，都有一个增量日志，其中包含对基础列文件中记录的更新。
+ 在示例中，增量日志包含10:05至10:10的所有数据。与以前一样，基本列式文件仍使用提交进行版本控制。
+ 因此，如果只看一眼基本文件，那么存储布局看起来就像是写时复制表的副本。
+ - 定期压缩过程会从增量日志中合并这些更改，并生成基础文件的新版本，就像示例中10:05发生的情况一样。
+ - 有两种查询同一存储的方式：读优化（RO）表和近实时（RT）表，具体取决于我们选择查询性能还是数据新鲜度。
+ - 对于RO表来说，提交数据在何时可用于查询将有些许不同。 请注意，以10:10运行的（在RO表上的）此类查询将不会看到10:05之后的数据，而在RT表上的查询总会看到最新的数据。
+ - 何时触发压缩以及压缩什么是解决这些难题的关键。
+ 通过实施压缩策略，在该策略中，与较旧的分区相比，我们会积极地压缩最新的分区，从而确保RO表能够以一致的方式看到几分钟内发布的数据。
 
-The intention of merge on read storage is to enable near real-time processing directly on top of DFS, as opposed to copying
-data out to specialized systems, which may not be able to handle the data volume. There are also a few secondary side benefits to 
-this storage such as reduced write amplification by avoiding synchronous merge of data, i.e, the amount of data written per 1 bytes of data in a batch
-
-
+读时合并存储上的目的是直接在DFS上启用近实时处理，而不是将数据复制到专用系统，后者可能无法处理大数据量。
+该存储还有一些其他方面的好处，例如通过避免数据的同步合并来减少写放大，即批量数据中每1字节数据需要的写入数据量。
