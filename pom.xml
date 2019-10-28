@@ -244,6 +244,7 @@
           <excludes>
             <exclude>**/IT*.java</exclude>
           </excludes>
+          <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
         </configuration>
       </plugin>
     </plugins>
