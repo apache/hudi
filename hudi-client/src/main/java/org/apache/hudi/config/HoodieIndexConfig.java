@@ -54,6 +54,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   // TODO: On by default. Once stable, we will remove the other mode.
   public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = "hoodie.bloom.index.bucketized.checking";
   public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
+  public static final String BLOOM_INDEX_AUTO_TUNE_ENABLE_PROP = "hoodie.bloom.index.auto.tune.enable";
+  public static final boolean DEFAULT_BLOOM_INDEX_AUTO_TUNE_ENABLE = false;
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
   public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";

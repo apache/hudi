@@ -20,6 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.BloomFilterFactory;
+import org.apache.hudi.common.SimpleBloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -143,15 +145,25 @@ public class ParquetUtils {
    * Read out the bloom filter from the parquet file meta data.
    */
   public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration, Path parquetFilePath) {
-    Map<String, String> footerVals = readParquetFooter(configuration, false, parquetFilePath,
-        HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-        HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    Map<String, String> footerVals =
+        readParquetFooter(configuration, false, parquetFilePath,
+            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieAvroWriteSupport.HOODIE_BLOOM_INDEX_VERSION);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
       footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     }
-    return footerVal != null ? new BloomFilter(footerVal) : null;
+    BloomFilter toReturn = null;
+    if(footerVal != null) {
+      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_INDEX_VERSION)) {
+        BloomFilterFactory.getBloomFilterFromSerializedString(footerVal, Integer.parseInt(footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_INDEX_VERSION)));
+      } else {
+        BloomFilterFactory.getBloomFilterFromSerializedString(footerVal, SimpleBloomFilter.VERSION);
+      }
+    }
+    return toReturn;
   }
 
   public static String[] readMinMaxRecordKeys(Configuration configuration, Path parquetFilePath) {

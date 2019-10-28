@@ -18,32 +18,86 @@
 
 package org.apache.hudi.common;
 
-import org.junit.Test;
-
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import org.apache.commons.lang.RandomStringUtils;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 /**
  * Tests bloom filter {@link BloomFilter}.
  */
+@RunWith(Parameterized.class)
 public class TestBloomFilter {
+
+  private final int keySize = 50;
+  private final int versionToTest;
+
+  // name attribute is optional, provide an unique name for test
+  // multiple parameters, uses Collection<Object[]>
+  @Parameters()
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][]{
+        {0},
+        {1}
+    });
+  }
+
+  public TestBloomFilter(int versionToTest) {
+    this.versionToTest = versionToTest;
+  }
 
   @Test
   public void testAddKey() {
-    BloomFilter filter = new BloomFilter(100, 0.0000001);
-    filter.add("key1");
-    assert (filter.mightContain("key1"));
+    List<java.lang.String> inputs = new ArrayList<>();
+    int[] sizes = {100, 1000, 10000};
+    for (int size : sizes) {
+      inputs = new ArrayList<>();
+      BloomFilter filter = BloomFilterFactory
+          .createBloomFilter(100, 0.0000001, versionToTest);
+      for (int i = 0; i < size; i++) {
+        java.lang.String key = RandomStringUtils.randomAlphanumeric(keySize);
+        inputs.add(key);
+        filter.add(key);
+      }
+      for (java.lang.String key : inputs) {
+        assert (filter.mightContain(key));
+      }
+      for (int i = 0; i < 100; i++) {
+        java.lang.String randomKey = RandomStringUtils.randomAlphanumeric(keySize);
+        if (inputs.contains(randomKey)) {
+          assert filter.mightContain(randomKey);
+        }
+      }
+    }
   }
 
   @Test
   public void testSerialize() throws IOException, ClassNotFoundException {
-    BloomFilter filter = new BloomFilter(1000, 0.0000001);
-    filter.add("key1");
-    filter.add("key2");
-    String filterStr = filter.serializeToString();
 
-    // Rebuild
-    BloomFilter newFilter = new BloomFilter(filterStr);
-    assert (newFilter.mightContain("key1"));
-    assert (newFilter.mightContain("key2"));
+    List<java.lang.String> inputs = new ArrayList<>();
+    int[] sizes = {100, 1000, 10000};
+    for (int size : sizes) {
+      inputs = new ArrayList<>();
+      BloomFilter filter = BloomFilterFactory
+          .createBloomFilter(100, 0.0000001, versionToTest);
+      for (int i = 0; i < size; i++) {
+        java.lang.String key = RandomStringUtils.randomAlphanumeric(keySize);
+        inputs.add(key);
+        filter.add(key);
+      }
+
+      String serString = filter.serializeToString();
+      BloomFilter recreatedBloomFilter = BloomFilterFactory
+          .getBloomFilterFromSerializedString(serString, versionToTest);
+      for (String key : inputs) {
+        assert (recreatedBloomFilter.mightContain(key));
+      }
+    }
   }
 }

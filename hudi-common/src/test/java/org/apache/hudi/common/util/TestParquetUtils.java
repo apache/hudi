@@ -20,7 +20,9 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.BloomFilterFactory;
 import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.common.SimpleBloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 
@@ -33,6 +35,7 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
 import org.junit.Test;
+import sun.nio.ch.SelectorImpl;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -107,7 +110,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   private void writeParquetFile(String filePath, List<String> rowKeys) throws Exception {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    BloomFilter filter = new BloomFilter(1000, 0.0001);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, SimpleBloomFilter.VERSION);
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
