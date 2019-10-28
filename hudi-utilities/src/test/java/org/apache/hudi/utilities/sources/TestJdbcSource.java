@@ -230,7 +230,9 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
       //Add 10 records with commit time 001
       DatabaseUtils.insert("001", 5);
+      rowDataset=runSourceAndAssert(Option.empty(),15);
       Assert.assertEquals(5, rowDataset.where("commit_time=001").count());
+      Assert.assertEquals(10, rowDataset.where("commit_time=000").count());
 
       //Start second commit and check if all records are pulled
       runSourceAndAssert(Option.empty(), 15);
