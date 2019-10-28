@@ -2,15 +2,12 @@ package org.apache.hudi.utilities.sources;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
@@ -21,6 +18,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -99,10 +97,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   public static void cleanDerby() {
     try {
-      Files.walk(Paths.get(DatabaseUtils.getDerbyDir()))
-          .sorted(Comparator.reverseOrder())
-          .map(java.nio.file.Path::toFile)
-          .forEach(File::delete);
+      FileIOUtils.deleteDirectory(new File(DatabaseUtils.getDerbyDir()));
     } catch (Exception e) {
       //exit silently
       return;

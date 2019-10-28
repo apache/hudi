@@ -3,7 +3,6 @@ package org.apache.hudi.utilities.sources;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -25,8 +24,12 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.storage.StorageLevel;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * Reads data from RDBMS data sources
+ */
 
 public class JDBCSource extends RowSource {
 
@@ -37,6 +40,14 @@ public class JDBCSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
+  /**
+   * Validates all user properties and prepares the {@link DataFrameReader} to read from RDBMS
+   *
+   * @param session
+   * @param properties
+   * @return
+   * @throws HoodieException
+   */
   private static DataFrameReader validatePropsAndGetDataFrameReader(final SparkSession session,
       final TypedProperties properties)
       throws HoodieException {
@@ -50,15 +61,14 @@ public class JDBCSource extends RowSource {
       dataFrameReader = dataFrameReader
           .option(Config.RDBMS_TABLE_PROP, properties.getString(Config.RDBMS_TABLE_NAME));
 
-      if (properties.containsKey(Config.PASSWORD) && !StringUtils
-          .isNullOrEmpty(properties.getString(Config.PASSWORD))) {
+      if (properties.containsKey(Config.PASSWORD)) {
         LOG.info("Reading JDBC password from properties file....");
         dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP, properties.getString(Config.PASSWORD));
       } else if (properties.containsKey(Config.PASSWORD_FILE) && !StringUtils
           .isNullOrEmpty(properties.getString(Config.PASSWORD_FILE))) {
         LOG.info(
             String.format("Reading JDBC password from password file %s", properties.getString(Config.PASSWORD_FILE)));
-        FileSystem fileSystem = FileSystem.get(new Configuration());
+        FileSystem fileSystem = FileSystem.get(session.sparkContext().hadoopConfiguration());
         passwordFileStream = fileSystem.open(new Path(properties.getString(Config.PASSWORD_FILE)));
         byte[] bytes = new byte[passwordFileStream.available()];
         passwordFileStream.read(bytes);
@@ -81,6 +91,20 @@ public class JDBCSource extends RowSource {
     }
   }
 
+  /**
+   * Accepts spark JDBC options from the user in terms of EXTRA_OPTIONS adds them to {@link DataFrameReader} Example: In
+   * a normal spark code you would do something like: session.read.format('jdbc') .option(fetchSize,1000)
+   * .option(timestampFormat,"yyyy-mm-dd hh:mm:ss")
+   * <p>
+   * The way to pass these properties to HUDI is through the config file. Any property starting with
+   * hoodie.datasource.jdbc.extra.options. will be added.
+   * <p>
+   * Example: hoodie.datasource.jdbc.extra.options.fetchSize hoodie.datasource.jdbc.extra.options.upperBound
+   * hoodie.datasource.jdbc.extra.options.lowerBound
+   *
+   * @param properties
+   * @param dataFrameReader
+   */
   private static void addExtraJdbcOptions(TypedProperties properties, DataFrameReader dataFrameReader) {
     Set<Object> objects = properties.keySet();
     for (Object property : objects) {
@@ -89,7 +113,7 @@ public class JDBCSource extends RowSource {
         String key = Arrays.asList(prop.split(Config.EXTRA_OPTIONS)).stream()
             .collect(Collectors.joining());
         String value = properties.getString(prop);
-        if (!StringUtils.isNullOrEmpty(value)) {
+        if (value != null) {
           LOG.info(String.format("Adding %s -> %s to jdbc options", key, value));
           dataFrameReader.option(key, value);
         } else {
@@ -113,6 +137,14 @@ public class JDBCSource extends RowSource {
     }
   }
 
+  /**
+   * Decide to do a full RDBMS table scan or an incremental scan based on the lastCheckpoint. If previous checkpoint
+   * value exists then we do an incremental scan with a PPD query or else we do a full scan. In certain cases where the
+   * incremental query fails, we fallback to a full scan.
+   *
+   * @param lastCheckpoint
+   * @return
+   */
   @NotNull
   private Pair<Option<Dataset<Row>>, String> fetch(Option<String> lastCheckpoint) {
     Dataset<Row> dataset;
@@ -123,9 +155,18 @@ public class JDBCSource extends RowSource {
     } else {
       dataset = incrementalFetch(lastCheckpoint);
     }
-    return Pair.of(Option.of(dataset), checkpoint(dataset, isIncremental));
+    dataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
+    Pair<Option<Dataset<Row>>, String> pair = Pair.of(Option.of(dataset), checkpoint(dataset, isIncremental));
+    dataset.unpersist();
+    return pair;
   }
 
+  /**
+   * Does an incremental scan with PPQ query prepared on the bases of previous checkpoint.
+   *
+   * @param lastCheckpoint
+   * @return
+   */
   @NotNull
   private Dataset<Row> incrementalFetch(Option<String> lastCheckpoint) {
     try {
@@ -145,6 +186,10 @@ public class JDBCSource extends RowSource {
     }
   }
 
+  /**
+   * Does a full scan on the RDBMS data source
+   * @return
+   */
   private Dataset<Row> fullFetch() {
     return validatePropsAndGetDataFrameReader(sparkSession, props).load();
   }
