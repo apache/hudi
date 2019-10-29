@@ -139,7 +139,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Get only pure commits (inflight and completed) in the active timeline
    */
-  public HoodieTimeline getCommitTimeline() {
+  public HoodieTimeline   getCommitTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
   }
 

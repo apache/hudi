@@ -278,10 +278,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
    */
   public HoodieCleanerPlan scheduleClean(JavaSparkContext jsc) {
     try {
-      FileSystem fs = getMetaClient().getFs();
+      HoodieCleanHelper cleaner = new HoodieCleanHelper(this, config);
+      Option<HoodieInstant> earliestInstant = cleaner.getEarliestCommitToRetain();
 
-      List<String> partitionsToClean =
-          FSUtils.getAllPartitionPaths(fs, getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
+      List<String> partitionsToClean = cleaner.getPartitionPathsToClean(earliestInstant);
+
       if (partitionsToClean.isEmpty()) {
         logger.info("Nothing to clean here. It is already clean");
         return HoodieCleanerPlan.newBuilder().setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name()).build();
@@ -290,8 +291,6 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
           "Total Partitions to clean : " + partitionsToClean.size() + ", with policy " + config.getCleanerPolicy());
       int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
       logger.info("Using cleanerParallelism: " + cleanerParallelism);
-      HoodieCleanHelper cleaner = new HoodieCleanHelper(this, config);
-      Option<HoodieInstant> earliestInstant = cleaner.getEarliestCommitToRetain();
 
       Map<String, List<String>> cleanOps = jsc.parallelize(partitionsToClean, cleanerParallelism)
           .map(partitionPathToClean -> Pair.of(partitionPathToClean, cleaner.getDeletePaths(partitionPathToClean)))

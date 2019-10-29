@@ -43,6 +43,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max" + ".delta.commits";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions" + ".retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
+  public static final String CLEANER_INCREMENTAL_MODE = "hoodie.cleaner.incremental.mode";
   public static final String MAX_COMMITS_TO_KEEP_PROP = "hoodie.keep.max.commits";
   public static final String MIN_COMMITS_TO_KEEP_PROP = "hoodie.keep.min.commits";
   public static final String COMMITS_ARCHIVAL_BATCH_SIZE_PROP = "hoodie.commits.archival.batch";
@@ -92,6 +93,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
   private static final String DEFAULT_AUTO_CLEAN = "true";
   private static final String DEFAULT_INLINE_COMPACT = "false";
+  private static final String DEFAULT_INCREMENTAL_CLEANER = "false";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "1";
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
@@ -133,6 +135,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withAutoClean(Boolean autoClean) {
       props.setProperty(AUTO_CLEAN_PROP, String.valueOf(autoClean));
+      return this;
+    }
+
+    public Builder withIncrementalCleaningMode(Boolean incrementalCleaningMode) {
+      props.setProperty(CLEANER_INCREMENTAL_MODE, String.valueOf(incrementalCleaningMode));
       return this;
     }
 
@@ -235,6 +242,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP), AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
+      setDefaultOnCondition(props, !props.containsKey(CLEANER_INCREMENTAL_MODE), CLEANER_INCREMENTAL_MODE,
+          DEFAULT_INCREMENTAL_CLEANER);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_PROP), INLINE_COMPACT_PROP,
           DEFAULT_INLINE_COMPACT);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP),
