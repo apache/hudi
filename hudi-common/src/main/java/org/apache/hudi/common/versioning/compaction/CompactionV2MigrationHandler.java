@@ -46,20 +46,15 @@ public class CompactionV2MigrationHandler extends AbstractMigratorBase<HoodieCom
 
   @Override
   public HoodieCompactionPlan upgradeFrom(HoodieCompactionPlan input) {
-    Preconditions.checkArgument(input.getVersion() == 1, "Input version is "
-        + input.getVersion() + ". Must be 1");
+    Preconditions.checkArgument(input.getVersion() == 1, "Input version is " + input.getVersion() + ". Must be 1");
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
     List<HoodieCompactionOperation> v2CompactionOperationList = new ArrayList<>();
     if (null != input.getOperations()) {
       v2CompactionOperationList = input.getOperations().stream().map(inp -> {
-        return HoodieCompactionOperation.newBuilder()
-            .setBaseInstantTime(inp.getBaseInstantTime())
-            .setFileId(inp.getFileId())
-            .setPartitionPath(inp.getPartitionPath())
-            .setMetrics(inp.getMetrics())
-            .setDataFilePath(new Path(inp.getDataFilePath()).getName())
-            .setDeltaFilePaths(inp.getDeltaFilePaths().stream().map(s -> new Path(s).getName())
-                .collect(Collectors.toList()))
+        return HoodieCompactionOperation.newBuilder().setBaseInstantTime(inp.getBaseInstantTime())
+            .setFileId(inp.getFileId()).setPartitionPath(inp.getPartitionPath()).setMetrics(inp.getMetrics())
+            .setDataFilePath(new Path(inp.getDataFilePath()).getName()).setDeltaFilePaths(
+                inp.getDeltaFilePaths().stream().map(s -> new Path(s).getName()).collect(Collectors.toList()))
             .build();
       }).collect(Collectors.toList());
     }

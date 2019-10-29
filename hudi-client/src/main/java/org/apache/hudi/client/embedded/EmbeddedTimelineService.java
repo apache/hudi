@@ -97,9 +97,11 @@ public class EmbeddedTimelineService {
 
   public void stop() {
     if (null != server) {
+      logger.info("Closing Timeline server");
       this.server.close();
       this.server = null;
       this.viewManager = null;
+      logger.info("Closed Timeline server");
     }
   }
 }

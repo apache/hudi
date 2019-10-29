@@ -114,8 +114,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     fileSlice.addLogFile(
         new HoodieLogFile(new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN))));
     op = CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], fileSlice, Option.of(metricsCaptureFn));
-    testFileSliceCompactionOpEquality(fileSlice, op, DEFAULT_PARTITION_PATHS[0],
-        LATEST_COMPACTION_METADATA_VERSION);
+    testFileSliceCompactionOpEquality(fileSlice, op, DEFAULT_PARTITION_PATHS[0], LATEST_COMPACTION_METADATA_VERSION);
   }
 
   /**
@@ -126,17 +125,17 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     FileSlice emptyFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "empty1");
     FileSlice fileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
     fileSlice.setDataFile(new TestHoodieDataFile(fullPartitionPath.toString() + "/data1_1_000.parquet"));
-    fileSlice.addLogFile(
-        new HoodieLogFile(new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN)))));
-    fileSlice.addLogFile(
-        new HoodieLogFile(new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN)))));
+    fileSlice.addLogFile(new HoodieLogFile(
+        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN)))));
+    fileSlice.addLogFile(new HoodieLogFile(
+        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN)))));
     FileSlice noLogFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noLog1");
     noLogFileSlice.setDataFile(new TestHoodieDataFile(fullPartitionPath.toString() + "/noLog_1_000.parquet"));
     FileSlice noDataFileSlice = new FileSlice(DEFAULT_PARTITION_PATHS[0], "000", "noData1");
-    noDataFileSlice.addLogFile(
-        new HoodieLogFile(new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN)))));
-    noDataFileSlice.addLogFile(
-        new HoodieLogFile(new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN)))));
+    noDataFileSlice.addLogFile(new HoodieLogFile(
+        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 1, TEST_WRITE_TOKEN)))));
+    noDataFileSlice.addLogFile(new HoodieLogFile(
+        new Path(fullPartitionPath, new Path(FSUtils.makeLogFileName("noData1", ".log", "000", 2, TEST_WRITE_TOKEN)))));
     List<FileSlice> fileSliceList = Arrays.asList(emptyFileSlice, noDataFileSlice, fileSlice, noLogFileSlice);
     List<Pair<String, FileSlice>> input =
         fileSliceList.stream().map(f -> Pair.of(DEFAULT_PARTITION_PATHS[0], f)).collect(Collectors.toList());
@@ -221,9 +220,8 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
    */
   private void testFileSlicesCompactionPlanEquality(List<Pair<String, FileSlice>> input, HoodieCompactionPlan plan) {
     Assert.assertEquals("All file-slices present", input.size(), plan.getOperations().size());
-    IntStream.range(0, input.size()).boxed().forEach(idx ->
-        testFileSliceCompactionOpEquality(input.get(idx).getValue(), plan.getOperations().get(idx),
-            input.get(idx).getKey(), plan.getVersion()));
+    IntStream.range(0, input.size()).boxed().forEach(idx -> testFileSliceCompactionOpEquality(input.get(idx).getValue(),
+        plan.getOperations().get(idx), input.get(idx).getKey(), plan.getVersion()));
   }
 
   /**
@@ -233,15 +231,15 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
    * @param op HoodieCompactionOperation
    * @param expPartitionPath Partition path
    */
-  private void testFileSliceCompactionOpEquality(FileSlice slice, HoodieCompactionOperation op,
-      String expPartitionPath, int version) {
+  private void testFileSliceCompactionOpEquality(FileSlice slice, HoodieCompactionOperation op, String expPartitionPath,
+      int version) {
     Assert.assertEquals("Partition path is correct", expPartitionPath, op.getPartitionPath());
     Assert.assertEquals("Same base-instant", slice.getBaseInstantTime(), op.getBaseInstantTime());
     Assert.assertEquals("Same file-id", slice.getFileId(), op.getFileId());
     if (slice.getDataFile().isPresent()) {
       HoodieDataFile df = slice.getDataFile().get();
-      Assert.assertEquals("Same data-file",
-          version == COMPACTION_METADATA_VERSION_1 ? df.getPath() : df.getFileName(), op.getDataFilePath());
+      Assert.assertEquals("Same data-file", version == COMPACTION_METADATA_VERSION_1 ? df.getPath() : df.getFileName(),
+          op.getDataFilePath());
     }
     List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());
     IntStream.range(0, paths.size()).boxed().forEach(idx -> {

@@ -63,6 +63,7 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_COMMIT_EXTENSION = INFLIGHT_EXTENSION;
   String INFLIGHT_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_CLEAN_EXTENSION = "." + CLEAN_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
@@ -79,6 +80,13 @@ public interface HoodieTimeline extends Serializable {
    * @return New instance of HoodieTimeline with just in-flights
    */
   HoodieTimeline filterInflights();
+
+  /**
+   * Filter this timeline to include requested and in-flights
+   *
+   * @return New instance of HoodieTimeline with just in-flights and requested instants
+   */
+  HoodieTimeline filterInflightsAndRequested();
 
   /**
    * Filter this timeline to just include the in-flights excluding compaction instants
@@ -219,7 +227,19 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static HoodieInstant getCompletedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(false, instant.getAction(), instant.getTimestamp());
+    return new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
+  }
+
+  static HoodieInstant getRequestedInstant(final HoodieInstant instant) {
+    return new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp());
+  }
+
+  static HoodieInstant getCleanRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, CLEAN_ACTION, timestamp);
+  }
+
+  static HoodieInstant getCleanInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, timestamp);
   }
 
   static HoodieInstant getCompactionRequestedInstant(final String timestamp) {
@@ -244,6 +264,10 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeCleanerFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.CLEAN_EXTENSION);
+  }
+
+  static String makeRequestedCleanerFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_CLEAN_EXTENSION);
   }
 
   static String makeInflightCleanerFileName(String instant) {

@@ -62,25 +62,30 @@ public class HiveSyncTool {
   }
 
   public void syncHoodieTable() throws ClassNotFoundException {
-    switch (hoodieHiveClient.getTableType()) {
-      case COPY_ON_WRITE:
-        syncHoodieTable(false);
-        break;
-      case MERGE_ON_READ:
-        // sync a RO table for MOR
-        syncHoodieTable(false);
-        String originalTableName = cfg.tableName;
-        // TODO : Make realtime table registration optional using a config param
-        cfg.tableName = cfg.tableName + SUFFIX_REALTIME_TABLE;
-        // sync a RT table for MOR
-        syncHoodieTable(true);
-        cfg.tableName = originalTableName;
-        break;
-      default:
-        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-        throw new InvalidDatasetException(hoodieHiveClient.getBasePath());
+    try {
+      switch (hoodieHiveClient.getTableType()) {
+        case COPY_ON_WRITE:
+          syncHoodieTable(false);
+          break;
+        case MERGE_ON_READ:
+          // sync a RO table for MOR
+          syncHoodieTable(false);
+          String originalTableName = cfg.tableName;
+          // TODO : Make realtime table registration optional using a config param
+          cfg.tableName = cfg.tableName + SUFFIX_REALTIME_TABLE;
+          // sync a RT table for MOR
+          syncHoodieTable(true);
+          cfg.tableName = originalTableName;
+          break;
+        default:
+          LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+          throw new InvalidDatasetException(hoodieHiveClient.getBasePath());
+      }
+    } catch (RuntimeException re) {
+      LOG.error("Got runtime exception when hive syncing", re);
+    } finally {
+      hoodieHiveClient.close();
     }
-    hoodieHiveClient.close();
   }
 
   private void syncHoodieTable(boolean isRealTime) throws ClassNotFoundException {

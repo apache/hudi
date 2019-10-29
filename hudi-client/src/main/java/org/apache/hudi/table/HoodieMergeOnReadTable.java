@@ -185,12 +185,12 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     logger.info("Unpublished " + commit);
     Long startTime = System.currentTimeMillis();
     List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, instantToRollback);
-    //TODO: We need to persist this as rollback workload and use it in case of partial failures
+    // TODO: We need to persist this as rollback workload and use it in case of partial failures
     List<HoodieRollbackStat> allRollbackStats =
         new RollbackExecutor(metaClient, config).performRollback(jsc, instantToRollback, rollbackRequests);
     // Delete Inflight instants if enabled
-    deleteInflightInstant(deleteInstants, this.getActiveTimeline(), new HoodieInstant(true, instantToRollback
-        .getAction(), instantToRollback.getTimestamp()));
+    deleteInflightInstant(deleteInstants, this.getActiveTimeline(),
+        new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()));
 
     logger.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
 
@@ -200,6 +200,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   /**
    * Generate all rollback requests that we need to perform for rolling back this action without actually performing
    * rolling back
+   * 
    * @param jsc JavaSparkContext
    * @param instantToRollback Instant to Rollback
    * @return list of rollback requests
@@ -211,92 +212,92 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     List<String> partitions = FSUtils.getAllPartitionPaths(this.metaClient.getFs(), this.getMetaClient().getBasePath(),
         config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
-    return jsc.parallelize(partitions, Math.min(partitions.size(), sparkPartitions))
-        .flatMap(partitionPath -> {
-          HoodieActiveTimeline activeTimeline = this.getActiveTimeline().reload();
-          List<RollbackRequest> partitionRollbackRequests = new ArrayList<>();
-          switch (instantToRollback.getAction()) {
-            case HoodieTimeline.COMMIT_ACTION:
-              logger.info("Rolling back commit action. There are higher delta commits. So only rolling back this "
-                  + "instant");
-              partitionRollbackRequests.add(RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(
-                  partitionPath, instantToRollback));
-              break;
-            case HoodieTimeline.COMPACTION_ACTION:
-              // If there is no delta commit present after the current commit (if compaction), no action, else we
-              // need to make sure that a compaction commit rollback also deletes any log files written as part of the
-              // succeeding deltacommit.
-              boolean higherDeltaCommits = !activeTimeline.getDeltaCommitTimeline()
-                  .filterCompletedInstants().findInstantsAfter(commit, 1).empty();
-              if (higherDeltaCommits) {
-                // Rollback of a compaction action with no higher deltacommit means that the compaction is scheduled
-                // and has not yet finished. In this scenario we should delete only the newly created parquet files
-                // and not corresponding base commit log files created with this as baseCommit since updates would
-                // have been written to the log files.
-                logger.info("Rolling back compaction. There are higher delta commits. So only deleting data files");
-                partitionRollbackRequests.add(RollbackRequest.createRollbackRequestWithDeleteDataFilesOnlyAction(
-                    partitionPath, instantToRollback));
-              } else {
-                // No deltacommits present after this compaction commit (inflight or requested). In this case, we
-                // can also delete any log files that were created with this compaction commit as base
-                // commit.
-                logger.info("Rolling back compaction plan. There are NO higher delta commits. So deleting both data and"
-                    + " log files");
-                partitionRollbackRequests.add(
-                    RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath,
-                        instantToRollback));
-              }
-              break;
-            case HoodieTimeline.DELTA_COMMIT_ACTION:
-              // --------------------------------------------------------------------------------------------------
-              // (A) The following cases are possible if index.canIndexLogFiles and/or index.isGlobal
-              // --------------------------------------------------------------------------------------------------
-              // (A.1) Failed first commit - Inserts were written to log files and HoodieWriteStat has no entries. In
-              // this scenario we would want to delete these log files.
-              // (A.2) Failed recurring commit - Inserts/Updates written to log files. In this scenario,
-              // HoodieWriteStat will have the baseCommitTime for the first log file written, add rollback blocks.
-              // (A.3) Rollback triggered for first commit - Inserts were written to the log files but the commit is
-              // being reverted. In this scenario, HoodieWriteStat will be `null` for the attribute prevCommitTime and
-              // and hence will end up deleting these log files. This is done so there are no orphan log files
-              // lying around.
-              // (A.4) Rollback triggered for recurring commits - Inserts/Updates are being rolled back, the actions
-              // taken in this scenario is a combination of (A.2) and (A.3)
-              // ---------------------------------------------------------------------------------------------------
-              // (B) The following cases are possible if !index.canIndexLogFiles and/or !index.isGlobal
-              // ---------------------------------------------------------------------------------------------------
-              // (B.1) Failed first commit - Inserts were written to parquet files and HoodieWriteStat has no entries.
-              // In this scenario, we delete all the parquet files written for the failed commit.
-              // (B.2) Failed recurring commits - Inserts were written to parquet files and updates to log files. In
-              // this scenario, perform (A.1) and for updates written to log files, write rollback blocks.
-              // (B.3) Rollback triggered for first commit - Same as (B.1)
-              // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
-              // as well if the base parquet file gets deleted.
-              try {
-                HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-                    metaClient.getCommitTimeline().getInstantDetails(
-                        new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
-                        .get(), HoodieCommitMetadata.class);
-
-                // In case all data was inserts and the commit failed, delete the file belonging to that commit
-                // We do not know fileIds for inserts (first inserts are either log files or parquet files),
-                // delete all files for the corresponding failed commit, if present (same as COW)
-                partitionRollbackRequests.add(RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(
-                    partitionPath, instantToRollback));
-
-                // append rollback blocks for updates
-                if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
-                  partitionRollbackRequests
-                      .addAll(generateAppendRollbackBlocksAction(partitionPath, instantToRollback, commitMetadata));
-                }
-                break;
-              } catch (IOException io) {
-                throw new UncheckedIOException("Failed to collect rollback actions for commit " + commit, io);
-              }
-            default:
-              break;
+    return jsc.parallelize(partitions, Math.min(partitions.size(), sparkPartitions)).flatMap(partitionPath -> {
+      HoodieActiveTimeline activeTimeline = this.getActiveTimeline().reload();
+      List<RollbackRequest> partitionRollbackRequests = new ArrayList<>();
+      switch (instantToRollback.getAction()) {
+        case HoodieTimeline.COMMIT_ACTION:
+          logger.info(
+              "Rolling back commit action. There are higher delta commits. So only rolling back this " + "instant");
+          partitionRollbackRequests.add(
+              RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+          break;
+        case HoodieTimeline.COMPACTION_ACTION:
+          // If there is no delta commit present after the current commit (if compaction), no action, else we
+          // need to make sure that a compaction commit rollback also deletes any log files written as part of the
+          // succeeding deltacommit.
+          boolean higherDeltaCommits =
+              !activeTimeline.getDeltaCommitTimeline().filterCompletedInstants().findInstantsAfter(commit, 1).empty();
+          if (higherDeltaCommits) {
+            // Rollback of a compaction action with no higher deltacommit means that the compaction is scheduled
+            // and has not yet finished. In this scenario we should delete only the newly created parquet files
+            // and not corresponding base commit log files created with this as baseCommit since updates would
+            // have been written to the log files.
+            logger.info("Rolling back compaction. There are higher delta commits. So only deleting data files");
+            partitionRollbackRequests.add(
+                RollbackRequest.createRollbackRequestWithDeleteDataFilesOnlyAction(partitionPath, instantToRollback));
+          } else {
+            // No deltacommits present after this compaction commit (inflight or requested). In this case, we
+            // can also delete any log files that were created with this compaction commit as base
+            // commit.
+            logger.info("Rolling back compaction plan. There are NO higher delta commits. So deleting both data and"
+                + " log files");
+            partitionRollbackRequests.add(
+                RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
           }
-          return partitionRollbackRequests.iterator();
-        }).filter(Objects::nonNull).collect();
+          break;
+        case HoodieTimeline.DELTA_COMMIT_ACTION:
+          // --------------------------------------------------------------------------------------------------
+          // (A) The following cases are possible if index.canIndexLogFiles and/or index.isGlobal
+          // --------------------------------------------------------------------------------------------------
+          // (A.1) Failed first commit - Inserts were written to log files and HoodieWriteStat has no entries. In
+          // this scenario we would want to delete these log files.
+          // (A.2) Failed recurring commit - Inserts/Updates written to log files. In this scenario,
+          // HoodieWriteStat will have the baseCommitTime for the first log file written, add rollback blocks.
+          // (A.3) Rollback triggered for first commit - Inserts were written to the log files but the commit is
+          // being reverted. In this scenario, HoodieWriteStat will be `null` for the attribute prevCommitTime and
+          // and hence will end up deleting these log files. This is done so there are no orphan log files
+          // lying around.
+          // (A.4) Rollback triggered for recurring commits - Inserts/Updates are being rolled back, the actions
+          // taken in this scenario is a combination of (A.2) and (A.3)
+          // ---------------------------------------------------------------------------------------------------
+          // (B) The following cases are possible if !index.canIndexLogFiles and/or !index.isGlobal
+          // ---------------------------------------------------------------------------------------------------
+          // (B.1) Failed first commit - Inserts were written to parquet files and HoodieWriteStat has no entries.
+          // In this scenario, we delete all the parquet files written for the failed commit.
+          // (B.2) Failed recurring commits - Inserts were written to parquet files and updates to log files. In
+          // this scenario, perform (A.1) and for updates written to log files, write rollback blocks.
+          // (B.3) Rollback triggered for first commit - Same as (B.1)
+          // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
+          // as well if the base parquet file gets deleted.
+          try {
+            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
+                metaClient.getCommitTimeline()
+                    .getInstantDetails(
+                        new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()))
+                    .get(),
+                HoodieCommitMetadata.class);
+
+            // In case all data was inserts and the commit failed, delete the file belonging to that commit
+            // We do not know fileIds for inserts (first inserts are either log files or parquet files),
+            // delete all files for the corresponding failed commit, if present (same as COW)
+            partitionRollbackRequests.add(
+                RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
+
+            // append rollback blocks for updates
+            if (commitMetadata.getPartitionToWriteStats().containsKey(partitionPath)) {
+              partitionRollbackRequests
+                  .addAll(generateAppendRollbackBlocksAction(partitionPath, instantToRollback, commitMetadata));
+            }
+            break;
+          } catch (IOException io) {
+            throw new UncheckedIOException("Failed to collect rollback actions for commit " + commit, io);
+          }
+        default:
+          break;
+      }
+      return partitionRollbackRequests.iterator();
+    }).filter(Objects::nonNull).collect();
   }
 
   @Override
@@ -428,27 +429,27 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     // baseCommit always by listing the file slice
     Map<String, String> fileIdToBaseCommitTimeForLogMap = this.getRTFileSystemView().getLatestFileSlices(partitionPath)
         .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));
-    return commitMetadata.getPartitionToWriteStats().get(partitionPath).stream()
-        .filter(wStat -> {
+    return commitMetadata.getPartitionToWriteStats().get(partitionPath).stream().filter(wStat -> {
 
-          // Filter out stats without prevCommit since they are all inserts
-          boolean validForRollback = (wStat != null) && (wStat.getPrevCommit() != HoodieWriteStat.NULL_COMMIT)
-              && (wStat.getPrevCommit() != null) && fileIdToBaseCommitTimeForLogMap.containsKey(wStat.getFileId());
+      // Filter out stats without prevCommit since they are all inserts
+      boolean validForRollback = (wStat != null) && (wStat.getPrevCommit() != HoodieWriteStat.NULL_COMMIT)
+          && (wStat.getPrevCommit() != null) && fileIdToBaseCommitTimeForLogMap.containsKey(wStat.getFileId());
 
-          if (validForRollback) {
-            // For sanity, log instant time can never be less than base-commit on which we are rolling back
-            Preconditions.checkArgument(HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(
-                wStat.getFileId()), rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
-          }
+      if (validForRollback) {
+        // For sanity, log instant time can never be less than base-commit on which we are rolling back
+        Preconditions
+            .checkArgument(HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId()),
+                rollbackInstant.getTimestamp(), HoodieTimeline.LESSER_OR_EQUAL));
+      }
 
-          return validForRollback  && HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(
-              // Base Ts should be strictly less. If equal (for inserts-to-logs), the caller employs another option
-              // to delete and we should not step on it
-              wStat.getFileId()), rollbackInstant.getTimestamp(), HoodieTimeline.LESSER);
-        }).map(wStat -> {
-          String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
-          return RollbackRequest.createRollbackRequestWithAppendRollbackBlockAction(partitionPath, wStat.getFileId(),
-              baseCommitTime, rollbackInstant);
-        }).collect(Collectors.toList());
+      return validForRollback && HoodieTimeline.compareTimestamps(fileIdToBaseCommitTimeForLogMap.get(
+          // Base Ts should be strictly less. If equal (for inserts-to-logs), the caller employs another option
+          // to delete and we should not step on it
+          wStat.getFileId()), rollbackInstant.getTimestamp(), HoodieTimeline.LESSER);
+    }).map(wStat -> {
+      String baseCommitTime = fileIdToBaseCommitTimeForLogMap.get(wStat.getFileId());
+      return RollbackRequest.createRollbackRequestWithAppendRollbackBlockAction(partitionPath, wStat.getFileId(),
+          baseCommitTime, rollbackInstant);
+    }).collect(Collectors.toList());
   }
 }

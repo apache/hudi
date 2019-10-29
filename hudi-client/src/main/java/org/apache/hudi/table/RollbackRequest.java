@@ -30,9 +30,7 @@ public class RollbackRequest {
    * Rollback Action Types
    */
   public enum RollbackAction {
-    DELETE_DATA_FILES_ONLY,
-    DELETE_DATA_AND_LOG_FILES,
-    APPEND_ROLLBACK_BLOCK
+    DELETE_DATA_FILES_ONLY, DELETE_DATA_AND_LOG_FILES, APPEND_ROLLBACK_BLOCK
   }
 
   /**
@@ -60,8 +58,8 @@ public class RollbackRequest {
    */
   private final RollbackAction rollbackAction;
 
-  public RollbackRequest(String partitionPath, HoodieInstant rollbackInstant,
-      Option<String> fileId, Option<String> latestBaseInstant, RollbackAction rollbackAction) {
+  public RollbackRequest(String partitionPath, HoodieInstant rollbackInstant, Option<String> fileId,
+      Option<String> latestBaseInstant, RollbackAction rollbackAction) {
     this.partitionPath = partitionPath;
     this.rollbackInstant = rollbackInstant;
     this.fileId = fileId;

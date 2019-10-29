@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.WriteStatus;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.utils.ClientUtils;
@@ -191,6 +192,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
+   * Get clean timeline
+   */
+  public HoodieTimeline getCleanTimeline() {
+    return getActiveTimeline().getCleanerTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -265,9 +273,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       HoodieCompactionPlan compactionPlan);
 
   /**
-   * Clean partition paths according to cleaning policy and returns the number of files cleaned.
+   * Generates list of files that are eligible for cleaning
+   * 
+   * @param jsc Java Spark Context
+   * @return Cleaner Plan containing list of files to be deleted.
    */
-  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc);
+  public abstract HoodieCleanerPlan scheduleClean(JavaSparkContext jsc);
+
+  /**
+   * Cleans the files listed in the cleaner plan associated with clean instant
+   * 
+   * @param jsc Java Spark Context
+   * @param cleanInstant Clean Instant
+   * @return list of Clean Stats
+   */
+  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1) Atomically unpublish

@@ -96,8 +96,7 @@ public abstract class CompactionStrategy implements Serializable {
     // Strategy implementation can overload this method to set specific compactor-id
     return HoodieCompactionPlan.newBuilder()
         .setOperations(orderAndFilter(writeConfig, operations, pendingCompactionPlans))
-        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION)
-        .build();
+        .setVersion(CompactionUtils.LATEST_COMPACTION_METADATA_VERSION).build();
   }
 
   /**

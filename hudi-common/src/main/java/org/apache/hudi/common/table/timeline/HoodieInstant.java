@@ -69,7 +69,7 @@ public class HoodieInstant implements Serializable {
     } else if (action.contains(HoodieTimeline.INFLIGHT_EXTENSION)) {
       state = State.INFLIGHT;
       action = action.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
-    } else if (action.equals(HoodieTimeline.REQUESTED_COMPACTION_SUFFIX)) {
+    } else if (action.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
       state = State.REQUESTED;
       action = action.replace(HoodieTimeline.REQUESTED_EXTENSION, "");
     }
@@ -117,7 +117,8 @@ public class HoodieInstant implements Serializable {
           : HoodieTimeline.makeCommitFileName(timestamp);
     } else if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
-          : HoodieTimeline.makeCleanerFileName(timestamp);
+          : isRequested() ? HoodieTimeline.makeRequestedCleanerFileName(timestamp)
+              : HoodieTimeline.makeCleanerFileName(timestamp);
     } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
           : HoodieTimeline.makeRollbackFileName(timestamp);

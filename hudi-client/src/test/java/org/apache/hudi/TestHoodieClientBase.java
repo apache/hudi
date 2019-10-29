@@ -52,6 +52,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -75,6 +76,10 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupResources();
+  }
+
+  protected HoodieCleanClient getHoodieCleanClient(HoodieWriteConfig cfg) {
+    return new HoodieCleanClient(jsc, cfg, new HoodieMetrics(cfg, cfg.getTableName()));
   }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
