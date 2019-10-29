@@ -101,8 +101,8 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     FileSystem fs = metaClient.getFs();
 
     Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-    log.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation
-        .getDeltaFileNames() + " for commit " + commitTime);
+    log.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
+        + " for commit " + commitTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
     // (failure recover).
@@ -115,20 +115,19 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     log.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());
 
-    List<String> logFiles = operation.getDeltaFileNames().stream()
-        .map(p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-            p).toString()).collect(toList());
-    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs,
-        metaClient.getBasePath(), logFiles, readerSchema, maxInstantTime,
-        config.getMaxMemoryPerCompaction(), config.getCompactionLazyBlockReadEnabled(),
+    List<String> logFiles = operation.getDeltaFileNames().stream().map(
+        p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
+        .collect(toList());
+    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, metaClient.getBasePath(), logFiles,
+        readerSchema, maxInstantTime, config.getMaxMemoryPerCompaction(), config.getCompactionLazyBlockReadEnabled(),
         config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
         config.getSpillableMapBasePath());
     if (!scanner.iterator().hasNext()) {
       return Lists.<WriteStatus>newArrayList();
     }
 
-    Option<HoodieDataFile> oldDataFileOpt = operation.getBaseFile(metaClient.getBasePath(),
-        operation.getPartitionPath());
+    Option<HoodieDataFile> oldDataFileOpt =
+        operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
@@ -189,28 +188,22 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
     RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
     log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
-    List<HoodieCompactionOperation> operations =
-        jsc.parallelize(partitionPaths, partitionPaths.size())
-            .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
-                .getLatestFileSlices(partitionPath)
-                .filter(slice ->
-                    !fgIdsInPendingCompactions.contains(slice.getFileGroupId()))
-                .map(
-                    s -> {
-                      List<HoodieLogFile> logFiles = s.getLogFiles().sorted(HoodieLogFile
-                          .getLogFileComparator()).collect(Collectors.toList());
-                      totalLogFiles.add((long) logFiles.size());
-                      totalFileSlices.add(1L);
-                      // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
-                      // for spark Map operations and collecting them finally in Avro generated classes for storing
-                      // into meta files.
-                      Option<HoodieDataFile> dataFile = s.getDataFile();
-                      return new CompactionOperation(dataFile, partitionPath, logFiles,
-                          config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
-                    })
-                .filter(c -> !c.getDeltaFileNames().isEmpty())
-                .collect(toList()).iterator()).collect().stream().map(CompactionUtils::buildHoodieCompactionOperation)
-            .collect(toList());
+    List<HoodieCompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
+        .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
+            .getLatestFileSlices(partitionPath)
+            .filter(slice -> !fgIdsInPendingCompactions.contains(slice.getFileGroupId())).map(s -> {
+              List<HoodieLogFile> logFiles =
+                  s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+              totalLogFiles.add((long) logFiles.size());
+              totalFileSlices.add(1L);
+              // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
+              // for spark Map operations and collecting them finally in Avro generated classes for storing
+              // into meta files.
+              Option<HoodieDataFile> dataFile = s.getDataFile();
+              return new CompactionOperation(dataFile, partitionPath, logFiles,
+                  config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
+            }).filter(c -> !c.getDeltaFileNames().isEmpty()).collect(toList()).iterator())
+        .collect().stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
     log.info("Total of " + operations.size() + " compactions are retrieved");
     log.info("Total number of latest files slices " + totalFileSlices.value());
     log.info("Total number of log files " + totalLogFiles.value());

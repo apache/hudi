@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * Migrates a specific metadata type stored in .hoodie folder to latest version
+ * 
  * @param <T>
  */
 public class MetadataMigrator<T> {
@@ -36,15 +37,16 @@ public class MetadataMigrator<T> {
   private final Integer oldestVersion;
 
   public MetadataMigrator(HoodieTableMetaClient metaClient, List<VersionMigrator<T>> migratorList) {
-    migrators = migratorList.stream().map(m ->
-        Pair.of(m.getManagedVersion(), m)).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    migrators = migratorList.stream().map(m -> Pair.of(m.getManagedVersion(), m))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     latestVersion = migrators.keySet().stream().reduce((x, y) -> x > y ? x : y).get();
     oldestVersion = migrators.keySet().stream().reduce((x, y) -> x < y ? x : y).get();
   }
 
   /**
    * Upgrade Metadata version to its latest
-   * @param metadata  Metadata
+   * 
+   * @param metadata Metadata
    * @param metadataVersion Current version of metadata
    * @return Metadata conforming to the latest version of this metadata
    */
@@ -64,9 +66,10 @@ public class MetadataMigrator<T> {
 
   /**
    * Migrate metadata to a specific version
-   * @param metadata         Hoodie Table Meta Client
-   * @param metadataVersion   Metadata Version
-   * @param targetVersion     Target Version
+   * 
+   * @param metadata Hoodie Table Meta Client
+   * @param metadataVersion Metadata Version
+   * @param targetVersion Target Version
    * @return Metadata conforming to the target version
    */
   public T migrateToVersion(T metadata, int metadataVersion, int targetVersion) {

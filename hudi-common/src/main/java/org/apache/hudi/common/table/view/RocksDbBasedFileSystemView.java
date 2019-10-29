@@ -333,8 +333,10 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   public void close() {
+    log.info("Closing Rocksdb !!");
     closed = true;
     rocksDB.close();
+    log.info("Closed Rocksdb !!");
   }
 
   @Override

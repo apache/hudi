@@ -141,10 +141,9 @@ public class ParquetUtils {
    * Read out the bloom filter from the parquet file meta data.
    */
   public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration, Path parquetFilePath) {
-    Map<String, String> footerVals =
-        readParquetFooter(configuration, false, parquetFilePath,
-            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    Map<String, String> footerVals = readParquetFooter(configuration, false, parquetFilePath,
+        HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+        HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"

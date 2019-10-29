@@ -36,6 +36,7 @@ import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -110,6 +111,11 @@ public class AvroUtils {
     return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
   }
 
+
+  public static Option<byte[]> serializeCleanerPlan(HoodieCleanerPlan cleanPlan) throws IOException {
+    return serializeAvroMetadata(cleanPlan, HoodieCleanerPlan.class);
+  }
+
   public static Option<byte[]> serializeCleanMetadata(HoodieCleanMetadata metadata) throws IOException {
     return serializeAvroMetadata(metadata, HoodieCleanMetadata.class);
   }
@@ -135,6 +141,10 @@ public class AvroUtils {
     fileWriter.append(metadata);
     fileWriter.flush();
     return Option.of(baos.toByteArray());
+  }
+
+  public static HoodieCleanerPlan deserializeCleanerPlan(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieCleanerPlan.class);
   }
 
   public static HoodieCompactionPlan deserializeCompactionPlan(byte[] bytes) throws IOException {

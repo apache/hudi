@@ -30,6 +30,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -81,6 +82,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filterInflights() {
     return new HoodieDefaultTimeline(instants.stream().filter(HoodieInstant::isInflight), details);
+  }
+
+  @Override
+  public HoodieTimeline filterInflightsAndRequested() {
+    return new HoodieDefaultTimeline(
+        instants.stream().filter(i -> i.getState().equals(State.REQUESTED) || i.getState().equals(State.INFLIGHT)),
+        details);
   }
 
   @Override

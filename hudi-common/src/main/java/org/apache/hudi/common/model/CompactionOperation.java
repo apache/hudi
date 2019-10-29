@@ -134,14 +134,9 @@ public class CompactionOperation implements Serializable {
 
   @Override
   public String toString() {
-    return "CompactionOperation{"
-        + "baseInstantTime='" + baseInstantTime + '\''
-        + ", dataFileCommitTime=" + dataFileCommitTime
-        + ", deltaFileNames=" + deltaFileNames
-        + ", dataFileName=" + dataFileName
-        + ", id='" + id + '\''
-        + ", metrics=" + metrics
-        + '}';
+    return "CompactionOperation{" + "baseInstantTime='" + baseInstantTime + '\'' + ", dataFileCommitTime="
+        + dataFileCommitTime + ", deltaFileNames=" + deltaFileNames + ", dataFileName=" + dataFileName + ", id='" + id
+        + '\'' + ", metrics=" + metrics + '}';
   }
 
   @Override
@@ -156,8 +151,7 @@ public class CompactionOperation implements Serializable {
     return Objects.equals(baseInstantTime, operation.baseInstantTime)
         && Objects.equals(dataFileCommitTime, operation.dataFileCommitTime)
         && Objects.equals(deltaFileNames, operation.deltaFileNames)
-        && Objects.equals(dataFileName, operation.dataFileName)
-        && Objects.equals(id, operation.id);
+        && Objects.equals(dataFileName, operation.dataFileName) && Objects.equals(id, operation.id);
   }
 
   @Override

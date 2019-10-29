@@ -58,10 +58,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public static final SimpleDateFormat COMMIT_FORMATTER = new SimpleDateFormat("yyyyMMddHHmmss");
 
-  public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(new String[] {
-      COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION, INFLIGHT_DELTA_COMMIT_EXTENSION,
-      SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
-      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
+  public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE =
+      new HashSet<>(Arrays.asList(new String[] {COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
+          INFLIGHT_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION, INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION,
+          INFLIGHT_CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION,
+          REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
   private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
@@ -212,9 +213,17 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void revertToInflight(HoodieInstant instant) {
-    log.info("Reverting instant to inflight " + instant);
-    revertCompleteToInflight(instant, HoodieTimeline.getInflightInstant(instant));
+    log.info("Reverting " + instant + " to inflight ");
+    revertStateTransition(instant, HoodieTimeline.getInflightInstant(instant));
     log.info("Reverted " + instant + " to inflight");
+  }
+
+  public HoodieInstant revertToRequested(HoodieInstant instant) {
+    log.warn("Reverting " + instant + " to requested ");
+    HoodieInstant requestedInstant = HoodieTimeline.getRequestedInstant(instant);
+    revertStateTransition(instant, HoodieTimeline.getRequestedInstant(instant));
+    log.warn("Reverted " + instant + " to requested");
+    return requestedInstant;
   }
 
   public void deleteInflight(HoodieInstant instant) {
@@ -311,6 +320,39 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * END - COMPACTION RELATED META-DATA MANAGEMENT
    **/
 
+  /**
+   * Transition Clean State from inflight to Committed
+   *
+   * @param inflightInstant Inflight instant
+   * @param data Extra Metadata
+   * @return commit instant
+   */
+  public HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+    Preconditions.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
+    Preconditions.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, CLEAN_ACTION, inflightInstant.getTimestamp());
+    // First write metadata to aux folder
+    createFileInAuxiliaryFolder(commitInstant, data);
+    // Then write to timeline
+    transitionState(inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  /**
+   * Transition Clean State from requested to inflight
+   *
+   * @param requestedInstant requested instant
+   * @return commit instant
+   */
+  public HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant) {
+    Preconditions.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
+    Preconditions.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflight = new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, requestedInstant.getTimestamp());
+    transitionState(requestedInstant, inflight, Option.empty());
+    return inflight;
+  }
+
+
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
     Preconditions.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     Path commitFilePath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
@@ -327,19 +369,20 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
-  private void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
-    Preconditions.checkArgument(completed.getTimestamp().equals(inflight.getTimestamp()));
-    Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), inflight.getFileName());
+  private void revertStateTransition(HoodieInstant curr, HoodieInstant revert) {
+    Preconditions.checkArgument(curr.getTimestamp().equals(revert.getTimestamp()));
+    Path revertFilePath = new Path(metaClient.getMetaPath(), revert.getFileName());
     try {
-      if (!metaClient.getFs().exists(inFlightCommitFilePath)) {
-        Path commitFilePath = new Path(metaClient.getMetaPath(), completed.getFileName());
-        boolean success = metaClient.getFs().rename(commitFilePath, inFlightCommitFilePath);
+      if (!metaClient.getFs().exists(revertFilePath)) {
+        Path currFilePath = new Path(metaClient.getMetaPath(), curr.getFileName());
+        boolean success = metaClient.getFs().rename(currFilePath, revertFilePath);
         if (!success) {
-          throw new HoodieIOException("Could not rename " + commitFilePath + " to " + inFlightCommitFilePath);
+          throw new HoodieIOException("Could not rename " + currFilePath + " to " + revertFilePath);
         }
+        log.info("Renamed " + currFilePath + " to " + revertFilePath);
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not complete revert " + completed, e);
+      throw new HoodieIOException("Could not complete revert " + curr, e);
     }
   }
 
@@ -353,6 +396,15 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content);
+  }
+
+  public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
+    Preconditions.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
+    Preconditions.checkArgument(instant.getState().equals(State.REQUESTED));
+    // Write workload to auxiliary folder
+    createFileInAuxiliaryFolder(instant, content);
+    // Plan is only stored in auxiliary folder
+    createFileInMetaPath(instant.getFileName(), Option.empty());
   }
 
   private void createFileInMetaPath(String filename, Option<byte[]> content) {

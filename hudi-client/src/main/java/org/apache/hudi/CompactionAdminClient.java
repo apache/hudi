@@ -239,9 +239,8 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     FileSlice merged =
         fileSystemView.getLatestMergedFileSlicesBeforeOrOn(op.getPartitionPath(), lastInstant.getTimestamp())
             .filter(fs -> fs.getFileId().equals(op.getFileId())).findFirst().get();
-    final int maxVersion =
-            op.getDeltaFileNames().stream().map(lf -> FSUtils.getFileVersionFromLog(new Path(lf)))
-                    .reduce((x, y) -> x > y ? x : y).orElse(0);
+    final int maxVersion = op.getDeltaFileNames().stream().map(lf -> FSUtils.getFileVersionFromLog(new Path(lf)))
+        .reduce((x, y) -> x > y ? x : y).orElse(0);
     List<HoodieLogFile> logFilesToBeMoved =
         merged.getLogFiles().filter(lf -> lf.getLogVersion() > maxVersion).collect(Collectors.toList());
     return logFilesToBeMoved.stream().map(lf -> {
@@ -293,33 +292,31 @@ public class CompactionAdminClient extends AbstractHoodieClient {
           FileSlice fs = fileSliceOptional.get();
           Option<HoodieDataFile> df = fs.getDataFile();
           if (operation.getDataFileName().isPresent()) {
-            String expPath = metaClient.getFs().getFileStatus(new Path(
-                FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-                    new Path(operation.getDataFileName().get()))).getPath()
-                .toString();
-            Preconditions.checkArgument(df.isPresent(), "Data File must be present. File Slice was : "
-                + fs + ", operation :" + operation);
+            String expPath = metaClient.getFs()
+                .getFileStatus(
+                    new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
+                        new Path(operation.getDataFileName().get())))
+                .getPath().toString();
+            Preconditions.checkArgument(df.isPresent(),
+                "Data File must be present. File Slice was : " + fs + ", operation :" + operation);
             Preconditions.checkArgument(df.get().getPath().equals(expPath),
                 "Base Path in operation is specified as " + expPath + " but got path " + df.get().getPath());
           }
           Set<HoodieLogFile> logFilesInFileSlice = fs.getLogFiles().collect(Collectors.toSet());
-          Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream()
-              .map(dp -> {
-                try {
-                  FileStatus[] fileStatuses = metaClient.getFs().listStatus(
-                      new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()),
-                          new Path(dp)));
-                  Preconditions.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
-                  return new HoodieLogFile(fileStatuses[0]);
-                } catch (FileNotFoundException fe) {
-                  throw new CompactionValidationException(fe.getMessage());
-                } catch (IOException ioe) {
-                  throw new HoodieIOException(ioe.getMessage(), ioe);
-                }
-              }).collect(Collectors.toSet());
-          Set<HoodieLogFile> missing =
-              logFilesInCompactionOp.stream().filter(lf -> !logFilesInFileSlice.contains(lf))
-                  .collect(Collectors.toSet());
+          Set<HoodieLogFile> logFilesInCompactionOp = operation.getDeltaFileNames().stream().map(dp -> {
+            try {
+              FileStatus[] fileStatuses = metaClient.getFs().listStatus(new Path(
+                  FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), new Path(dp)));
+              Preconditions.checkArgument(fileStatuses.length == 1, "Expect only 1 file-status");
+              return new HoodieLogFile(fileStatuses[0]);
+            } catch (FileNotFoundException fe) {
+              throw new CompactionValidationException(fe.getMessage());
+            } catch (IOException ioe) {
+              throw new HoodieIOException(ioe.getMessage(), ioe);
+            }
+          }).collect(Collectors.toSet());
+          Set<HoodieLogFile> missing = logFilesInCompactionOp.stream().filter(lf -> !logFilesInFileSlice.contains(lf))
+              .collect(Collectors.toSet());
           Preconditions.checkArgument(missing.isEmpty(),
               "All log files specified in compaction operation is not present. Missing :" + missing + ", Exp :"
                   + logFilesInCompactionOp + ", Got :" + logFilesInFileSlice);

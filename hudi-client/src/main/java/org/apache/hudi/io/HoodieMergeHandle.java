@@ -195,9 +195,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       // Load the new records in a map
       long memoryForMerge = config.getMaxMemoryPerPartitionMerge();
       logger.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
-      this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge,
-          config.getSpillableMapBasePath(), new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(originalSchema));
+      this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }

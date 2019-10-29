@@ -38,7 +38,6 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -98,6 +97,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final boolean rollbackInFlight;
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
+  private final transient HoodieCleanClient<T> cleanClient;
   private transient Timer.Context writeContext = null;
   private transient Timer.Context compactionTimer;
   private transient Timer.Context indexTimer = null;
@@ -131,6 +131,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this.index = index;
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackInFlight = rollbackInFlight;
+    this.cleanClient = new HoodieCleanClient<>(jsc, config, metrics, timelineService);
   }
 
   public static SparkConf registerClasses(SparkConf conf) {
@@ -918,6 +919,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   public void close() {
     // Stop timeline-server if running
     super.close();
+    this.cleanClient.close();
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
@@ -927,55 +929,24 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
+   * 
+   * @throws HoodieIOException
    */
   public void clean() throws HoodieIOException {
-    String startCleanTime = HoodieActiveTimeline.createNewCommitTime();
-    clean(startCleanTime);
+    cleanClient.clean();
   }
 
   /**
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
+   *
+   * @param startCleanTime Cleaner Instant Timestamp
+   * @return
+   * @throws HoodieIOException in case of any IOException
    */
-  private void clean(String startCleanTime) throws HoodieIOException {
-    try {
-      logger.info("Cleaner started");
-      final Timer.Context context = metrics.getCleanCtx();
-
-      // Create a Hoodie table which encapsulated the commits and files visible
-      HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
-
-      List<HoodieCleanStat> cleanStats = table.clean(jsc);
-      if (cleanStats.isEmpty()) {
-        return;
-      }
-
-      // Emit metrics (duration, numFilesDeleted) if needed
-      Option<Long> durationInMs = Option.empty();
-      if (context != null) {
-        durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
-        logger.info("cleanerElaspsedTime (Minutes): " + durationInMs.get() / (1000 * 60));
-      }
-
-      // Create the metadata and save it
-      HoodieCleanMetadata metadata = AvroUtils.convertCleanMetadata(startCleanTime, durationInMs, cleanStats);
-      logger.info("Cleaned " + metadata.getTotalFilesDeleted() + " files");
-      metrics.updateCleanMetrics(durationInMs.orElseGet(() -> -1L), metadata.getTotalFilesDeleted());
-
-      table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, startCleanTime),
-          AvroUtils.serializeCleanMetadata(metadata));
-      logger.info("Marked clean started on " + startCleanTime + " as complete");
-
-      if (!table.getActiveTimeline().getCleanerTimeline().empty()) {
-        // Cleanup of older cleaner meta files
-        // TODO - make the commit archival generic and archive clean metadata
-        FSUtils.deleteOlderCleanMetaFiles(fs, table.getMetaClient().getMetaPath(),
-            table.getActiveTimeline().getCleanerTimeline().getInstants());
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to clean up after commit", e);
-    }
+  protected HoodieCleanMetadata clean(String startCleanTime) throws HoodieIOException {
+    return cleanClient.clean(startCleanTime);
   }
 
   /**
@@ -1176,8 +1147,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private JavaRDD<WriteStatus> runCompaction(HoodieInstant compactionInstant, HoodieActiveTimeline activeTimeline,
       boolean autoCommit) throws IOException {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(metaClient,
-        compactionInstant.getTimestamp());
+    HoodieCompactionPlan compactionPlan =
+        CompactionUtils.getCompactionPlan(metaClient, compactionInstant.getTimestamp());
 
     // Mark instant as compaction inflight
     activeTimeline.transitionCompactionRequestedToInflight(compactionInstant);

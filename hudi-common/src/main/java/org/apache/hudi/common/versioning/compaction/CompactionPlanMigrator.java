@@ -29,8 +29,7 @@ import org.apache.hudi.common.versioning.MetadataMigrator;
 public class CompactionPlanMigrator extends MetadataMigrator<HoodieCompactionPlan> {
 
   public CompactionPlanMigrator(HoodieTableMetaClient metaClient) {
-    super(metaClient, Arrays.asList(
-        new CompactionV1MigrationHandler(metaClient),
-        new CompactionV2MigrationHandler(metaClient)));
+    super(metaClient,
+        Arrays.asList(new CompactionV1MigrationHandler(metaClient), new CompactionV2MigrationHandler(metaClient)));
   }
 }

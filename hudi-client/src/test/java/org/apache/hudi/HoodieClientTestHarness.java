@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -52,6 +53,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HoodieTestDataGenerator dataGen = null;
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
+  private static AtomicInteger instantGen = new AtomicInteger(1);
+
+  public String getNextInstant() {
+    return String.format("%09d", instantGen.getAndIncrement());
+  }
 
   // dfs
   protected String dfsBasePath;

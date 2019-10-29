@@ -138,9 +138,11 @@ public class TimelineService {
   }
 
   public void close() {
+    log.info("Closing Timeline Service");
     this.app.stop();
     this.app = null;
     this.fsViewsManager.close();
+    log.info("Closed Timeline Service");
   }
 
   public Configuration getConf() {

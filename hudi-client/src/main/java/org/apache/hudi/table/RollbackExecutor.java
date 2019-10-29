@@ -65,8 +65,8 @@ public class RollbackExecutor implements Serializable {
   /**
    * Performs all rollback actions that we have collected in parallel.
    */
-  public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc,
-      HoodieInstant instantToRollback, List<RollbackRequest> rollbackRequests) {
+  public List<HoodieRollbackStat> performRollback(JavaSparkContext jsc, HoodieInstant instantToRollback,
+      List<RollbackRequest> rollbackRequests) {
 
     SerializablePathFilter filter = (path) -> {
       if (path.toString().contains(".parquet")) {
@@ -101,11 +101,10 @@ public class RollbackExecutor implements Serializable {
           Writer writer = null;
           boolean success = false;
           try {
-            writer = HoodieLogFormat.newWriterBuilder().onParentPath(
-                FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
+            writer = HoodieLogFormat.newWriterBuilder()
+                .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
                 .withFileId(rollbackRequest.getFileId().get())
-                .overBaseCommit(rollbackRequest.getLatestBaseInstant().get())
-                .withFs(metaClient.getFs())
+                .overBaseCommit(rollbackRequest.getLatestBaseInstant().get()).withFs(metaClient.getFs())
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
             // generate metadata
@@ -114,8 +113,7 @@ public class RollbackExecutor implements Serializable {
             writer = writer.appendBlock(new HoodieCommandBlock(header));
             success = true;
           } catch (IOException | InterruptedException io) {
-            throw new HoodieRollbackException(
-                "Failed to rollback for instant " + instantToRollback, io);
+            throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
           } finally {
             try {
               if (writer != null) {
@@ -130,8 +128,7 @@ public class RollbackExecutor implements Serializable {
           // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
           // cloud-storage : HUDI-168
           Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
-          filesToNumBlocksRollback.put(metaClient.getFs()
-              .getFileStatus(writer.getLogFile().getPath()), 1L);
+          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(writer.getLogFile().getPath()), 1L);
           return new Tuple2<String, HoodieRollbackStat>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                   .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
@@ -180,8 +177,7 @@ public class RollbackExecutor implements Serializable {
    * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
-      Map<FileStatus, Boolean> results, String partitionPath,
-      PathFilter filter) throws IOException {
+      Map<FileStatus, Boolean> results, String partitionPath, PathFilter filter) throws IOException {
     logger.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
     FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);

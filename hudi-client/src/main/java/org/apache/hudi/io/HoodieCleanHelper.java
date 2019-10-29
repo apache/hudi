@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -52,7 +53,7 @@ import org.apache.log4j.Logger;
  * <p>
  * TODO: Should all cleaning be done based on {@link HoodieCommitMetadata}
  */
-public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
+public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
 
   private static Logger logger = LogManager.getLogger(HoodieCleanHelper.class);
 
@@ -114,12 +115,11 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
         FileSlice nextSlice = fileSliceIterator.next();
         if (nextSlice.getDataFile().isPresent()) {
           HoodieDataFile dataFile = nextSlice.getDataFile().get();
-          deletePaths.add(dataFile.getPath());
+          deletePaths.add(dataFile.getFileName());
         }
         if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
           // If merge on read, then clean the log files for the commits as well
-          deletePaths
-              .addAll(nextSlice.getLogFiles().map(file -> file.getPath().toString()).collect(Collectors.toList()));
+          deletePaths.addAll(nextSlice.getLogFiles().map(file -> file.getFileName()).collect(Collectors.toList()));
         }
       }
     }
@@ -187,11 +187,10 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> {
           if (!isFileSliceNeededForPendingCompaction(aSlice) && HoodieTimeline
               .compareTimestamps(earliestCommitToRetain.getTimestamp(), fileCommitTime, HoodieTimeline.GREATER)) {
             // this is a commit, that should be cleaned.
-            aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getPath()));
+            aFile.ifPresent(hoodieDataFile -> deletePaths.add(hoodieDataFile.getFileName()));
             if (hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
               // If merge on read, then clean the log files for the commits as well
-              deletePaths
-                  .addAll(aSlice.getLogFiles().map(file -> file.getPath().toString()).collect(Collectors.toList()));
+              deletePaths.addAll(aSlice.getLogFiles().map(file -> file.getFileName()).collect(Collectors.toList()));
             }
           }
         }
