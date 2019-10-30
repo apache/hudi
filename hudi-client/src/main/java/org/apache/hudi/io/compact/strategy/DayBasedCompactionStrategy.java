@@ -45,6 +45,8 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
   // Sorts compaction in LastInFirstCompacted order
   protected static Comparator<String> comparator = (String leftPartition, String rightPartition) -> {
     try {
+      leftPartition = getPartitionPathWithoutPartitionKeys(leftPartition);
+      rightPartition = getPartitionPathWithoutPartitionKeys(rightPartition);
       Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH).parse(leftPartition);
       Date right = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH).parse(rightPartition);
       return left.after(right) ? -1 : right.after(left) ? 1 : 0;
@@ -76,5 +78,15 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
         .sorted(Comparator.reverseOrder()).map(partitionPath -> partitionPath.replace("-", "/"))
         .collect(Collectors.toList()).subList(0, writeConfig.getTargetPartitionsPerDayBasedCompaction());
     return filteredPartitionPaths;
+  }
+
+  /**
+   * If is Hive style partition path, convert it to regular partition path. e.g. year=2019/month=11/day=24 => 2019/11/24
+   */
+  protected static String getPartitionPathWithoutPartitionKeys(String partitionPath) {
+    if (partitionPath.contains("=")) {
+      return partitionPath.replaceFirst(".*?=", "").replaceAll("/.*?=", "/");
+    }
+    return partitionPath;
   }
 }

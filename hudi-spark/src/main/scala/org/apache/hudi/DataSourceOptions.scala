@@ -139,6 +139,14 @@ object DataSourceWriteOptions {
   val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = "partitionpath"
 
   /**
+    * Flag to indicate whether to use Hive style partitioning.
+    * If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+    * By default false (the names of partition folders are only partition values)
+    */
+  val HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning"
+  val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
+
+  /**
     * Key generator class, that implements will extract the key out of incoming record
     *
     */

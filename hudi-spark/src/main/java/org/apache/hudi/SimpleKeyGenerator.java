@@ -35,10 +35,14 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
   protected final String partitionPathField;
 
+  protected final boolean hiveStylePartitioning;
+
   public SimpleKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
     this.partitionPathField = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+    this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
   }
 
   @Override
@@ -55,6 +59,9 @@ public class SimpleKeyGenerator extends KeyGenerator {
     String partitionPath = DataSourceUtils.getNullableNestedFieldValAsString(record, partitionPathField);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = DEFAULT_PARTITION_PATH;
+    }
+    if (hiveStylePartitioning) {
+      partitionPath = partitionPathField + "=" + partitionPath;
     }
 
     return new HoodieKey(recordKey, partitionPath);

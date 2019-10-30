@@ -41,11 +41,15 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
   protected final List<String> partitionPathFields;
 
+  protected final boolean hiveStylePartitioning;
+
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
     this.partitionPathFields =
         Arrays.asList(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","));
+    this.hiveStylePartitioning = props.getBoolean(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
   }
 
   @Override
@@ -77,9 +81,10 @@ public class ComplexKeyGenerator extends KeyGenerator {
     for (String partitionPathField : partitionPathFields) {
       String fieldVal = DataSourceUtils.getNullableNestedFieldValAsString(record, partitionPathField);
       if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(DEFAULT_PARTITION_PATH);
+        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + DEFAULT_PARTITION_PATH
+                : DEFAULT_PARTITION_PATH);
       } else {
-        partitionPath.append(fieldVal);
+        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
       }
       partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
     }
