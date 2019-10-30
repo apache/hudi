@@ -105,7 +105,10 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       if (recordKey == null || recordKey.isEmpty()) {
         throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
       }
-      return new HoodieKey(recordKey, partitionPathFormat.format(timestamp));
+
+      String partitionPath = hiveStylePartitioning ? partitionPathField + "=" + partitionPathFormat.format(timestamp)
+              : partitionPathFormat.format(timestamp);
+      return new HoodieKey(recordKey, partitionPath);
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);
     }
