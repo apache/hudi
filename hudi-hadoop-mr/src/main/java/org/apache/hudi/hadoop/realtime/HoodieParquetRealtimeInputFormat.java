@@ -200,14 +200,17 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   /**
    * Hive will append read columns' ids to old columns' ids during getRecordReader. In some cases, e.g. SELECT COUNT(*),
    * the read columns' id is an empty string and Hive will combine it with Hoodie required projection ids and becomes
-   * e.g. ",2,0,3" and will cause an error. This method is used to avoid this situation.
+   * e.g. ",2,0,3" and will cause an error. Actually this method is a temporary solution because the real bug is from
+   * Hive. Hive has fixed this bug after 3.0.0, but the version before that would still face this problem. (HIVE-22438)
    */
-  private static synchronized Configuration cleanProjectionColumnIds(Configuration conf) {
-    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-    if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
-      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
+  private static Configuration cleanProjectionColumnIds(Configuration conf) {
+    synchronized (conf) {
+      String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
+      if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
+        conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
+        }
       }
     }
     return conf;
