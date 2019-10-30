@@ -26,7 +26,7 @@
             "null",
             "HoodieCommitMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieCleanMetadata",
@@ -34,7 +34,7 @@
             "null",
             "HoodieCleanMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieCompactionMetadata",
@@ -42,7 +42,7 @@
             "null",
             "HoodieCompactionMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieRollbackMetadata",
@@ -50,7 +50,7 @@
             "null",
             "HoodieRollbackMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"hoodieSavePointMetadata",
@@ -58,15 +58,17 @@
             "null",
             "HoodieSavepointMetadata"
          ],
-         "default": "null"
+         "default": null
       },
       {
          "name":"commitTime",
-         "type":["null","string"]
+         "type":["null","string"],
+         "default": null
       },
       {
          "name":"actionType",
-         "type":["null","string"]
+         "type":["null","string"],
+         "default": null
       },
       {
          "name":"version",
