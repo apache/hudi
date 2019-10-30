@@ -364,7 +364,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
   }
 
-  public boolean enableAutoTuneBloomFilter(){
+  public boolean enableAutoTuneBloomFilter() {
     return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_AUTO_TUNE_ENABLE_PROP));
   }
 

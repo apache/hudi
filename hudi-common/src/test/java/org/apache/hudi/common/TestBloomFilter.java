@@ -23,14 +23,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import org.apache.commons.lang.RandomStringUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
 /**
- * Tests bloom filter {@link BloomFilter}.
+ * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBloomFilter}
  */
 @RunWith(Parameterized.class)
 public class TestBloomFilter {
@@ -54,14 +53,14 @@ public class TestBloomFilter {
 
   @Test
   public void testAddKey() {
-    List<java.lang.String> inputs = new ArrayList<>();
+    List<String> inputs = new ArrayList<>();
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
       BloomFilter filter = BloomFilterFactory
           .createBloomFilter(100, 0.0000001, versionToTest);
       for (int i = 0; i < size; i++) {
-        java.lang.String key = RandomStringUtils.randomAlphanumeric(keySize);
+        String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
         inputs.add(key);
         filter.add(key);
       }
@@ -69,7 +68,7 @@ public class TestBloomFilter {
         assert (filter.mightContain(key));
       }
       for (int i = 0; i < 100; i++) {
-        java.lang.String randomKey = RandomStringUtils.randomAlphanumeric(keySize);
+        String randomKey = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
         if (inputs.contains(randomKey)) {
           assert filter.mightContain(randomKey);
         }
@@ -80,21 +79,21 @@ public class TestBloomFilter {
   @Test
   public void testSerialize() throws IOException, ClassNotFoundException {
 
-    List<java.lang.String> inputs = new ArrayList<>();
+    List<String> inputs = new ArrayList<>();
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
       BloomFilter filter = BloomFilterFactory
           .createBloomFilter(100, 0.0000001, versionToTest);
       for (int i = 0; i < size; i++) {
-        java.lang.String key = RandomStringUtils.randomAlphanumeric(keySize);
+        String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
         inputs.add(key);
         filter.add(key);
       }
 
       String serString = filter.serializeToString();
       BloomFilter recreatedBloomFilter = BloomFilterFactory
-          .getBloomFilterFromSerializedString(serString, versionToTest);
+          .fromString(serString, versionToTest);
       for (String key : inputs) {
         assert (recreatedBloomFilter.mightContain(key));
       }

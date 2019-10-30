@@ -35,7 +35,6 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.Before;
 import org.junit.Test;
-import sun.nio.ch.SelectorImpl;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -81,7 +81,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
   @Parameterized.Parameters(name = "{index}: Test with rangePruning={0}, treeFiltering ={1}, bucketizedChecking is:{2}")
   public static Collection<Object[]> data() {
     Object[][] data =
-        new Object[][] {{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
+        new Object[][]{{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
     return Arrays.asList(data);
   }
 

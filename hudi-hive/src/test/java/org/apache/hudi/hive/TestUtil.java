@@ -20,6 +20,8 @@ package org.apache.hudi.hive;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.BloomFilterFactory;
+import org.apache.hudi.common.SimpleBloomFilter;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -267,7 +269,7 @@ public class TestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = (isParquetSchemaSimple ? SchemaTestUtil.getSimpleSchema() : SchemaTestUtil.getEvolvedSchema());
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
-    BloomFilter filter = new BloomFilter(1000, 0.0001);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, SimpleBloomFilter.VERSION);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, filter);
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,

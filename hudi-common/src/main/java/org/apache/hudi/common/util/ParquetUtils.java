@@ -149,18 +149,19 @@ public class ParquetUtils {
         readParquetFooter(configuration, false, parquetFilePath,
             HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
             HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.HOODIE_BLOOM_INDEX_VERSION);
+            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_VERSION);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
       footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     }
     BloomFilter toReturn = null;
-    if(footerVal != null) {
-      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_INDEX_VERSION)) {
-        BloomFilterFactory.getBloomFilterFromSerializedString(footerVal, Integer.parseInt(footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_INDEX_VERSION)));
+    if (footerVal != null) {
+      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_VERSION)) {
+        BloomFilterFactory.fromString(footerVal,
+            Integer.parseInt(footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_VERSION)));
       } else {
-        BloomFilterFactory.getBloomFilterFromSerializedString(footerVal, SimpleBloomFilter.VERSION);
+        BloomFilterFactory.fromString(footerVal, SimpleBloomFilter.VERSION);
       }
     }
     return toReturn;
@@ -174,7 +175,7 @@ public class ParquetUtils {
           String.format("Could not read min/max record key out of footer correctly from %s. read) : %s",
               parquetFilePath, minMaxKeys));
     }
-    return new String[] {minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
+    return new String[]{minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
         minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
   }
 
@@ -209,6 +210,7 @@ public class ParquetUtils {
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {
+
     private final Set<String> candidateKeys;
 
     RecordKeysFilterFunction(Set<String> candidateKeys) {

@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.common;
 
 import java.io.ByteArrayInputStream;
@@ -31,34 +32,33 @@ import org.apache.hudi.exception.HoodieIndexException;
 /**
  * Hudi's Dynamic Bloom Filter based out of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
  */
-public class HudiDynamicBloomFilter extends DynamicBloomFilter implements BloomFilter {
-  /**
-   * Used in computing the optimal Bloom filter size. This approximately equals 0.480453.
-   */
-  static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
+public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements BloomFilter {
+
   public static final int VERSION = 1;
   private DynamicBloomFilter dynamicBloomFilter;
 
   /**
-   * Instantiates {@link HudiDynamicBloomFilter} with the given args
+   * Instantiates {@link HoodieDynamicBloomFilter} with the given args
+   *
    * @param numEntries The total number of entries.
    * @param errorRate maximum allowable error rate.
-   * @param hashType type of the hashing function (see
-   * {@link org.apache.hadoop.util.hash.Hash}).
-   * @return the {@link HudiDynamicBloomFilter} thus created
+   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @return the {@link HoodieDynamicBloomFilter} thus created
    */
-  HudiDynamicBloomFilter(int numEntries, double errorRate, int hashType){
-    int bitSize = (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
+  HoodieDynamicBloomFilter(int numEntries, double errorRate, int hashType) {
+    // Bit size
+    int bitSize = BloomFilterUtils.getBitSize(numEntries, errorRate);
     // Number of the hash functions
-    int numHashs = (int) Math.ceil(Math.log(2) * bitSize / numEntries);
+    int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
     this.dynamicBloomFilter = new DynamicBloomFilter(bitSize, numHashs, hashType, numEntries);
   }
 
   /**
-   * Generate {@link HudiDynamicBloomFilter} from the given {@code serString} serialized string
-   * @param serString the serialized string which represents the {@link HudiDynamicBloomFilter}
+   * Generate {@link HoodieDynamicBloomFilter} from the given {@code serString} serialized string
+   *
+   * @param serString the serialized string which represents the {@link HoodieDynamicBloomFilter}
    */
-  HudiDynamicBloomFilter(String serString){
+  HoodieDynamicBloomFilter(String serString) {
     byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
@@ -96,6 +96,6 @@ public class HudiDynamicBloomFilter extends DynamicBloomFilter implements BloomF
 
   @Override
   public int getBloomIndexVersion() {
-    return HudiDynamicBloomFilter.VERSION;
+    return HoodieDynamicBloomFilter.VERSION;
   }
 }

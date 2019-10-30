@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.common;
 
 import java.io.ByteArrayInputStream;
@@ -25,41 +26,36 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import javax.xml.bind.DatatypeConverter;
 import org.apache.hadoop.util.bloom.Key;
-import org.apache.hadoop.util.hash.Hash;
 import org.apache.hudi.exception.HoodieIndexException;
 
 /**
  * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
  */
 
-public class SimpleBloomFilter implements BloomFilter{
+public class SimpleBloomFilter implements BloomFilter {
 
   public static final int VERSION = 0;
-  /**
-   * Used in computing the optimal Bloom filter size. This approximately equals 0.480453.
-   */
-  public static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
-
   private org.apache.hadoop.util.bloom.BloomFilter filter = null;
 
   /**
    * Create a new Bloom filter with the given configurations.
+   *
    * @param numEntries The total number of entries.
    * @param errorRate maximum allowable error rate.
-   * @param hashType type of the hashing function (see
-   * {@link org.apache.hadoop.util.hash.Hash}).
+   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
    */
   public SimpleBloomFilter(int numEntries, double errorRate, int hashType) {
     // Bit size
-    int bitSize = (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
+    int bitSize = BloomFilterUtils.getBitSize(numEntries, errorRate);
     // Number of the hash functions
-    int numHashs = (int) Math.ceil(Math.log(2) * bitSize / numEntries);
+    int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
     // The filter
     this.filter = new org.apache.hadoop.util.bloom.BloomFilter(bitSize, numHashs, hashType);
   }
 
   /**
    * Create the bloom filter from serialized string.
+   *
    * @param serString serialized string which represents the {@link SimpleBloomFilter}
    */
   public SimpleBloomFilter(String serString) {

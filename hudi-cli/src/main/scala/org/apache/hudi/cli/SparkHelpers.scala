@@ -17,9 +17,6 @@
 
 package org.apache.hudi.cli
 
-import java.util
-import java.util.Map
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
@@ -27,11 +24,10 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.avro.HoodieAvroWriteSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.common.{BloomFilter, BloomFilterFactory, HoodieJsonPayload, HudiDynamicBloomFilter, SimpleBloomFilter}
+import org.apache.hudi.common.{BloomFilter, BloomFilterFactory, HoodieJsonPayload, SimpleBloomFilter}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieStorageConfig}
 import org.apache.hudi.io.storage.{HoodieParquetConfig, HoodieParquetWriter}
 import org.apache.parquet.avro.AvroSchemaConverter
-import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
