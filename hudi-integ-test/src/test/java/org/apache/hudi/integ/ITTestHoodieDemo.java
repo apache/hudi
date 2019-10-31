@@ -88,8 +88,8 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void setupDemo() throws Exception {
-    List<String> cmds = new ImmutableList.Builder<String>().add("hdfs dfsadmin -safemode wait") // handle NN going into
-                                                                                                // safe mode at times
+    List<String> cmds = new ImmutableList.Builder<String>()
+        .add("hdfs dfsadmin -safemode wait") // handle NN going into safe mode at times
         .add("hdfs dfs -mkdir -p " + HDFS_DATA_DIR)
         .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1)
         .add("/bin/bash " + DEMO_CONTAINER_SCRIPT).build();

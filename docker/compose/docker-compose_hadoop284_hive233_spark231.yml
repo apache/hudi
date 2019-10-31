@@ -21,8 +21,6 @@ services:
     image: apachehudi/hudi-hadoop_2.8.4-namenode:latest
     hostname: namenode
     container_name: namenode
-    volumes:
-      - /tmp/hadoop_name:/hadoop/dfs/name
     environment:
       - CLUSTER_NAME=hudi_hadoop284_hive232_spark231
     ports:
@@ -57,8 +55,6 @@ services:
       retries: 3
     depends_on:
       - namenode
-    volumes:
-      - /tmp/hadoop_data:/hadoop/dfs/data
 
   historyserver:
     image: apachehudi/hudi-hadoop_2.8.4-history:latest
