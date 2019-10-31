@@ -117,9 +117,15 @@ public class HoodieDeltaStreamer implements Serializable {
       log.info("Delta Sync shutting down");
     } else {
       log.info("Delta Streamer running only single round");
-      deltaSyncService.getDeltaSync().syncOnce();
-      deltaSyncService.close();
-      log.info("Shut down deltastreamer");
+      try {
+        deltaSyncService.getDeltaSync().syncOnce();
+      } catch (Exception ex) {
+        log.error("Got error running delta sync once. Shutting down", ex);
+        throw ex;
+      } finally {
+        deltaSyncService.close();
+        log.info("Shut down deltastreamer");
+      }
     }
   }
 

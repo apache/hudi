@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -251,7 +252,9 @@ public class DeltaSync implements Serializable {
         } else {
           throw new HoodieDeltaStreamerException(
               "Unable to find previous checkpoint. Please double check if this table "
-                  + "was indeed built via delta streamer ");
+                  + "was indeed built via delta streamer. Last Commit :" + lastCommit + ", Instants :"
+                  + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
+                  + commitMetadata.toJsonString());
         }
       }
     } else {
