@@ -78,7 +78,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField);
+    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathFields.get(0));
     SimpleDateFormat partitionPathFormat = new SimpleDateFormat(outputDateFormat);
     partitionPathFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
 
@@ -97,8 +97,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
             "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
-
-      return new HoodieKey(DataSourceUtils.getNestedFieldValAsString(record, recordKeyField),
+      return new HoodieKey(DataSourceUtils.getNestedFieldValAsString(record, recordKeyFields.get(0)),
           partitionPathFormat.format(timestamp));
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);

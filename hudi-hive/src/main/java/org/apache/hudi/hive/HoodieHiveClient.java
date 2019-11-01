@@ -681,4 +681,8 @@ public class HoodieHiveClient {
       return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
     }
   }
+
+  public HiveMetaStoreClient getClient() {
+    return client;
+  }
 }

@@ -360,6 +360,15 @@ public class HoodieTestDataGenerator {
     });
   }
 
+  public List<GenericRecord> generateGenericRecords(int numRecords) {
+    List<GenericRecord> list = new ArrayList<>();
+    IntStream.range(0, numRecords).forEach(i -> {
+      list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
+          .toString(), rand.nextDouble()));
+    });
+    return list;
+  }
+
   public String[] getPartitionPaths() {
     return partitionPaths;
   }

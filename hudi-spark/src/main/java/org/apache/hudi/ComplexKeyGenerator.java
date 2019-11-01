@@ -19,9 +19,9 @@
 package org.apache.hudi;
 
 import java.util.Arrays;
-import java.util.List;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 
@@ -30,29 +30,27 @@ import org.apache.hudi.exception.HoodieException;
  */
 public class ComplexKeyGenerator extends KeyGenerator {
 
+  public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
   private static final String DEFAULT_PARTITION_PATH = "default";
-
-  private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-
-  protected final List<String> recordKeyFields;
-
-  protected final List<String> partitionPathFields;
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
-    this.partitionPathFields =
-        Arrays.asList(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","));
+    this.partitionPathFields = Arrays.asList(props
+        .getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(","));
   }
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
     if (recordKeyFields == null || partitionPathFields == null) {
-      throw new HoodieException("Unable to find field names for record key or partition path in cfg");
+      throw new HoodieException(
+          "Unable to find field names for record key or partition path in cfg");
     }
     StringBuilder recordKey = new StringBuilder();
     for (String recordKeyField : recordKeyFields) {
-      recordKey.append(recordKeyField + ":" + DataSourceUtils.getNestedFieldValAsString(record, recordKeyField) + ",");
+      recordKey.append(StringUtils.join(recordKeyField, DEFAULT_RECORD_KEY_SEPARATOR, DataSourceUtils
+          .getNestedFieldValAsString(record, recordKeyField),","));
     }
     recordKey.deleteCharAt(recordKey.length() - 1);
     StringBuilder partitionPath = new StringBuilder();
@@ -67,13 +65,5 @@ public class ComplexKeyGenerator extends KeyGenerator {
     }
 
     return new HoodieKey(recordKey.toString(), partitionPath.toString());
-  }
-
-  public List<String> getRecordKeyFields() {
-    return recordKeyFields;
-  }
-
-  public List<String> getPartitionPathFields() {
-    return partitionPathFields;
   }
 }
