@@ -31,9 +31,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -221,5 +223,16 @@ public class UtilHelpers {
     TypedProperties defaults = new TypedProperties();
     defaults.load(in);
     return defaults;
+  }
+
+  public static DFSPathSelector createSourceSelector(String sourceSelectorClass, TypedProperties props,
+      Configuration conf) throws IOException {
+    try {
+      return (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+          new Class<?>[]{TypedProperties.class, Configuration.class},
+          props, conf);
+    } catch (Throwable e) {
+      throw new IOException("Could not load source selector class " + sourceSelectorClass, e);
+    }
   }
 }

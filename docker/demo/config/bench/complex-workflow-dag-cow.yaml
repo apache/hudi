@@ -1,0 +1,71 @@
+first_insert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    repeat_count: 5
+    num_records_insert: 100
+  type: InsertNode
+  deps: none
+second_insert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    repeat_count: 5
+    num_records_insert: 100
+  deps: first_insert
+  type: InsertNode
+third_insert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    repeat_count: 2
+    num_records_insert: 300
+  deps: second_insert
+  type: InsertNode
+first_rollback:
+  config:
+  deps: third_insert
+  type: RollbackNode
+first_upsert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    num_records_insert: 300
+    repeat_count: 5
+    num_records_upsert: 100
+    num_upsert_partitions: 10
+  type: UpsertNode
+  deps: first_rollback
+first_hive_sync:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+  type: HiveSyncNode
+  deps: first_upsert
+first_hive_query:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+  type: HiveQueryNode
+  deps: first_hive_sync
+second_upsert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    num_records_insert: 300
+    repeat_count: 5
+    num_records_upsert: 100
+    num_upsert_partitions: 10
+  type: UpsertNode
+  deps: first_hive_query
+second_hive_query:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+    hive_queries:
+      query1: "select count(*) from testdb.test_table group by `_row_key` having count(*) > 1"
+      result1: 0
+      query2: "select count(*) from testdb.test_table"
+      result2: 3100
+  type: HiveQueryNode
+  deps: second_upsert

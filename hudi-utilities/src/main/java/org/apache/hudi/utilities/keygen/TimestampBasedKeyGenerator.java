@@ -81,7 +81,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField);
+    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathFields.get(0));
     SimpleDateFormat partitionPathFormat = new SimpleDateFormat(outputDateFormat);
     partitionPathFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
 

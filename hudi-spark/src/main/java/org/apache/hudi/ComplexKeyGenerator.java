@@ -32,8 +32,9 @@ import java.util.List;
  */
 public class ComplexKeyGenerator extends KeyGenerator {
 
+  public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
   private static final String DEFAULT_PARTITION_PATH = "default";
-  private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   private static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
   private static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
@@ -91,13 +92,5 @@ public class ComplexKeyGenerator extends KeyGenerator {
     partitionPath.deleteCharAt(partitionPath.length() - 1);
 
     return new HoodieKey(recordKey.toString(), partitionPath.toString());
-  }
-
-  public List<String> getRecordKeyFields() {
-    return recordKeyFields;
-  }
-
-  public List<String> getPartitionPathFields() {
-    return partitionPathFields;
   }
 }
