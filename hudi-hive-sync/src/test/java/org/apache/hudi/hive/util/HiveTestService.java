@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.hadoop.conf.Configuration;
@@ -90,7 +89,7 @@ public class HiveTestService {
     Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
 
     if (hadoopConf == null) {
-      hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
+      hadoopConf = new Configuration();
     }
 
     String localHiveLocation = getHiveLocation(workDir);
@@ -119,6 +118,28 @@ public class HiveTestService {
 
     LOG.info("Hive Minicluster service started.");
     return hiveServer;
+  }
+
+  public void stop() {
+    if (hiveServer != null) {
+      try {
+        hiveServer.stop();
+      } catch (Exception e) {
+        LOG.error("Stop hive server failed", e);
+      }
+    }
+
+    if (tServer != null) {
+      try {
+        tServer.stop();
+      } catch (Exception e) {
+        LOG.error("Stop meta store failed", e);
+      }
+    }
+
+    if (executorService != null) {
+      executorService.shutdownNow();
+    }
   }
 
   private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {

@@ -71,7 +71,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
   @Before
   public void setup() throws Exception {
     super.setup();
-    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
+    schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS("delta-streamer-config/source.avsc"), jsc);
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }

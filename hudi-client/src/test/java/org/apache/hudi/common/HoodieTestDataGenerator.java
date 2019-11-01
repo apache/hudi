@@ -498,7 +498,8 @@ public class HoodieTestDataGenerator {
   public Stream<HoodieKey> generateUniqueDeleteStream(Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
     if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+      throw new IllegalArgumentException(
+          "Requested unique deletes is greater than number of available keys");
     }
 
     List<HoodieKey> result = new ArrayList<>();
@@ -527,7 +528,8 @@ public class HoodieTestDataGenerator {
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
     final Set<KeyPartition> used = new HashSet<>();
     if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+      throw new IllegalArgumentException(
+          "Requested unique deletes is greater than number of available keys");
     }
 
     List<HoodieRecord> result = new ArrayList<>();
@@ -549,6 +551,15 @@ public class HoodieTestDataGenerator {
       }
     }
     return result.stream();
+  }
+
+  public List<GenericRecord> generateGenericRecords(int numRecords) {
+    List<GenericRecord> list = new ArrayList<>();
+    IntStream.range(0, numRecords).forEach(i -> {
+      list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
+          .toString(), RAND.nextDouble()));
+    });
+    return list;
   }
 
   public String[] getPartitionPaths() {

@@ -42,6 +42,7 @@ public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
     }
+
     return new HoodieKey(recordKey, EMPTY_PARTITION);
   }
 }
