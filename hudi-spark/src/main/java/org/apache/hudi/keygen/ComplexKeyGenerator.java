@@ -37,6 +37,7 @@ public class ComplexKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
 
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
@@ -98,8 +99,16 @@ public class ComplexKeyGenerator extends KeyGenerator {
     recordKey.deleteCharAt(recordKey.length() - 1);
     if (keyIsNullEmpty) {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-        + recordKeyFields.toString() + " cannot be entirely null or empty.");
+          + recordKeyFields.toString() + " cannot be entirely null or empty.");
     }
     return recordKey.toString();
+  }
+
+  public List<String> getRecordKeyFields() {
+    return recordKeyFields;
+  }
+
+  public List<String> getPartitionPathFields() {
+    return partitionPathFields;
   }
 }

@@ -149,7 +149,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       DateTime timestamp = new DateTime(timeMs, outputDateTimeZone);
-
       return hiveStylePartitioning ? partitionPathField + "=" + timestamp.toString(partitionFormatter)
         : timestamp.toString(partitionFormatter);
     } catch (Exception e) {

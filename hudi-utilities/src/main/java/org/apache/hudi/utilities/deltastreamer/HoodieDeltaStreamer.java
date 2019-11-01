@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.async.AbstractAsyncService;
+import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -49,6 +50,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
@@ -83,9 +85,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
 
-  private final transient Config cfg;
+  protected final transient Config cfg;
 
-  private transient DeltaSyncService deltaSyncService;
+  protected transient DeltaSyncService deltaSyncService;
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
@@ -435,11 +437,11 @@ public class HoodieDeltaStreamer implements Serializable {
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
-              Option<String> scheduledCompactionInstant = deltaSync.syncOnce();
-              if (scheduledCompactionInstant.isPresent()) {
-                LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
+              Pair<Option<String>, JavaRDD<WriteStatus>> scheduledCompactionInstantAndRDD = deltaSync.syncOnce();
+              if (scheduledCompactionInstantAndRDD.getLeft().isPresent()) {
+                LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.getLeft() + ")");
                 asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
-                    HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstant.get()));
+                    HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.getLeft().get()));
                 asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
@@ -622,5 +624,9 @@ public class HoodieDeltaStreamer implements Serializable {
         return true;
       }, executor)).toArray(CompletableFuture[]::new)), executor);
     }
+  }
+
+  public DeltaSyncService getDeltaSyncService() {
+    return deltaSyncService;
   }
 }
