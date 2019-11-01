@@ -111,7 +111,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField, true);
+    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathFields.get(0), true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
@@ -133,12 +133,14 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
           "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
       Date timestamp = new Date(timeMs);
-      String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
+      String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyFields.get(0), true);
       if (recordKey == null || recordKey.isEmpty()) {
-        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyFields + "\" "
+            + "cannot be null or empty.");
       }
 
-      String partitionPath = hiveStylePartitioning ? partitionPathField + "=" + partitionPathFormat.format(timestamp)
+      String partitionPath =
+          hiveStylePartitioning ? partitionPathFields.get(0) + "=" + partitionPathFormat.format(timestamp)
               : partitionPathFormat.format(timestamp);
       return new HoodieKey(recordKey, partitionPath);
     } catch (ParseException pe) {

@@ -19,7 +19,8 @@ jdk:
   - openjdk8
 sudo: required
 env:
-  - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit
+  - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit_main
+  - HUDI_QUIETER_LOGGING=1 TEST_SUITE=unit_other
   - TEST_SUITE=integration
 install: true
 services:
