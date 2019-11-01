@@ -126,10 +126,21 @@ public class HiveTestService {
   public void stop() {
     resetSystemProperties();
     if (tServer != null) {
-      tServer.stop();
+      try {
+        tServer.stop();
+      } catch (Exception e) {
+        LOG.error("Stop meta store failed", e);
+      }
     }
     if (hiveServer != null) {
-      hiveServer.stop();
+      try {
+        hiveServer.stop();
+      } catch (Exception e) {
+        LOG.error("Stop hive server failed", e);
+      }
+    }
+    if (executorService != null) {
+      executorService.shutdownNow();
     }
     LOG.info("Hive Minicluster service shut down.");
     tServer = null;

@@ -73,4 +73,12 @@ public class SimpleKeyGenerator extends KeyGenerator {
     }
     return recordKey;
   }
+
+  public String getRecordKeyField() {
+    return recordKeyField;
+  }
+
+  public String getPartitionPathField() {
+    return partitionPathField;
+  }
 }
