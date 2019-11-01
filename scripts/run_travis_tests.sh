@@ -20,10 +20,15 @@ mode=$1
 sparkVersion=2.4.4
 hadoopVersion=2.7
 
-if [ "$mode" = "unit" ];
+if [ "$mode" = "unit_main" ];
 then
-  echo "Running Unit Tests"
-  mvn test -DskipITs=true -B
+  echo "Running Unit Tests for main modules"
+  mvn test -pl '!hudi-test-suite' -DskipITs=true -B
+elif [ "$mode" = "unit_other" ];
+then
+  echo "Running Unit Tests for other modules"
+  mvn -DskipTests test-compile jar:test-jar install
+  mvn test -pl hudi-test-suite -DskipITs=true -B
 elif [ "$mode" = "integration" ];
 then
   echo "Downloading Apache Spark-${sparkVersion}-bin-hadoop${hadoopVersion}"
