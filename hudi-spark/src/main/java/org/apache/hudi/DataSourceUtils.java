@@ -261,6 +261,8 @@ public class DataSourceUtils {
     hiveSyncConfig.partitionValueExtractorClass =
         props.getString(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
             SlashEncodedDayPartitionValueExtractor.class.getName());
+    hiveSyncConfig.isTestSuite = props.getBoolean(DataSourceWriteOptions.HIVE_ENABLE_TEST_SUITE_OPT_KEY(),
+        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_ENABLE_TEST_SUITE_OPT_KEY()));
     return hiveSyncConfig;
   }
 }

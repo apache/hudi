@@ -18,16 +18,6 @@
 
 package org.apache.hudi.utilities.keygen;
 
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
-
-import org.apache.avro.generic.GenericRecord;
-
 import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -35,6 +25,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.TimeZone;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 
 /**
  * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
@@ -88,7 +86,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathField, true);
+    Object partitionVal = DataSourceUtils.getNestedFieldVal(record, partitionPathFields.get(0), true);
     if (partitionVal == null) {
       partitionVal = 1L;
     }
@@ -111,12 +109,14 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       }
       Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
 
-      String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
+      String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyFields.get(0), true);
       if (recordKey == null || recordKey.isEmpty()) {
-        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyFields + "\" "
+            + "cannot be null or empty.");
       }
 
-      String partitionPath = hiveStylePartitioning ? partitionPathField + "=" + partitionPathFormat.format(timestamp)
+      String partitionPath =
+          hiveStylePartitioning ? partitionPathFields.get(0) + "=" + partitionPathFormat.format(timestamp)
               : partitionPathFormat.format(timestamp);
       return new HoodieKey(recordKey, partitionPath);
     } catch (ParseException pe) {

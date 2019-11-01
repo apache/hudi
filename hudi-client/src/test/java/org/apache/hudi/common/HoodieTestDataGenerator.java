@@ -665,7 +665,7 @@ public class HoodieTestDataGenerator {
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    for (Map.Entry<Integer, KeyPartition> entry: existingKeys.entrySet()) {
+    for (Map.Entry<Integer, KeyPartition> entry : existingKeys.entrySet()) {
       if (entry.getValue().key.equals(key)) {
         int index = entry.getKey();
         existingKeys.put(index, existingKeys.get(numExistingKeys - 1));
@@ -675,8 +675,16 @@ public class HoodieTestDataGenerator {
         return true;
       }
     }
-
     return false;
+  }
+
+  public List<GenericRecord> generateGenericRecords(int numRecords) {
+    List<GenericRecord> list = new ArrayList<>();
+    IntStream.range(0, numRecords).forEach(i -> {
+      list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
+          .toString(), RAND.nextDouble()));
+    });
+    return list;
   }
 
   public String[] getPartitionPaths() {
