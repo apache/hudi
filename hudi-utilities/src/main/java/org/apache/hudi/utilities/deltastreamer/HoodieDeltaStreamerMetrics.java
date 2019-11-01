@@ -19,18 +19,19 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import com.codahale.metrics.Timer;
+import java.io.Serializable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.Metrics;
 
-public class HoodieDeltaStreamerMetrics {
+public class HoodieDeltaStreamerMetrics implements Serializable {
 
   private HoodieWriteConfig config = null;
   private String tableName = null;
 
   public String overallTimerName = null;
   public String hiveSyncTimerName = null;
-  private Timer overallTimer = null;
-  public Timer hiveSyncTimer = null;
+  private transient Timer overallTimer = null;
+  public transient Timer hiveSyncTimer = null;
 
   public HoodieDeltaStreamerMetrics(HoodieWriteConfig config) {
     this.config = config;

@@ -44,7 +44,32 @@ import org.apache.hudi.exception.HoodieIOException;
  */
 public class QuickstartUtils {
 
+  private static Option<String> convertToString(HoodieRecord record) {
+    try {
+      String str = HoodieAvroUtils
+          .bytesToAvro(((OverwriteWithLatestAvroPayload) record.getData()).recordBytes, DataGenerator.avroSchema)
+          .toString();
+      str = "{" + str.substring(str.indexOf("\"ts\":"));
+      return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));
+    } catch (IOException e) {
+      return Option.empty();
+    }
+  }
+
+  public static List<String> convertToStringList(List<HoodieRecord> records) {
+    return records.stream().map(hr -> convertToString(hr)).filter(os -> os.isPresent()).map(os -> os.get())
+        .collect(Collectors.toList());
+  }
+
+  public static Map<String, String> getQuickstartWriteConfigs() {
+    Map<String, String> demoConfigs = new HashMap<>();
+    demoConfigs.put("hoodie.insert.shuffle.parallelism", "2");
+    demoConfigs.put("hoodie.upsert.shuffle.parallelism", "2");
+    return demoConfigs;
+  }
+
   public static class DataGenerator {
+
     private static final String DEFAULT_FIRST_PARTITION_PATH = "americas/united_states/san_francisco";
     private static final String DEFAULT_SECOND_PARTITION_PATH = "americas/brazil/sao_paulo";
     private static final String DEFAULT_THIRD_PARTITION_PATH = "asia/india/chennai";
@@ -86,10 +111,6 @@ public class QuickstartUtils {
       return buffer.toString();
     }
 
-    public int getNumExistingKeys() {
-      return numExistingKeys;
-    }
-
     public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
         double timestamp) {
       GenericRecord rec = new GenericData.Record(avroSchema);
@@ -116,6 +137,10 @@ public class QuickstartUtils {
       GenericRecord rec =
           generateGenericRecord(key.getRecordKey(), "rider-" + riderDriverSuffix, "driver-" + riderDriverSuffix, 0.0);
       return new OverwriteWithLatestAvroPayload(Option.of(rec));
+    }
+
+    public int getNumExistingKeys() {
+      return numExistingKeys;
     }
 
     /**
@@ -170,29 +195,5 @@ public class QuickstartUtils {
     public void close() {
       existingKeys.clear();
     }
-  }
-
-  private static Option<String> convertToString(HoodieRecord record) {
-    try {
-      String str = HoodieAvroUtils
-          .bytesToAvro(((OverwriteWithLatestAvroPayload) record.getData()).recordBytes, DataGenerator.avroSchema)
-          .toString();
-      str = "{" + str.substring(str.indexOf("\"ts\":"));
-      return Option.of(str.replaceAll("}", ", \"partitionpath\": \"" + record.getPartitionPath() + "\"}"));
-    } catch (IOException e) {
-      return Option.empty();
-    }
-  }
-
-  public static List<String> convertToStringList(List<HoodieRecord> records) {
-    return records.stream().map(hr -> convertToString(hr)).filter(os -> os.isPresent()).map(os -> os.get())
-        .collect(Collectors.toList());
-  }
-
-  public static Map<String, String> getQuickstartWriteConfigs() {
-    Map<String, String> demoConfigs = new HashMap<>();
-    demoConfigs.put("hoodie.insert.shuffle.parallelism", "2");
-    demoConfigs.put("hoodie.upsert.shuffle.parallelism", "2");
-    return demoConfigs;
   }
 }

@@ -92,13 +92,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   @BeforeClass
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
-
     // prepare the configs.
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/sql-transformer.properties", dfs,
+    UtilitiesTestBase.Helpers.copyToDFS(Helpers.class.getClassLoader(), "delta-streamer-config/base.properties", dfs,
+        dfsBasePath + "/base.properties");
+    UtilitiesTestBase.Helpers.copyToDFS(Helpers.class.getClassLoader(),"delta-streamer-config/sql-transformer.properties", dfs,
         dfsBasePath + "/sql-transformer.properties");
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
-    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS(Helpers.class.getClassLoader(),"delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS(Helpers.class.getClassLoader(),"delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
 
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");

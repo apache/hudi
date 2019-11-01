@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import java.util.Arrays;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
@@ -30,31 +31,38 @@ public class SimpleKeyGenerator extends KeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH = "default";
 
-  protected final String recordKeyField;
-
-  protected final String partitionPathField;
-
   public SimpleKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyField = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
-    this.partitionPathField = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+    this.recordKeyFields = Arrays.asList(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()));
+    this.partitionPathFields = Arrays.asList(props
+        .getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
   }
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyField == null || partitionPathField == null) {
-      throw new HoodieException("Unable to find field names for record key or partition path in cfg");
-    }
+    return new HoodieKey(getRecordKey(record), getPartitionPath(record));
+  }
 
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField);
+  private String getRecordKey(GenericRecord record) {
+    if (recordKeyFields == null || recordKeyFields.size() < 1) {
+      throw new HoodieException(
+          "Unable to find field names for record key in cfg");
+    }
+    return DataSourceUtils.getNestedFieldValAsString(record, recordKeyFields.get(0));
+  }
+
+  private String getPartitionPath(GenericRecord record) {
+    if (partitionPathFields == null || partitionPathFields.size() < 1) {
+      throw new HoodieException(
+          "Unable to find field names for partition path in cfg");
+    }
     String partitionPath;
     try {
-      partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField);
+      partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathFields.get(0));
     } catch (HoodieException e) {
       // if field is not found, lump it into default partition
       partitionPath = DEFAULT_PARTITION_PATH;
     }
-
-    return new HoodieKey(recordKey, partitionPath);
+    return partitionPath;
   }
 }

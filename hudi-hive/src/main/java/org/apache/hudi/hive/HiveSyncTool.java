@@ -94,6 +94,8 @@ public class HiveSyncTool {
 
     // Check if the necessary table exists
     boolean tableExists = hoodieHiveClient.doesTableExist();
+    // check if the database exists else create it
+    hoodieHiveClient.updateHiveSQL("create database if not exists " + cfg.databaseName);
     // Get the parquet schema for this dataset looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed

@@ -29,7 +29,8 @@ import org.apache.hudi.common.util.Option;
  */
 public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodieRecordPayload> {
 
-  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {}
+  public EmptyHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
+  }
 
   @Override
   public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another) {
