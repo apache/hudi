@@ -158,10 +158,8 @@ public class UtilitiesTestBase {
 
   public static class Helpers {
 
-    // to get hold of resources bundled with jar
-    private static ClassLoader classLoader = Helpers.class.getClassLoader();
-
-    public static void copyToDFS(String testResourcePath, FileSystem fs, String targetPath) throws IOException {
+    public static void copyToDFS(ClassLoader classLoader, String testResourcePath, FileSystem fs, String targetPath)
+        throws IOException {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
       PrintStream os = new PrintStream(fs.create(new Path(targetPath), true));
@@ -196,10 +194,10 @@ public class UtilitiesTestBase {
       }
     }
 
-    public static TypedProperties setupSchemaOnDFS() throws IOException {
-      UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+    public static TypedProperties setupSchemaOnDFS(String filePath) throws IOException {
+      UtilitiesTestBase.Helpers.copyToDFS(Helpers.class.getClassLoader(), filePath, dfs, dfsBasePath + "/" + filePath);
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+      props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + filePath);
       return props;
     }
 
