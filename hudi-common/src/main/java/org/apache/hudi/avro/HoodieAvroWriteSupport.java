@@ -39,7 +39,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
   public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
-  public static final String HOODIE_BLOOM_FILTER_VERSION = "hoodie_bloom_filter_version";
+  public static final String HOODIE_BLOOM_FILTER_TYPE_CODE = "hoodie_bloom_filter_type_code";
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
     super(schema, avroSchema);
@@ -55,8 +55,8 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
         extraMetaData.put(HOODIE_MIN_RECORD_KEY_FOOTER, minRecordKey);
         extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
       }
-      if (bloomFilter.getBloomIndexVersion() == HoodieDynamicBloomFilter.VERSION) {
-        extraMetaData.put(HOODIE_BLOOM_FILTER_VERSION, Integer.toString(bloomFilter.getBloomIndexVersion()));
+      if (bloomFilter.getBloomFilterTypeCode().contains(HoodieDynamicBloomFilter.TYPE_CODE_PREFIX)) {
+        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilter.getBloomFilterTypeCode());
       }
     }
     return new WriteSupport.FinalizedWriteContext(extraMetaData);

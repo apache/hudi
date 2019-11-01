@@ -34,7 +34,8 @@ import org.apache.hudi.exception.HoodieIndexException;
  */
 public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements BloomFilter {
 
-  public static final int VERSION = 1;
+  public static final String TYPE_CODE_PREFIX = "DYNAMIC";
+  public static final String TYPE_CODE = TYPE_CODE_PREFIX + "_V0";
   private DynamicBloomFilter dynamicBloomFilter;
 
   /**
@@ -57,8 +58,10 @@ public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements Bloo
    * Generate {@link HoodieDynamicBloomFilter} from the given {@code serString} serialized string
    *
    * @param serString the serialized string which represents the {@link HoodieDynamicBloomFilter}
+   * @param typeCode type code of the bloom filter
    */
-  HoodieDynamicBloomFilter(String serString) {
+  HoodieDynamicBloomFilter(String serString, String typeCode) {
+    // ignoring the type code for now, since we have just one version
     byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
@@ -95,7 +98,7 @@ public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements Bloo
   }
 
   @Override
-  public int getBloomIndexVersion() {
-    return HoodieDynamicBloomFilter.VERSION;
+  public String getBloomFilterTypeCode() {
+    return HoodieDynamicBloomFilter.TYPE_CODE;
   }
 }

@@ -149,7 +149,7 @@ public class ParquetUtils {
         readParquetFooter(configuration, false, parquetFilePath,
             HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
             HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_VERSION);
+            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
@@ -157,11 +157,11 @@ public class ParquetUtils {
     }
     BloomFilter toReturn = null;
     if (footerVal != null) {
-      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_VERSION)) {
-        BloomFilterFactory.fromString(footerVal,
-            Integer.parseInt(footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_VERSION)));
+      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE)) {
+        toReturn = BloomFilterFactory.fromString(footerVal,
+            footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE));
       } else {
-        BloomFilterFactory.fromString(footerVal, SimpleBloomFilter.VERSION);
+        toReturn = BloomFilterFactory.fromString(footerVal, SimpleBloomFilter.TYPE_CODE);
       }
     }
     return toReturn;

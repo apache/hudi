@@ -30,11 +30,11 @@ public class BloomFilterFactory {
    *
    * @param numEntries total number of entries
    * @param errorRate max allowed error rate
-   * @param bloomFilterVersion bloom filter version
+   * @param bloomFilterTypeCode bloom filter type code
    * @return the {@link BloomFilter} thus created
    */
-  public static BloomFilter createBloomFilter(int numEntries, double errorRate, int bloomFilterVersion) {
-    return createBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH, bloomFilterVersion);
+  public static BloomFilter createBloomFilter(int numEntries, double errorRate, String bloomFilterTypeCode) {
+    return createBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH, bloomFilterTypeCode);
   }
 
   /**
@@ -43,16 +43,16 @@ public class BloomFilterFactory {
    * @param numEntries total number of entries
    * @param errorRate max allowed error rate
    * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
-   * @param bloomFilterVersion bloom filter version
+   * @param bloomFilterTypeCode bloom filter type code
    * @return the {@link BloomFilter} thus created
    */
-  public static BloomFilter createBloomFilter(int numEntries, double errorRate, int hashType, int bloomFilterVersion) {
-    if (bloomFilterVersion == SimpleBloomFilter.VERSION) {
+  public static BloomFilter createBloomFilter(int numEntries, double errorRate, int hashType, String bloomFilterTypeCode) {
+    if (bloomFilterTypeCode.equals(SimpleBloomFilter.TYPE_CODE)) {
       return new SimpleBloomFilter(numEntries, errorRate, hashType);
-    } else if (bloomFilterVersion == HoodieDynamicBloomFilter.VERSION) {
+    } else if (bloomFilterTypeCode.contains(HoodieDynamicBloomFilter.TYPE_CODE_PREFIX)) {
       return new HoodieDynamicBloomFilter(numEntries, errorRate, hashType);
     } else {
-      throw new IllegalArgumentException("Bloom Filter version not recognizable " + bloomFilterVersion);
+      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
     }
   }
 
@@ -60,16 +60,16 @@ public class BloomFilterFactory {
    * Generate {@link BloomFilter} from serialized String
    *
    * @param serString the serialized string of the {@link BloomFilter}
-   * @param bloomFilterVersion bloom filter version
+   * @param bloomFilterTypeCode bloom filter type code
    * @return the {@link BloomFilter} thus generated from the passed in serialized string
    */
-  public static BloomFilter fromString(String serString, int bloomFilterVersion) {
-    if (bloomFilterVersion == SimpleBloomFilter.VERSION) {
+  public static BloomFilter fromString(String serString, String bloomFilterTypeCode) {
+    if (bloomFilterTypeCode.equals(SimpleBloomFilter.TYPE_CODE)) {
       return new SimpleBloomFilter(serString);
-    } else if (bloomFilterVersion == HoodieDynamicBloomFilter.VERSION) {
-      return new HoodieDynamicBloomFilter(serString);
+    } else if (bloomFilterTypeCode.contains(HoodieDynamicBloomFilter.TYPE_CODE_PREFIX)) {
+      return new HoodieDynamicBloomFilter(serString, bloomFilterTypeCode);
     } else {
-      throw new IllegalArgumentException("Bloom Filter version not recognizable " + bloomFilterVersion);
+      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
     }
   }
 }

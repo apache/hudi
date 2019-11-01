@@ -46,5 +46,5 @@ public interface BloomFilter {
   /**
    * @return the bloom index version
    **/
-  int getBloomIndexVersion();
+  String getBloomFilterTypeCode();
 }

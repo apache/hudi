@@ -34,7 +34,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 
 public class SimpleBloomFilter implements BloomFilter {
 
-  public static final int VERSION = 0;
+  public static final String TYPE_CODE = "SIMPLE";
   private org.apache.hadoop.util.bloom.BloomFilter filter = null;
 
   /**
@@ -104,7 +104,7 @@ public class SimpleBloomFilter implements BloomFilter {
   }
 
   @Override
-  public int getBloomIndexVersion() {
-    return SimpleBloomFilter.VERSION;
+  public String getBloomFilterTypeCode() {
+    return SimpleBloomFilter.TYPE_CODE;
   }
 }

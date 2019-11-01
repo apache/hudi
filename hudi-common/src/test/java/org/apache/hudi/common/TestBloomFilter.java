@@ -35,19 +35,19 @@ import org.junit.runners.Parameterized.Parameters;
 public class TestBloomFilter {
 
   private final int keySize = 50;
-  private final int versionToTest;
+  private final String versionToTest;
 
   // name attribute is optional, provide an unique name for test
   // multiple parameters, uses Collection<Object[]>
   @Parameters()
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][]{
-        {0},
-        {1}
+        {SimpleBloomFilter.TYPE_CODE},
+        {HoodieDynamicBloomFilter.TYPE_CODE}
     });
   }
 
-  public TestBloomFilter(int versionToTest) {
+  public TestBloomFilter(String versionToTest) {
     this.versionToTest = versionToTest;
   }
 
