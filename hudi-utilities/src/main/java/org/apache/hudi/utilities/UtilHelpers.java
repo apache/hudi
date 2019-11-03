@@ -190,7 +190,9 @@ public class UtilHelpers {
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
         .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withParallelism(parallelism, parallelism)
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withParallelism(parallelism, parallelism)
+            .withBulkInsertParallelism(parallelism)
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();
