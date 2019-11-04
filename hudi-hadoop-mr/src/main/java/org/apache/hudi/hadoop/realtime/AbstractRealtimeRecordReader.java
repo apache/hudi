@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop.realtime;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -156,24 +157,39 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Given a comma separated list of field names and positions at which they appear on Hive, return a ordered list of
-   * field names, that can be passed onto storage.
+   * Given a comma separated list of field names and positions at which they appear on Hive, return
+   * an ordered list of field names, that can be passed onto storage.
    */
   private static List<String> orderFields(String fieldNameCsv, String fieldOrderCsv, List<String> partitioningFields) {
-
-    String[] fieldOrders = fieldOrderCsv.split(",");
-    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(",")).filter(fn -> !partitioningFields.contains(fn))
-        .collect(Collectors.toList());
-
+    // Need to convert the following to Set first since Hive does not handle duplicate field names correctly but
+    // handles duplicate fields orders correctly.
+    // Fields Orders -> {@link https://github
+    // .com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
+    // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
+    // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
+    // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
+    Set<String> fieldOrdersSet = new LinkedHashSet<>();
+    String[] fieldOrdersWithDups = fieldOrderCsv.split(",");
+    for (String fieldOrder : fieldOrdersWithDups) {
+      fieldOrdersSet.add(fieldOrder);
+    }
+    String[] fieldOrders = fieldOrdersSet.toArray(new String[fieldOrdersSet.size()]);
+    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
+        .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
+    Set<String> fieldNamesSet = new LinkedHashSet<>();
+    for (String fieldName : fieldNames) {
+      fieldNamesSet.add(fieldName);
+    }
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
-    if (fieldNames.size() != fieldOrders.length) {
-      throw new HoodieException(
-          String.format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
+    if (fieldNamesSet.size() != fieldOrders.length) {
+      throw new HoodieException(String
+          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
               fieldNames.size(), fieldOrders.length));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
+    String[] fieldNamesArray = fieldNamesSet.toArray(new String[fieldNamesSet.size()]);
     for (int ox = 0; ox < fieldOrders.length; ox++) {
-      orderedFieldMap.put(Integer.parseInt(fieldOrders[ox]), fieldNames.get(ox));
+      orderedFieldMap.put(Integer.parseInt(fieldOrders[ox]), fieldNamesArray[ox]);
     }
     return new ArrayList<>(orderedFieldMap.values());
   }
