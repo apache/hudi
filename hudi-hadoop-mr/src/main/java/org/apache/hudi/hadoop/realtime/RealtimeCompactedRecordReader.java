@@ -96,11 +96,13 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         }
         GenericRecord recordToReturn = rec.get();
         if (usesCustomPayload) {
-          // If using a custom payload, return only the projection fields
+          // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
+          // the writerSchema with only the projection fields
           recordToReturn = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(rec.get(), getReaderSchema());
         }
         // we assume, a later safe record in the log, is newer than what we have in the map &
-        // replace it.
+        // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
+        // schema, we use writerSchema to create the arrayWritable from the latest generic record
         ArrayWritable aWritable = (ArrayWritable) avroToArrayWritable(recordToReturn, getHiveSchema());
         Writable[] replaceValue = aWritable.get();
         if (LOG.isDebugEnabled()) {
@@ -115,7 +117,9 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           LOG.error("Got exception when doing array copy", re);
           LOG.error("Base record :" + arrayWritableToString(arrayWritable));
           LOG.error("Log record :" + arrayWritableToString(aWritable));
-          throw re;
+          String errMsg = "Base-record :" + arrayWritableToString(arrayWritable)
+              + " ,Log-record :" + arrayWritableToString(aWritable) + " ,Error :" + re.getMessage();
+          throw new RuntimeException(errMsg, re);
         }
       }
       return true;

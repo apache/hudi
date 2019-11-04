@@ -69,7 +69,8 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
   public static final int HOODIE_RECORD_KEY_COL_POS = 2;
   public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
-  // Hive on Spark queries do not work with RT tables. Our theory is that due to
+  public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
+  // To make Hive on Spark queries work with RT tables. Our theory is that due to
   // {@link org.apache.hadoop.hive.ql.io.parquet.ProjectionPusher}
   // not handling empty list correctly, the ParquetRecordReaderWrapper ends up adding the same column ids multiple
   // times which ultimately breaks the query.
@@ -186,7 +187,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     return conf;
   }
 
-  private static synchronized Configuration addRequiredProjectionFields(Configuration configuration) {
+  private static Configuration addRequiredProjectionFields(Configuration configuration) {
     // Need this to do merge records in HoodieRealtimeRecordReader
     configuration =
         addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HOODIE_RECORD_KEY_COL_POS);
@@ -204,13 +205,11 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
    * Hive. Hive has fixed this bug after 3.0.0, but the version before that would still face this problem. (HIVE-22438)
    */
   private static Configuration cleanProjectionColumnIds(Configuration conf) {
-    synchronized (conf) {
-      String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-      if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
-        conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
-        }
+    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
+    if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
+      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
       }
     }
     return conf;
@@ -219,18 +218,30 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
       final Reporter reporter) throws IOException {
-
-    this.conf = cleanProjectionColumnIds(job);
-    LOG.info("Before adding Hoodie columns, Projections :" + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
-        + ", Ids :" + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-
-    // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
-    // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases
-    // hoodie additional projection columns are reset after calling setConf and only natural projections
-    // (one found in select queries) are set. things would break because of this.
-    // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
-    // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction time.
-    this.conf = addRequiredProjectionFields(job);
+    // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
+    // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
+    // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
+    // latency incurred here due to the synchronization since get record reader is called once per spilt before the
+    // actual heavy lifting of reading the parquet files happen.
+    if (job.get(HOODIE_READ_COLUMNS_PROP) == null) {
+      synchronized (job) {
+        LOG.info(
+            "Before adding Hoodie columns, Projections :" + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
+                + ", Ids :" + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+        if (job.get(HOODIE_READ_COLUMNS_PROP) == null) {
+          // Hive (across all versions) fails for queries like select count(`_hoodie_commit_time`) from table;
+          // In this case, the projection fields gets removed. Looking at HiveInputFormat implementation, in some cases
+          // hoodie additional projection columns are reset after calling setConf and only natural projections
+          // (one found in select queries) are set. things would break because of this.
+          // For e:g _hoodie_record_key would be missing and merge step would throw exceptions.
+          // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
+          // time.
+          this.conf = cleanProjectionColumnIds(job);
+          this.conf = addRequiredProjectionFields(job);
+          this.conf.set(HOODIE_READ_COLUMNS_PROP, "true");
+        }
+      }
+    }
 
     LOG.info("Creating record reader with readCols :" + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
