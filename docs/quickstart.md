@@ -12,20 +12,10 @@ code snippets that allows you to insert and update a Hudi dataset of default sto
 [Copy on Write](https://hudi.apache.org/concepts.html#copy-on-write-storage). 
 After each write operation we will also show how to read the data both snapshot and incrementally.
 
-## Build Hudi spark bundle jar
-
-Hudi requires Java 8 to be installed on a *nix system. Check out [code](https://github.com/apache/incubator-hudi) and 
-normally build the maven project, from command line:
-
-``` 
-# checkout and build
-git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
-mvn clean install -DskipTests -DskipITs
-
-# Export the location of hudi-spark-bundle for later 
-mkdir -p /tmp/hudi && cp packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar  /tmp/hudi/hudi-spark-bundle.jar 
-export HUDI_SPARK_BUNDLE_PATH=/tmp/hudi/hudi-spark-bundle.jar
-```
+**NOTE:**
+You can also do the quickstart by [building hudi yourself](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source-building-hudi), 
+and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar` in the spark-shell command
+instead of `--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
 
 ## Setup spark-shell
 Hudi works with Spark-2.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for 
@@ -34,7 +24,7 @@ setting up spark.
 From the extracted directory run spark-shell with Hudi as:
 
 ```
-bin/spark-shell --jars $HUDI_SPARK_BUNDLE_PATH --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 Setup table name, base path and a data generator to generate records for this guide.
