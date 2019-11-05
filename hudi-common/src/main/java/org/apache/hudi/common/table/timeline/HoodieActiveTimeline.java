@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -66,12 +67,21 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
+  private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
   /**
    * Returns next commit time in the {@link #COMMIT_FORMATTER} format.
+   * Ensures each commit time is atleast 1 second apart since we create COMMIT times at second granularity
    */
   public static String createNewCommitTime() {
-    return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+    lastInstantTime.updateAndGet((oldVal) -> {
+      String newCommitTime = null;
+      do {
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+      } while (HoodieTimeline.compareTimestamps(newCommitTime, oldVal, LESSER_OR_EQUAL));
+      return newCommitTime;
+    });
+    return lastInstantTime.get();
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
@@ -99,7 +109,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    *
    * @deprecated
    */
-  public HoodieActiveTimeline() {}
+  public HoodieActiveTimeline() {
+  }
 
   /**
    * This method is only used when this object is deserialized in a spark executor.
@@ -112,7 +123,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   /**
    * Get all instants (commits, delta commits) that produce new data, in the active timeline *
-   *
    */
   public HoodieTimeline getCommitsTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
@@ -139,7 +149,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Get only pure commits (inflight and completed) in the active timeline
    */
-  public HoodieTimeline   getCommitTimeline() {
+  public HoodieTimeline getCommitTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
   }
 
@@ -258,7 +268,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
-  /** BEGIN - COMPACTION RELATED META-DATA MANAGEMENT **/
+  /**
+   * BEGIN - COMPACTION RELATED META-DATA MANAGEMENT
+   **/
 
   public Option<byte[]> getInstantAuxiliaryDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
