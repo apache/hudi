@@ -39,7 +39,7 @@ import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   enum TimestampType implements Serializable {
-    UNIX_TIMESTAMP, DATE_STRING, MIXED
+    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS
   }
 
   private final TimestampType timestampType;
@@ -97,9 +97,10 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
         throw new HoodieNotSupportedException(
             "Unexpected type for partition field: " + partitionVal.getClass().getName());
       }
+      Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
 
       return new HoodieKey(DataSourceUtils.getNestedFieldValAsString(record, recordKeyField),
-          partitionPathFormat.format(new Date(unixTime * 1000)));
+          partitionPathFormat.format(timestamp));
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);
     }
