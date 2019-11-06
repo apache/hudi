@@ -141,7 +141,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public int countInstants() {
-    return new Long(instants.stream().count()).intValue();
+    return instants.size();
   }
 
   @Override
