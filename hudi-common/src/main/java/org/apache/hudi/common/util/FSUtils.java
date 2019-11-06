@@ -533,6 +533,13 @@ public class FSUtils {
   }
 
   /**
+   * Get DFS full partition path (e.g. hdfs://ip-address:8020:/<absolute path>)
+   */
+  public static String getDFSFullPartitionPath(FileSystem fs, Path partitionPath) {
+    return fs.getUri() + partitionPath.toUri().getRawPath();
+  }
+
+  /**
    * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
    * 
    * @param inputStream FSDataInputStream

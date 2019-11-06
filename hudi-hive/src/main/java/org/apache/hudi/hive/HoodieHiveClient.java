@@ -49,6 +49,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.storage.StorageSchemes;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -192,7 +193,9 @@ public class HoodieHiveClient {
     String alterTable = "ALTER TABLE " + syncConfig.tableName;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
+      Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
+      String fullPartitionPath = partitionPath.toUri().getScheme().equals(StorageSchemes.HDFS.getScheme())
+              ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
       String changePartition =
           alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
       changePartitions.add(changePartition);
@@ -216,7 +219,8 @@ public class HoodieHiveClient {
 
     List<PartitionEvent> events = Lists.newArrayList();
     for (String storagePartition : partitionStoragePartitions) {
-      String fullStoragePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition).toString();
+      Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition);
+      String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
       Collections.sort(storagePartitionValues);
