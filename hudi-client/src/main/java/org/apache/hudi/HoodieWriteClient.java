@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -746,11 +745,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     // Get all the commits on the timeline after the provided commit time
-    List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getCommitsAndCompactionTimeline().getInstants()
+    List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .getReverseOrderedInstants()
         .filter(instant -> HoodieActiveTimeline.GREATER.test(instant.getTimestamp(), instantTime))
         .collect(Collectors.toList());
-    // reverse the commits to descending order of commit time
-    Collections.reverse(instantsToRollback);
     // Start a rollback instant for all commits to be rolled back
     String startRollbackInstant = startInstant();
     // Start the timer
@@ -1116,8 +1114,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private void rollbackInflightCommits() {
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterInflightsExcludingCompaction();
-    List<String> commits = inflightTimeline.getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-    Collections.reverse(commits);
+    List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
     for (String commit : commits) {
       rollback(commit);
     }

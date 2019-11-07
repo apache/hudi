@@ -20,7 +20,6 @@ package org.apache.hudi.cli.commands;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,9 +68,8 @@ public class CleansCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
-    List<HoodieInstant> cleans = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    Collections.reverse(cleans);
     for (int i = 0; i < cleans.size(); i++) {
       HoodieInstant clean = cleans.get(i);
       HoodieCleanMetadata cleanMetadata =

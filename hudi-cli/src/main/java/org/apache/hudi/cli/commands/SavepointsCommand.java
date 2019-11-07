@@ -19,7 +19,6 @@
 package org.apache.hudi.cli.commands;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.hudi.HoodieWriteClient;
@@ -70,9 +69,8 @@ public class SavepointsCommand implements CommandMarker {
   public String showSavepoints() throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getSavePointTimeline().filterCompletedInstants();
-    List<HoodieInstant> commits = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> commits = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     String[][] rows = new String[commits.size()][];
-    Collections.reverse(commits);
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
       rows[i] = new String[] {commit.getTimestamp()};
