@@ -34,9 +34,15 @@ public class ITTestHoodieDemo extends ITTestBase {
   private static String HDFS_DATA_DIR = "/usr/hive/data/input";
   private static String HDFS_BATCH_PATH1 = HDFS_DATA_DIR + "/" + "batch_1.json";
   private static String HDFS_BATCH_PATH2 = HDFS_DATA_DIR + "/" + "batch_2.json";
+  private static String HDFS_PRESTO_INPUT_TABLE_CHECK_PATH = HDFS_DATA_DIR + "/" + "presto-table-check.commands";
+  private static String HDFS_PRESTO_INPUT_BATCH1_PATH = HDFS_DATA_DIR + "/" + "presto-batch1.commands";
+  private static String HDFS_PRESTO_INPUT_BATCH2_PATH = HDFS_DATA_DIR + "/" + "presto-batch2-after-compaction.commands";
 
   private static String INPUT_BATCH_PATH1 = HOODIE_WS_ROOT + "/docker/demo/data/batch_1.json";
+  private static String PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH = "/docker/demo/presto-table-check.commands";
+  private static String PRESTO_INPUT_BATCH1_RELATIVE_PATH = "/docker/demo/presto-batch1.commands";
   private static String INPUT_BATCH_PATH2 = HOODIE_WS_ROOT + "/docker/demo/data/batch_2.json";
+  private static String PRESTO_INPUT_BATCH2_RELATIVE_PATH = "/docker/demo/presto-batch2-after-compaction.commands";
 
   private static String COW_BASE_PATH = "/user/hive/warehouse/stock_ticks_cow";
   private static String MOR_BASE_PATH = "/user/hive/warehouse/stock_ticks_mor";
@@ -55,7 +61,6 @@ public class ITTestHoodieDemo extends ITTestBase {
   private static String HIVE_BATCH2_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-batch2-after-compaction.commands";
   private static String HIVE_INCREMENTAL_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/hive-incremental.commands";
 
-
   private static String HIVE_SYNC_CMD_FMT =
       " --enable-hive-sync " + " --hoodie-conf hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000 "
           + " --hoodie-conf hoodie.datasource.hive_sync.username=hive "
@@ -64,7 +69,6 @@ public class ITTestHoodieDemo extends ITTestBase {
           + " --hoodie-conf hoodie.datasource.hive_sync.database=default "
           + " --hoodie-conf hoodie.datasource.hive_sync.table=%s";
 
-
   @Test
   public void testDemo() throws Exception {
     setupDemo();
@@ -72,11 +76,13 @@ public class ITTestHoodieDemo extends ITTestBase {
     // batch 1
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
+    testPrestoAfterFirstBatch();
     testSparkSQLAfterFirstBatch();
 
     // batch 2
     ingestSecondBatchAndHiveSync();
     testHiveAfterSecondBatch();
+    testPrestoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
     testIncrementalHiveQuery();
     testIncrementalSparkSQLQuery();
@@ -84,6 +90,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // compaction
     scheduleAndRunCompaction();
     testHiveAfterSecondBatchAfterCompaction();
+    testPrestoAfterSecondBatchAfterCompaction();
     testIncrementalHiveQueryAfterCompaction();
   }
 
@@ -94,6 +101,16 @@ public class ITTestHoodieDemo extends ITTestBase {
         .add("hdfs dfs -copyFromLocal -f " + INPUT_BATCH_PATH1 + " " + HDFS_BATCH_PATH1)
         .add("/bin/bash " + DEMO_CONTAINER_SCRIPT).build();
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
+
+    // create input dir in presto coordinator
+    cmds = new ImmutableList.Builder<String>()
+        .add("mkdir -p " + HDFS_DATA_DIR).build();
+    executeCommandStringsInDocker(PRESTO_COORDINATOR, cmds);
+
+    // copy presto sql files to presto coordinator
+    executePrestoCopyCommand( System.getProperty("user.dir") + "/.." + PRESTO_INPUT_TABLE_CHECK_RELATIVE_PATH, HDFS_DATA_DIR);
+    executePrestoCopyCommand( System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH1_RELATIVE_PATH, HDFS_DATA_DIR);
+    executePrestoCopyCommand( System.getProperty("user.dir") + "/.." + PRESTO_INPUT_BATCH2_RELATIVE_PATH, HDFS_DATA_DIR);
   }
 
   private void ingestFirstBatchAndHiveSync() throws Exception {
@@ -168,6 +185,21 @@ public class ITTestHoodieDemo extends ITTestBase {
     executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
   }
 
+  private void testPrestoAfterFirstBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_TABLE_CHECK_PATH);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_cow");
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor",2);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor_rt");
+
+    stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\"", 6);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 3);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 3);
+  }
+
   private void testHiveAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n" + "+---------+----------------------+\n"
@@ -187,6 +219,20 @@ public class ITTestHoodieDemo extends ITTestBase {
         2);
   }
 
+  private void testPrestoAfterSecondBatch() throws Exception {
+    Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",3);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"",2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
+  }
+
   private void testHiveAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH2_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n" + "+---------+----------------------+\n"
@@ -197,6 +243,16 @@ public class ITTestHoodieDemo extends ITTestBase {
             + "| GOOG    | 2018-08-31 09:59:00  | 6330    | 1230.5     | 1230.02   |\n"
             + "| GOOG    | 2018-08-31 10:59:00  | 9021    | 1227.1993  | 1227.215  |",
         2);
+  }
+
+  private void testPrestoAfterSecondBatchAfterCompaction() throws Exception {
+    Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH2_PATH);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\"", 4);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",2);
+    assertStdOutContains(stdOutErrPair,
+        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"",2);
   }
 
   private void testSparkSQLAfterSecondBatch() throws Exception {
