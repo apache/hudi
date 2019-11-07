@@ -20,7 +20,6 @@ package org.apache.hudi.cli.commands;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,9 +79,8 @@ public class CommitsCommand implements CommandMarker {
 
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
-    List<HoodieInstant> commits = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> commits = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
-    Collections.reverse(commits);
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
       HoodieCommitMetadata commitMetadata =
