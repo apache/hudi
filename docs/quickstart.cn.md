@@ -10,25 +10,17 @@ permalink: quickstart.html
 本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新的Hudi默认存储类型数据集：
 [写时复制](https://hudi.apache.org/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量读取数据。
 
-## 编译Hudi spark整包
-Hudi要求在*nix系统上安装Java 8。Git检出[代码](https://github.com/apache/incubator-hudi)，并通过命令行构建maven项目:
-
-```
-# 检出和编译
-git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
-mvn clean install -DskipTests -DskipITs
-
-# 为后续使用导入hudi-spark-bundle位置
-mkdir -p /tmp/hudi && cp packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar  /tmp/hudi/hudi-spark-bundle.jar
-export HUDI_SPARK_BUNDLE_PATH=/tmp/hudi/hudi-spark-bundle.jar
-```
+**注意：**
+您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source-building-hudi)来快速入门，
+并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar`，
+而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
 
 ## 设置spark-shell
 Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```
-bin/spark-shell --jars $HUDI_SPARK_BUNDLE_PATH --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
 设置表名、基本路径和数据生成器来为本指南生成记录。
