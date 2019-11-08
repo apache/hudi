@@ -16,108 +16,114 @@
   limitations under the License.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-  <parent>
-    <artifactId>hudi</artifactId>
-    <groupId>org.apache.hudi</groupId>
-    <version>0.6.0-SNAPSHOT</version>
-  </parent>
-  <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <artifactId>hudi</artifactId>
+        <groupId>org.apache.hudi</groupId>
+        <version>0.6.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-hadoop-mr</artifactId>
+    <artifactId>hudi-hadoop-mr</artifactId>
 
-  <properties>
-    <main.basedir>${project.parent.basedir}</main.basedir>
-  </properties>
+    <properties>
+        <main.basedir>${project.parent.basedir}</main.basedir>
+    </properties>
 
-  <dependencies>
-    <!-- Hudi -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
+    <dependencies>
+        <!-- Hudi -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
-    <!-- Avro -->
-    <dependency>
-      <groupId>org.apache.avro</groupId>
-      <artifactId>avro</artifactId>
-    </dependency>
+        <!-- Avro -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+        </dependency>
 
-    <!-- Parquet -->
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-    </dependency>
+        <!-- Parquet -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+        </dependency>
 
-    <!-- Hadoop -->
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-auth</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-mapreduce-client-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-mapreduce-client-common</artifactId>
-    </dependency>
+        <!-- Hadoop -->
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-auth</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-common</artifactId>
+        </dependency>
 
-    <!-- Hive -->
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-jdbc</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${hive.groupid}</groupId>
-      <artifactId>hive-exec</artifactId>
-      <classifier>${hive.exec.classifier}</classifier>
-    </dependency>
+        <!-- Hive -->
+        <dependency>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${hive.groupid}</groupId>
+            <artifactId>hive-exec</artifactId>
+            <classifier>${hive.exec.classifier}</classifier>
+        </dependency>
 
-    <!-- Hoodie - Test -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-common</artifactId>
-      <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-hdfs</artifactId>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
+        <!-- Hoodie - Test -->
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+            <classifier>tests</classifier>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <classifier>tests</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <classifier>tests</classifier>
+            <scope>test</scope>
+        </dependency>
 
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
 
-  <build>
-    <resources>
-      <resource>
-        <directory>src/main/resources</directory>
-      </resource>
-    </resources>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.rat</groupId>
-        <artifactId>apache-rat-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-      </plugin>
-    </plugins>
-  </build>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-all</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -20,14 +20,23 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.SchemaTestUtil;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.junit.rules.TemporaryFolder;
@@ -37,9 +46,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class InputFormatTestUtil {
 
@@ -197,4 +209,92 @@ public class InputFormatTestUtil {
     }
 
   }
+
+  public static HoodieLogFormat.Writer writeRollback(File partitionDir, FileSystem fs, String fileId, String baseCommit,
+                                                     String newCommit, String rolledBackInstant, int logVersion)
+      throws InterruptedException, IOException {
+    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath())).withFileId(fileId)
+        .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withLogWriteToken("1-0-1")
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+    // generate metadata
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
+    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, rolledBackInstant);
+    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+    // if update belongs to an existing log file
+    writer = writer.appendBlock(new HoodieCommandBlock(header));
+    return writer;
+  }
+
+  public static HoodieLogFormat.Writer writeDataBlockToLogFile(File partitionDir, FileSystem fs, Schema schema, String
+      fileId,
+                                                               String baseCommit, String newCommit, int numberOfRecords, int offset, int logVersion)
+      throws InterruptedException, IOException {
+    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withLogVersion(logVersion)
+        .withLogWriteToken("1-0-1").overBaseCommit(baseCommit).withFs(fs).build();
+    List<IndexedRecord> records = new ArrayList<>();
+    for (int i = offset; i < offset + numberOfRecords; i++) {
+      records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
+    }
+    Schema writeSchema = records.get(0).getSchema();
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
+    HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
+    writer = writer.appendBlock(dataBlock);
+    return writer;
+  }
+
+  public static HoodieLogFormat.Writer writeRollbackBlockToLogFile(File partitionDir, FileSystem fs, Schema schema,
+      String
+          fileId, String baseCommit, String newCommit, String oldCommit, int logVersion)
+      throws InterruptedException, IOException {
+    HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).overBaseCommit(baseCommit)
+        .withLogVersion(logVersion).withFs(fs).build();
+
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, oldCommit);
+    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
+        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
+    HoodieCommandBlock rollbackBlock = new HoodieCommandBlock(header);
+    writer = writer.appendBlock(rollbackBlock);
+    return writer;
+  }
+
+  public static void setPropsForInputFormat(JobConf jobConf,
+      Schema schema, String hiveColumnTypes) {
+    List<Schema.Field> fields = schema.getFields();
+    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+    String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+
+    String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
+        .map(Schema.Field::name).collect(Collectors.joining(","));
+    hiveColumnNames = hiveColumnNames + ",datestr";
+    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(hiveColumnTypes);
+    modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+    jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
+    conf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+    conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions);
+    conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
+    conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
+    jobConf.addResource(conf);
+  }
+
+  public static void setInputPath(JobConf jobConf, String inputPath) {
+    jobConf.set("mapreduce.input.fileinputformat.inputdir", inputPath);
+    jobConf.set("mapreduce.input.fileinputformat.inputdir", inputPath);
+    jobConf.set("map.input.dir", inputPath);
+  }
+
 }

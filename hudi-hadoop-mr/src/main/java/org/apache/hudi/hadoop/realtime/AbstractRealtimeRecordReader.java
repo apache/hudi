@@ -88,8 +88,8 @@ public abstract class AbstractRealtimeRecordReader {
 
   protected final HoodieRealtimeFileSplit split;
   protected final JobConf jobConf;
-  private final MessageType baseFileSchema;
   protected final boolean usesCustomPayload;
+  private final MessageType baseFileSchema;
   // Schema handles
   private Schema readerSchema;
   private Schema writerSchema;
@@ -109,12 +109,6 @@ public abstract class AbstractRealtimeRecordReader {
     } catch (IOException e) {
       throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
     }
-  }
-
-  private boolean usesCustomPayload() {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jobConf, split.getBasePath());
-    return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
-        || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
   }
 
   /**
@@ -323,6 +317,12 @@ public abstract class AbstractRealtimeRecordReader {
     return HoodieAvroUtils.appendNullSchemaFields(schema, fieldsToAdd);
   }
 
+  private boolean usesCustomPayload() {
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jobConf, split.getBasePath());
+    return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
+        || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
+  }
+
   /**
    * Goes through the log files in reverse order and finds the schema from the last available data block. If not, falls
    * back to the schema from the latest parquet file. Finally, sets the partition column and projection fields into the
@@ -360,7 +360,9 @@ public abstract class AbstractRealtimeRecordReader {
   private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
     // Get all column names of hive table
     String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
+    LOG.info("Hive Columns : " + hiveColumnString);
     String[] hiveColumns = hiveColumnString.split(",");
+    LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
 
     for (String columnName : hiveColumns) {
@@ -378,6 +380,7 @@ public abstract class AbstractRealtimeRecordReader {
     Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
         writerSchema.isError());
     hiveSchema.setFields(hiveSchemaFields);
+    LOG.info("HIVE Schema is :" + hiveSchema.toString(true));
     return hiveSchema;
   }
 

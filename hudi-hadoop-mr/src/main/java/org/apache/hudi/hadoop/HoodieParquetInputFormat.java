@@ -68,6 +68,22 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
 
   protected Configuration conf;
 
+  /**
+   * Read the table metadata from a data path. This assumes certain hierarchy of files which should be changed once a
+   * better way is figured out to pass in the hoodie meta directory
+   */
+  protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath) throws IOException {
+    int levels = HoodieHiveUtil.DEFAULT_LEVELS_TO_BASEPATH;
+    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
+      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
+      metadata.readFromFS();
+      levels = metadata.getPartitionDepth();
+    }
+    Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
+    LOG.info("Reading hoodie metadata from path " + baseDir.toString());
+    return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
+  }
+
   @Override
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
@@ -297,21 +313,5 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // clearOutExistingPredicate(job);
     // }
     return super.getRecordReader(split, job, reporter);
-  }
-
-  /**
-   * Read the table metadata from a data path. This assumes certain hierarchy of files which should be changed once a
-   * better way is figured out to pass in the hoodie meta directory
-   */
-  protected static HoodieTableMetaClient getTableMetaClient(FileSystem fs, Path dataPath) throws IOException {
-    int levels = HoodieHiveUtil.DEFAULT_LEVELS_TO_BASEPATH;
-    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
-      metadata.readFromFS();
-      levels = metadata.getPartitionDepth();
-    }
-    Path baseDir = HoodieHiveUtil.getNthParent(dataPath, levels);
-    LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
   }
 }

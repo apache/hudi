@@ -66,7 +66,6 @@ import java.util.stream.Stream;
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
-
   // These positions have to be deterministic across all tables
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
   public static final int HOODIE_RECORD_KEY_COL_POS = 2;
@@ -76,6 +75,65 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   // {@link org.apache.hadoop.hive.ql.io.parquet.ProjectionPusher}
   // not handling empty list correctly, the ParquetRecordReaderWrapper ends up adding the same column ids multiple
   // times which ultimately breaks the query.
+
+  /**
+   * Add a field to the existing fields projected.
+   */
+  private static Configuration addProjectionField(Configuration conf, String fieldName, int fieldIndex) {
+    String readColNames = conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
+    String readColIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "");
+
+    String readColNamesPrefix = readColNames + ",";
+    if (readColNames == null || readColNames.isEmpty()) {
+      readColNamesPrefix = "";
+    }
+    String readColIdsPrefix = readColIds + ",";
+    if (readColIds == null || readColIds.isEmpty()) {
+      readColIdsPrefix = "";
+    }
+
+    if (!readColNames.contains(fieldName)) {
+      // If not already in the list - then add it
+      conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
+      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(String.format("Adding extra column " + fieldName + ", to enable log merging cols (%s) ids (%s) ",
+            conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+            conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
+      }
+    }
+    return conf;
+  }
+
+  private static synchronized Configuration addRequiredProjectionFields(Configuration configuration) {
+    // Need this to do merge records in HoodieRealtimeRecordReader
+    configuration =
+        addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HOODIE_RECORD_KEY_COL_POS);
+    configuration =
+        addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HOODIE_COMMIT_TIME_COL_POS);
+    configuration =
+        addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HOODIE_PARTITION_PATH_COL_POS);
+    return configuration;
+  }
+
+  /**
+   * Hive will append read columns' ids to old columns' ids during getRecordReader. In some cases, e.g. SELECT COUNT(*),
+   * the read columns' id is an empty string and Hive will combine it with Hoodie required projection ids and becomes
+   * e.g. ",2,0,3" and will cause an error. Actually this method is a temporary solution because the real bug is from
+   * Hive. Hive has fixed this bug after 3.0.0, but the version before that would still face this problem. (HIVE-22438)
+   */
+  private static Configuration cleanProjectionColumnIds(Configuration conf) {
+    synchronized (conf) {
+      String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
+      if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
+        conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
+        }
+      }
+    }
+    return conf;
+  }
 
   @Override
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
@@ -157,58 +215,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit
     // timeline.
     return super.listStatus(job);
-  }
-
-  /**
-   * Add a field to the existing fields projected.
-   */
-  private static Configuration addProjectionField(Configuration conf, String fieldName, int fieldIndex) {
-    String readColNames = conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
-    String readColIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "");
-
-    String readColNamesPrefix = readColNames + ",";
-    if (readColNames == null || readColNames.isEmpty()) {
-      readColNamesPrefix = "";
-    }
-    String readColIdsPrefix = readColIds + ",";
-    if (readColIds == null || readColIds.isEmpty()) {
-      readColIdsPrefix = "";
-    }
-
-    if (!readColNames.contains(fieldName)) {
-      // If not already in the list - then add it
-      conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNamesPrefix + fieldName);
-      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, readColIdsPrefix + fieldIndex);
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(String.format("Adding extra column " + fieldName + ", to enable log merging cols (%s) ids (%s) ",
-            conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-            conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR)));
-      }
-    }
-    return conf;
-  }
-
-  private static void addRequiredProjectionFields(Configuration configuration) {
-    // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HOODIE_PARTITION_PATH_COL_POS);
-  }
-
-  /**
-   * Hive will append read columns' ids to old columns' ids during getRecordReader. In some cases, e.g. SELECT COUNT(*),
-   * the read columns' id is an empty string and Hive will combine it with Hoodie required projection ids and becomes
-   * e.g. ",2,0,3" and will cause an error. Actually this method is a temporary solution because the real bug is from
-   * Hive. Hive has fixed this bug after 3.0.0, but the version before that would still face this problem. (HIVE-22438)
-   */
-  private static void cleanProjectionColumnIds(Configuration conf) {
-    String columnIds = conf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR);
-    if (!columnIds.isEmpty() && columnIds.charAt(0) == ',') {
-      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, columnIds.substring(1));
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
-      }
-    }
   }
 
   @Override

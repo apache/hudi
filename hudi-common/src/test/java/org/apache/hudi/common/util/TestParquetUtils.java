@@ -140,7 +140,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
       GenericRecord rec = new GenericData.Record(schema);
       rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, rowKey);
       writer.write(rec);
-      writeSupport.add(rowKey);
+      filter.add(rowKey);
     }
     writer.close();
   }
