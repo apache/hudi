@@ -252,5 +252,15 @@
       <scope>${utilities.bundle.hive.scope}</scope>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>utilities-bundle-shade-hive</id>
+      <properties>
+        <utilities.bundle.hive.scope>compile</utilities.bundle.hive.scope>
+        <utilities.bundle.hive.shade.prefix>org.apache.hudi.</utilities.bundle.hive.shade.prefix>
+      </properties>
+    </profile>
+  </profiles>
 </project>
 
