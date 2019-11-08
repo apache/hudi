@@ -104,6 +104,8 @@
     <mr.bundle.avro.shade.prefix></mr.bundle.avro.shade.prefix>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
     <spark.bundle.hive.shade.prefix></spark.bundle.hive.shade.prefix>
+    <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
+    <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
   </properties>
 
   <scm>
