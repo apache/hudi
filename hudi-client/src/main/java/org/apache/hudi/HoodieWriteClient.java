@@ -39,6 +39,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -159,7 +160,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(records);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -189,7 +190,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(preppedRecords);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, true);
     } catch (Throwable e) {
@@ -211,7 +212,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(records);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -238,7 +239,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(preppedRecords);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, false);
     } catch (Throwable e) {
@@ -281,7 +282,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(records);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -314,7 +315,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(preppedRecords);
+    HoodieTable<T> table = getTableAndInitCtx();
     try {
       return bulkInsertInternal(preppedRecords, commitTime, table, bulkInsertPartitioner);
     } catch (Throwable e) {
@@ -322,6 +323,31 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         throw e;
       }
       throw new HoodieInsertException("Failed to bulk insert prepared records for commit time " + commitTime, e);
+    }
+  }
+
+  /**
+   * Deletes a bunch of keys from the Hoodie table, at the supplied commitTime
+   */
+  public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, final String commitTime) {
+    HoodieTable<T> table = getTableAndInitCtx();
+    try {
+      // De-dupe/merge if needed
+      JavaRDD<HoodieKey> dedupedKeys =
+          combineKeysOnCondition(config.shouldCombineBeforeUpsert(), keys, config.getUpsertShuffleParallelism());
+
+      JavaRDD<HoodieRecord<T>> dedupedRecords = generateHoodieRecordsToDeleteFromKeys(dedupedKeys);
+      indexTimer = metrics.getIndexCtx();
+      // perform index loop up to get existing location of records
+      JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table);
+      metrics.updateIndexMetrics("lookup", metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+      indexTimer = null;
+      return upsertRecordsInternal(taggedRecords, commitTime, table, true);
+    } catch (Throwable e) {
+      if (e instanceof HoodieUpsertException) {
+        throw (HoodieUpsertException) e;
+      }
+      throw new HoodieUpsertException("Failed to delete for commit time " + commitTime, e);
     }
   }
 
@@ -366,10 +392,19 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   private JavaRDD<HoodieRecord<T>> combineOnCondition(boolean condition, JavaRDD<HoodieRecord<T>> records,
       int parallelism) {
+    return condition ? deduplicateRecords(records, parallelism) : records;
+  }
+
+  private JavaRDD<HoodieKey> combineKeysOnCondition(boolean condition, JavaRDD<HoodieKey> keys,
+      int parallelism) {
     if (condition) {
-      return deduplicateRecords(records, parallelism);
+      return deduplicateKeys(keys, parallelism);
     }
-    return records;
+    return keys;
+  }
+
+  private JavaRDD<HoodieRecord<T>> generateHoodieRecordsToDeleteFromKeys(JavaRDD<HoodieKey> keys) {
+    return keys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
   }
 
   /**
@@ -1089,6 +1124,20 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
+   * Deduplicate Hoodie records, using the given deduplication funciton.
+   */
+  JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys, int parallelism) {
+    boolean isIndexingGlobal = index.isGlobal();
+    if (isIndexingGlobal) {
+      return keys.keyBy(HoodieKey::getRecordKey)
+          .reduceByKey((key1, key2) -> key1)
+          .values();
+    } else {
+      return keys.distinct();
+    }
+  }
+
+  /**
    * Cleanup all inflight commits
    */
   private void rollbackInflightCommits() {
@@ -1101,7 +1150,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
   }
 
-  private HoodieTable getTableAndInitCtx(JavaRDD<HoodieRecord<T>> records) {
+  private HoodieTable getTableAndInitCtx() {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     if (table.getMetaClient().getCommitActionType().equals(HoodieTimeline.COMMIT_ACTION)) {

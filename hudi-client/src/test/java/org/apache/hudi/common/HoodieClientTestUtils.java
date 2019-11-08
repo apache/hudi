@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,6 +40,7 @@ import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDataFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -69,6 +71,7 @@ import org.apache.spark.sql.SQLContext;
 public class HoodieClientTestUtils {
 
   private static final transient Logger log = LogManager.getLogger(HoodieClientTestUtils.class);
+  private static final Random RANDOM = new Random();
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
     List<WriteStatus> statuses = new ArrayList<>();
@@ -84,6 +87,27 @@ public class HoodieClientTestUtils {
       keys.add(rec.getRecordKey());
     }
     return keys;
+  }
+
+  public static List<HoodieKey> getHoodieKeys(List<HoodieRecord> hoodieRecords) {
+    List<HoodieKey> keys = new ArrayList<>();
+    for (HoodieRecord rec : hoodieRecords) {
+      keys.add(rec.getKey());
+    }
+    return keys;
+  }
+
+  public static List<HoodieKey> getKeysToDelete(List<HoodieKey> keys, int size) {
+    List<HoodieKey> toReturn = new ArrayList<>();
+    int counter = 0;
+    while (counter < size) {
+      int index = RANDOM.nextInt(keys.size());
+      if (!toReturn.contains(keys.get(index))) {
+        toReturn.add(keys.get(index));
+        counter++;
+      }
+    }
+    return toReturn;
   }
 
   private static void fakeMetaFile(String basePath, String commitTime, String suffix) throws IOException {
