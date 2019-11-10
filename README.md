@@ -16,7 +16,7 @@
 -->
 
 # Hudi
-Apache Hudi (Incubating) (pronounced Hoodie) stands for `Hadoop Upsert Delete and Incremental`. 
+Apache Hudi (Incubating) (pronounced Hoodie) stands for `Hadoop Upserts Deletes and Incrementals`. 
 Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatible storage).
 
 ### Features
