@@ -189,15 +189,14 @@ public class ITTestHoodieDemo extends ITTestBase {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_TABLE_CHECK_PATH);
     assertStdOutContains(stdOutErrPair, "stock_ticks_cow");
     assertStdOutContains(stdOutErrPair, "stock_ticks_mor",2);
-    assertStdOutContains(stdOutErrPair, "stock_ticks_mor_rt");
 
     stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\"", 6);
+        "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 3);
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"", 2);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 3);
+        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"", 2);
   }
 
   private void testHiveAfterSecondBatch() throws Exception {
@@ -222,13 +221,13 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testPrestoAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH1_PATH);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\"", 4);
+        "\"GOOG\",\"2018-08-31 10:29:00\"", 2);
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",3);
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",2);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"",2);
+        "\"GOOG\",\"2018-08-31 10:29:00\",\"3391\",\"1230.1899\",\"1230.085\"");
     assertStdOutContains(stdOutErrPair,
         "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
   }
@@ -248,11 +247,11 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testPrestoAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executePrestoCommandFile(HDFS_PRESTO_INPUT_BATCH2_PATH);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\"", 4);
+        "\"GOOG\",\"2018-08-31 10:59:00\"", 2);
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"",2);
+        "\"GOOG\",\"2018-08-31 09:59:00\",\"6330\",\"1230.5\",\"1230.02\"");
     assertStdOutContains(stdOutErrPair,
-        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"",2);
+        "\"GOOG\",\"2018-08-31 10:59:00\",\"9021\",\"1227.1993\",\"1227.215\"");
   }
 
   private void testSparkSQLAfterSecondBatch() throws Exception {

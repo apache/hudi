@@ -65,8 +65,6 @@ public abstract class ITTestBase {
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-utilities.jar";
   protected static final String HIVE_SERVER_JDBC_URL = "jdbc:hive2://hiveserver:10000";
   protected static final String PRESTO_COORDINATOR_URL = "presto-coordinator-1:8090";
-  protected static final String PRESTO_USE_HIVE_DEFAULT = "use hive.default;";
-  protected static final String DOUBLE_QUOTES = "\"";
   protected static final String HADOOP_CONF_DIR = "/etc/hadoop";
 
   // Skip these lines when capturing output from hive
