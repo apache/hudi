@@ -52,6 +52,7 @@ public abstract class ITTestBase {
   protected static final String ADHOC_1_CONTAINER = "/adhoc-1";
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";
   protected static final String HIVESERVER = "/hiveserver";
+  protected static final String PRESTO_COORDINATOR = "/presto-coordinator-1";
   protected static final String HOODIE_WS_ROOT = "/var/hoodie/ws";
   protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_app.sh";
   protected static final String HUDI_HADOOP_BUNDLE =
@@ -63,6 +64,7 @@ public abstract class ITTestBase {
   protected static final String HUDI_UTILITIES_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-utilities.jar";
   protected static final String HIVE_SERVER_JDBC_URL = "jdbc:hive2://hiveserver:10000";
+  protected static final String PRESTO_COORDINATOR_URL = "presto-coordinator-1:8090";
   protected static final String HADOOP_CONF_DIR = "/etc/hadoop";
 
   // Skip these lines when capturing output from hive
@@ -104,6 +106,14 @@ public abstract class ITTestBase {
         .append(
             " --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 1G --num-executors 1 ")
         .append(" --packages com.databricks:spark-avro_2.11:4.0.0 ").append(" -i ").append(commandFile).toString();
+  }
+
+  static String getPrestoConsoleCommand(String commandFile) {
+    StringBuilder builder = new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
+        .append(" --catalog hive --schema default")
+        .append(" -f " + commandFile );
+    System.out.println("Presto comamnd " + builder.toString());
+    return builder.toString();
   }
 
   @Before
@@ -205,6 +215,20 @@ public abstract class ITTestBase {
     TestExecStartResultCallback callback =
         executeCommandStringInDocker(ADHOC_1_CONTAINER, sparkShellCmd, expectedToSucceed);
     return Pair.of(callback.getStdout().toString(), callback.getStderr().toString());
+  }
+
+  Pair<String, String> executePrestoCommandFile(String commandFile) throws Exception {
+    String prestoCmd = getPrestoConsoleCommand(commandFile);
+    TestExecStartResultCallback callback = executeCommandStringInDocker(PRESTO_COORDINATOR, prestoCmd, true);
+    return Pair.of(callback.getStdout().toString().trim(), callback.getStderr().toString().trim());
+  }
+
+  void executePrestoCopyCommand(String fromFile, String remotePath){
+    Container sparkWorkerContainer = runningContainers.get(PRESTO_COORDINATOR);
+    dockerClient.copyArchiveToContainerCmd(sparkWorkerContainer.getId())
+        .withHostResource(fromFile)
+        .withRemotePath(remotePath)
+        .exec();
   }
 
   private void saveUpLogs() {
