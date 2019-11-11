@@ -1,50 +1,47 @@
 ---
-title: Performance
+title: 性能
 keywords: hudi, index, storage, compaction, cleaning, implementation
 sidebar: mydoc_sidebar
 toc: false
 permalink: performance.html
 ---
 
-In this section, we go over some real world performance numbers for Hudi upserts, incremental pull and compare them against
-the conventional alternatives for achieving these tasks. 
+在本节中，我们将介绍一些有关Hudi插入更新、增量提取的实际性能数据，并将其与实现这些任务的其它传统工具进行比较。
 
-## Upserts
+## 插入更新
 
-Following shows the speed up obtained for NoSQL database ingestion, from incrementally upserting on a Hudi dataset on the copy-on-write storage,
-on 5 tables ranging from small to huge (as opposed to bulk loading the tables)
+下面显示了从NoSQL数据库摄取获得的速度提升，这些速度提升数据是通过在写入时复制存储上的Hudi数据集上插入更新而获得的，
+数据集包括5个从小到大的表（相对于批量加载表）。
 
 <figure>
     <img class="docimage" src="/images/hudi_upsert_perf1.png" alt="hudi_upsert_perf1.png" style="max-width: 1000px" />
 </figure>
 
-Given Hudi can build the dataset incrementally, it opens doors for also scheduling ingesting more frequently thus reducing latency, with
-significant savings on the overall compute cost.
+由于Hudi可以通过增量构建数据集，它也为更频繁地调度摄取提供了可能性，从而减少了延迟，并显著节省了总体计算成本。
 
 <figure>
     <img class="docimage" src="/images/hudi_upsert_perf2.png" alt="hudi_upsert_perf2.png" style="max-width: 1000px" />
 </figure>
 
-Hudi upserts have been stress tested upto 4TB in a single commit across the t1 table. 
-See [here](https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide) for some tuning tips.
+Hudi插入更新在t1表的一次提交中就进行了高达4TB的压力测试。
+有关一些调优技巧，请参见[这里](https://cwiki.apache.org/confluence/display/HUDI/Tuning+Guide)。
 
-## Indexing
+## 索引
 
-In order to efficiently upsert data, Hudi needs to classify records in a write batch into inserts & updates (tagged with the file group 
-it belongs to). In order to speed this operation, Hudi employs a pluggable index mechanism that stores a mapping between recordKey and 
-the file group id it belongs to. By default, Hudi uses a built in index that uses file ranges and bloom filters to accomplish this, with
-upto 10x speed up over a spark join to do the same. 
+为了有效地插入更新数据，Hudi需要将要写入的批量数据中的记录分类为插入和更新（并标记它所属的文件组）。
+为了加快此操作的速度，Hudi采用了可插入索引机制，该机制存储了recordKey和它所属的文件组ID之间的映射。
+默认情况下，Hudi使用内置索引，该索引使用文件范围和布隆过滤器来完成此任务，相比于Spark Join，其速度最高可提高10倍。
 
-Hudi provides best indexing performance when you model the recordKey to be monotonically increasing (e.g timestamp prefix), leading to range pruning filtering
-out a lot of files for comparison. Even for UUID based keys, there are [known techniques](https://www.percona.com/blog/2014/12/19/store-uuid-optimized-way/) to achieve this.
-For e.g , with 100M timestamp prefixed keys (5% updates, 95% inserts) on a event table with 80B keys/3 partitions/11416 files/10TB data, Hudi index achieves a 
-**~7X (2880 secs vs 440 secs) speed up** over vanilla spark join. Even for a challenging workload like an '100% update' database ingestion workload spanning 
-3.25B UUID keys/30 partitions/6180 files using 300 cores, Hudi indexing offers a **80-100% speedup**.
+当您将recordKey建模为单调递增时（例如时间戳前缀），Hudi提供了最佳的索引性能，从而进行范围过滤来避免与许多文件进行比较。
+即使对于基于UUID的键，也有[已知技术](https://www.percona.com/blog/2014/12/19/store-uuid-optimized-way/)来达到同样目的。
+例如，在具有80B键、3个分区、11416个文件、10TB数据的事件表上使用100M个时间戳前缀的键（5％的更新，95％的插入）时，
+相比于原始Spark Join，Hudi索引速度的提升**约为7倍（440秒相比于2880秒）**。
+即使对于具有挑战性的工作负载，如使用300个核对3.25B UUID键、30个分区、6180个文件的“100％更新”的数据库摄取工作负载，Hudi索引也可以提供**80-100％的加速**。
 
-## Read Optimized Queries
+## 读优化查询
 
-The major design goal for read optimized view is to achieve the latency reduction & efficiency gains in previous section,
-with no impact on queries. Following charts compare the Hudi vs non-Hudi datasets across Hive/Presto/Spark queries and demonstrate this.
+读优化视图的主要设计目标是在不影响查询的情况下实现上一节中提到的延迟减少和效率提高。
+下图比较了对Hudi和非Hudi数据集的Hive、Presto、Spark查询，并对此进行说明。
 
 **Hive**
 
