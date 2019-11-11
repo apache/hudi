@@ -9,10 +9,10 @@ summary: 在这里，我们列出了所有可能的配置及其含义。
 该页面介绍了几种配置写入或读取Hudi数据集的作业的方法。
 简而言之，您可以在几个级别上控制行为。
 
-- **[Spark Datasource 配置](#spark-datasource)** : 这些配置控制Hudi Spark Datasource，提供如下功能：
+- **[Spark数据源配置](#spark-datasource)** : 这些配置控制Hudi Spark数据源，提供如下功能：
    定义键和分区、选择写操作、指定如何合并记录或选择要读取的视图类型。
 - **[WriteClient 配置](#writeclient-configs)** : 在内部，Hudi数据源使用基于RDD的`HoodieWriteClient` API
-   真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行性、压缩（compaction）、写入模式、清理等底层方面进行完全控制。
+   真正执行对存储的写入。 这些配置可对文件大小、压缩（compression）、并行度、压缩（compaction）、写入模式、清理等底层方面进行完全控制。
    尽管Hudi提供了合理的默认设置，但在不同情形下，可能需要对这些配置进行调整以针对特定的工作负载进行优化。
 - **[RecordPayload 配置](#PAYLOAD_CLASS_OPT_KEY)** : 这是Hudi提供的最底层的定制。
    RecordPayload定义了如何根据传入的新记录和存储的旧记录来产生新值以进行插入更新。
@@ -21,14 +21,14 @@ summary: 在这里，我们列出了所有可能的配置及其含义。
  
 ### 与云存储连接
 
-无论使用RDD/WriteClient API还是Datasource，以下信息有助于配置对云存储的访问。
+无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。
 
  * [AWS S3](s3_hoodie.html) <br/>
    S3和Hudi协同工作所需的配置。
  * [Google Cloud Storage](gcs_hoodie.html) <br/>
    GCS和Hudi协同工作所需的配置。
 
-### Spark Datasource 配置 {#spark-datasource}
+### Spark数据源配置 {#spark-datasource}
 
 可以通过将以下选项传递到`option(k,v)`方法中来配置使用数据源的Spark作业。
 实际的数据源级别配置在下面列出。
@@ -40,7 +40,7 @@ summary: 在这里，我们列出了所有可能的配置及其含义。
 ```
 inputDF.write()
 .format("org.apache.hudi")
-.options(clientOpts) // 任何Hudi客户端选择都可以传入
+.options(clientOpts) // 任何Hudi客户端选项都可以传入
 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
 .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
 .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
@@ -72,7 +72,7 @@ inputDF.write()
 ##### PAYLOAD_CLASS_OPT_KEY {#PAYLOAD_CLASS_OPT_KEY}
   属性：`hoodie.datasource.write.payload.class`, 默认值：`org.apache.hudi.OverwriteWithLatestAvroPayload` <br/>
   <span style="color:grey">使用的有效载荷类。如果您想在插入更新或插入时使用自己的合并逻辑，请重写此方法。
-  这将使为`PRECOMBINE_FIELD_OPT_VAL`设置的任何值无效</span>
+  这将使得`PRECOMBINE_FIELD_OPT_VAL`设置的任何值无效</span>
   
 ##### RECORDKEY_FIELD_OPT_KEY {#RECORDKEY_FIELD_OPT_KEY}
   属性：`hoodie.datasource.write.recordkey.field`, 默认值：`uuid` <br/>
@@ -91,7 +91,7 @@ inputDF.write()
 ##### COMMIT_METADATA_KEYPREFIX_OPT_KEY {#COMMIT_METADATA_KEYPREFIX_OPT_KEY}
   属性：`hoodie.datasource.write.commitmeta.key.prefix`, 默认值：`_` <br/>
   <span style="color:grey">以该前缀开头的选项键会自动添加到提交/增量提交的元数据中。
-  这对于以与hudi时间轴一致的方式存储检查点信息很有用</span>
+  这对于与hudi时间轴一致的方式存储检查点信息很有用</span>
 
 ##### INSERT_DROP_DUPS_OPT_KEY {#INSERT_DROP_DUPS_OPT_KEY}
   属性：`hoodie.datasource.write.insert.drop.duplicates`, 默认值：`false` <br/>
@@ -127,7 +127,7 @@ inputDF.write()
   
 ##### HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY {#HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY}
   属性：`hoodie.datasource.hive_sync.partition_extractor_class`, 默认值：`org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor` <br/>
-  <span style="color:grey">用于将分区字段值提取到配置单元分区列中的类。</span>
+  <span style="color:grey">用于将分区字段值提取到Hive分区列中的类。</span>
   
 ##### HIVE_ASSUME_DATE_PARTITION_OPT_KEY {#HIVE_ASSUME_DATE_PARTITION_OPT_KEY}
   属性：`hoodie.datasource.hive_sync.assume_date_partitioning`, 默认值：`false` <br/>
@@ -150,8 +150,8 @@ inputDF.write()
 例如：'20170901080000'将获取2017年9月1日08:00 AM之后写入的所有新数据。</span>
  
 ##### END_INSTANTTIME_OPT_KEY {#END_INSTANTTIME_OPT_KEY}
-属性：`hoodie.datasource.read.end.instanttime`, 默认值：latest instant (i.e fetches all new data since begin instant time) <br/>
-<span style="color:grey">将增量提取的数据限制到的即时时间。取出以`instant_time <= END_INSTANTTIME`写入的新数据。</span>
+属性：`hoodie.datasource.read.end.instanttime`, 默认值：最新即时（即从开始即时获取所有新数据） <br/>
+<span style="color:grey">限制增量提取的数据的即时时间。取出以`instant_time <= END_INSTANTTIME`写入的新数据。</span>
 
 
 ### WriteClient 配置 {#writeclient-configs}
@@ -221,7 +221,7 @@ Hudi将有关提交、保存点、清理审核日志等的所有主要元数据�
 ##### withConsistencyCheckEnabled(enabled = false) {#withConsistencyCheckEnabled} 
 属性：`hoodie.consistency.check.enabled`<br/>
 <span style="color:grey">HoodieWriteClient是否应该执行其他检查，以确保写入的文件在基础文件系统/存储上可列出。
-将其设置为true可以解决S3的最终一致性模型，并确保作为提交的一部分写入的所有数据均能忠实地用于查询。</span>
+将其设置为true可以解决S3的最终一致性模型，并确保作为提交的一部分写入的所有数据均能准确地用于查询。</span>
 
 #### 索引配置
 以下配置控制索引行为，该行为将传入记录标记为对较旧记录的插入或更新。
@@ -253,11 +253,11 @@ Hudi将有关提交、保存点、清理审核日志等的所有主要元数据�
 
 ##### bloomIndexUseCaching(useCaching = true) {#bloomIndexUseCaching}
 属性：`hoodie.bloom.index.use.caching` <br/>
-<span style="color:grey">仅在索引类型为BLOOM时适用。<br/>为true时，将通过减少用于计算并行性或受影响分区的IO来缓存输入的RDD以加快索引查找</span>
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br/>为true时，将通过减少用于计算并行度或受影响分区的IO来缓存输入的RDD以加快索引查找</span>
 
 ##### bloomIndexTreebasedFilter(useTreeFilter = true) {#bloomIndexTreebasedFilter}
 属性：`hoodie.bloom.index.use.treebased.filter` <br/>
-<span style="color:grey">仅在索引类型为BLOOM时适用。<br/>为true时，启用基于间隔树的文件过滤优化。与蛮力模式相比，此模式可根据键范围加快文件过滤速度</span>
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br/>为true时，启用基于间隔树的文件过滤优化。与暴力模式相比，此模式可根据键范围加快文件过滤速度</span>
 
 ##### bloomIndexBucketizedChecking(bucketizedChecking = true) {#bloomIndexBucketizedChecking}
 属性：`hoodie.bloom.index.bucketized.checking` <br/>
@@ -271,7 +271,7 @@ Hudi将有关提交、保存点、清理审核日志等的所有主要元数据�
 
 ##### bloomIndexParallelism(0) {#bloomIndexParallelism}
 属性：`hoodie.bloom.index.parallelism` <br/>
-<span style="color:grey">仅在索引类型为BLOOM时适用。<br/>这是索引查找的并行性，其中涉及Spark Shuffle。 默认情况下，这是根据输入的工作负载特征自动计算的</span>
+<span style="color:grey">仅在索引类型为BLOOM时适用。<br/>这是索引查找的并行度，其中涉及Spark Shuffle。 默认情况下，这是根据输入的工作负载特征自动计算的</span>
 
 ##### hbaseZkQuorum(zkString) [必须] {#hbaseZkQuorum}  
 属性：`hoodie.index.hbase.zkquorum` <br/>
@@ -366,7 +366,7 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 
 ##### insertSplitSize(size = 500000) {#insertSplitSize} 
 属性：`hoodie.copyonwrite.insert.split.size` <br/>
-<span style="color:grey">插入写入并行性。为单个分区的总共插入次数。
+<span style="color:grey">插入写入并行度。为单个分区的总共插入次数。
 写出100MB的文件，至少1kb大小的记录，意味着每个文件有100K记录。默认值是超额配置为500K。
 为了改善插入延迟，请对其进行调整以匹配单个文件中的记录数。
 将此值设置为较小的值将导致文件变小（尤其是当compactionSmallFileSize为0时）</span>
@@ -378,7 +378,7 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 ##### approxRecordSize(size = 1024) {#approxRecordSize} 
 属性：`hoodie.copyonwrite.record.size.estimate` <br/>
 <span style="color:grey">平均记录大小。如果指定，hudi将使用它，并且不会基于最后24个提交的元数据动态地计算。
-没有默认值设置。这对于计算插入并行性以及将插入打包到小文件中至关重要。如上所述。</span>
+没有默认值设置。这对于计算插入并行度以及将插入打包到小文件中至关重要。如上所述。</span>
 
 ##### withInlineCompaction(inlineCompaction = false) {#withInlineCompaction} 
 属性：`hoodie.compact.inline` <br/>
