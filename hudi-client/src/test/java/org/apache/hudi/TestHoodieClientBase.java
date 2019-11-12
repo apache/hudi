@@ -368,7 +368,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * @return Cleaner state corresponding to partition path
    */
   HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo, String partitionPath) {
-    return hoodieCleanStatsTwo.stream().filter(e -> e.getPartitionPath().equals(partitionPath)).findFirst().get();
+    return hoodieCleanStatsTwo.stream().filter(e -> e.getPartitionPath().equals(partitionPath)).findFirst().orElse(null);
   }
 
   /**

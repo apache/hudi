@@ -115,7 +115,7 @@ public class HoodieCleanStat implements Serializable {
 
     public Builder withEarliestCommitRetained(Option<HoodieInstant> earliestCommitToRetain) {
       this.earliestCommitToRetain =
-          (earliestCommitToRetain.isPresent()) ? earliestCommitToRetain.get().getTimestamp() : "-1";
+          (earliestCommitToRetain.isPresent()) ? earliestCommitToRetain.get().getTimestamp() : "";
       return this;
     }
 
@@ -123,5 +123,17 @@ public class HoodieCleanStat implements Serializable {
       return new HoodieCleanStat(policy, partitionPath, deletePathPatterns, successDeleteFiles, failedDeleteFiles,
           earliestCommitToRetain);
     }
+  }
+
+  @Override
+  public String toString() {
+    return "HoodieCleanStat{"
+        + "policy=" + policy
+        + ", partitionPath='" + partitionPath + '\''
+        + ", deletePathPatterns=" + deletePathPatterns
+        + ", successDeleteFiles=" + successDeleteFiles
+        + ", failedDeleteFiles=" + failedDeleteFiles
+        + ", earliestCommitToRetain='" + earliestCommitToRetain + '\''
+        + '}';
   }
 }
