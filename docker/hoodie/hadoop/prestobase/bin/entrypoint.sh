@@ -57,6 +57,9 @@ do
     cat ${conf_file}.mustache | mustache.sh > ${conf_file}
 done
 
+# Copy the presto bundle at run time so that locally built bundle overrides the one that is present in the image
+cp ${HUDI_PRESTO_BUNDLE} ${PRESTO_HOME}/plugin/hive-hadoop2/
+
 case "$1" in
     "coordinator" | "worker" )
         server_role="$1"
