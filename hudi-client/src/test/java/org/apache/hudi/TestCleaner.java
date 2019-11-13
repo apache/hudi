@@ -499,7 +499,7 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "001", file1P0C0); // update
     HoodieTestUtils.createDataFile(basePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "001", file1P1C0); // update
 
-    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);;
+    List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
     assertEquals("Must clean 1 file", 1,
         getCleanStat(hoodieCleanStatsTwo, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
             .size());
@@ -525,7 +525,7 @@ public class TestCleaner extends TestHoodieClientBase {
     String file3P0C2 =
         HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "002");
 
-    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);;
+    List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
     assertEquals("Must clean two files", 2,
         getCleanStat(hoodieCleanStatsThree, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
             .getSuccessDeleteFiles().size());
@@ -583,7 +583,7 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieTestUtils.createCompactionCommitFiles(fs, basePath, "001");
 
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);;
+    List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
     assertEquals("Must clean three files, one parquet and 2 log files", 3,
         getCleanStat(hoodieCleanStats, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).getSuccessDeleteFiles()
             .size());
