@@ -131,7 +131,7 @@
 
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
-    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark231.yml</dockerCompose.file>
+    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244.yml</dockerCompose.file>
     <skipITs>false</skipITs>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <checkstyle.skip>true</checkstyle.skip>
@@ -201,7 +201,7 @@
             <configuration>
               <skip>${docker.compose.skip}</skip>
               <host>unix:///var/run/docker.sock</host>
-              <composeFile>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark231.yml</composeFile>
+              <composeFile>${dockerCompose.file}</composeFile>
               <detachedMode>true</detachedMode>
               <envFile>${dockerCompose.envFile}</envFile>
             </configuration>
@@ -214,7 +214,7 @@
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
-              <composeFile>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark231.yml</composeFile>
+              <composeFile>${dockerCompose.file}</composeFile>
               <removeVolumes>true</removeVolumes>
             </configuration>
           </execution>
