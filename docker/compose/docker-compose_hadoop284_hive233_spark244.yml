@@ -22,7 +22,7 @@ services:
     hostname: namenode
     container_name: namenode
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark231
+      - CLUSTER_NAME=hudi_hadoop284_hive232_spark244
     ports:
       - "50070:50070"
       - "8020:8020"
@@ -39,7 +39,7 @@ services:
     container_name: datanode1
     hostname: datanode1
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark231
+      - CLUSTER_NAME=hudi_hadoop284_hive232_spark244
     env_file:
       - ./hadoop.env
     ports:
@@ -61,7 +61,7 @@ services:
     hostname: historyserver
     container_name: historyserver
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark231
+      - CLUSTER_NAME=hudi_hadoop284_hive232_spark244
     depends_on:
       - "namenode"
     links:
@@ -128,7 +128,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   sparkmaster:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_2.4.4:latest
     hostname: sparkmaster
     container_name: sparkmaster
     env_file:
@@ -145,7 +145,7 @@ services:
       - "namenode"
 
   spark-worker-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_2.4.4:latest
     hostname: spark-worker-1
     container_name: spark-worker-1
     env_file:
@@ -218,7 +218,7 @@ services:
       command: worker
 
   adhoc-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -239,7 +239,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   adhoc-2:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.3.1:latest
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_2.4.4:latest
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:
