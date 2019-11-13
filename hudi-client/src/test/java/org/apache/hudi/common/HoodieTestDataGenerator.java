@@ -302,7 +302,8 @@ public class HoodieTestDataGenerator {
   }
 
   /**
-   * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned list
+   * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
+   * list
    *
    * @param commitTime Commit Timestamp
    * @param n Number of updates (including dups)
@@ -327,6 +328,17 @@ public class HoodieTestDataGenerator {
    */
   public List<HoodieRecord> generateUniqueUpdates(String commitTime, Integer n) {
     return generateUniqueUpdatesStream(commitTime, n).collect(Collectors.toList());
+  }
+
+  /**
+   * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
+   *
+   * @param commitTime Commit Timestamp
+   * @param n Number of unique records
+   * @return list of hoodie record updates
+   */
+  public List<HoodieKey> generateUniqueDeletes(String commitTime, Integer n) {
+    return generateUniqueDeleteStream(commitTime, n).collect(Collectors.toList());
   }
 
   /**
@@ -360,6 +372,33 @@ public class HoodieTestDataGenerator {
     });
   }
 
+  /**
+   * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
+   *
+   * @param commitTime Commit Timestamp
+   * @param n Number of unique records
+   * @return stream of hoodie record updates
+   */
+  public Stream<HoodieKey> generateUniqueDeleteStream(String commitTime, Integer n) {
+    final Set<KeyPartition> used = new HashSet<>();
+
+    if (n > numExistingKeys) {
+      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+    }
+
+    return IntStream.range(0, n).boxed().map(i -> {
+      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
+      KeyPartition kp = existingKeys.get(index);
+      // Find the available keyPartition starting from randomly chosen one.
+      while (used.contains(kp)) {
+        index = (index + 1) % numExistingKeys;
+        kp = existingKeys.get(index);
+      }
+      used.add(kp);
+      return kp.key;
+    });
+  }
+
   public String[] getPartitionPaths() {
     return partitionPaths;
   }
@@ -369,6 +408,7 @@ public class HoodieTestDataGenerator {
   }
 
   public static class KeyPartition implements Serializable {
+
     HoodieKey key;
     String partitionPath;
   }

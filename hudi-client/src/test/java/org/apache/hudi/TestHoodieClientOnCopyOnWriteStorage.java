@@ -275,6 +275,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, writeFn, isPrepped, true,
         numRecords, 200, 2);
+
+    // Delete 1
+    prevCommitTime = newCommitTime;
+    newCommitTime = "005";
+    numRecords = 50;
+
+    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+        initCommitTime, numRecords, HoodieWriteClient::delete, isPrepped, true,
+        0, 150);
   }
 
   /**
@@ -641,7 +650,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     }
 
     // delete non existant keys
-
     String commitTime5 = "005";
     client.startCommitWithTime(commitTime5);
 
@@ -653,8 +661,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     assertNoWriteErrors(statuses);
 
-    assertEquals("Just 1 file needs to be added.", 1, statuses.size());
-    assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
+    assertEquals("Just 0 file needs to be added.", 0, statuses.size());
 
     // Check the entire dataset has all records still
     fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
@@ -663,11 +670,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     }
     assertEquals("Must contain " + 110 + " records", 110,
         HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
-
-    newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals("file should contain 110 records", readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
-        110);
-
   }
 
 

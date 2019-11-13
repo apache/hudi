@@ -95,6 +95,8 @@ import scala.Tuple2;
 public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
   private static Logger logger = LogManager.getLogger(HoodieWriteClient.class);
+  private static final String UPDATE_STR = "update";
+  private static final String LOOKUP_STR = "lookup";
   private final boolean rollbackInFlight;
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
@@ -104,18 +106,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private transient Timer.Context indexTimer = null;
 
   /**
-   * @param jsc
-   * @param clientConfig
-   * @throws Exception
+   *
    */
   public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) throws Exception {
     this(jsc, clientConfig, false);
   }
 
   /**
-   * @param jsc
-   * @param clientConfig
-   * @param rollbackInFlight
+   *
    */
   public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackInFlight) {
     this(jsc, clientConfig, rollbackInFlight, HoodieIndex.createIndex(clientConfig, jsc));
@@ -151,7 +149,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
     indexTimer = metrics.getIndexCtx();
     JavaRDD<HoodieRecord<T>> recordsWithLocation = index.tagLocation(hoodieRecords, jsc, table);
-    metrics.updateIndexMetrics("lookup", metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+    metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     indexTimer = null;
     return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
   }
@@ -169,7 +167,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       indexTimer = metrics.getIndexCtx();
       // perform index loop up to get existing location of records
       JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table);
-      metrics.updateIndexMetrics("lookup", metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+      metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
       indexTimer = null;
       return upsertRecordsInternal(taggedRecords, commitTime, table, true);
     } catch (Throwable e) {
@@ -327,22 +325,35 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Deletes a bunch of keys from the Hoodie table, at the supplied commitTime
+   * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied commitTime {@link HoodieKey}s will be
+   * deduped and non existant keys will be removed before deleting.
+   *
+   * @param keys {@link List} of {@link HoodieKey}s to be deleted
+   * @param commitTime Commit time handle
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, final String commitTime) {
     HoodieTable<T> table = getTableAndInitCtx();
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieKey> dedupedKeys =
-          combineKeysOnCondition(config.shouldCombineBeforeUpsert(), keys, config.getUpsertShuffleParallelism());
+          config.shouldCombineBeforeDelete() ? deduplicateKeys(keys, config.getDeleteShuffleParallelism()) : keys;
 
-      JavaRDD<HoodieRecord<T>> dedupedRecords = generateHoodieRecordsToDeleteFromKeys(dedupedKeys);
+      JavaRDD<HoodieRecord<T>> dedupedRecords =
+          dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
       indexTimer = metrics.getIndexCtx();
       // perform index loop up to get existing location of records
       JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table);
-      metrics.updateIndexMetrics("lookup", metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
-      indexTimer = null;
-      return upsertRecordsInternal(taggedRecords, commitTime, table, true);
+      // filter out non existant keys/records
+      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(record -> record.getCurrentLocation() != null);
+      if (!taggedValidRecords.isEmpty()) {
+        metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+        indexTimer = null;
+        return upsertRecordsInternal(taggedValidRecords, commitTime, table, true);
+      } else {
+        // if entire set of keys are non existent
+        return jsc.emptyRDD();
+      }
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
         throw (HoodieUpsertException) e;
@@ -393,18 +404,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private JavaRDD<HoodieRecord<T>> combineOnCondition(boolean condition, JavaRDD<HoodieRecord<T>> records,
       int parallelism) {
     return condition ? deduplicateRecords(records, parallelism) : records;
-  }
-
-  private JavaRDD<HoodieKey> combineKeysOnCondition(boolean condition, JavaRDD<HoodieKey> keys,
-      int parallelism) {
-    if (condition) {
-      return deduplicateKeys(keys, parallelism);
-    }
-    return keys;
-  }
-
-  private JavaRDD<HoodieRecord<T>> generateHoodieRecordsToDeleteFromKeys(JavaRDD<HoodieKey> keys) {
-    return keys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
   }
 
   /**
@@ -486,7 +485,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     indexTimer = metrics.getIndexCtx();
     // Update the index back
     JavaRDD<WriteStatus> statuses = index.updateLocation(writeStatusRDD, jsc, table);
-    metrics.updateIndexMetrics("update", metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+    metrics.updateIndexMetrics(UPDATE_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
     indexTimer = null;
     // Trigger the insert and collect statuses
     commitOnAutoCommit(commitTime, statuses, table.getMetaClient().getCommitActionType());
