@@ -27,12 +27,14 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieStorageWriter;
 import org.apache.hudi.io.storage.HoodieStorageWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -57,7 +59,12 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
 
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId) {
-    super(config, commitTime, fileId, hoodieTable);
+    this(config, commitTime, hoodieTable, partitionPath, fileId, generateOriginalAndHoodieWriteSchema(config));
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+      String partitionPath, String fileId, Pair<Schema, Schema> originalAndHoodieSchema) {
+    super(config, commitTime, fileId, hoodieTable, originalAndHoodieSchema);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -81,7 +88,14 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator) {
-    this(config, commitTime, hoodieTable, partitionPath, fileId);
+    this(config, commitTime, hoodieTable, partitionPath, fileId, recordIterator,
+        generateOriginalAndHoodieWriteSchema(config));
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
+      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator,
+      Pair<Schema, Schema> originalAndHoodieSchema) {
+    this(config, commitTime, hoodieTable, partitionPath, fileId, originalAndHoodieSchema);
     this.recordIterator = recordIterator;
     this.useWriterSchema = true;
   }

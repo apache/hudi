@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
+import org.apache.hudi.bootstrap.MetadataOnlyBootstrapSelector;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -98,12 +99,29 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   private ConsistencyGuardConfig consistencyGuardConfig;
 
+  public enum BootstrapMode {
+    FULL_BOOTSTRAP,
+    METADATA_ONLY_BOOTSTRAP
+  }
+
+  private static final String SOURCE_BASE_PATH_PROP = "hoodie.bootstrap.source.base.path";
+  private static final String BOOTSTRAP_PARTITION_SELECTOR = "hoodie.bootstrap.partition.selector";
+  // Expect configurations of format col1,col2,col3 ....
+  private static final String BOOTSTRAP_RECORDKEY_COLUMNS = "hoodie.bootstrap.recordkey.columns";
+  private static final String BOOTSTRAP_PARALLELISM = "hoodie.bootstrap.parallelism";
+  private static final String DEFAULT_BOOTSTRAP_PARALLELISM = "1500";
+  private static final String BOOTSTRAP_METADATA_WRITER_PARALLELISM  = "hoodie.bootstrap.metadata.writer.parallelism";
+  private static final String DEFAULT_BOOTSTRAP_METADATA_WRITER_PARALLELISM = "100";
+  private static final String BOOTSTRAP_METADATA_WRITER_MAX_SIZE_PER_FILE  =
+      "hoodie.bootstrap.metadata.writer.maxSizeInBytes";
+  private static final String DEFAULT_METADATA_WRITER_MAX_SIZE_PER_FILE = String.valueOf(1024L * 1024L * 1024L);
+
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
   // We keep track of original config and rewritten config
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
 
-  private HoodieWriteConfig(Properties props) {
+  protected HoodieWriteConfig(Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
@@ -543,9 +561,33 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public String getBootstrapSourceBasePath() {
+    return props.getProperty(SOURCE_BASE_PATH_PROP);
+  }
+
+  public String getPartitionSelectorClass() {
+    return props.getProperty(BOOTSTRAP_PARTITION_SELECTOR);
+  }
+
+  public String getBootstrapRecordKeyColumns() {
+    return props.getProperty(BOOTSTRAP_RECORDKEY_COLUMNS);
+  }
+
+  public int getBootstrapParallelism() {
+    return Integer.parseInt(props.getProperty(BOOTSTRAP_PARALLELISM));
+  }
+
+  public int getBootstrapMetadataWriterParallelism() {
+    return Integer.parseInt(props.getProperty(BOOTSTRAP_METADATA_WRITER_PARALLELISM));
+  }
+
+  public long getBootstrapMetadataWriterMaxFileSizeInBytes() {
+    return Long.parseLong(props.getProperty(BOOTSTRAP_METADATA_WRITER_MAX_SIZE_PER_FILE));
+  }
+
   public static class Builder {
 
-    private final Properties props = new Properties();
+    protected final Properties props = new Properties();
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
@@ -697,7 +739,42 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public HoodieWriteConfig build() {
+    public Builder withBootstrapSourceBasePath(String basePath) {
+      props.setProperty(SOURCE_BASE_PATH_PROP, basePath);
+      return this;
+    }
+
+    public Builder withBootstrapPartitionSelector(String partitionSelectorClass) {
+      props.setProperty(BOOTSTRAP_PARTITION_SELECTOR, partitionSelectorClass);
+      return this;
+    }
+
+    public Builder withBootstrapRecordKeyColumns(String recordKeyColumnsCsv) {
+      props.setProperty(BOOTSTRAP_RECORDKEY_COLUMNS, recordKeyColumnsCsv);
+      return this;
+    }
+
+    public Builder withBootstrapParallelism(int parallelism) {
+      props.setProperty(BOOTSTRAP_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withBootstrapMetadataWriterParallelism(int parallelism) {
+      props.setProperty(BOOTSTRAP_METADATA_WRITER_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withBootstrapMetadataWriterMaxFileSizeInBytes(long maxFileSizeInBytes) {
+      props.setProperty(BOOTSTRAP_METADATA_WRITER_MAX_SIZE_PER_FILE, String.valueOf(maxFileSizeInBytes));
+      return this;
+    }
+
+    public Builder withProperties(Properties properties) {
+      this.props.putAll(properties);
+      return this;
+    }
+
+    protected void setDefaults() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
@@ -744,13 +821,24 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isConsistencyGuardSet,
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_PARALLELISM), BOOTSTRAP_PARALLELISM,
+          DEFAULT_BOOTSTRAP_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_METADATA_WRITER_PARALLELISM),
+          BOOTSTRAP_METADATA_WRITER_PARALLELISM, DEFAULT_BOOTSTRAP_METADATA_WRITER_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_METADATA_WRITER_MAX_SIZE_PER_FILE),
+          BOOTSTRAP_METADATA_WRITER_MAX_SIZE_PER_FILE, DEFAULT_METADATA_WRITER_MAX_SIZE_PER_FILE);
+      setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_PARTITION_SELECTOR), BOOTSTRAP_PARTITION_SELECTOR,
+          MetadataOnlyBootstrapSelector.class.getCanonicalName());
 
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
       String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
+    }
 
+    public HoodieWriteConfig build() {
+      setDefaults();
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);
       Preconditions.checkArgument(config.getBasePath() != null);

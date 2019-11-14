@@ -18,6 +18,8 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.bootstrap.HoodieBootstrapClient;
+import org.apache.hudi.bootstrap.MetadataOnlyBootstrapSelector;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -26,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStat;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -155,6 +158,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
       assertTrue("After explicit commit, commit file should be created",
           HoodieTestUtils.doesCommitExist(basePath, newCommitTime));
     }
+
+    String newBasePath = basePath + "_2";
+    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), newBasePath, HoodieTableType.COPY_ON_WRITE,
+        "dummy2", "archived");
+    HoodieWriteConfig config = getConfigBuilder().withPath(newBasePath)
+        .withBootstrapPartitionSelector(MetadataOnlyBootstrapSelector.class.getCanonicalName())
+        .withBootstrapSourceBasePath(cfg.getBasePath())
+        .withBootstrapParallelism(2)
+        .withBootstrapMetadataWriterParallelism(1)
+        .withBootstrapRecordKeyColumns("_row_key")
+        .build();
+    HoodieBootstrapClient bootstrapClient = new HoodieBootstrapClient(jsc, config);
+    bootstrapClient.bootstrap();
+    assertTrue("After bootstrap, Bootstrap commit file should be created",
+        HoodieTestUtils.doesCommitExist(newBasePath, HoodieTimeline.BOOTSTRAP_INSTANT_TS));
   }
 
   /**

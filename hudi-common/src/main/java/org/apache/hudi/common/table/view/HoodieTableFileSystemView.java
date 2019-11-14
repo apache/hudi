@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.ExternalDataFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -59,6 +60,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fgIdToPendingCompaction;
 
   /**
+   * PartitionPath + File-Id to external Data File (Index Only bootstrapped).
+   */
+  protected Map<HoodieFileGroupId, ExternalDataFile> fgIdToExternalDataFile;
+
+  /**
    * Flag to determine if closed.
    */
   private boolean closed = false;
@@ -93,6 +99,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected void resetViewState() {
     this.fgIdToPendingCompaction = null;
     this.partitionToFileGroupsMap = null;
+    this.fgIdToExternalDataFile = null;
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -102,6 +109,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, Pair<String, CompactionOperation>> createFileIdToPendingCompactionMap(
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> fileIdToPendingCompaction) {
     return fileIdToPendingCompaction;
+  }
+
+  protected Map<HoodieFileGroupId, ExternalDataFile> createFileIdToExternalDataFileMap(
+      Map<HoodieFileGroupId, ExternalDataFile> fileGroupIdExternalDataFileMap) {
+    return fileGroupIdExternalDataFileMap;
   }
 
   /**
@@ -182,6 +194,48 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected boolean isExternalDataFilePresentForFileId(HoodieFileGroupId fgId) {
+    return fgIdToExternalDataFile.containsKey(fgId);
+  }
+
+  @Override
+  void resetExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream) {
+    // Build fileId to External Data File
+    this.fgIdToExternalDataFile = createFileIdToExternalDataFileMap(externalDataFileStream
+        .collect(Collectors.toMap(ExternalDataFile::getFileGroupId, x -> x)));
+  }
+
+  @Override
+  void addExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream) {
+    externalDataFileStream.forEach(externalDataFile -> {
+      Preconditions.checkArgument(!fgIdToExternalDataFile.containsKey(externalDataFile.getFileGroupId()),
+          "Duplicate FileGroupId found in external data file mapping. FgId :"
+              + externalDataFile.getFileGroupId());
+      fgIdToExternalDataFile.put(externalDataFile.getFileGroupId(), externalDataFile);
+    });
+  }
+
+  @Override
+  void removeExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream) {
+    externalDataFileStream.forEach(externalDataFile -> {
+      Preconditions.checkArgument(fgIdToExternalDataFile.containsKey(externalDataFile.getFileGroupId()),
+          "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
+              + externalDataFile.getFileGroupId());
+      fgIdToExternalDataFile.remove(externalDataFile.getFileGroupId());
+    });
+  }
+
+  @Override
+  protected Option<ExternalDataFile> getExternalDataFile(HoodieFileGroupId fileGroupId) {
+    return Option.ofNullable(fgIdToExternalDataFile.get(fileGroupId));
+  }
+
+  @Override
+  Stream<ExternalDataFile> fetchExternalDataFiles() {
+    return fgIdToExternalDataFile.values().stream();
+  }
+
+  @Override
   protected Option<Pair<String, CompactionOperation>> getPendingCompactionOperationWithInstant(HoodieFileGroupId fgId) {
     return Option.ofNullable(fgIdToPendingCompaction.get(fgId));
   }
@@ -210,6 +264,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     super.reset();
     partitionToFileGroupsMap = null;
     fgIdToPendingCompaction = null;
+    fgIdToExternalDataFile = null;
   }
 
   public boolean isClosed() {

@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.KeyGenerator;
 import org.apache.hudi.WriteStatus;
+import org.apache.hudi.bootstrap.HoodieBootstrapClient;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -213,22 +214,28 @@ public class DeltaSync implements Serializable {
     // Refresh Timeline
     refreshTimeline();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
+    if ((cfg.operation == Operation.BOOTSTRAP) || (!commitTimelineOpt.isPresent()
+        || (commitTimelineOpt.get().filterCompletedInstants().empty() && cfg.enableBootstrap))) {
+      log.info("Bootstrap is enabled. Running it");
+      HoodieBootstrapClient bootstrapClient = new HoodieBootstrapClient(jssc, getHoodieClientConfig(null));
+      bootstrapClient.bootstrap();
+    } else {
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
 
-    if (null != srcRecordsWithCkpt) {
-      // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
-      // compactor
-      if (null == schemaProvider) {
-        // Set the schemaProvider if not user-provided
-        this.schemaProvider = srcRecordsWithCkpt.getKey();
-        // Setup HoodieWriteClient and compaction now that we decided on schema
-        setupWriteClient();
+      if (null != srcRecordsWithCkpt) {
+        // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
+        // compactor
+        if (null == schemaProvider) {
+          // Set the schemaProvider if not user-provided
+          this.schemaProvider = srcRecordsWithCkpt.getKey();
+          // Setup HoodieWriteClient and compaction now that we decided on schema
+          setupWriteClient();
+        }
+
+        scheduledCompaction = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
+            srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
       }
-
-      scheduledCompaction = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
-          srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
-
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
     return scheduledCompaction;

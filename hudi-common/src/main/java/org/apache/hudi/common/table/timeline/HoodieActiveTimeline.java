@@ -227,6 +227,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
+    System.out.println("Marking instant complete " + instant);
     LOG.info("Marking instant complete " + instant);
     Preconditions.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
@@ -399,6 +400,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         createFileInMetaPath(fromInstant.getFileName(), data, false);
         Path fromInstantPath = new Path(metaClient.getMetaPath(), fromInstant.getFileName());
         Path toInstantPath = new Path(metaClient.getMetaPath(), toInstant.getFileName());
+        LOG.info("Renaming " + fromInstantPath + " to " + toInstantPath);
+        System.out.println("Renaming " + fromInstantPath + " to " + toInstantPath);
         boolean success = metaClient.getFs().rename(fromInstantPath, toInstantPath);
         if (!success) {
           throw new HoodieIOException("Could not rename " + fromInstantPath + " to " + toInstantPath);
@@ -410,7 +413,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
             fromInstant.getFileName())));
         // Use Write Once to create Target File
         createImmutableFileInPath(new Path(metaClient.getMetaPath(), toInstant.getFileName()), data);
-        LOG.info("Create new file for toInstant ?" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
+        LOG.info("Created new file for toInstant =" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
+        System.out.println("Created new file for toInstant =" + new Path(metaClient.getMetaPath(), toInstant.getFileName()));
+
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);

@@ -26,4 +26,8 @@ spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from s
 spark.sql("select symbol, max(ts) from stock_ticks_mor_rt group by symbol HAVING symbol = 'GOOG'").show(100, false)
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG'").show(100, false)
 
+// Copy COW as parquet dataset for bootstrap
+val df = spark.sql("select _hoodie_record_key, volume, ts, symbol, year, month, high, low key, date, close, open, day, dt from stock_ticks_cow")
+df.withColumnRenamed("_hoodie_record_key", "_row_key").write.parquet("/user/hive/warehouse/stock_ticks_cow_parquet")
+
 System.exit(0)

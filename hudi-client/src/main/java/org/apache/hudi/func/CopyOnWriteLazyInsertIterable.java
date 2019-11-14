@@ -135,8 +135,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
       final HoodieRecord insertPayload = payload.record;
       // lazily initialize the handle, for the first time
       if (handle == null) {
-        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix));
+        handle = getCreateHandle(insertPayload);
       }
 
       if (handle.canWrite(payload.record)) {
@@ -146,10 +145,14 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
         // handle is full.
         statuses.add(handle.close());
         // Need to handle the rejected payload & open new handle
-        handle = new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, insertPayload.getPartitionPath(),
-            getNextFileId(idPrefix));
+        handle = getCreateHandle(insertPayload);
         handle.write(insertPayload, payload.insertValue, payload.exception); // we should be able to write 1 payload.
       }
+    }
+
+    protected HoodieCreateHandle getCreateHandle(HoodieRecord record) {
+      return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, record.getPartitionPath(),
+          getNextFileId(idPrefix));
     }
 
     @Override

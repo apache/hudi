@@ -22,6 +22,9 @@ import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.bootstrap.BootstrapKeyGenerator;
+import org.apache.hudi.bootstrap.BootstrapWriteStatus;
+import org.apache.hudi.bootstrap.BootstrapWriteStatus.BootstrapSourceInfo;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -49,11 +53,14 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.func.CopyOnWriteLazyInsertIterable;
 import org.apache.hudi.func.ParquetReaderIterator;
 import org.apache.hudi.func.SparkBoundedInMemoryExecutor;
+import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.io.HoodieCleanHelper;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 
 import com.google.common.hash.Hashing;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -62,7 +69,12 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.format.converter.ParquetMetadataConverter;
+import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.schema.MessageType;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -155,6 +167,54 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   @Override
   public boolean isWorkloadProfileNeeded() {
     return true;
+  }
+
+  @Override
+  public BootstrapWriteStatus handleMetadataBootstrap(BootstrapSourceInfo bootstrapSourceInfo, String partitionPath,
+      BootstrapKeyGenerator keyGenerator) {
+
+    Path sourceFilePath = new Path(FSUtils.getPartitionPath(bootstrapSourceInfo.getBootstrapBasePath(),
+        bootstrapSourceInfo.getBootstrapPartitionPath()), bootstrapSourceInfo.getFileName());
+    HoodieBootstrapHandle bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.BOOTSTRAP_INSTANT_TS,
+        this, partitionPath, FSUtils.createNewFileIdPfx());
+    try {
+      ParquetMetadata readFooter = ParquetFileReader.readFooter(getHadoopConf(), sourceFilePath,
+          ParquetMetadataConverter.NO_FILTER);
+      MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
+      Schema avroSchema = new AvroSchemaConverter().convert(parquetSchema);
+      Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema,
+          keyGenerator.getTopLevelKeyColumns());
+      logger.info("Schema to be used for reading record Keys :" + recordKeySchema);
+      AvroReadSupport.setAvroReadSchema(getHadoopConf(), recordKeySchema);
+      AvroReadSupport.setRequestedProjection(getHadoopConf(), recordKeySchema);
+
+      BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
+      try (ParquetReader<IndexedRecord> reader =
+          AvroParquetReader.<IndexedRecord>builder(sourceFilePath).withConf(getHadoopConf()).build()) {
+        wrapper = new SparkBoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config,
+            new ParquetReaderIterator(reader), new BootstrapHandler(bootstrapHandle), inp -> {
+          String recKey = keyGenerator.getRecordKey(inp);
+          GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
+          BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
+          HoodieRecord rec = new HoodieRecord(new HoodieKey(recKey, partitionPath), payload);
+          return rec;
+        });
+        wrapper.execute();
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      } finally {
+        bootstrapHandle.close();
+        if (null != wrapper) {
+          wrapper.shutdownNow();
+        }
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus)bootstrapHandle.getWriteStatus();
+    writeStatus.setBootstrapSourceInfo(bootstrapSourceInfo);
+    return writeStatus;
   }
 
   @Override
@@ -431,6 +491,35 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
     @Override
     protected void consumeOneRecord(GenericRecord record) {
       upsertHandle.write(record);
+    }
+
+    @Override
+    protected void finish() {}
+
+    @Override
+    protected Void getResult() {
+      return null;
+    }
+  }
+
+  /**
+   * Consumer that dequeues records from queue and sends to Merge Handle
+   */
+  private static class BootstrapHandler extends BoundedInMemoryQueueConsumer<HoodieRecord, Void> {
+
+    private final HoodieBootstrapHandle bootstrapHandle;
+
+    private BootstrapHandler(HoodieBootstrapHandle bootstrapHandle) {
+      this.bootstrapHandle = bootstrapHandle;
+    }
+
+    @Override
+    protected void consumeOneRecord(HoodieRecord record) {
+      try {
+        bootstrapHandle.write(record, record.getData().getInsertValue(bootstrapHandle.getWriterSchema()));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
     }
 
     @Override
@@ -777,5 +866,30 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       LOG.error("Error trying to compute average bytes/record ", t);
     }
     return avgSize;
+  }
+
+  private static class BootstrapRecordPayload implements HoodieRecordPayload<BootstrapRecordPayload> {
+
+    private final GenericRecord record;
+
+    public BootstrapRecordPayload(GenericRecord record) {
+      this.record = record;
+    }
+
+    @Override
+    public BootstrapRecordPayload preCombine(BootstrapRecordPayload another) {
+      return this;
+    }
+
+    @Override
+    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema)
+        throws IOException {
+      return Option.ofNullable(record);
+    }
+
+    @Override
+    public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+      return Option.ofNullable(record);
+    }
   }
 }

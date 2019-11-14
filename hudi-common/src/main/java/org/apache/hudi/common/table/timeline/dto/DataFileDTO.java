@@ -35,6 +35,8 @@ public class DataFileDTO {
   private String fullPath;
   @JsonProperty("fileLen")
   private long fileLen;
+  @JsonProperty("externalDataFile")
+  private String externalDataFile;
 
   public static HoodieDataFile toHoodieDataFile(DataFileDTO dto) {
     if (null == dto) {
@@ -48,6 +50,7 @@ public class DataFileDTO {
       dataFile = new HoodieDataFile(dto.fullPath);
       dataFile.setFileLen(dto.fileLen);
     }
+    dataFile.setExternalDataFile(dto.externalDataFile);
     return dataFile;
   }
 
@@ -60,6 +63,7 @@ public class DataFileDTO {
     dto.fileStatus = FileStatusDTO.fromFileStatus(dataFile.getFileStatus());
     dto.fullPath = dataFile.getPath();
     dto.fileLen = dataFile.getFileLen();
+    dto.externalDataFile = dataFile.getExternalDataFile().orElse(null);
     return dto;
   }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.SimpleKeyGenerator;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
@@ -61,6 +62,7 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -331,7 +333,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testBulkInsertsAndUpserts() throws Exception {
+  public void testBulkInsertsUpsertsAndBootstrapWriteOnly() throws Exception {
     String datasetBasePath = dfsBasePath + "/test_dataset";
 
     // Initial bulk insert
@@ -357,6 +359,31 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
     assertEquals(2000, counts.get(0).getLong(1));
+
+    // bootstrap
+    String newDatasetBasePath = dfsBasePath + "/test_dataset_bootstrapped";
+    cfg.enableBootstrap = true;
+    cfg.configs.add(String.format("hoodie.bootstrap.source.base.path=%s", cfg.targetBasePath));
+    cfg.configs.add(String.format("hoodie.bootstrap.recordkey.columns=%s", "_row_key"));
+    cfg.configs.add("hoodie.bootstrap.metadata.parallelism=5");
+    cfg.targetBasePath = newDatasetBasePath;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath + "/*/*.parquet");
+    log.info("Schema :");
+    res.printSchema();
+
+    // 3000 because original source is treated as non-hoodie source when in fact it was a hoodie source
+    TestHelpers.assertRecordCount(3000, newDatasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
+    Assert.assertEquals(2000, res.select(HoodieRecord.RECORD_KEY_METADATA_FIELD).distinct().count());
+
+    StructField[] fields = res.schema().fields();
+    Assert.assertEquals(5, fields.length);
+    Assert.assertEquals(HoodieRecord.COMMIT_TIME_METADATA_FIELD, fields[0].name());
+    Assert.assertEquals(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, fields[1].name());
+    Assert.assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, fields[2].name());
+    Assert.assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, fields[3].name());
+    Assert.assertEquals(HoodieRecord.FILENAME_METADATA_FIELD, fields[4].name());
   }
 
   @Test

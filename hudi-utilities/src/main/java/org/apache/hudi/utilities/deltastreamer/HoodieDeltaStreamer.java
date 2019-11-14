@@ -35,7 +35,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.JsonDFSSource;
+import org.apache.hudi.utilities.sources.NoOpRowSource;
 
 import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.JCommander;
@@ -112,7 +112,7 @@ public class HoodieDeltaStreamer implements Serializable {
    * @throws Exception
    */
   public void sync() throws Exception {
-    if (cfg.continuousMode) {
+    if (cfg.continuousMode && (cfg.operation != Operation.BOOTSTRAP)) {
       deltaSyncService.start(this::onDeltaSyncShutdown);
       deltaSyncService.waitForShutdown();
       LOG.info("Delta Sync shutting down");
@@ -137,7 +137,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public enum Operation {
-    UPSERT, INSERT, BULK_INSERT
+    UPSERT, INSERT, BULK_INSERT, BOOTSTRAP
   }
 
   private static class OperationConvertor implements IStringConverter<Operation> {
@@ -179,7 +179,7 @@ public class HoodieDeltaStreamer implements Serializable {
         description = "Subclass of org.apache.hudi.utilities.sources to read data. "
             + "Built-in options: org.apache.hudi.utilities.sources.{JsonDFSSource (default), AvroDFSSource, "
             + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
-    public String sourceClassName = JsonDFSSource.class.getName();
+    public String sourceClassName = NoOpRowSource.class.getName();
 
     @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
@@ -270,6 +270,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
+
+    @Parameter(names = {"--enable-bootstrap"}, description = "Bootstrap if bootstrap commit is not found")
+    public Boolean enableBootstrap = false;
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction

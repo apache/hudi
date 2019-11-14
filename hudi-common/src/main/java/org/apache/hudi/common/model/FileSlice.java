@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -52,11 +53,23 @@ public class FileSlice implements Serializable {
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
+  public FileSlice(FileSlice fileSlice) {
+    this.baseInstantTime = fileSlice.baseInstantTime;
+    this.dataFile = fileSlice.dataFile != null ? new HoodieDataFile(fileSlice.dataFile) : null;
+    this.fileGroupId = fileSlice.fileGroupId;
+    this.logFiles = new TreeSet<>(fileSlice.logFiles.stream().map(lf -> new HoodieLogFile(lf))
+        .collect(Collectors.toList()));
+  }
+
   public FileSlice(String partitionPath, String baseInstantTime, String fileId) {
     this(new HoodieFileGroupId(partitionPath, fileId), baseInstantTime);
   }
 
   public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime) {
+    this(fileGroupId, baseInstantTime, null);
+  }
+
+  public FileSlice(HoodieFileGroupId fileGroupId, String baseInstantTime, String externalDataFile) {
     this.fileGroupId = fileGroupId;
     this.baseInstantTime = baseInstantTime;
     this.dataFile = null;

@@ -22,6 +22,9 @@ import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.bootstrap.BootstrapKeyGenerator;
+import org.apache.hudi.bootstrap.BootstrapWriteStatus;
+import org.apache.hudi.bootstrap.BootstrapWriteStatus.BootstrapSourceInfo;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
@@ -256,8 +259,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
   /**
+   * Perform metadata bootstrap for a given external source file.
+   * @param bootstrapSourceInfo External non hoodie file information
+   * @param partitionPath Partition Path
+   * @param keyGenerator Record Key Generator
+   * @return BootstrapWriteStatus
+   */
+  public abstract BootstrapWriteStatus handleMetadataBootstrap(BootstrapSourceInfo bootstrapSourceInfo,
+      String partitionPath, BootstrapKeyGenerator keyGenerator);
+
+  /**
    * Schedule compaction for the instant time.
-   * 
+   *
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
    * @return

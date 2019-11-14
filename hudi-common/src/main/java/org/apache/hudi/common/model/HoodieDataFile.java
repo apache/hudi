@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -35,16 +36,38 @@ public class HoodieDataFile implements Serializable {
   private final String fullPath;
   private long fileLen;
 
+  /**
+   * In case of index-only bootstrap, this file points to the actual data
+   */
+  private Option<String> externalDataFile;
+
+  public HoodieDataFile(HoodieDataFile dataFile) {
+    this.fileStatus = dataFile.fileStatus;
+    this.fullPath = dataFile.fullPath;
+    this.fileLen = dataFile.fileLen;
+    this.externalDataFile = dataFile.externalDataFile;
+  }
+
   public HoodieDataFile(FileStatus fileStatus) {
+    this(fileStatus, null);
+  }
+
+  public HoodieDataFile(FileStatus fileStatus, String externalDataFile) {
     this.fileStatus = fileStatus;
     this.fullPath = fileStatus.getPath().toString();
     this.fileLen = fileStatus.getLen();
+    this.externalDataFile = Option.ofNullable(externalDataFile);
   }
 
   public HoodieDataFile(String filePath) {
+    this(filePath, null);
+  }
+
+  public HoodieDataFile(String filePath, String externalDataFile) {
     this.fileStatus = null;
     this.fullPath = filePath;
     this.fileLen = -1;
+    this.externalDataFile = Option.ofNullable(externalDataFile);
   }
 
   public String getFileId() {
@@ -79,6 +102,14 @@ public class HoodieDataFile implements Serializable {
     return fileLen;
   }
 
+  public Option<String> getExternalDataFile() {
+    return externalDataFile;
+  }
+
+  public void setExternalDataFile(String externalDataFile) {
+    this.externalDataFile = Option.ofNullable(externalDataFile);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -98,6 +129,7 @@ public class HoodieDataFile implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieDataFile{fullPath=" + fullPath + ", fileLen=" + fileLen + '}';
+    return "HoodieDataFile{" + "fullPath=" + fullPath + ", fileLen=" + fileLen
+        + ", ExternalDataFile=" + externalDataFile.orElse(null) + '}';
   }
 }

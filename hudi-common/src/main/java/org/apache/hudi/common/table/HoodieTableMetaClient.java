@@ -70,6 +70,9 @@ public class HoodieTableMetaClient implements Serializable {
   public static String METAFOLDER_NAME = ".hoodie";
   public static String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
   public static String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
+  public static String BOOTSTRAP_META_ROOT = METAFOLDER_NAME + File.separator + ".bootstrap";
+  public static String BOOTSTRAP_META_IDX = BOOTSTRAP_META_ROOT + File.separator + ".idx";
+
   public static final String MARKER_EXTN = ".marker";
 
   private String basePath;
@@ -165,6 +168,7 @@ public class HoodieTableMetaClient implements Serializable {
     return metaPath;
   }
 
+
   /**
    * @return Temp Folder path
    */
@@ -187,6 +191,20 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getMetaAuxiliaryPath() {
     return basePath + File.separator + AUXILIARYFOLDER_NAME;
+  }
+
+  /**
+   * @return Root Directory containing Bootstrap folder
+   */
+  public String getMetaBootstrapPath() {
+    return basePath + File.separator + BOOTSTRAP_META_ROOT;
+  }
+
+  /**
+   * @return Root Directory containing Bootstrap Index folder
+   */
+  public String getMetaBootstrapIndexPath() {
+    return basePath + File.separator + BOOTSTRAP_META_IDX;
   }
 
   /**
@@ -355,6 +373,12 @@ public class HoodieTableMetaClient implements Serializable {
     final Path auxiliaryFolder = new Path(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
     if (!fs.exists(auxiliaryFolder)) {
       fs.mkdirs(auxiliaryFolder);
+    }
+
+    // This should create both bootstrap data and bootstrap index folders
+    final Path bootstrapIdxFolder = new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_META_IDX);
+    if (!fs.exists(bootstrapIdxFolder)) {
+      fs.mkdirs(bootstrapIdxFolder);
     }
 
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);

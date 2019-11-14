@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.SerializableConfiguration;
+import org.apache.hudi.common.io.storage.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -46,13 +48,17 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -196,6 +202,38 @@ public class FSUtils {
       return true;
     }, true);
     return partitions;
+  }
+
+  public static List<Pair<String, List<String>>> getAllLeafFoldersWithFiles(FileSystem fs, String basePathStr,
+      PathFilter filePathFilter) throws IOException {
+    final Path basePath = new Path(basePathStr);
+    final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
+    final Map<String, List<String>> partitionToFiles = new HashMap<>();
+    System.out.print("BASE PAth is " + basePathStr);
+    processFiles(fs, basePathStr, (status) -> {
+      if (status.isFile() && filePathFilter.accept(status.getPath())) {
+        System.out.print("Processing File :" + status.getPath());
+        String relativePath = FSUtils.getRelativePartitionPath(basePath, status.getPath().getParent());
+        List<String> files = partitionToFiles.get(relativePath);
+        if (null == files) {
+          Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
+          List<String> dirs = levelToPartitions.get(level);
+          if (null == dirs) {
+            dirs = new ArrayList<>();
+            levelToPartitions.put(level, dirs);
+          }
+          dirs.add(relativePath);
+          files = new ArrayList<>();
+          partitionToFiles.put(relativePath, files);
+        }
+        files.add(status.getPath().getName());
+      }
+      return true;
+    }, true);
+    OptionalInt maxLevelOpt = levelToPartitions.keySet().stream().mapToInt(x -> x).max();
+    int maxLevel = maxLevelOpt.orElse(-1);
+    return maxLevel >= 0 ? levelToPartitions.get(maxLevel).stream()
+        .map(d -> Pair.of(d, partitionToFiles.get(d))).collect(Collectors.toList()) : new ArrayList<>();
   }
 
   public static final List<String> getAllDataFilesForMarkers(FileSystem fs, String basePath, String instantTs,
@@ -549,5 +587,23 @@ public class FSUtils {
     return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
         || inputStream.getWrappedStream().getClass().getCanonicalName()
             .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
+  }
+
+  /**
+   * Get the FS implementation for this table.
+   * @param path  Path String
+   * @param hadoopConf  Serializable Hadoop Configuration
+   * @param consistencyGuardConfig Consistency Guard Config
+   * @return HoodieWrapperFileSystem
+   */
+  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
+      ConsistencyGuardConfig consistencyGuardConfig) {
+    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
+    Preconditions.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
+        "File System not expected to be that of HoodieWrapperFileSystem");
+    return new HoodieWrapperFileSystem(fileSystem,
+        consistencyGuardConfig.isConsistencyCheckEnabled()
+            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
+            : new NoOpConsistencyGuard());
   }
 }

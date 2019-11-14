@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.ExternalDataFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -262,6 +263,62 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   @Override
   Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
     return rocksDB.<Pair<String, CompactionOperation>>prefixSearch(schemaHelper.getColFamilyForPendingCompaction(), "")
+        .map(Pair::getValue);
+  }
+
+  @Override
+  protected boolean isExternalDataFilePresentForFileId(HoodieFileGroupId fgId) {
+    return getExternalDataFile(fgId).isPresent();
+  }
+
+  @Override
+  void resetExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream) {
+    rocksDB.writeBatch(batch -> {
+      externalDataFileStream.forEach(externalDataFile -> {
+        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForExternalDataFile(),
+            schemaHelper.getKeyForExternalDataFile(externalDataFile.getFileGroupId()), externalDataFile);
+      });
+      log.info("Initializing external data file mapping. Count=" + batch.count());
+    });
+  }
+
+  @Override
+  void addExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream) {
+    rocksDB.writeBatch(batch -> {
+      externalDataFileStream.forEach(externalDataFile -> {
+        Preconditions.checkArgument(!isExternalDataFilePresentForFileId(externalDataFile.getFileGroupId()),
+            "Duplicate FileGroupId found in external data file. FgId :" + externalDataFile.getFileGroupId());
+        rocksDB.putInBatch(batch, schemaHelper.getColFamilyForExternalDataFile(),
+            schemaHelper.getKeyForExternalDataFile(externalDataFile.getFileGroupId()), externalDataFile);
+      });
+    });
+  }
+
+  @Override
+  void removeExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream) {
+    rocksDB.writeBatch(batch -> {
+      externalDataFileStream.forEach(externalDataFile -> {
+        Preconditions.checkArgument(
+            getExternalDataFile(externalDataFile.getFileGroupId()) != null,
+            "Trying to remove a FileGroupId which is not found in external data file mapping. FgId :"
+                + externalDataFile.getFileGroupId());
+        rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForExternalDataFile(),
+            schemaHelper.getKeyForExternalDataFile(externalDataFile.getFileGroupId()));
+      });
+    });
+  }
+
+  @Override
+  protected Option<ExternalDataFile> getExternalDataFile(HoodieFileGroupId fileGroupId) {
+    String lookupKey = schemaHelper.getKeyForExternalDataFile(fileGroupId);
+    ExternalDataFile externalDataFile =
+        rocksDB.get(schemaHelper.getColFamilyForPendingCompaction(), lookupKey);
+    return Option.ofNullable(externalDataFile);
+  }
+
+  @Override
+  Stream<ExternalDataFile> fetchExternalDataFiles() {
+    return rocksDB.<ExternalDataFile>prefixSearch(schemaHelper.getColFamilyForExternalDataFile(), "")
         .map(Pair::getValue);
   }
 

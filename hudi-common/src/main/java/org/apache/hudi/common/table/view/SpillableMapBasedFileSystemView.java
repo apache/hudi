@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.ExternalDataFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -46,6 +47,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
   private final long maxMemoryForFileGroupMap;
   private final long maxMemoryForPendingCompaction;
+  private final long maxMemoryForExternalDataFile;
   private final String baseStoreDir;
 
   public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
@@ -53,6 +55,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     super(config.isIncrementalTimelineSyncEnabled());
     this.maxMemoryForFileGroupMap = config.getMaxMemoryForFileGroupMap();
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
+    this.maxMemoryForExternalDataFile = config.getMaxMemoryForExternalDataFile();
     this.baseStoreDir = config.getBaseStoreDir();
     init(metaClient, visibleActiveTimeline);
   }
@@ -91,6 +94,21 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     }
   }
 
+  protected Map<HoodieFileGroupId, ExternalDataFile> createFileIdToExternalDataFileMap(
+      Map<HoodieFileGroupId, ExternalDataFile> fileGroupIdExternalDataFileMap) {
+    try {
+      log.info("Creating External Data File Map using external spillable Map. Max Mem=" + maxMemoryForExternalDataFile
+          + ", BaseDir=" + baseStoreDir);
+      new File(baseStoreDir).mkdirs();
+      Map<HoodieFileGroupId, ExternalDataFile> pendingMap = new ExternalSpillableMap<>(
+          maxMemoryForExternalDataFile, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
+      pendingMap.putAll(fileGroupIdExternalDataFileMap);
+      return pendingMap;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   public Stream<HoodieFileGroup> getAllFileGroups() {
     return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream()
         .flatMap(fg -> ((List<HoodieFileGroup>) fg).stream());
@@ -99,7 +117,11 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   @Override
   Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations() {
     return ((ExternalSpillableMap) fgIdToPendingCompaction).valueStream();
+  }
 
+  @Override
+  Stream<ExternalDataFile> fetchExternalDataFiles() {
+    return ((ExternalSpillableMap) fgIdToExternalDataFile).valueStream();
   }
 
   @Override

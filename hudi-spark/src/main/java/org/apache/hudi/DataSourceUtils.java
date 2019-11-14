@@ -19,6 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -36,7 +37,6 @@ import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
 
-import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -46,7 +46,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Utilities used throughout the data source.
@@ -68,38 +67,14 @@ public class DataSourceUtils {
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName) {
-    Object obj = getNestedFieldVal(record, fieldName);
-    return (obj == null) ? null : obj.toString();
+    return ClientUtils.getNestedFieldValAsString(record, fieldName);
   }
 
   /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
    */
   public static Object getNestedFieldVal(GenericRecord record, String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    GenericRecord valueNode = record;
-    int i = 0;
-    for (; i < parts.length; i++) {
-      String part = parts[i];
-      Object val = valueNode.get(part);
-      if (val == null) {
-        break;
-      }
-
-      // return, if last part of name
-      if (i == parts.length - 1) {
-        return val;
-      } else {
-        // VC: Need a test here
-        if (!(val instanceof GenericRecord)) {
-          throw new HoodieException("Cannot find a record at part value :" + part);
-        }
-        valueNode = (GenericRecord) val;
-      }
-    }
-    throw new HoodieException(
-        fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
-            + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    return ClientUtils.getNestedFieldVal(record, fieldName);
   }
 
   /**

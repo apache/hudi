@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -59,8 +60,22 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     super(config, instantTime, hoodieTable);
     this.fileId = fileId;
     this.writeToken = makeSparkWriteToken();
-    this.originalSchema = new Schema.Parser().parse(config.getSchema());
-    this.writerSchema = createHoodieWriteSchema(originalSchema);
+    Pair<Schema, Schema> originalAndHoodieSchema = generateOriginalAndHoodieWriteSchema(config);
+
+    this.originalSchema = originalAndHoodieSchema.getKey();
+    this.writerSchema = originalAndHoodieSchema.getValue();
+    this.timer = new HoodieTimer().startTimer();
+    this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
+        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+  }
+
+  public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String fileId,
+      HoodieTable<T> hoodieTable, Pair<Schema, Schema> originalAndHoodieSchema) {
+    super(config, instantTime, hoodieTable);
+    this.fileId = fileId;
+    this.writeToken = makeSparkWriteToken();
+    this.originalSchema = originalAndHoodieSchema.getKey();
+    this.writerSchema = originalAndHoodieSchema.getValue();
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -74,8 +89,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
         TaskContext.get().taskAttemptId());
   }
 
-  public static Schema createHoodieWriteSchema(Schema originalSchema) {
-    return HoodieAvroUtils.addMetadataFields(originalSchema);
+  protected static Pair<Schema, Schema> generateOriginalAndHoodieWriteSchema(HoodieWriteConfig config) {
+    Schema originalSchema = new Schema.Parser().parse(config.getSchema());
+    Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
+    return Pair.of(originalSchema, hoodieSchema);
   }
 
   public Path makeNewPath(String partitionPath) {
