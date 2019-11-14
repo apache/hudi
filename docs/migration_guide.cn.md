@@ -42,16 +42,19 @@ Use the HDFSParquetImporter tool. As the name suggests, this only works if your 
 This tool essentially starts a Spark Job to read the existing parquet dataset and converts it into a HUDI managed dataset by re-writing all the data.
 
 #### Option 2
-For huge datasets, this could be as simple as : for partition in [list of partitions in source dataset] {
+For huge datasets, this could be as simple as : 
+```java
+for partition in [list of partitions in source dataset] {
         val inputDF = spark.read.format("any_input_format").load("partition_path")
         inputDF.write.format("org.apache.hudi").option()....save("basePath")
-        }      
+}
+```      
 
 #### Option 3
 Write your own custom logic of how to load an existing dataset into a Hudi managed one. Please read about the RDD API
  [here](quickstart.html).
 
-```
+```Java
 Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
 fired by via `cd hudi-cli && ./hudi-cli.sh`.
 

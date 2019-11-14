@@ -23,7 +23,7 @@ Hudi库使用.hoodie子文件夹跟踪所有元数据，从而有效地在内部
 
 初始化hudi表，可使用如下命令。
 
-```
+```Java
 18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
 ============================================
 *                                          *
@@ -44,7 +44,7 @@ hudi->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tab
 
 To see the description of hudi table, use the command:
 
-```
+```Java
 hoodie:hoodie_table_1->desc
 18/09/06 15:57:19 INFO timeline.HoodieActiveTimeline: Loaded instants []
     _________________________________________________________
@@ -60,7 +60,7 @@ hoodie:hoodie_table_1->desc
 
 以下是连接到包含uber trips的Hudi数据集的示例命令。
 
-```
+```Java
 hoodie:trips->connect --path /app/uber/trips
 
 16/10/05 23:20:37 INFO model.HoodieTableMetadata: Attempting to load the commits under /app/uber/trips/.hoodie with suffix .commit
@@ -73,7 +73,7 @@ hoodie:trips->
 连接到数据集后，便可使用许多其他命令。该shell程序具有上下文自动完成帮助(按TAB键)，下面是所有命令的列表，本节中对其中的一些命令进行了详细示例。
 
 
-```
+```Java
 hoodie:trips->help
 * ! - Allows execution of operating system (OS) commands
 * // - Inline comment markers (start of line only)
@@ -114,7 +114,7 @@ hoodie:trips->
 查看有关最近10次提交的一些基本信息，
 
 
-```
+```Java
 hoodie:trips->commits show --sortBy "Total Bytes Written" --desc true --limit 10
     ________________________________________________________________________________________________________________________________________________________________________
     | CommitTime    | Total Bytes Written| Total Files Added| Total Files Updated| Total Partitions Written| Total Records Written| Total Update Records Written| Total Errors|
@@ -127,7 +127,7 @@ hoodie:trips->
 
 在每次写入开始时，Hudi还将.inflight提交写入.hoodie文件夹。您可以使用那里的时间戳来估计正在进行的提交已经花费的时间
 
-```
+```Java
 $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 -rw-r--r--   3 vinoth supergroup     321984 2016-10-05 23:18 /app/uber/trips/.hoodie/20161005225920.inflight
 ```
@@ -138,7 +138,7 @@ $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 了解写入如何分散到特定分区，
 
 
-```
+```Java
 hoodie:trips->commit showpartitions --commit 20161005165855 --sortBy "Total Bytes Written" --desc true --limit 10
     __________________________________________________________________________________________________________________________________________
     | Partition Path| Total Files Added| Total Files Updated| Total Records Inserted| Total Records Updated| Total Bytes Written| Total Errors|
@@ -149,7 +149,7 @@ hoodie:trips->commit showpartitions --commit 20161005165855 --sortBy "Total Byte
 
 如果您需要文件级粒度，我们可以执行以下操作
 
-```
+```Java
 hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
     ________________________________________________________________________________________________________________________________________________________
     | Partition Path| File ID                             | Previous Commit| Total Records Updated| Total Records Written| Total Bytes Written| Total Errors|
@@ -163,7 +163,7 @@ hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
 
 Hudi将每个分区视为文件组的集合，每个文件组包含按提交顺序排列的文件切片列表(请参阅概念)。以下命令允许用户查看数据集的文件切片。
 
-```
+```Java
  hoodie:stock_ticks_mor->show fsview all
  ....
   _______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
@@ -189,7 +189,7 @@ Hudi将每个分区视为文件组的集合，每个文件组包含按提交顺�
 由于Hudi直接管理DFS数据集的文件大小，这些信息会帮助你全面了解Hudi的运行状况
 
 
-```
+```Java
 hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc true --limit 10
     ________________________________________________________________________________________________
     | CommitTime    | Min     | 10th    | 50th    | avg     | 95th    | Max     | NumFiles| StdDev  |
@@ -201,7 +201,7 @@ hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc 
 
 如果Hudi写入花费的时间更长，那么可以通过观察写放大指标来发现任何异常
 
-```
+```Java
 hoodie:trips->stats wa
     __________________________________________________________________________
     | CommitTime    | Total Upserted| Total Written| Write Amplifiation Factor|
@@ -220,7 +220,7 @@ hoodie:trips->stats wa
 
 要了解压缩和写程序之间的时滞，请使用以下命令列出所有待处理的压缩。
 
-```
+```Java
 hoodie:trips->compactions show all
      ___________________________________________________________________
     | Compaction Instant Time| State    | Total FileIds to be Compacted|
@@ -231,7 +231,7 @@ hoodie:trips->compactions show all
 
 要检查特定的压缩计划，请使用
 
-```
+```Java
 hoodie:trips->compaction show --instant <INSTANT_1>
     _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
     | Partition Path| File Id | Base Instant  | Data File Path                                    | Total Delta Files| getMetrics                                                                                                                    |
@@ -243,7 +243,7 @@ hoodie:trips->compaction show --instant <INSTANT_1>
 要手动调度或运行压缩，请使用以下命令。该命令使用spark启动器执行压缩操作。
 注意：确保没有其他应用程序正在同时调度此数据集的压缩
 
-```
+```Java
 hoodie:trips->help compaction schedule
 Keyword:                   compaction schedule
 Description:               Schedule Compaction
@@ -256,7 +256,7 @@ Description:               Schedule Compaction
 * compaction schedule - Schedule Compaction
 ```
 
-```
+```Java
 hoodie:trips->help compaction run
 Keyword:                   compaction run
 Description:               Run Compaction for given instant time
@@ -303,7 +303,7 @@ Description:               Run Compaction for given instant time
 
 验证压缩计划：检查压缩所需的所有文件是否都存在且有效
 
-```
+```Java
 hoodie:stock_ticks_mor->compaction validate --instant 20181005222611
 ...
 
@@ -336,7 +336,7 @@ hoodie:stock_ticks_mor->compaction validate --instant 20181005222601
 
 ##### 取消调度压缩
 
-```
+```Java
 hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
 ....
 No File renames needed to unschedule file from pending compaction. Operation successful.
@@ -344,7 +344,7 @@ No File renames needed to unschedule file from pending compaction. Operation suc
 
 在其他情况下，需要撤销整个压缩计划。以下CLI支持此功能
 
-```
+```Java
 hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
@@ -357,7 +357,7 @@ No File renames needed to unschedule pending compaction. Operation successful.
 当您运行`压缩验证`时，您会注意到无效的压缩操作(如果有的话)。
 在这种情况下，修复命令将立即执行，它将重新排列文件切片，以使文件不丢失，并且文件切片与压缩计划一致
 
-```
+```Java
 hoodie:stock_ticks_mor->compaction repair --instant 20181005222611
 ......
 Compaction successfully repaired

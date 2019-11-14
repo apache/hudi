@@ -23,7 +23,7 @@ The steps have been tested on a Mac laptop
   * /etc/hosts : The demo references many services running in container by the hostname. Add the following settings to /etc/hosts
 
 
-```
+```Java
    127.0.0.1 adhoc-1
    127.0.0.1 adhoc-2
    127.0.0.1 namenode
@@ -44,7 +44,7 @@ Also, this has not been tested on some environments like Docker on Windows.
 #### Build Hudi
 
 The first step is to build hudi
-```
+```Java
 cd <HUDI_WORKSPACE>
 mvn package -DskipTests
 ```
@@ -54,7 +54,7 @@ mvn package -DskipTests
 The next step is to run the docker compose script and setup configs for bringing up the cluster.
 This should pull the docker images from docker hub and setup docker cluster.
 
-```
+```Java
 cd docker
 ./setup_demo.sh
 ....
@@ -84,7 +84,7 @@ Creating spark-worker-1            ... done
 Copying spark default config and setting up configs
 Copying spark default config and setting up configs
 Copying spark default config and setting up configs
-varadarb-C02SG7Q3G8WP:docker varadarb$ docker ps
+$ docker ps
 ```
 
 At this point, the docker cluster will be up and running. The demo cluster brings up the following services
@@ -107,12 +107,10 @@ The batches are windowed intentionally so that the second batch contains updates
 
 #### Step 1 : Publish the first batch to Kafka
 
-Upload the first batch to Kafka topic 'stock ticks'
-
-```
-cat docker/demo/data/batch_1.json | kafkacat -b kafkabroker -t stock_ticks -P
+Upload the first batch to Kafka topic 'stock ticks' `cat docker/demo/data/batch_1.json | kafkacat -b kafkabroker -t stock_ticks -P`
 
 To check if the new topic shows up, use
+```Java
 kafkacat -b kafkabroker -L -J | jq .
 {
   "originating_broker": {
@@ -160,24 +158,16 @@ pull changes and apply to Hudi dataset using upsert/insert primitives. Here, we 
 json data from kafka topic and ingest to both COW and MOR tables we initialized in the previous step. This tool
 automatically initializes the datasets in the file-system if they do not exist yet.
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_cow dataset in HDFS
 spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type COPY_ON_WRITE --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_cow --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
-....
-....
-2018-09-24 22:20:00 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
-2018-09-24 22:20:00 INFO  SparkContext:54 - Successfully stopped SparkContext
-
 
 
 # Run the following spark-submit command to execute the delta-streamer and ingest to stock_ticks_mor dataset in HDFS
 spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE --storage-type MERGE_ON_READ --source-class org.apache.hudi.utilities.sources.JsonKafkaSource --source-ordering-field ts  --target-base-path /user/hive/warehouse/stock_ticks_mor --target-table stock_ticks_mor --props /var/demo/config/kafka-source.properties --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider --disable-compaction
-....
-2018-09-24 22:22:01 INFO  OutputCommitCoordinator$OutputCommitCoordinatorEndpoint:54 - OutputCommitCoordinator stopped!
-2018-09-24 22:22:01 INFO  SparkContext:54 - Successfully stopped SparkContext
-....
+
 
 # As part of the setup (Look at setup_demo.sh), the configs needed for DeltaStreamer is uploaded to HDFS. The configs
 # contain mostly Kafa connectivity settings, the avro-schema to be used for ingesting along with key and partitioning fields.
@@ -200,7 +190,7 @@ There will be a similar setup when you browse the MOR dataset
 At this step, the datasets are available in HDFS. We need to sync with Hive to create new Hive tables and add partitions
 inorder to run Hive queries against those datasets.
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 
 # THis command takes in HIveServer URL and COW Hudi Dataset location in HDFS and sync the HDFS state to Hive
@@ -231,7 +221,7 @@ Run a hive query to find the latest timestamp ingested for stock symbol 'GOOG'. 
 (for both COW and MOR dataset)and realtime views (for MOR dataset)give the same value "10:29 a.m" as Hudi create a
 parquet file for the first batch of data.
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
 # List Tables
@@ -334,7 +324,7 @@ exit
 Hudi support Spark as query processor just like Hive. Here are the same hive queries
 running in spark-sql
 
-```
+```Java
 docker exec -it adhoc-1 /bin/bash
 $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --master local[2] --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
 ...
@@ -432,7 +422,7 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 
 Here are the Presto queries for similar Hive and Spark queries. Currently, Hudi does not support Presto queries on realtime views.
 
-```
+```Java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
 presto> show catalogs;
   Catalog
@@ -524,7 +514,7 @@ presto:default> exit
 Upload the second batch of data and ingest this batch using delta-streamer. As this batch does not bring in any new
 partitions, there is no need to run hive-sync
 
-```
+```Java
 cat docker/demo/data/batch_2.json | kafkacat -b kafkabroker -t stock_ticks -P
 
 # Within Docker container, run the ingestion command
@@ -556,7 +546,7 @@ This is the time, when ReadOptimized and Realtime views will provide different r
 return "10:29 am" as it will only read from the Parquet file. Realtime View will do on-the-fly merge and return
 latest committed data which is "10:59 a.m".
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
 
@@ -627,7 +617,7 @@ exit
 
 Running the same queries in Spark-SQL:
 
-```
+```Java
 docker exec -it adhoc-1 /bin/bash
 bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
 
@@ -696,7 +686,7 @@ exit
 Running the same queries on Presto for ReadOptimized views. 
 
 
-```
+```Java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
 presto> use hive.default;
 USE
@@ -761,7 +751,7 @@ With 2 batches of data ingested, lets showcase the support for incremental queri
 
 Lets take the same projection query example
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
 
@@ -785,7 +775,7 @@ the commit time of the first batch (20180924064621) and run incremental query
 Hudi incremental mode provides efficient scanning for incremental queries by filtering out files that do not have any
 candidate rows using hudi-managed metadata.
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
 0: jdbc:hive2://hiveserver:10000> set hoodie.stock_ticks_cow.consume.mode=INCREMENTAL;
@@ -798,7 +788,7 @@ No rows affected (0.009 seconds)
 With the above setting, file-ids that do not have any updates from the commit 20180924065039 is filtered out without scanning.
 Here is the incremental query :
 
-```
+```Java
 0: jdbc:hive2://hiveserver:10000>
 0: jdbc:hive2://hiveserver:10000> select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG' and `_hoodie_commit_time` > '20180924064621';
 +----------------------+---------+----------------------+---------+------------+-----------+--+
@@ -811,7 +801,7 @@ Here is the incremental query :
 ```
 
 ##### Incremental Query with Spark SQL:
-```
+```Java
 docker exec -it adhoc-1 /bin/bash
 bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
 Welcome to
@@ -853,7 +843,7 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 Lets schedule and run a compaction to create a new version of columnar  file so that read-optimized readers will see fresher data.
 Again, You can use Hudi CLI to manually schedule and run compaction
 
-```
+```Java
 docker exec -it adhoc-1 /bin/bash
 root@adhoc-1:/opt#   /var/hoodie/ws/hudi-cli/hudi-cli.sh
 ============================================
@@ -946,7 +936,7 @@ Lets also run the incremental query for MOR table.
 From looking at the below query output, it will be clear that the fist commit time for the MOR table is 20180924064636
 and the second commit time is 20180924070031
 
-```
+```Java
 docker exec -it adhoc-2 /bin/bash
 beeline -u jdbc:hive2://hiveserver:10000 --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat --hiveconf hive.stats.autogather=false
 
@@ -1007,7 +997,7 @@ exit
 
 ##### Step 10: Read Optimized and Realtime Views for MOR with Spark-SQL after compaction
 
-```
+```Java
 docker exec -it adhoc-1 /bin/bash
 bash-4.4# $SPARK_INSTALL/bin/spark-shell --jars $HUDI_SPARK_BUNDLE --driver-class-path $HADOOP_CONF_DIR --conf spark.sql.hive.convertMetastoreParquet=false --deploy-mode client  --driver-memory 1G --master local[2] --executor-memory 3G --num-executors 1  --packages com.databricks:spark-avro_2.11:4.0.0
 
@@ -1047,7 +1037,7 @@ scala> spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close 
 
 ##### Step 11:  Presto queries over Read Optimized View on MOR dataset after compaction
 
-```
+```Java
 docker exec -it presto-worker-1 presto --server presto-coordinator-1:8090
 presto> use hive.default;
 USE
@@ -1084,7 +1074,7 @@ This brings the demo to an end.
 ## Testing Hudi in Local Docker environment
 
 You can bring up a hadoop docker environment containing Hadoop, Hive and Spark services with support for hudi.
-```
+```Java
 $ mvn pre-integration-test -DskipTests
 ```
 The above command builds docker images for all the services with
@@ -1092,13 +1082,13 @@ current Hudi source installed at /var/hoodie/ws and also brings up the services 
 currently use Hadoop (v2.8.4), Hive (v2.3.3) and Spark (v2.3.1) in docker images.
 
 To bring down the containers
-```
+```Java
 $ cd hudi-integ-test
 $ mvn docker-compose:down
 ```
 
 If you want to bring up the docker containers, use
-```
+```Java
 $ cd hudi-integ-test
 $  mvn docker-compose:up -DdetachedMode=true
 ```
@@ -1126,7 +1116,7 @@ run the script
 
 Here are the commands:
 
-```
+```Java
 cd docker
 ./build_local_docker_images.sh
 .....

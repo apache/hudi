@@ -21,7 +21,7 @@ Simplest way to use Hudi with S3, is to configure your `SparkSession` or `SparkC
 
 Alternatively, add the required configs in your core-site.xml from where Hudi can fetch them. Replace the `fs.defaultFS` with your S3 bucket name and Hudi should be able to read/write from the bucket.
 
-```
+```xml
   <property>
       <name>fs.defaultFS</name>
       <value>s3://ysharma</value>
@@ -57,7 +57,7 @@ Alternatively, add the required configs in your core-site.xml from where Hudi ca
 Utilities such as hudi-cli or deltastreamer tool, can pick up s3 creds via environmental variable prefixed with `HOODIE_ENV_`. For e.g below is a bash snippet to setup
 such variables and then have cli be able to work on datasets stored in s3
 
-```
+```Java
 export HOODIE_ENV_fs_DOT_s3a_DOT_access_DOT_key=$accessKey
 export HOODIE_ENV_fs_DOT_s3a_DOT_secret_DOT_key=$secretKey
 export HOODIE_ENV_fs_DOT_s3_DOT_awsAccessKeyId=$accessKey

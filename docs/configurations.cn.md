@@ -37,7 +37,7 @@ summary: 在这里，我们列出了所有可能的配置及其含义。
 
 另外，您可以使用`options()`或`option(k,v)`方法直接传递任何WriteClient级别的配置。
 
-```
+```Java
 inputDF.write()
 .format("org.apache.hudi")
 .options(clientOpts) // 任何Hudi客户端选项都可以传入
@@ -159,7 +159,7 @@ inputDF.write()
 直接使用RDD级别api进行编程的Jobs可以构建一个`HoodieWriteConfig`对象，并将其传递给`HoodieWriteClient`构造函数。
 HoodieWriteConfig可以使用以下构建器模式构建。
 
-```
+```Java
 HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .forTable(tableName)

@@ -92,13 +92,13 @@ Spark可将Hudi jars和捆绑包轻松部署和管理到作业/笔记本中。�
 要使用SparkSQL将RO表读取为Hive表，只需按如下所示将路径过滤器推入sparkContext。
 对于Hudi表，该方法保留了Spark内置的读取Parquet文件的优化功能，例如进行矢量化读取。
 
-```
+```Scala
 spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 ```
 
 如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark数据帧。
 
-```
+```Scala
 Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 // pass any path glob, can include hudi & non-hudi datasets
 .load("/glob/path/pattern");
@@ -108,7 +108,7 @@ Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 当前，实时表只能在Spark中作为Hive表进行查询。为了做到这一点，设置`spark.sql.hive.convertMetastoreParquet = false`，
 迫使Spark回退到使用Hive Serde读取数据（计划/执行仍然是Spark）。
 
-```
+```Scala
 $ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'").show()
@@ -118,7 +118,7 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
 `hudi-spark`模块提供了DataSource API，这是一种从Hudi数据集中提取数据并通过Spark处理数据的更优雅的方法。
 如下所示是一个示例增量拉取，它将获取自`beginInstantTime`以来写入的所有记录。
 
-```
+```Java
  Dataset<Row> hoodieIncViewDF = spark.read()
      .format("org.apache.hudi")
      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
