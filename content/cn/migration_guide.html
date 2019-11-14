@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -372,16 +372,18 @@ Take this approach if your dataset is an append only type of dataset and you do 
 This tool essentially starts a Spark Job to read the existing parquet dataset and converts it into a HUDI managed dataset by re-writing all the data.</p>
 
 <h4 id="option-2">Option 2</h4>
-<p>For huge datasets, this could be as simple as : for partition in [list of partitions in source dataset] {
-        val inputDF = spark.read.format(“any_input_format”).load(“partition_path”)
-        inputDF.write.format(“org.apache.hudi”).option()….save(“basePath”)
-        }</p>
+<p>For huge datasets, this could be as simple as :</p>
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">partition</span> <span class="n">in</span> <span class="o">[</span><span class="n">list</span> <span class="n">of</span> <span class="n">partitions</span> <span class="n">in</span> <span class="n">source</span> <span class="n">dataset</span><span class="o">]</span> <span class="o">{</span>
+        <span class="n">val</span> <span class="n">inputDF</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">read</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"any_input_format"</span><span class="o">).</span><span class="na">load</span><span class="o">(</span><span class="s">"partition_path"</span><span class="o">)</span>
+        <span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"org.apache.hudi"</span><span class="o">).</span><span class="na">option</span><span class="o">()....</span><span class="na">save</span><span class="o">(</span><span class="s">"basePath"</span><span class="o">)</span>
+<span class="o">}</span>
+</code></pre></div></div>
 
 <h4 id="option-3">Option 3</h4>
 <p>Write your own custom logic of how to load an existing dataset into a Hudi managed one. Please read about the RDD API
  <a href="quickstart.html">here</a>.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
+<pre><code class="language-Java">Using the HDFSParquetImporter Tool. Once hudi has been built via `mvn clean install -DskipTests`, the shell can be
 fired by via `cd hudi-cli &amp;&amp; ./hudi-cli.sh`.
 
 hudi-&gt;hdfsparquetimport
@@ -398,7 +400,7 @@ hudi-&gt;hdfsparquetimport
         --format parquet
         --sparkMemory 6g
         --retry 2
-</code></pre></div></div>
+</code></pre>
 
 
     <div class="tags">

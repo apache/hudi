@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -376,7 +376,7 @@
 
 <p>命令行选项更详细地描述了这些功能：</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
+<pre><code class="language-Java">[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: &lt;main class&gt; [options]
   Options:
     --commit-on-errors
@@ -445,7 +445,7 @@ Usage: &lt;main class&gt; [options]
       schema) before writing. Default : Not set. E:g -
       org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which
       allows a SQL query template to be passed as a transformation function)
-</code></pre></div></div>
+</code></pre>
 
 <p>该工具采用层次结构组成的属性文件，并具有可插拔的接口，用于提取数据、生成密钥和提供模式。
 从Kafka和DFS摄取数据的示例配置在这里：<code class="highlighter-rouge">hudi-utilities/src/test/resources/delta-streamer-config</code>。</p>
@@ -454,19 +454,19 @@ Usage: &lt;main class&gt; [options]
 （<a href="https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html">impressions.avro</a>，
 由schema-registry代码库提供）</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
-</code></pre></div></div>
+<pre><code class="language-Java">[confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
+</code></pre>
 
 <p>然后用如下命令摄取这些数据。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+<pre><code class="language-Java">[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
   --target-base-path file:///tmp/hudi-deltastreamer-op --target-table uber.impressions \
   --op BULK_INSERT
-</code></pre></div></div>
+</code></pre>
 
 <p>在某些情况下，您可能需要预先将现有数据集迁移到Hudi。 请参考<a href="migration_guide.html">迁移指南</a>。</p>
 
@@ -476,7 +476,7 @@ Usage: &lt;main class&gt; [options]
 以下是在指定需要使用的字段名称的之后，如何插入更新数据帧的方法，这些字段包括
 <code class="highlighter-rouge">recordKey =&gt; _row_key</code>、<code class="highlighter-rouge">partitionPath =&gt; partition</code>和<code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>inputDF.write()
+<pre><code class="language-Java">inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) // 可以传入任何Hudi客户端参数
        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
@@ -485,7 +485,7 @@ Usage: &lt;main class&gt; [options]
        .option(HoodieWriteConfig.TABLE_NAME, tableName)
        .mode(SaveMode.Append)
        .save(basePath);
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="与hive同步">与Hive同步</h2>
 
@@ -493,7 +493,7 @@ Usage: &lt;main class&gt; [options]
 如果需要从命令行或在独立的JVM中运行它，Hudi提供了一个<code class="highlighter-rouge">HiveSyncTool</code>，
 在构建了hudi-hive模块之后，可以按以下方式调用它。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd hudi-hive
+<pre><code class="language-Java">cd hudi-hive
 ./run_sync_tool.sh
  [hudi-hive]$ ./run_sync_tool.sh --help
 Usage: &lt;main class&gt; [options]
@@ -512,7 +512,7 @@ Usage: &lt;main class&gt; [options]
        name of the target table in Hive
   * --user
        Hive username
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="删除数据">删除数据</h2>
 
@@ -526,13 +526,13 @@ Usage: &lt;main class&gt; [options]
  Hudi附带了一个内置的<code class="highlighter-rouge">org.apache.hudi.EmptyHoodieRecordPayload</code>类，它就是实现了这一功能。</li>
 </ul>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> deleteDF // 仅包含要删除的记录的数据帧
+<pre><code class="language-Java"> deleteDF // 仅包含要删除的记录的数据帧
    .write().format("org.apache.hudi")
    .option(...) // 根据设置需要添加HUDI参数，例如记录键、分区路径和其他参数
    // 指定record_key，partition_key，precombine_fieldkey和常规参数
    .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
  
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="存储管理">存储管理</h2>
 
