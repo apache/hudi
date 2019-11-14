@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -343,28 +343,16 @@
 <p>本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新的Hudi默认存储类型数据集：
 <a href="https://hudi.apache.org/concepts.html#copy-on-write-storage">写时复制</a>。每次写操作之后，我们还将展示如何读取快照和增量读取数据。</p>
 
-<h2 id="编译hudi-spark整包">编译Hudi spark整包</h2>
-<p>Hudi要求在*nix系统上安装Java 8。Git检出<a href="https://github.com/apache/incubator-hudi">代码</a>，并通过命令行构建maven项目:</p>
-
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code># 检出和编译
-git clone https://github.com/apache/incubator-hudi.git &amp;&amp; cd incubator-hudi
-mvn clean install -DskipTests -DskipITs
-
-# 为后续使用导入hudi-spark-bundle位置
-mkdir -p /tmp/hudi &amp;&amp; cp packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar  /tmp/hudi/hudi-spark-bundle.jar
-export HUDI_SPARK_BUNDLE_PATH=/tmp/hudi/hudi-spark-bundle.jar
-</code></pre></div></div>
-
 <h2 id="设置spark-shell">设置spark-shell</h2>
 <p>Hudi适用于Spark-2.x版本。您可以按照<a href="https://spark.apache.org/downloads.html">此处</a>的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bin/spark-shell --jars $HUDI_SPARK_BUNDLE_PATH --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-</code></pre></div></div>
+<pre><code class="language-Scala">bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+</code></pre>
 
 <p>设置表名、基本路径和数据生成器来为本指南生成记录。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>import org.apache.hudi.QuickstartUtils._
+<pre><code class="language-Java">import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._
 import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
@@ -374,7 +362,7 @@ import org.apache.hudi.config.HoodieWriteConfig._
 val tableName = "hudi_cow_table"
 val basePath = "file:///tmp/hudi_cow_table"
 val dataGen = new DataGenerator
-</code></pre></div></div>
+</code></pre>
 
 <p><a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java">数据生成器</a>
 可以基于<a href="https://github.com/apache/incubator-hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57">行程样本模式</a>
@@ -383,7 +371,7 @@ val dataGen = new DataGenerator
 <h2 id="inserts">插入数据</h2>
 <p>生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>val inserts = convertToStringList(dataGen.generateInserts(10))
+<pre><code class="language-Java">val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("org.apache.hudi").
     options(getQuickstartWriteConfigs).
@@ -393,7 +381,7 @@ df.write.format("org.apache.hudi").
     option(TABLE_NAME, tableName).
     mode(Overwrite).
     save(basePath);
-</code></pre></div></div>
+</code></pre>
 
 <p><code class="highlighter-rouge">mode(Overwrite)</code>覆盖并重新创建数据集(如果已经存在)。
 您可以检查在<code class="highlighter-rouge">/tmp/hudi_cow_table/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>下生成的数据。我们提供了一个记录键
@@ -408,14 +396,14 @@ df.write.format("org.apache.hudi").
 
 <p>将数据文件加载到数据帧中。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>val roViewDF = spark.
+<pre><code class="language-Java">val roViewDF = spark.
     read.
     format("org.apache.hudi").
     load(basePath + "/*/*/*/*")
 roViewDF.registerTempTable("hudi_ro_table")
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare &gt; 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
-</code></pre></div></div>
+</code></pre>
 
 <p>该查询提供已提取数据的读取优化视图。由于我们的分区路径(<code class="highlighter-rouge">region/country/city</code>)是嵌套的3个级别
 从基本路径开始，我们使用了<code class="highlighter-rouge">load(basePath + "/*/*/*/*")</code>。
@@ -425,7 +413,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 <p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到数据帧并将数据帧写入hudi数据集。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>val updates = convertToStringList(dataGen.generateUpdates(10))
+<pre><code class="language-Java">val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));
 df.write.format("org.apache.hudi").
     options(getQuickstartWriteConfigs).
@@ -435,7 +423,7 @@ df.write.format("org.apache.hudi").
     option(TABLE_NAME, tableName).
     mode(Append).
     save(basePath);
-</code></pre></div></div>
+</code></pre>
 
 <p>注意，保存模式现在为<code class="highlighter-rouge">追加</code>。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
 <a href="#query">查询</a>现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的<a href="http://hudi.incubator.apache.org/concepts.html">commit</a>
@@ -447,7 +435,7 @@ df.write.format("org.apache.hudi").
 这可以通过使用Hudi的增量视图并提供所需更改的开始时间来实现。
 如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k =&gt; k.getString(0)).take(50)
+<pre><code class="language-Java">val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k =&gt; k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // 增量查询数据
@@ -459,7 +447,7 @@ val incViewDF = spark.
     load(basePath);
 incViewDF.registerTempTable("hudi_incr_table")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare &gt; 20.0").show()
-</code></pre></div></div>
+</code></pre>
 
 <p>这将提供在开始时间提交之后发生的所有更改，其中包含票价大于20.0的过滤器。关于此功能的独特之处在于，它现在使您可以在批量数据上创作流式管道。</p>
 
@@ -467,7 +455,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 <p>让我们看一下如何查询特定时间的数据。可以通过将结束时间指向特定的提交时间，将开始时间指向”000”(表示最早的提交时间)来表示特定时间。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>val beginTime = "000" // Represents all commits &gt; this time.
+<pre><code class="language-Java">val beginTime = "000" // Represents all commits &gt; this time.
 val endTime = commits(commits.length - 2) // commit time we are interested in
 
 // 增量查询数据
@@ -478,9 +466,13 @@ val incViewDF = spark.read.format("org.apache.hudi").
     load(basePath);
 incViewDF.registerTempTable("hudi_incr_table")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare &gt; 20.0").show()
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="从这开始下一步">从这开始下一步？</h2>
+
+<p>您也可以通过<a href="https://github.com/apache/incubator-hudi#building-apache-hudi-from-source-building-hudi">自己构建hudi</a>来快速入门，
+并在spark-shell命令中使用<code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar</code>，
+而不是<code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating</code></p>
 
 <p>这里我们使用Spark演示了Hudi的功能。但是，Hudi可以支持多种存储类型/视图，并且可以从Hive，Spark，Presto等查询引擎中查询Hudi数据集。
 我们制作了一个基于Docker设置、所有依赖系统都在本地运行的<a href="https://www.youtube.com/watch?v=VhNgUsxdrD0">演示视频</a>，
@@ -489,14 +481,6 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 
     <div class="tags">
-        
-        <b>Tags: </b>
-        
-        
-        
-        <a href="tag_quickstart.html" class="btn btn-default navbar-btn cursorNorm" role="button">quickstart</a>
-        
-        
         
     </div>
 

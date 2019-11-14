@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -220,7 +220,7 @@
 
 
 <ul id="mysidebar" class="nav">
-    <li class="sidebarTitle">Latest Version 0.5.0-incubating</li>
+    <li class="sidebarTitle">Version (0.5.0-incubating)</li>
     
     
     
@@ -375,7 +375,7 @@ can be chosen/changed across each commit/deltacommit issued against the dataset.
 
 <p>Command line options describe capabilities in more detail</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
+<pre><code class="language-Java">[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: &lt;main class&gt; [options]
   Options:
     --commit-on-errors
@@ -444,26 +444,26 @@ Usage: &lt;main class&gt; [options]
       schema) before writing. Default : Not set. E:g -
       org.apache.hudi.utilities.transform.SqlQueryBasedTransformer (which
       allows a SQL query template to be passed as a transformation function)
-</code></pre></div></div>
+</code></pre>
 
 <p>The tool takes a hierarchically composed property file and has pluggable interfaces for extracting data, key generation and providing schema. Sample configs for ingesting from kafka and dfs are
 provided under <code class="highlighter-rouge">hudi-utilities/src/test/resources/delta-streamer-config</code>.</p>
 
 <p>For e.g: once you have Confluent Kafka, Schema registry up &amp; running, produce some test data using (<a href="https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html">impressions.avro</a> provided by schema-registry repo)</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
-</code></pre></div></div>
+<pre><code class="language-Java">[confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
+</code></pre>
 
 <p>and then ingest it as follows.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
+<pre><code class="language-Java">[hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
   --source-class org.apache.hudi.utilities.sources.AvroKafkaSource \
   --source-ordering-field impresssiontime \
   --target-base-path file:///tmp/hudi-deltastreamer-op --target-table uber.impressions \
   --op BULK_INSERT
-</code></pre></div></div>
+</code></pre>
 
 <p>In some cases, you may want to migrate your existing dataset into Hudi beforehand. Please refer to <a href="migration_guide.html">migration guide</a>.</p>
 
@@ -473,7 +473,7 @@ provided under <code class="highlighter-rouge">hudi-utilities/src/test/resources
 Following is how we can upsert a dataframe, while specifying the field names that need to be used
 for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class="highlighter-rouge">partitionPath =&gt; partition</code> and <code class="highlighter-rouge">precombineKey =&gt; timestamp</code></p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>inputDF.write()
+<pre><code class="language-Java">inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) // any of the Hudi client opts can be passed in as well
        .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
@@ -482,7 +482,7 @@ for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class
        .option(HoodieWriteConfig.TABLE_NAME, tableName)
        .mode(SaveMode.Append)
        .save(basePath);
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="syncing-to-hive">Syncing to Hive</h2>
 
@@ -490,7 +490,7 @@ for <code class="highlighter-rouge">recordKey =&gt; _row_key</code>, <code class
 In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a <code class="highlighter-rouge">HiveSyncTool</code>, which can be invoked as below, 
 once you have built the hudi-hive module.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd hudi-hive
+<pre><code class="language-Java">cd hudi-hive
 ./run_sync_tool.sh
  [hudi-hive]$ ./run_sync_tool.sh --help
 Usage: &lt;main class&gt; [options]
@@ -511,7 +511,7 @@ Usage: &lt;main class&gt; [options]
        name of the target table in Hive
   * --user
        Hive username
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="deletes">Deletes</h2>
 
@@ -524,13 +524,13 @@ Usage: &lt;main class&gt; [options]
  via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in <code class="highlighter-rouge">org.apache.hudi.EmptyHoodieRecordPayload</code> class that does exactly this.</li>
 </ul>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> deleteDF // dataframe containing just records to be deleted
+<pre><code class="language-Java"> deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey &amp; usual params
    .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
  
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="storage-management">Storage Management</h2>
 

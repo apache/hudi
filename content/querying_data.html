@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -220,7 +220,7 @@
 
 
 <ul id="mysidebar" class="nav">
-    <li class="sidebarTitle">Latest Version 0.5.0-incubating</li>
+    <li class="sidebarTitle">Version (0.5.0-incubating)</li>
     
     
     
@@ -493,37 +493,37 @@ separated) and calls InputFormat.listStatus() only once with all those partition
 <p>To read RO table as a Hive table using SparkSQL, simply push a path filter into sparkContext as follows. 
 This method retains Spark built-in optimizations for reading Parquet files like vectorized reading on Hudi tables.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
-</code></pre></div></div>
+<pre><code class="language-Scala">spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
+</code></pre>
 
 <p>If you prefer to glob paths on DFS via the datasource, you can simply do something like below to get a Spark dataframe to work with.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Dataset&lt;Row&gt; hoodieROViewDF = spark.read().format("org.apache.hudi")
+<pre><code class="language-Java">Dataset&lt;Row&gt; hoodieROViewDF = spark.read().format("org.apache.hudi")
 // pass any path glob, can include hudi &amp; non-hudi datasets
 .load("/glob/path/pattern");
-</code></pre></div></div>
+</code></pre>
 
 <h3 id="spark-rt-view">Real time table</h3>
 <p>Currently, real time table can only be queried as a Hive table in Spark. In order to do this, set <code class="highlighter-rouge">spark.sql.hive.convertMetastoreParquet=false</code>, forcing Spark to fallback 
 to using the Hive Serde to read the data (planning/executions is still Spark).</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
+<pre><code class="language-Java">$ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala&gt; sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'").show()
-</code></pre></div></div>
+</code></pre>
 
 <h3 id="spark-incr-pull">Incremental Pulling</h3>
 <p>The <code class="highlighter-rouge">hudi-spark</code> module offers the DataSource API, a more elegant way to pull data from Hudi dataset and process it via Spark.
 A sample incremental pull, that will obtain all records written since <code class="highlighter-rouge">beginInstantTime</code>, looks like below.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> Dataset&lt;Row&gt; hoodieIncViewDF = spark.read()
+<pre><code class="language-Java"> Dataset&lt;Row&gt; hoodieIncViewDF = spark.read()
      .format("org.apache.hudi")
      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),
              DataSourceReadOptions.VIEW_TYPE_INCREMENTAL_OPT_VAL())
      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY(),
             &lt;beginInstantTime&gt;)
      .load(tablePath); // For incremental view, pass in the root/base path of dataset
-</code></pre></div></div>
+</code></pre>
 
 <p>Please refer to <a href="configurations.html#spark-datasource">configurations</a> section, to view all datasource options.</p>
 

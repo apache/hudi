@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -220,7 +220,7 @@
 
 
 <ul id="mysidebar" class="nav">
-    <li class="sidebarTitle">Latest Version 0.5.0-incubating</li>
+    <li class="sidebarTitle">Version (0.5.0-incubating)</li>
     
     
     
@@ -397,7 +397,7 @@ The actual datasource level configs are listed below.</p>
 
 <p>Additionally, you can pass down any of the WriteClient level configs directly using <code class="highlighter-rouge">options()</code> or <code class="highlighter-rouge">option(k,v)</code> methods.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>inputDF.write()
+<pre><code class="language-Java">inputDF.write()
 .format("org.apache.hudi")
 .options(clientOpts) // any of the Hudi client opts can be passed in as well
 .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
@@ -406,7 +406,7 @@ The actual datasource level configs are listed below.</p>
 .option(HoodieWriteConfig.TABLE_NAME, tableName)
 .mode(SaveMode.Append)
 .save(basePath);
-</code></pre></div></div>
+</code></pre>
 
 <p>Options useful for writing datasets via <code class="highlighter-rouge">write.format.option(...)</code></p>
 
@@ -520,7 +520,7 @@ necessarily correspond to an instant on the timeline. New data written with an
 <p>Jobs programming directly against the RDD level apis can build a <code class="highlighter-rouge">HoodieWriteConfig</code> object and pass it in to the <code class="highlighter-rouge">HoodieWriteClient</code> constructor. 
 HoodieWriteConfig can be built using a builder pattern as below.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
+<pre><code class="language-Java">HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .forTable(tableName)
         .withSchema(schemaStr)
@@ -529,7 +529,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
         .withIndexConfig(HoodieIndexConfig.newBuilder().withXXX(...).build())
         ...
         .build();
-</code></pre></div></div>
+</code></pre>
 
 <p>Following subsections go over different aspects of write configs, explaining most important configs with their property names, default values.</p>
 

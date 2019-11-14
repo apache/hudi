@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -358,7 +358,7 @@ Hudi库使用.hoodie子文件夹跟踪所有元数据，从而有效地在内部
 
 <p>初始化hudi表，可使用如下命令。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
+<pre><code class="language-Java">18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
 ============================================
 *                                          *
 *     _    _           _   _               *
@@ -374,11 +374,11 @@ Welcome to Hoodie CLI. Please type help if you are looking for help.
 hudi-&gt;create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tableType COPY_ON_WRITE
 .....
 18/09/06 15:57:15 INFO table.HoodieTableMetaClient: Finished Loading Table of type COPY_ON_WRITE from ...
-</code></pre></div></div>
+</code></pre>
 
 <p>To see the description of hudi table, use the command:</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:hoodie_table_1-&gt;desc
+<pre><code class="language-Java">hoodie:hoodie_table_1-&gt;desc
 18/09/06 15:57:19 INFO timeline.HoodieActiveTimeline: Loaded instants []
     _________________________________________________________
     | Property                | Value                        |
@@ -389,22 +389,22 @@ hudi-&gt;create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --
     | hoodie.table.name       | hoodie_table_1               |
     | hoodie.table.type       | COPY_ON_WRITE                |
     | hoodie.archivelog.folder|                              |
-</code></pre></div></div>
+</code></pre>
 
 <p>以下是连接到包含uber trips的Hudi数据集的示例命令。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;connect --path /app/uber/trips
+<pre><code class="language-Java">hoodie:trips-&gt;connect --path /app/uber/trips
 
 16/10/05 23:20:37 INFO model.HoodieTableMetadata: Attempting to load the commits under /app/uber/trips/.hoodie with suffix .commit
 16/10/05 23:20:37 INFO model.HoodieTableMetadata: Attempting to load the commits under /app/uber/trips/.hoodie with suffix .inflight
 16/10/05 23:20:37 INFO model.HoodieTableMetadata: All commits :HoodieCommits{commitList=[20161002045850, 20161002052915, 20161002055918, 20161002065317, 20161002075932, 20161002082904, 20161002085949, 20161002092936, 20161002105903, 20161002112938, 20161002123005, 20161002133002, 20161002155940, 20161002165924, 20161002172907, 20161002175905, 20161002190016, 20161002192954, 20161002195925, 20161002205935, 20161002215928, 20161002222938, 20161002225915, 20161002232906, 20161003003028, 20161003005958, 20161003012936, 20161003022924, 20161003025859, 20161003032854, 20161003042930, 20161003052911, 20161003055907, 20161003062946, 20161003065927, 20161003075924, 20161003082926, 20161003085925, 20161003092909, 20161003100010, 20161003102913, 20161003105850, 20161003112910, 20161003115851, 20161003122929, 20161003132931, 20161003142952, 20161003145856, 20161003152953, 20161003155912, 20161003162922, 20161003165852, 20161003172923, 20161003175923, 20161003195931, 20161003210118, 20161003212919, 20161003215928, 20161003223000, 20161003225858, 20161004003042, 20161004011345, 20161004015235, 20161004022234, 20161004063001, 20161004072402, 20161004074436, 20161004080224, 20161004082928, 20161004085857, 20161004105922, 20161004122927, 20161004142929, 20161004163026, 20161004175925, 20161004194411, 20161004203202, 20161004211210, 20161004214115, 20161004220437, 20161004223020, 20161004225321, 20161004231431, 20161004233643, 20161005010227, 20161005015927, 20161005022911, 20161005032958, 20161005035939, 20161005052904, 20161005070028, 20161005074429, 20161005081318, 20161005083455, 20161005085921, 20161005092901, 20161005095936, 20161005120158, 20161005123418, 20161005125911, 20161005133107, 20161005155908, 20161005163517, 20161005165855, 20161005180127, 20161005184226, 20161005191051, 20161005193234, 20161005203112, 20161005205920, 20161005212949, 20161005223034, 20161005225920]}
 Metadata for table trips loaded
 hoodie:trips-&gt;
-</code></pre></div></div>
+</code></pre>
 
 <p>连接到数据集后，便可使用许多其他命令。该shell程序具有上下文自动完成帮助(按TAB键)，下面是所有命令的列表，本节中对其中的一些命令进行了详细示例。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;help
+<pre><code class="language-Java">hoodie:trips-&gt;help
 * ! - Allows execution of operating system (OS) commands
 * // - Inline comment markers (start of line only)
 * ; - Inline comment markers (start of line only)
@@ -433,7 +433,7 @@ hoodie:trips-&gt;
 * version - Displays shell version
 
 hoodie:trips-&gt;
-</code></pre></div></div>
+</code></pre>
 
 <h4 id="检查提交">检查提交</h4>
 
@@ -442,7 +442,7 @@ hoodie:trips-&gt;
 
 <p>查看有关最近10次提交的一些基本信息，</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;commits show --sortBy "Total Bytes Written" --desc true --limit 10
+<pre><code class="language-Java">hoodie:trips-&gt;commits show --sortBy "Total Bytes Written" --desc true --limit 10
     ________________________________________________________________________________________________________________________________________________________________________
     | CommitTime    | Total Bytes Written| Total Files Added| Total Files Updated| Total Partitions Written| Total Records Written| Total Update Records Written| Total Errors|
     |=======================================================================================================================================================================|
@@ -450,41 +450,41 @@ hoodie:trips-&gt;
     ....
     ....
 hoodie:trips-&gt;
-</code></pre></div></div>
+</code></pre>
 
 <p>在每次写入开始时，Hudi还将.inflight提交写入.hoodie文件夹。您可以使用那里的时间戳来估计正在进行的提交已经花费的时间</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>$ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
+<pre><code class="language-Java">$ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 -rw-r--r--   3 vinoth supergroup     321984 2016-10-05 23:18 /app/uber/trips/.hoodie/20161005225920.inflight
-</code></pre></div></div>
+</code></pre>
 
 <h4 id="深入到特定的提交">深入到特定的提交</h4>
 
 <p>了解写入如何分散到特定分区，</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;commit showpartitions --commit 20161005165855 --sortBy "Total Bytes Written" --desc true --limit 10
+<pre><code class="language-Java">hoodie:trips-&gt;commit showpartitions --commit 20161005165855 --sortBy "Total Bytes Written" --desc true --limit 10
     __________________________________________________________________________________________________________________________________________
     | Partition Path| Total Files Added| Total Files Updated| Total Records Inserted| Total Records Updated| Total Bytes Written| Total Errors|
     |=========================================================================================================================================|
      ....
      ....
-</code></pre></div></div>
+</code></pre>
 
 <p>如果您需要文件级粒度，我们可以执行以下操作</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;commit showfiles --commit 20161005165855 --sortBy "Partition Path"
+<pre><code class="language-Java">hoodie:trips-&gt;commit showfiles --commit 20161005165855 --sortBy "Partition Path"
     ________________________________________________________________________________________________________________________________________________________
     | Partition Path| File ID                             | Previous Commit| Total Records Updated| Total Records Written| Total Bytes Written| Total Errors|
     |=======================================================================================================================================================|
     ....
     ....
-</code></pre></div></div>
+</code></pre>
 
 <h4 id="文件系统视图">文件系统视图</h4>
 
 <p>Hudi将每个分区视为文件组的集合，每个文件组包含按提交顺序排列的文件切片列表(请参阅概念)。以下命令允许用户查看数据集的文件切片。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> hoodie:stock_ticks_mor-&gt;show fsview all
+<pre><code class="language-Java"> hoodie:stock_ticks_mor-&gt;show fsview all
  ....
   _______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
  | Partition | FileId | Base-Instant | Data-File | Data-File Size| Num Delta Files| Total Delta File Size| Delta Files |
@@ -501,30 +501,30 @@ hoodie:trips-&gt;
  | 2018/08/31| 111415c3-f26d-4639-86c8-f9956f245ac3| 20181002180759| hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/111415c3-f26d-4639-86c8-f9956f245ac3_0_20181002180759.parquet| 432.5 KB | 1 | 20.8 KB | 20.8 KB | 0.0 B | 0.0 B | 0.0 B | [HoodieLogFile {hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/.111415c3-f26d-4639-86c8-f9956f245ac3_20181002180759.log.1}]| [] |
 
  hoodie:stock_ticks_mor-&gt;
-</code></pre></div></div>
+</code></pre>
 
 <h4 id="统计信息">统计信息</h4>
 
 <p>由于Hudi直接管理DFS数据集的文件大小，这些信息会帮助你全面了解Hudi的运行状况</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc true --limit 10
+<pre><code class="language-Java">hoodie:trips-&gt;stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc true --limit 10
     ________________________________________________________________________________________________
     | CommitTime    | Min     | 10th    | 50th    | avg     | 95th    | Max     | NumFiles| StdDev  |
     |===============================================================================================|
     | &lt;COMMIT_ID&gt;   | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 93.9 MB | 2       | 2.3 KB  |
     ....
     ....
-</code></pre></div></div>
+</code></pre>
 
 <p>如果Hudi写入花费的时间更长，那么可以通过观察写放大指标来发现任何异常</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;stats wa
+<pre><code class="language-Java">hoodie:trips-&gt;stats wa
     __________________________________________________________________________
     | CommitTime    | Total Upserted| Total Written| Write Amplifiation Factor|
     |=========================================================================|
     ....
     ....
-</code></pre></div></div>
+</code></pre>
 
 <h4 id="归档的提交">归档的提交</h4>
 
@@ -535,28 +535,28 @@ hoodie:trips-&gt;
 
 <p>要了解压缩和写程序之间的时滞，请使用以下命令列出所有待处理的压缩。</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;compactions show all
+<pre><code class="language-Java">hoodie:trips-&gt;compactions show all
      ___________________________________________________________________
     | Compaction Instant Time| State    | Total FileIds to be Compacted|
     |==================================================================|
     | &lt;INSTANT_1&gt;            | REQUESTED| 35                           |
     | &lt;INSTANT_2&gt;            | INFLIGHT | 27                           |
-</code></pre></div></div>
+</code></pre>
 
 <p>要检查特定的压缩计划，请使用</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;compaction show --instant &lt;INSTANT_1&gt;
+<pre><code class="language-Java">hoodie:trips-&gt;compaction show --instant &lt;INSTANT_1&gt;
     _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
     | Partition Path| File Id | Base Instant  | Data File Path                                    | Total Delta Files| getMetrics                                                                                                                    |
     |================================================================================================================================================================================================================================================
     | 2018/07/17    | &lt;UUID&gt;  | &lt;INSTANT_1&gt;   | viewfs://ns-default/.../../UUID_&lt;INSTANT&gt;.parquet | 1                | {TOTAL_LOG_FILES=1.0, TOTAL_IO_READ_MB=1230.0, TOTAL_LOG_FILES_SIZE=2.51255751E8, TOTAL_IO_WRITE_MB=991.0, TOTAL_IO_MB=2221.0}|
 
-</code></pre></div></div>
+</code></pre>
 
 <p>要手动调度或运行压缩，请使用以下命令。该命令使用spark启动器执行压缩操作。
 注意：确保没有其他应用程序正在同时调度此数据集的压缩</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;help compaction schedule
+<pre><code class="language-Java">hoodie:trips-&gt;help compaction schedule
 Keyword:                   compaction schedule
 Description:               Schedule Compaction
  Keyword:                  sparkMemory
@@ -566,9 +566,9 @@ Description:               Schedule Compaction
    Default if unspecified: '1G'
 
 * compaction schedule - Schedule Compaction
-</code></pre></div></div>
+</code></pre>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;help compaction run
+<pre><code class="language-Java">hoodie:trips-&gt;help compaction run
 Keyword:                   compaction run
 Description:               Run Compaction for given instant time
  Keyword:                  tableName
@@ -608,13 +608,13 @@ Description:               Run Compaction for given instant time
    Default if unspecified: '__NULL__'
 
 * compaction run - Run Compaction for given instant time
-</code></pre></div></div>
+</code></pre>
 
 <h5 id="验证压缩">验证压缩</h5>
 
 <p>验证压缩计划：检查压缩所需的所有文件是否都存在且有效</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:stock_ticks_mor-&gt;compaction validate --instant 20181005222611
+<pre><code class="language-Java">hoodie:stock_ticks_mor-&gt;compaction validate --instant 20181005222611
 ...
 
    COMPACTION PLAN VALID
@@ -634,7 +634,7 @@ hoodie:stock_ticks_mor-&gt;compaction validate --instant 20181005222601
     | File Id                             | Base Instant Time| Base Data File                                                                                                                   | Num Delta Files| Valid| Error                                                                           |
     |=====================================================================================================================================================================================================================================================================================================|
     | 05320e98-9a57-4c38-b809-a6beaaeb36bd| 20181005222445   | hdfs://namenode:8020/user/hive/warehouse/stock_ticks_mor/2018/08/31/05320e98-9a57-4c38-b809-a6beaaeb36bd_0_20181005222445.parquet| 1              | false| All log files specified in compaction operation is not present. Missing ....    |
-</code></pre></div></div>
+</code></pre>
 
 <h5 id="注意">注意</h5>
 
@@ -645,17 +645,17 @@ hoodie:stock_ticks_mor-&gt;compaction validate --instant 20181005222601
 
 <h5 id="取消调度压缩">取消调度压缩</h5>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;compaction unscheduleFileId --fileId &lt;FileUUID&gt;
+<pre><code class="language-Java">hoodie:trips-&gt;compaction unscheduleFileId --fileId &lt;FileUUID&gt;
 ....
 No File renames needed to unschedule file from pending compaction. Operation successful.
-</code></pre></div></div>
+</code></pre>
 
 <p>在其他情况下，需要撤销整个压缩计划。以下CLI支持此功能</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:trips-&gt;compaction unschedule --compactionInstant &lt;compactionInstant&gt;
+<pre><code class="language-Java">hoodie:trips-&gt;compaction unschedule --compactionInstant &lt;compactionInstant&gt;
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
-</code></pre></div></div>
+</code></pre>
 
 <h5 id="修复压缩">修复压缩</h5>
 
@@ -664,11 +664,11 @@ No File renames needed to unschedule pending compaction. Operation successful.
 当您运行<code class="highlighter-rouge">压缩验证</code>时，您会注意到无效的压缩操作(如果有的话)。
 在这种情况下，修复命令将立即执行，它将重新排列文件切片，以使文件不丢失，并且文件切片与压缩计划一致</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie:stock_ticks_mor-&gt;compaction repair --instant 20181005222611
+<pre><code class="language-Java">hoodie:stock_ticks_mor-&gt;compaction repair --instant 20181005222611
 ......
 Compaction successfully repaired
 .....
-</code></pre></div></div>
+</code></pre>
 
 <h2 id="metrics">指标</h2>
 
