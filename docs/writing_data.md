@@ -40,7 +40,7 @@ The `HoodieDeltaStreamer` utility (part of hudi-utilities-bundle) provides the w
 
 Command line options describe capabilities in more detail
 
-```
+```Java
 [hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: <main class> [options]
   Options:
@@ -117,13 +117,13 @@ provided under `hudi-utilities/src/test/resources/delta-streamer-config`.
 
 For e.g: once you have Confluent Kafka, Schema registry up & running, produce some test data using ([impressions.avro](https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html) provided by schema-registry repo)
 
-```
+```Java
 [confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
 ```
 
 and then ingest it as follows.
 
-```
+```Java
 [hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
@@ -142,7 +142,7 @@ Following is how we can upsert a dataframe, while specifying the field names tha
 for `recordKey => _row_key`, `partitionPath => partition` and `precombineKey => timestamp`
 
 
-```
+```Java
 inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) // any of the Hudi client opts can be passed in as well
@@ -160,7 +160,7 @@ Both tools above support syncing of the dataset's latest schema to Hive metastor
 In case, its preferable to run this from commandline or in an independent jvm, Hudi provides a `HiveSyncTool`, which can be invoked as below, 
 once you have built the hudi-hive module.
 
-```
+```Java
 cd hudi-hive
 ./run_sync_tool.sh
  [hudi-hive]$ ./run_sync_tool.sh --help
@@ -193,7 +193,7 @@ Hudi supports implementing two types of deletes on data stored in Hudi datasets,
  - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the dataset. This can be achieved by issuing an upsert with a custom payload implementation
  via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `org.apache.hudi.EmptyHoodieRecordPayload` class that does exactly this.
  
-```
+```Java
  deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup

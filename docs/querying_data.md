@@ -92,13 +92,13 @@ Spark provides much easier deployment & management of Hudi jars and bundles into
 To read RO table as a Hive table using SparkSQL, simply push a path filter into sparkContext as follows. 
 This method retains Spark built-in optimizations for reading Parquet files like vectorized reading on Hudi tables.
 
-```
+```Scala
 spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 ```
 
 If you prefer to glob paths on DFS via the datasource, you can simply do something like below to get a Spark dataframe to work with. 
 
-```
+```Java
 Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 // pass any path glob, can include hudi & non-hudi datasets
 .load("/glob/path/pattern");
@@ -108,7 +108,7 @@ Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
 Currently, real time table can only be queried as a Hive table in Spark. In order to do this, set `spark.sql.hive.convertMetastoreParquet=false`, forcing Spark to fallback 
 to using the Hive Serde to read the data (planning/executions is still Spark). 
 
-```
+```Java
 $ spark-shell --jars hudi-spark-bundle-x.y.z-SNAPSHOT.jar --driver-class-path /etc/hive/conf  --packages com.databricks:spark-avro_2.11:4.0.0 --conf spark.sql.hive.convertMetastoreParquet=false --num-executors 10 --driver-memory 7g --executor-memory 2g  --master yarn-client
 
 scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'").show()
@@ -118,7 +118,7 @@ scala> sqlContext.sql("select count(*) from hudi_rt where datestr = '2016-10-02'
 The `hudi-spark` module offers the DataSource API, a more elegant way to pull data from Hudi dataset and process it via Spark.
 A sample incremental pull, that will obtain all records written since `beginInstantTime`, looks like below.
 
-```
+```Java
  Dataset<Row> hoodieIncViewDF = spark.read()
      .format("org.apache.hudi")
      .option(DataSourceReadOptions.VIEW_TYPE_OPT_KEY(),

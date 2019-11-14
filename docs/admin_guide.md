@@ -23,7 +23,7 @@ Hudi library effectively manages this dataset internally, using .hoodie subfolde
 
 To initialize a hudi table, use the following command.
 
-```
+```Java
 18/09/06 15:56:52 INFO annotation.AutowiredAnnotationBeanPostProcessor: JSR-330 'javax.inject.Inject' annotation found and supported for autowiring
 ============================================
 *                                          *
@@ -44,7 +44,7 @@ hudi->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tab
 
 To see the description of hudi table, use the command:
 
-```
+```Java
 hoodie:hoodie_table_1->desc
 18/09/06 15:57:19 INFO timeline.HoodieActiveTimeline: Loaded instants []
     _________________________________________________________
@@ -60,7 +60,7 @@ hoodie:hoodie_table_1->desc
 
 Following is a sample command to connect to a Hudi dataset contains uber trips.
 
-```
+```Java
 hoodie:trips->connect --path /app/uber/trips
 
 16/10/05 23:20:37 INFO model.HoodieTableMetadata: Attempting to load the commits under /app/uber/trips/.hoodie with suffix .commit
@@ -74,7 +74,7 @@ Once connected to the dataset, a lot of other commands become available. The she
 are reviewed
 
 
-```
+```Java
 hoodie:trips->help
 * ! - Allows execution of operating system (OS) commands
 * // - Inline comment markers (start of line only)
@@ -115,7 +115,7 @@ Each commit has a monotonically increasing string/number called the **commit num
 To view some basic information about the last 10 commits,
 
 
-```
+```Java
 hoodie:trips->commits show --sortBy "Total Bytes Written" --desc true --limit 10
     ________________________________________________________________________________________________________________________________________________________________________
     | CommitTime    | Total Bytes Written| Total Files Added| Total Files Updated| Total Partitions Written| Total Records Written| Total Update Records Written| Total Errors|
@@ -129,7 +129,7 @@ hoodie:trips->
 At the start of each write, Hudi also writes a .inflight commit to the .hoodie folder. You can use the timestamp there to estimate how long the commit has been inflight
 
 
-```
+```Java
 $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 -rw-r--r--   3 vinoth supergroup     321984 2016-10-05 23:18 /app/uber/trips/.hoodie/20161005225920.inflight
 ```
@@ -140,7 +140,7 @@ $ hdfs dfs -ls /app/uber/trips/.hoodie/*.inflight
 To understand how the writes spread across specific partiions,
 
 
-```
+```Java
 hoodie:trips->commit showpartitions --commit 20161005165855 --sortBy "Total Bytes Written" --desc true --limit 10
     __________________________________________________________________________________________________________________________________________
     | Partition Path| Total Files Added| Total Files Updated| Total Records Inserted| Total Records Updated| Total Bytes Written| Total Errors|
@@ -152,7 +152,7 @@ hoodie:trips->commit showpartitions --commit 20161005165855 --sortBy "Total Byte
 If you need file level granularity , we can do the following
 
 
-```
+```Java
 hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
     ________________________________________________________________________________________________________________________________________________________
     | Partition Path| File ID                             | Previous Commit| Total Records Updated| Total Records Written| Total Bytes Written| Total Errors|
@@ -167,7 +167,7 @@ hoodie:trips->commit showfiles --commit 20161005165855 --sortBy "Partition Path"
 Hudi views each partition as a collection of file-groups with each file-group containing a list of file-slices in commit
 order (See Concepts). The below commands allow users to view the file-slices for a data-set.
 
-```
+```Java
  hoodie:stock_ticks_mor->show fsview all
  ....
   _______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
@@ -193,7 +193,7 @@ order (See Concepts). The below commands allow users to view the file-slices for
 Since Hudi directly manages file sizes for DFS dataset, it might be good to get an overall picture
 
 
-```
+```Java
 hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc true --limit 10
     ________________________________________________________________________________________________
     | CommitTime    | Min     | 10th    | 50th    | avg     | 95th    | Max     | NumFiles| StdDev  |
@@ -206,7 +206,7 @@ hoodie:trips->stats filesizes --partitionPath 2016/09/01 --sortBy "95th" --desc 
 In case of Hudi write taking much longer, it might be good to see the write amplification for any sudden increases
 
 
-```
+```Java
 hoodie:trips->stats wa
     __________________________________________________________________________
     | CommitTime    | Total Upserted| Total Written| Write Amplifiation Factor|
@@ -227,7 +227,7 @@ This is a sequence file that contains a mapping from commitNumber => json with r
 To get an idea of the lag between compaction and writer applications, use the below command to list down all
 pending compactions.
 
-```
+```Java
 hoodie:trips->compactions show all
      ___________________________________________________________________
     | Compaction Instant Time| State    | Total FileIds to be Compacted|
@@ -238,7 +238,7 @@ hoodie:trips->compactions show all
 
 To inspect a specific compaction plan, use
 
-```
+```Java
 hoodie:trips->compaction show --instant <INSTANT_1>
     _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
     | Partition Path| File Id | Base Instant  | Data File Path                                    | Total Delta Files| getMetrics                                                                                                                    |
@@ -250,7 +250,7 @@ hoodie:trips->compaction show --instant <INSTANT_1>
 To manually schedule or run a compaction, use the below command. This command uses spark launcher to perform compaction
 operations. NOTE : Make sure no other application is scheduling compaction for this dataset concurrently
 
-```
+```Java
 hoodie:trips->help compaction schedule
 Keyword:                   compaction schedule
 Description:               Schedule Compaction
@@ -263,7 +263,7 @@ Description:               Schedule Compaction
 * compaction schedule - Schedule Compaction
 ```
 
-```
+```Java
 hoodie:trips->help compaction run
 Keyword:                   compaction run
 Description:               Run Compaction for given instant time
@@ -310,7 +310,7 @@ Description:               Run Compaction for given instant time
 
 Validating a compaction plan : Check if all the files necessary for compactions are present and are valid
 
-```
+```Java
 hoodie:stock_ticks_mor->compaction validate --instant 20181005222611
 ...
 
@@ -344,7 +344,7 @@ so that are preserved. Hudi provides the following CLI to support it
 
 ##### UnScheduling Compaction
 
-```
+```Java
 hoodie:trips->compaction unscheduleFileId --fileId <FileUUID>
 ....
 No File renames needed to unschedule file from pending compaction. Operation successful.
@@ -352,7 +352,7 @@ No File renames needed to unschedule file from pending compaction. Operation suc
 
 In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
 
-```
+```Java
 hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
@@ -366,7 +366,7 @@ partial failures, the compaction operation could become inconsistent with the st
 command comes to the rescue, it will rearrange the file-slices so that there is no loss and the file-slices are
 consistent with the compaction plan
 
-```
+```Java
 hoodie:stock_ticks_mor->compaction repair --instant 20181005222611
 ......
 Compaction successfully repaired

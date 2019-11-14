@@ -39,7 +39,7 @@ The actual datasource level configs are listed below.
 
 Additionally, you can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
 
-```
+```Java
 inputDF.write()
 .format("org.apache.hudi")
 .options(clientOpts) // any of the Hudi client opts can be passed in as well
@@ -164,7 +164,7 @@ Property: `hoodie.datasource.read.end.instanttime`, Default: latest instant (i.e
 Jobs programming directly against the RDD level apis can build a `HoodieWriteConfig` object and pass it in to the `HoodieWriteClient` constructor. 
 HoodieWriteConfig can be built using a builder pattern as below. 
 
-```
+```Java
 HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .forTable(tableName)

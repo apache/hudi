@@ -39,7 +39,7 @@ summary: 这一页里，我们将讨论一些可用的工具，这些工具可�
 
 命令行选项更详细地描述了这些功能：
 
-```
+```Java
 [hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` --help
 Usage: <main class> [options]
   Options:
@@ -118,13 +118,13 @@ Usage: <main class> [options]
 （[impressions.avro](https://docs.confluent.io/current/ksql/docs/tutorials/generate-custom-test-data.html)，
 由schema-registry代码库提供）
 
-```
+```Java
 [confluent-5.0.0]$ bin/ksql-datagen schema=../impressions.avro format=avro topic=impressions key=impressionid
 ```
 
 然后用如下命令摄取这些数据。
 
-```
+```Java
 [hoodie]$ spark-submit --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer `ls packaging/hudi-utilities-bundle/target/hudi-utilities-bundle-*.jar` \
   --props file://${PWD}/hudi-utilities/src/test/resources/delta-streamer-config/kafka-source.properties \
   --schemaprovider-class org.apache.hudi.utilities.schema.SchemaRegistryProvider \
@@ -142,7 +142,7 @@ Usage: <main class> [options]
 以下是在指定需要使用的字段名称的之后，如何插入更新数据帧的方法，这些字段包括
 `recordKey => _row_key`、`partitionPath => partition`和`precombineKey => timestamp`
 
-```
+```Java
 inputDF.write()
        .format("org.apache.hudi")
        .options(clientOpts) // 可以传入任何Hudi客户端参数
@@ -160,7 +160,7 @@ inputDF.write()
 如果需要从命令行或在独立的JVM中运行它，Hudi提供了一个`HiveSyncTool`，
 在构建了hudi-hive模块之后，可以按以下方式调用它。
 
-```
+```Java
 cd hudi-hive
 ./run_sync_tool.sh
  [hudi-hive]$ ./run_sync_tool.sh --help
@@ -192,7 +192,7 @@ Usage: <main class> [options]
  这可以通过触发一个带有自定义负载实现的插入更新来实现，这种实现可以使用总是返回Optional.Empty作为组合值的DataSource或DeltaStreamer。 
  Hudi附带了一个内置的`org.apache.hudi.EmptyHoodieRecordPayload`类，它就是实现了这一功能。
  
-```
+```Java
  deleteDF // 仅包含要删除的记录的数据帧
    .write().format("org.apache.hudi")
    .option(...) // 根据设置需要添加HUDI参数，例如记录键、分区路径和其他参数
