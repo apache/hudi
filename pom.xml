@@ -88,6 +88,7 @@
     <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
     <scala.libversion>2.11</scala.libversion>
+    <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
@@ -306,6 +307,7 @@
           <!-- excludes are inherited -->
           <groupId>org.apache.rat</groupId>
           <artifactId>apache-rat-plugin</artifactId>
+          <version>${apache-rat-plugin.version}</version>
           <configuration>
             <excludeSubProjects>false</excludeSubProjects>
             <numUnapprovedLicenses>0</numUnapprovedLicenses>
