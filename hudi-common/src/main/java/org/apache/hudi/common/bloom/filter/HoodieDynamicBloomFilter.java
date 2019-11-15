@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.common.bloom.filter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -25,45 +25,48 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import javax.xml.bind.DatatypeConverter;
+import org.apache.hadoop.util.bloom.DynamicBloomFilter;
 import org.apache.hadoop.util.bloom.Key;
 import org.apache.hudi.exception.HoodieIndexException;
 
 /**
- * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
+ * Hudi's Dynamic Bloom Filter based out of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
  */
+public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements BloomFilter {
 
-public class SimpleBloomFilter implements BloomFilter {
-
-  public static final String TYPE_CODE = "SIMPLE";
-  private org.apache.hadoop.util.bloom.BloomFilter filter = null;
+  public static final String TYPE_CODE_PREFIX = "DYNAMIC";
+  public static final String TYPE_CODE = TYPE_CODE_PREFIX + "_V0";
+  private DynamicBloomFilter dynamicBloomFilter;
 
   /**
-   * Create a new Bloom filter with the given configurations.
+   * Instantiates {@link HoodieDynamicBloomFilter} with the given args
    *
    * @param numEntries The total number of entries.
    * @param errorRate maximum allowable error rate.
    * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @return the {@link HoodieDynamicBloomFilter} thus created
    */
-  public SimpleBloomFilter(int numEntries, double errorRate, int hashType) {
+  HoodieDynamicBloomFilter(int numEntries, double errorRate, int hashType) {
     // Bit size
     int bitSize = BloomFilterUtils.getBitSize(numEntries, errorRate);
     // Number of the hash functions
     int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
-    // The filter
-    this.filter = new org.apache.hadoop.util.bloom.BloomFilter(bitSize, numHashs, hashType);
+    this.dynamicBloomFilter = new DynamicBloomFilter(bitSize, numHashs, hashType, numEntries);
   }
 
   /**
-   * Create the bloom filter from serialized string.
+   * Generate {@link HoodieDynamicBloomFilter} from the given {@code serString} serialized string
    *
-   * @param serString serialized string which represents the {@link SimpleBloomFilter}
+   * @param serString the serialized string which represents the {@link HoodieDynamicBloomFilter}
+   * @param typeCode type code of the bloom filter
    */
-  public SimpleBloomFilter(String serString) {
-    this.filter = new org.apache.hadoop.util.bloom.BloomFilter();
+  HoodieDynamicBloomFilter(String serString, String typeCode) {
+    // ignoring the type code for now, since we have just one version
     byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
-      this.filter.readFields(dis);
+      dynamicBloomFilter = new DynamicBloomFilter();
+      dynamicBloomFilter.readFields(dis);
       dis.close();
     } catch (IOException e) {
       throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
@@ -72,29 +75,20 @@ public class SimpleBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    if (key == null) {
-      throw new NullPointerException("Key cannot by null");
-    }
-    filter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    dynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
   @Override
   public boolean mightContain(String key) {
-    if (key == null) {
-      throw new NullPointerException("Key cannot by null");
-    }
-    return filter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return dynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
-  /**
-   * Serialize the bloom filter as a string.
-   */
   @Override
   public String serializeToString() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     try {
-      filter.write(dos);
+      dynamicBloomFilter.write(dos);
       byte[] bytes = baos.toByteArray();
       dos.close();
       return DatatypeConverter.printBase64Binary(bytes);
@@ -105,6 +99,6 @@ public class SimpleBloomFilter implements BloomFilter {
 
   @Override
   public String getBloomFilterTypeCode() {
-    return SimpleBloomFilter.TYPE_CODE;
+    return HoodieDynamicBloomFilter.TYPE_CODE;
   }
 }

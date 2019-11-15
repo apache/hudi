@@ -19,10 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.BloomFilter;
-import org.apache.hudi.common.BloomFilterFactory;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
 import org.apache.hudi.common.HoodieCommonTestHarness;
-import org.apache.hudi.common.SimpleBloomFilter;
+import org.apache.hudi.common.bloom.filter.SimpleBloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTestUtils;
 

@@ -19,10 +19,10 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.HoodieClientTestHarness;
-import org.apache.hudi.common.BloomFilter;
-import org.apache.hudi.common.BloomFilterFactory;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
 import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.SimpleBloomFilter;
+import org.apache.hudi.common.bloom.filter.SimpleBloomFilter;
 import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;

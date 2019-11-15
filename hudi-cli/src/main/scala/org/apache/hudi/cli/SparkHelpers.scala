@@ -22,9 +22,10 @@ import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.avro.HoodieAvroWriteSupport
+import org.apache.hudi.common.bloom.filter.{BloomFilter, BloomFilterFactory, SimpleBloomFilter}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.common.{BloomFilter, BloomFilterFactory, HoodieJsonPayload, SimpleBloomFilter}
+import org.apache.hudi.common.{BloomFilterFactory, HoodieJsonPayload, SimpleBloomFilter}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieStorageConfig}
 import org.apache.hudi.io.storage.{HoodieParquetConfig, HoodieParquetWriter}
 import org.apache.parquet.avro.AvroSchemaConverter

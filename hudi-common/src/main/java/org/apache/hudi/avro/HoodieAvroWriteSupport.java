@@ -20,8 +20,8 @@ package org.apache.hudi.avro;
 
 import java.util.HashMap;
 import org.apache.avro.Schema;
-import org.apache.hudi.common.BloomFilter;
-import org.apache.hudi.common.HoodieDynamicBloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.HoodieDynamicBloomFilter;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;

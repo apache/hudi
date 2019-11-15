@@ -16,35 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.common.bloom.filter;
 
 /**
- * A Bloom filter interface
+ * Bloom filter utils
  */
-public interface BloomFilter {
+class BloomFilterUtils {
 
   /**
-   * Add a key to the {@link BloomFilter}
-   *
-   * @param key the key to the added to the {@link BloomFilter}
+   * Used in computing the optimal Bloom filter size. This approximately equals 0.480453.
    */
-  void add(String key);
+  private static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
 
   /**
-   * Tests for key membership
-   *
-   * @param key the key to be checked for membership
-   * @return {@code true} if key may be found, {@code false} if key is not found for sure.
+   * @return the bitsize given the total number of entries and error rate
    */
-  boolean mightContain(String key);
+  static int getBitSize(int numEntries, double errorRate) {
+    return (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
+  }
 
   /**
-   * Serialize the bloom filter as a string.
+   * @return the number of hashes given the bitsize and total number of entries
    */
-  String serializeToString();
-
-  /**
-   * @return the bloom index version
-   **/
-  String getBloomFilterTypeCode();
+  static int getNumHashes(int bitSize, int numEntries) {
+    // Number of the hash functions
+    return (int) Math.ceil(Math.log(2) * bitSize / numEntries);
+  }
 }

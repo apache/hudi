@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.common.bloom.filter;
 
 import org.apache.hadoop.util.hash.Hash;
 

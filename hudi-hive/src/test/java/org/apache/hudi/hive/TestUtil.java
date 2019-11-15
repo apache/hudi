@@ -19,9 +19,9 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.BloomFilter;
-import org.apache.hudi.common.BloomFilterFactory;
-import org.apache.hudi.common.SimpleBloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
+import org.apache.hudi.common.bloom.filter.SimpleBloomFilter;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.model.HoodieAvroPayload;
