@@ -96,8 +96,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   // Total number of new records inserted into the delta file
   private long insertRecordsWritten = 0;
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
-      String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  public HoodieAppendHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable, String fileId,
+      Iterator<HoodieRecord<T>> recordItr) {
     super(config, commitTime, fileId, hoodieTable);
     writeStatus.setStat(new HoodieDeltaWriteStat());
     this.fileId = fileId;
@@ -137,12 +137,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       } catch (Exception e) {
         logger.error("Error in update task at commit " + instantTime, e);
         writeStatus.setGlobalError(e);
-        throw new HoodieUpsertException(
-            "Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
-                + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath()
-                + partitionPath, e);
+        throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
+            + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath() + partitionPath, e);
       }
-      Path path = new Path(partitionPath, writer.getLogFile().getFileName());
+      Path path = partitionPath.length() == 0 ? new Path(writer.getLogFile().getFileName())
+          : new Path(partitionPath, writer.getLogFile().getFileName());
       writeStatus.getStat().setPath(path.toString());
       doInit = false;
     }
@@ -155,13 +154,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       if (avroRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
-        String seqId = HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(),
-            recordIndex.getAndIncrement());
-        HoodieAvroUtils
-            .addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
-                hoodieRecord.getPartitionPath(), fileId);
-        HoodieAvroUtils
-            .addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+        String seqId =
+            HoodieRecord.generateSequenceId(instantTime, TaskContext.getPartitionId(), recordIndex.getAndIncrement());
+        HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
+            hoodieRecord.getPartitionPath(), fileId);
+        HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
         // If currentLocation is present, then this is an update
         if (hoodieRecord.getCurrentLocation() != null) {
           updatedRecordsWritten++;
@@ -208,20 +205,18 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
         recordList.clear();
       }
       if (keysToDelete.size() > 0) {
-        writer = writer.appendBlock(
-            new HoodieDeleteBlock(keysToDelete.stream().toArray(HoodieKey[]::new), header));
+        writer = writer.appendBlock(new HoodieDeleteBlock(keysToDelete.stream().toArray(HoodieKey[]::new), header));
         keysToDelete.clear();
       }
     } catch (Exception e) {
-      throw new HoodieAppendException(
-          "Failed while appending records to " + currentLogFile.getPath(), e);
+      throw new HoodieAppendException("Failed while appending records to " + currentLogFile.getPath(), e);
     }
   }
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return config.getParquetMaxFileSize() >= estimatedNumberOfBytesWritten * config
-        .getLogFileToParquetCompressionRatio();
+    return config.getParquetMaxFileSize() >= estimatedNumberOfBytesWritten
+        * config.getLogFileToParquetCompressionRatio();
   }
 
   @Override
@@ -262,8 +257,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
 
-      logger.info(String.format("AppendHandle for partitionPath %s fileID %s, took %d ms.",
-          stat.getPartitionPath(), stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+      logger.info(String.format("AppendHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
+          stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
       return writeStatus;
     } catch (IOException e) {
@@ -282,18 +277,18 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
 
     return HoodieLogFormat.newWriterBuilder()
         .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-        .withFileId(fileId).overBaseCommit(baseCommitTime).withLogVersion(
-            latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+        .withFileId(fileId).overBaseCommit(baseCommitTime)
+        .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
         .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs)
-        .withLogWriteToken(
-            latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
-        .withRolloverLogWriteToken(writeToken)
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
+        .withRolloverLogWriteToken(writeToken).withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
 
   private void writeToBuffer(HoodieRecord<T> record) {
     // update the new location of the record, so we know where to find it next
+    record.unseal();
     record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+    record.seal();
     Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
       recordList.add(indexedRecord.get());

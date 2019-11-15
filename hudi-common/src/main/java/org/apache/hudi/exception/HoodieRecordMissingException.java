@@ -21,15 +21,15 @@ package org.apache.hudi.exception;
 import org.apache.hudi.common.model.HoodieRecord;
 
 /**
- * <p> Exception throws when indexing fails to locate the hoodie record. HoodieRecord current
- * location and partition path does not match. This is an unrecoverable error </p>
+ * <p>
+ * Exception throws when indexing fails to locate the hoodie record. HoodieRecord current location and partition path
+ * does not match. This is an unrecoverable error
+ * </p>
  */
 public class HoodieRecordMissingException extends HoodieException {
 
   public HoodieRecordMissingException(HoodieRecord record) {
-    super(
-        "Record " + record.getRecordKey() + " with partition path " + record.getPartitionPath()
-            + " in current location " + record.getCurrentLocation()
-            + " is not found in the partition");
+    super("Record " + record.getRecordKey() + " with partition path " + record.getPartitionPath()
+        + " in current location " + record.getCurrentLocation() + " is not found in the partition");
   }
 }

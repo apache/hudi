@@ -31,8 +31,7 @@ import java.util.stream.IntStream;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Table to be rendered. This class takes care of ordering
- * rows and limiting before renderer renders it.
+ * Table to be rendered. This class takes care of ordering rows and limiting before renderer renders it.
  */
 public class Table implements Iterable<List<String>> {
 
@@ -53,11 +52,8 @@ public class Table implements Iterable<List<String>> {
   // Rows ready for Rendering
   private List<List<String>> renderRows;
 
-  public Table(TableHeader rowHeader,
-      Map<String, Function<Object, String>> fieldNameToConverterMap,
-      Option<String> orderingFieldNameOptional,
-      Option<Boolean> isDescendingOptional,
-      Option<Integer> limitOptional) {
+  public Table(TableHeader rowHeader, Map<String, Function<Object, String>> fieldNameToConverterMap,
+      Option<String> orderingFieldNameOptional, Option<Boolean> isDescendingOptional, Option<Integer> limitOptional) {
     this.rowHeader = rowHeader;
     this.fieldNameToConverterMap = fieldNameToConverterMap;
     this.orderingFieldNameOptional = orderingFieldNameOptional;
@@ -68,6 +64,7 @@ public class Table implements Iterable<List<String>> {
 
   /**
    * Main API to add row to the table
+   * 
    * @param row Row
    */
   public Table add(List<Comparable> row) {
@@ -86,6 +83,7 @@ public class Table implements Iterable<List<String>> {
 
   /**
    * Add all rows
+   * 
    * @param rows Rows to be aded
    * @return
    */
@@ -96,6 +94,7 @@ public class Table implements Iterable<List<String>> {
 
   /**
    * Add all rows
+   * 
    * @param rows Rows to be added
    * @return
    */
@@ -115,6 +114,7 @@ public class Table implements Iterable<List<String>> {
 
   /**
    * Sorting of rows by a specified field
+   * 
    * @return
    */
   private List<List<Comparable>> orderRows() {

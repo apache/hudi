@@ -76,8 +76,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   private static Configuration hbaseConfig;
   private static String tableName = "test_table";
 
-  public TestHbaseIndex() throws Exception {
-  }
+  public TestHbaseIndex() throws Exception {}
 
   @AfterClass
   public static void clean() throws Exception {
@@ -102,7 +101,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     jsc.hadoopConfiguration().addResource(utility.getConfiguration());
 
     // Create a temp folder as the base path
-    initTempFolderAndPath();
+    initPath();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -110,7 +109,6 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   @After
   public void tearDown() throws Exception {
     cleanupSparkContexts();
-    cleanupTempFolderAndPath();
     cleanupTestDataGenerator();
     cleanupMetaClient();
   }
@@ -155,9 +153,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
       javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
       assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 200);
       assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 200);
-      assertTrue(javaRDD.filter(
-          record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getInstantTime()
-              .equals(newCommitTime))).distinct().count() == 200);
+      assertTrue(javaRDD.filter(record -> (record.getCurrentLocation() != null
+          && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count() == 200);
     }
   }
 
@@ -189,9 +186,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> javaRDD = index.tagLocation(writeRecords, jsc, hoodieTable);
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 10);
     assertTrue(javaRDD.map(record -> record.getKey().getRecordKey()).distinct().count() == 10);
-    assertTrue(javaRDD.filter(
-        record -> (record.getCurrentLocation() != null && record.getCurrentLocation().getInstantTime()
-            .equals(newCommitTime))).distinct().count() == 10);
+    assertTrue(javaRDD.filter(record -> (record.getCurrentLocation() != null
+        && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count() == 10);
   }
 
   @Test
@@ -349,11 +345,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     final JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(
-        Arrays.asList(
-            getSampleWriteStatus(1, 2),
-            getSampleWriteStatus(0, 3),
-            getSampleWriteStatus(10, 0)),
-        10);
+        Arrays.asList(getSampleWriteStatus(1, 2), getSampleWriteStatus(0, 3), getSampleWriteStatus(10, 0)), 10);
     final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
     final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
     final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
@@ -366,11 +358,8 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
   public void testsHBasePutAccessParallelismWithNoInserts() {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
-    final JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(
-        Arrays.asList(
-            getSampleWriteStatus(0, 2),
-            getSampleWriteStatus(0, 1)),
-        10);
+    final JavaRDD<WriteStatus> writeStatusRDD =
+        jsc.parallelize(Arrays.asList(getSampleWriteStatus(0, 2), getSampleWriteStatus(0, 1)), 10);
     final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
     final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
     final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
@@ -412,17 +401,16 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
 
   private HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(1, 1).withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withInlineCompaction(false)
-                .build()).withAutoCommit(false)
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
-        .forTable("test-trip-table").withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)
-                .withHBaseIndexConfig(
-                    new HoodieHBaseIndexConfig.Builder()
-                        .hbaseZkPort(Integer.valueOf(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
-                        .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(tableName)
-                        .hbaseIndexGetBatchSize(100).build())
-                .build());
+        .withParallelism(1, 1)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
+            .withInlineCompaction(false).build())
+        .withAutoCommit(false).withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .forTable("test-trip-table")
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.HBASE)
+            .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder()
+                .hbaseZkPort(Integer.valueOf(hbaseConfig.get("hbase.zookeeper.property.clientPort")))
+                .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(tableName)
+                .hbaseIndexGetBatchSize(100).build())
+            .build());
   }
 }

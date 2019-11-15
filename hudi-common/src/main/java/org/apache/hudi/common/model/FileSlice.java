@@ -25,8 +25,8 @@ import java.util.stream.Stream;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Within a file group, a slice is a combination of data file written at a commit time and list of
- * log files, containing changes to the data file from that commit time
+ * Within a file group, a slice is a combination of data file written at a commit time and list of log files, containing
+ * changes to the data file from that commit time
  */
 public class FileSlice implements Serializable {
 
@@ -46,8 +46,8 @@ public class FileSlice implements Serializable {
   private HoodieDataFile dataFile;
 
   /**
-   * List of appendable log files with real time data - Sorted with greater log version first -
-   * Always empty for copy_on_write storage.
+   * List of appendable log files with real time data - Sorted with greater log version first - Always empty for
+   * copy_on_write storage.
    */
   private final TreeSet<HoodieLogFile> logFiles;
 
@@ -100,6 +100,7 @@ public class FileSlice implements Serializable {
 
   /**
    * Returns true if there is no data file and no log files. Happens as part of pending compaction
+   * 
    * @return
    */
   public boolean isEmpty() {
@@ -126,10 +127,8 @@ public class FileSlice implements Serializable {
       return false;
     }
     FileSlice slice = (FileSlice) o;
-    return Objects.equals(fileGroupId, slice.fileGroupId)
-        && Objects.equals(baseInstantTime, slice.baseInstantTime)
-        && Objects.equals(dataFile, slice.dataFile)
-        && Objects.equals(logFiles, slice.logFiles);
+    return Objects.equals(fileGroupId, slice.fileGroupId) && Objects.equals(baseInstantTime, slice.baseInstantTime)
+        && Objects.equals(dataFile, slice.dataFile) && Objects.equals(logFiles, slice.logFiles);
   }
 
   @Override

@@ -25,12 +25,11 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.RecordReader;
 
 /**
- * Record Reader for parquet. Records read from this reader is safe to be
- * buffered for concurrent processing.
+ * Record Reader for parquet. Records read from this reader is safe to be buffered for concurrent processing.
  *
- * In concurrent producer/consumer pattern, where the record is read and buffered by one thread and processed in
- * another thread, we need to ensure new instance of ArrayWritable is buffered. ParquetReader createKey/Value is unsafe
- * as it gets reused for subsequent fetch. This wrapper makes ParquetReader safe for this use-case.
+ * In concurrent producer/consumer pattern, where the record is read and buffered by one thread and processed in another
+ * thread, we need to ensure new instance of ArrayWritable is buffered. ParquetReader createKey/Value is unsafe as it
+ * gets reused for subsequent fetch. This wrapper makes ParquetReader safe for this use-case.
  */
 public class SafeParquetRecordReaderWrapper implements RecordReader<NullWritable, ArrayWritable> {
 
@@ -62,11 +61,9 @@ public class SafeParquetRecordReaderWrapper implements RecordReader<NullWritable
   }
 
   /**
-   * We could be in concurrent fetch and read env.
-   * We need to ensure new ArrayWritable as ParquetReader implementation reuses same
-   * ArrayWritable for all reads which will cause corruption when buffering.
-   * So, we create a new ArrayWritable here with Value class from parquetReader's value
-   * and an empty array.
+   * We could be in concurrent fetch and read env. We need to ensure new ArrayWritable as ParquetReader implementation
+   * reuses same ArrayWritable for all reads which will cause corruption when buffering. So, we create a new
+   * ArrayWritable here with Value class from parquetReader's value and an empty array.
    */
   @Override
   public ArrayWritable createValue() {

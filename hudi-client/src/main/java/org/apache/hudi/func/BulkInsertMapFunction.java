@@ -31,16 +31,16 @@ import org.apache.spark.api.java.function.Function2;
 /**
  * Map function that handles a sorted stream of HoodieRecords
  */
-public class BulkInsertMapFunction<T extends HoodieRecordPayload> implements
-    Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
+public class BulkInsertMapFunction<T extends HoodieRecordPayload>
+    implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {
 
   private String commitTime;
   private HoodieWriteConfig config;
   private HoodieTable<T> hoodieTable;
   private List<String> fileIDPrefixes;
 
-  public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config,
-      HoodieTable<T> hoodieTable, List<String> fileIDPrefixes) {
+  public BulkInsertMapFunction(String commitTime, HoodieWriteConfig config, HoodieTable<T> hoodieTable,
+      List<String> fileIDPrefixes) {
     this.commitTime = commitTime;
     this.config = config;
     this.hoodieTable = hoodieTable;

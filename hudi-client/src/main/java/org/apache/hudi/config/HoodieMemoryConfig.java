@@ -40,9 +40,10 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   public static final String MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP = "hoodie.memory.compaction.fraction";
   // Default max memory fraction during compaction, excess spills to disk
   public static final String DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION = String.valueOf(0.6);
-  // Default memory size per compaction (used if SparkEnv is absent), excess spills to disk
-  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES =
-      1024 * 1024 * 1024L; // 1GB
+  // Default memory size (1GB) per compaction (used if SparkEnv is absent), excess spills to disk
+  public static final long DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 1024 * 1024 * 1024L;
+  // Minimum memory size (100MB) for the spillable map.
+  public static final long DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES = 100 * 1024 * 1024L;
   // Property to set the max memory for merge
   public static final String MAX_MEMORY_FOR_MERGE_PROP = "hoodie.memory.merge.max.size";
   // Property to set the max memory for compaction
@@ -88,20 +89,23 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
     }
 
     public Builder withMaxMemoryFractionPerPartitionMerge(double maxMemoryFractionPerPartitionMerge) {
-      props.setProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP,
-          String.valueOf(maxMemoryFractionPerPartitionMerge));
+      props.setProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP, String.valueOf(maxMemoryFractionPerPartitionMerge));
+      return this;
+    }
+
+    public Builder withMaxMemoryMaxSize(long mergeMaxSize, long compactionMaxSize) {
+      props.setProperty(MAX_MEMORY_FOR_MERGE_PROP, String.valueOf(mergeMaxSize));
+      props.setProperty(MAX_MEMORY_FOR_COMPACTION_PROP, String.valueOf(compactionMaxSize));
       return this;
     }
 
     public Builder withMaxMemoryFractionPerCompaction(double maxMemoryFractionPerCompaction) {
-      props.setProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP,
-          String.valueOf(maxMemoryFractionPerCompaction));
+      props.setProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, String.valueOf(maxMemoryFractionPerCompaction));
       return this;
     }
 
     public Builder withMaxDFSStreamBufferSize(int maxStreamBufferSize) {
-      props.setProperty(MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-          String.valueOf(maxStreamBufferSize));
+      props.setProperty(MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(maxStreamBufferSize));
       return this;
     }
 
@@ -130,20 +134,17 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
 
       if (SparkEnv.get() != null) {
         // 1 GB is the default conf used by Spark, look at SparkContext.scala
-        long executorMemoryInBytes = Utils.memoryStringToMb(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_PROP,
-            DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024
-            * 1024L;
+        long executorMemoryInBytes = Utils.memoryStringToMb(
+            SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_PROP, DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024 * 1024L;
         // 0.6 is the default value used by Spark,
         // look at {@link
         // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}
-        double memoryFraction = Double
-            .valueOf(SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_FRACTION_PROP,
-                DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION));
+        double memoryFraction = Double.valueOf(
+            SparkEnv.get().conf().get(SPARK_EXECUTOR_MEMORY_FRACTION_PROP, DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION));
         double maxMemoryFractionForMerge = Double.valueOf(maxMemoryFraction);
         double userAvailableMemory = executorMemoryInBytes * (1 - memoryFraction);
-        long maxMemoryForMerge = (long) Math
-            .floor(userAvailableMemory * maxMemoryFractionForMerge);
-        return maxMemoryForMerge;
+        long maxMemoryForMerge = (long) Math.floor(userAvailableMemory * maxMemoryFractionForMerge);
+        return Math.max(DEFAULT_MIN_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, maxMemoryForMerge);
       } else {
         return DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
       }
@@ -151,29 +152,19 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
 
     public HoodieMemoryConfig build() {
       HoodieMemoryConfig config = new HoodieMemoryConfig(props);
-      setDefaultOnCondition(props,
-          !props.containsKey(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP),
-          MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP,
-          DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION);
-      setDefaultOnCondition(props,
-          !props.containsKey(MAX_MEMORY_FRACTION_FOR_MERGE_PROP),
+      setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP),
+          MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION);
+      setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FRACTION_FOR_MERGE_PROP),
           MAX_MEMORY_FRACTION_FOR_MERGE_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE);
-      setDefaultOnCondition(props,
-          !props.containsKey(MAX_MEMORY_FOR_MERGE_PROP),
-          MAX_MEMORY_FOR_MERGE_PROP, String.valueOf(
-              getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP))));
-      setDefaultOnCondition(props,
-          !props.containsKey(MAX_MEMORY_FOR_COMPACTION_PROP),
-          MAX_MEMORY_FOR_COMPACTION_PROP, String.valueOf(
-              getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP))));
-      setDefaultOnCondition(props,
-          !props.containsKey(MAX_DFS_STREAM_BUFFER_SIZE_PROP),
-          MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
-      setDefaultOnCondition(props,
-          !props.containsKey(SPILLABLE_MAP_BASE_PATH_PROP),
-          SPILLABLE_MAP_BASE_PATH_PROP, DEFAULT_SPILLABLE_MAP_BASE_PATH);
-      setDefaultOnCondition(props,
-          !props.containsKey(WRITESTATUS_FAILURE_FRACTION_PROP),
+      setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FOR_MERGE_PROP), MAX_MEMORY_FOR_MERGE_PROP,
+          String.valueOf(getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP))));
+      setDefaultOnCondition(props, !props.containsKey(MAX_MEMORY_FOR_COMPACTION_PROP), MAX_MEMORY_FOR_COMPACTION_PROP,
+          String.valueOf(getMaxMemoryAllowedForMerge(props.getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP))));
+      setDefaultOnCondition(props, !props.containsKey(MAX_DFS_STREAM_BUFFER_SIZE_PROP), MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+          String.valueOf(DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
+      setDefaultOnCondition(props, !props.containsKey(SPILLABLE_MAP_BASE_PATH_PROP), SPILLABLE_MAP_BASE_PATH_PROP,
+          DEFAULT_SPILLABLE_MAP_BASE_PATH);
+      setDefaultOnCondition(props, !props.containsKey(WRITESTATUS_FAILURE_FRACTION_PROP),
           WRITESTATUS_FAILURE_FRACTION_PROP, String.valueOf(DEFAULT_WRITESTATUS_FAILURE_FRACTION));
       return config;
     }

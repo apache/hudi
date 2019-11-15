@@ -40,10 +40,9 @@ import org.apache.hudi.exception.HoodieIOException;
 public abstract class HoodieLogBlock {
 
   /**
-   * The current version of the log block. Anytime the logBlock format changes this version needs to
-   * be bumped and corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO :
-   * Change this to a class, something like HoodieLogBlockVersionV1/V2 and implement/override
-   * operations there
+   * The current version of the log block. Anytime the logBlock format changes this version needs to be bumped and
+   * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
+   * like HoodieLogBlockVersionV1/V2 and implement/override operations there
    */
   public static int version = 1;
   // Header for each log block
@@ -63,10 +62,8 @@ public abstract class HoodieLogBlock {
 
   public HoodieLogBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
-      @Nonnull Option<byte[]> content,
-      FSDataInputStream inputStream,
-      boolean readBlockLazily) {
+      @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
+      FSDataInputStream inputStream, boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
@@ -109,38 +106,30 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at
-   * the end.
+   * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
-    COMMAND_BLOCK,
-    DELETE_BLOCK,
-    CORRUPT_BLOCK,
-    AVRO_DATA_BLOCK
+    COMMAND_BLOCK, DELETE_BLOCK, CORRUPT_BLOCK, AVRO_DATA_BLOCK
   }
 
   /**
-   * Log Metadata headers abstraction for a HoodieLogBlock WARNING : This enum is serialized as the
-   * ordinal. Only add new enums at the end.
+   * Log Metadata headers abstraction for a HoodieLogBlock WARNING : This enum is serialized as the ordinal. Only add
+   * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME,
-    TARGET_INSTANT_TIME,
-    SCHEMA,
-    COMMAND_BLOCK_TYPE
+    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE
   }
 
   /**
-   * Log Metadata footers abstraction for a HoodieLogBlock WARNING : This enum is serialized as the
-   * ordinal. Only add new enums at the end.
+   * Log Metadata footers abstraction for a HoodieLogBlock WARNING : This enum is serialized as the ordinal. Only add
+   * new enums at the end.
    */
   public enum FooterMetadataType {
   }
 
   /**
-   * This class is used to store the Location of the Content of a Log Block. It's used when a client
-   * chooses for a IO intensive CompactedScanner, the location helps to lazily read contents from
-   * the log file
+   * This class is used to store the Location of the Content of a Log Block. It's used when a client chooses for a IO
+   * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
   public static final class HoodieLogBlockContentLocation {
 
@@ -153,8 +142,8 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    HoodieLogBlockContentLocation(HoodieLogFile logFile, long contentPositionInLogFile,
-        long blockSize, long blockEndPos) {
+    HoodieLogBlockContentLocation(HoodieLogFile logFile, long contentPositionInLogFile, long blockSize,
+        long blockEndPos) {
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
@@ -179,11 +168,9 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert log metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual
-   * bytes
+   * Convert log metadata to bytes 1. Write size of metadata 2. Write enum ordinal 3. Write actual bytes
    */
-  public static byte[] getLogMetadataBytes(Map<HeaderMetadataType, String> metadata)
-      throws IOException {
+  public static byte[] getLogMetadataBytes(Map<HeaderMetadataType, String> metadata) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream output = new DataOutputStream(baos);
     output.writeInt(metadata.size());
@@ -197,11 +184,9 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert bytes to LogMetadata, follow the same order as
-   * {@link HoodieLogBlock#getLogMetadataBytes}
+   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}
    */
-  public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis)
-      throws IOException {
+  public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
 
     Map<HeaderMetadataType, String> metadata = Maps.newHashMap();
     // 1. Read the metadata written out
@@ -225,8 +210,8 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static byte[] readOrSkipContent(FSDataInputStream inputStream,
-      Integer contentLength, boolean readBlockLazily) throws IOException {
+  public static byte[] readOrSkipContent(FSDataInputStream inputStream, Integer contentLength, boolean readBlockLazily)
+      throws IOException {
     byte[] content = null;
     if (!readBlockLazily) {
       // Read the contents in memory
@@ -261,9 +246,8 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * After the content bytes is converted into the required DataStructure by a logBlock, deflate the
-   * content to release byte [] and relieve memory pressure when GC kicks in. NOTE: This still
-   * leaves the heap fragmented
+   * After the content bytes is converted into the required DataStructure by a logBlock, deflate the content to release
+   * byte [] and relieve memory pressure when GC kicks in. NOTE: This still leaves the heap fragmented
    */
   protected void deflate() {
     content = Option.empty();
@@ -271,8 +255,9 @@ public abstract class HoodieLogBlock {
 
   /**
    * Handles difference in seek behavior for GCS and non-GCS input stream
+   * 
    * @param inputStream Input Stream
-   * @param pos  Position to seek
+   * @param pos Position to seek
    * @throws IOException
    */
   private static void safeSeek(FSDataInputStream inputStream, long pos) throws IOException {

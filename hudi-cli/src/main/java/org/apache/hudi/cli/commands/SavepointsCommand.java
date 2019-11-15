@@ -19,7 +19,6 @@
 package org.apache.hudi.cli.commands;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.hudi.HoodieWriteClient;
@@ -62,17 +61,16 @@ public class SavepointsCommand implements CommandMarker {
 
   @CliAvailabilityIndicator({"savepoint rollback"})
   public boolean isRollbackToSavepointAvailable() {
-    return HoodieCLI.tableMetadata != null && !HoodieCLI.tableMetadata.getActiveTimeline().getSavePointTimeline()
-        .filterCompletedInstants().empty();
+    return HoodieCLI.tableMetadata != null
+        && !HoodieCLI.tableMetadata.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().empty();
   }
 
   @CliCommand(value = "savepoints show", help = "Show the savepoints")
   public String showSavepoints() throws IOException {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getSavePointTimeline().filterCompletedInstants();
-    List<HoodieInstant> commits = timeline.getInstants().collect(Collectors.toList());
+    List<HoodieInstant> commits = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     String[][] rows = new String[commits.size()][];
-    Collections.reverse(commits);
     for (int i = 0; i < commits.size(); i++) {
       HoodieInstant commit = commits.get(i);
       rows[i] = new String[] {commit.getTimestamp()};
@@ -137,8 +135,8 @@ public class SavepointsCommand implements CommandMarker {
   }
 
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config, false);
   }
 

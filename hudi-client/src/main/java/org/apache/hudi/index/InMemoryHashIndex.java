@@ -40,7 +40,9 @@ import org.apache.spark.api.java.function.Function2;
 
 
 /**
- * Hoodie Index implementation backed by an in-memory Hash map. <p> ONLY USE FOR LOCAL TESTING
+ * Hoodie Index implementation backed by an in-memory Hash map.
+ * <p>
+ * ONLY USE FOR LOCAL TESTING
  */
 public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
@@ -80,7 +82,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
             if (newLocation.isPresent()) {
               recordLocationMap.put(key, newLocation.get());
             } else {
-              //Delete existing index for a deleted record
+              // Delete existing index for a deleted record
               recordLocationMap.remove(key);
             }
           }
@@ -122,17 +124,17 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
-  class LocationTagFunction implements
-      Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {
+  class LocationTagFunction implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {
 
     @Override
-    public Iterator<HoodieRecord<T>> call(Integer partitionNum,
-        Iterator<HoodieRecord<T>> hoodieRecordIterator) {
+    public Iterator<HoodieRecord<T>> call(Integer partitionNum, Iterator<HoodieRecord<T>> hoodieRecordIterator) {
       List<HoodieRecord<T>> taggedRecords = new ArrayList<>();
       while (hoodieRecordIterator.hasNext()) {
         HoodieRecord<T> rec = hoodieRecordIterator.next();
         if (recordLocationMap.containsKey(rec.getKey())) {
+          rec.unseal();
           rec.setCurrentLocation(recordLocationMap.get(rec.getKey()));
+          rec.seal();
         }
         taggedRecords.add(rec);
       }

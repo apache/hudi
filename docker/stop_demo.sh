@@ -21,7 +21,7 @@
 # set up root directory
 WS_ROOT=`dirname $PWD`
 # shut down cluster
-HUDI_WS=${WS_ROOT} docker-compose -f compose/docker-compose_hadoop284_hive233_spark231.yml down
+HUDI_WS=${WS_ROOT} docker-compose -f compose/docker-compose_hadoop284_hive233_spark244.yml down
 
 # remove houst mount directory
 rm -rf /tmp/hadoop_data

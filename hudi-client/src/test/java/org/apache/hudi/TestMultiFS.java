@@ -71,19 +71,17 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
   protected HoodieWriteConfig getHoodieWriteConfig(String basePath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withEmbeddedTimelineServerEnabled(true)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
-        .forTable(tableName).withIndexConfig(
-            HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
   }
 
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
-    HoodieTableMetaClient
-        .initTableType(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.valueOf(tableType), tableName,
-            HoodieAvroPayload.class.getName());
+    HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), dfsBasePath, HoodieTableType.valueOf(tableType),
+        tableName, HoodieAvroPayload.class.getName());
 
-    //Create write client to write some records in
+    // Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
 
@@ -105,9 +103,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
       assertEquals("Should contain 100 records", readRecords.count(), records.size());
 
       // Write to local
-      HoodieTableMetaClient
-          .initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType), tableName,
-              HoodieAvroPayload.class.getName());
+      HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
+          tableName, HoodieAvroPayload.class.getName());
 
       String writeCommitTime = localWriteClient.startCommit();
       logger.info("Starting write commit " + writeCommitTime);
@@ -120,8 +117,8 @@ public class TestMultiFS extends HoodieClientTestHarness {
       fs = FSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
       metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-      Dataset<Row> localReadRecords = HoodieClientTestUtils
-          .readCommit(tablePath, sqlContext, timeline, writeCommitTime);
+      Dataset<Row> localReadRecords =
+          HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime);
       assertEquals("Should contain 100 records", localReadRecords.count(), localRecords.size());
     }
   }

@@ -75,7 +75,7 @@ HUDI_REPO=hudi
 rm -rf $LOCAL_SVN_DIR
 mkdir $LOCAL_SVN_DIR
 cd $LOCAL_SVN_DIR
-bash -c "svn co ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} $REDIRECT"
+(bash -c "svn co ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} . Please run with --verbose to get details\n" && exit -1)
 
 cd ${HUDI_REPO}/hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}
 $SHASUM hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz > got.sha512 
@@ -86,31 +86,29 @@ echo -e "\t\tChecksum Check of Source Release - [OK]\n"
 
 # GPG Check
 echo "Checking Signature"
-bash -c "gpg --import ../KEYS $REDIRECT"
-bash -c "gpg --verify hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz.asc hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT"
-echo -e "\t\tSignature Check - [OK]\n"
+(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz.asc hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
 
 # Untar 
-bash -c "tar -zxf hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT"
+(bash -c "tar -zxf hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}.src.tgz . Please run with --verbose to get details\n" && exit -1)
 cd hudi-${RELEASE_VERSION}-incubating-rc${RC_NUM}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' | wc -l | sed -e s'/ //g'`
+numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' | grep -va 'application/xml' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/'
+  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' |  grep -va 'application/xml'
   exit -1
 fi
-echo -e "\t\tBinary Files in Source Release Check - [OK]\n"
+echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### END: Binary Files Check
 
-### Checking for DISCLAIMER
-echo "Checking for DISCLAIMER"
-disclaimerFile="./DISCLAIMER"
+### Checking for DISCLAIMER-WIP
+echo "Checking for DISCLAIMERi-WIP"
+disclaimerFile="./DISCLAIMER-WIP"
 if [ ! -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file missing"
+  echo "DISCLAIMER-WIP file missing"
   exit -1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
@@ -133,17 +131,17 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
   echo "There were some source files that did not have Apache License"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
   exit -1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"
 
 ### Checking for RAT
 echo "Running RAT Check"
-bash -c "mvn apache-rat:check $REDIRECT"
+(bash -c "mvn apache-rat:check $REDIRECT") || (echo -e "\t\t Rat Check Failed. Please run with --verbose to get details\n" && exit -1)
 echo -e "\t\tRAT Check Passed [OK]\n"
 
 popd

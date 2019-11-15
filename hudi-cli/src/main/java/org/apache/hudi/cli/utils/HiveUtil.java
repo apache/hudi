@@ -48,12 +48,11 @@ public class HiveUtil {
     ResultSet rs = null;
     Statement stmt = conn.createStatement();
     try {
-      //stmt.execute("set mapred.job.queue.name=<queue_name>");
+      // stmt.execute("set mapred.job.queue.name=<queue_name>");
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
       rs = stmt.executeQuery(
-          "select count(`_hoodie_commit_time`) as cnt from " + dbName + "."
-              + source.getTableConfig().getTableName());
+          "select count(`_hoodie_commit_time`) as cnt from " + dbName + "." + source.getTableConfig().getTableName());
       long count = -1;
       if (rs.next()) {
         count = rs.getLong("cnt");
@@ -88,7 +87,7 @@ public class HiveUtil {
     ResultSet rs = null;
     Statement stmt = conn.createStatement();
     try {
-      //stmt.execute("set mapred.job.queue.name=<queue_name>");
+      // stmt.execute("set mapred.job.queue.name=<queue_name>");
       stmt.execute("set hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
       stmt.execute("set hive.stats.autogather=false");
       rs = stmt.executeQuery(

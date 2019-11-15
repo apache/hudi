@@ -70,8 +70,7 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
           }
 
           @Override
-          protected void finish() {
-          }
+          protected void finish() {}
 
           @Override
           protected Integer getResult() {
@@ -79,11 +78,10 @@ public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
           }
         };
 
-    SparkBoundedInMemoryExecutor<HoodieRecord,
-        Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
+    SparkBoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
     try {
-      executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig,
-          hoodieRecords.iterator(), consumer, getTransformFunction(HoodieTestDataGenerator.avroSchema));
+      executor = new SparkBoundedInMemoryExecutor(hoodieWriteConfig, hoodieRecords.iterator(), consumer,
+          getTransformFunction(HoodieTestDataGenerator.avroSchema));
       int result = executor.execute();
       // It should buffer and write 100 records
       Assert.assertEquals(result, 100);

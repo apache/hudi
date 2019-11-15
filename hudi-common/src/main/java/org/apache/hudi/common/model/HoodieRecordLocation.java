@@ -22,8 +22,7 @@ import com.google.common.base.Objects;
 import java.io.Serializable;
 
 /**
- * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an
- * actual file on disk
+ * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an actual file on disk
  */
 public class HoodieRecordLocation implements Serializable {
 
@@ -44,8 +43,7 @@ public class HoodieRecordLocation implements Serializable {
       return false;
     }
     HoodieRecordLocation otherLoc = (HoodieRecordLocation) o;
-    return Objects.equal(instantTime, otherLoc.instantTime)
-        && Objects.equal(fileId, otherLoc.fileId);
+    return Objects.equal(instantTime, otherLoc.instantTime) && Objects.equal(fileId, otherLoc.fileId);
   }
 
   @Override

@@ -60,7 +60,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
     initSparkContexts("TestHoodieCompactor");
 
     // Create a temp folder as the base path
-    initTempFolderAndPath();
+    initPath();
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath, hadoopConf);
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
@@ -71,7 +71,6 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void tearDown() throws Exception {
     cleanupFileSystem();
     cleanupTestDataGenerator();
-    cleanupTempFolderAndPath();
     cleanupSparkContexts();
   }
 
@@ -87,9 +86,10 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
 
   private HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2).withCompactionConfig(
-            HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).withInlineCompaction(false)
-                .build()).withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .withParallelism(2, 2)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
+            .withInlineCompaction(false).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .withMemoryConfig(HoodieMemoryConfig.newBuilder().withMaxDFSStreamBufferSize(1 * 1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
@@ -147,16 +147,15 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       updatedRecords = index.tagLocation(updatedRecordsRDD, jsc, table).collect();
 
       // Write them to corresponding avro logfiles
-      HoodieTestUtils
-          .writeRecordsToLogFiles(fs, metaClient.getBasePath(), HoodieTestDataGenerator.avroSchemaWithMetadataFields,
-              updatedRecords);
+      HoodieTestUtils.writeRecordsToLogFiles(fs, metaClient.getBasePath(),
+          HoodieTestDataGenerator.avroSchemaWithMetadataFields, updatedRecords);
 
       // Verify that all data file has one log file
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, config, jsc);
       for (String partitionPath : dataGen.getPartitionPaths()) {
-        List<FileSlice> groupedLogFiles = table.getRTFileSystemView().getLatestFileSlices(partitionPath)
-            .collect(Collectors.toList());
+        List<FileSlice> groupedLogFiles =
+            table.getRTFileSystemView().getLatestFileSlices(partitionPath).collect(Collectors.toList());
         for (FileSlice fileSlice : groupedLogFiles) {
           assertEquals("There should be 1 log file written for every data file", 1, fileSlice.getLogFiles().count());
         }
@@ -174,8 +173,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       for (String partitionPath : dataGen.getPartitionPaths()) {
         List<WriteStatus> writeStatuses = result.collect();
         assertTrue(writeStatuses.stream()
-            .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath))
-            .count() > 0);
+            .filter(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)).count() > 0);
       }
     }
   }

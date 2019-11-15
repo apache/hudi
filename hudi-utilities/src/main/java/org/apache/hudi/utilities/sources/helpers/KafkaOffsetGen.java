@@ -58,8 +58,7 @@ public class KafkaOffsetGen {
     /**
      * Reconstruct checkpoint from string.
      */
-    public static HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> strToOffsets(
-        String checkpointStr) {
+    public static HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> strToOffsets(String checkpointStr) {
       HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> offsetMap = new HashMap<>();
       if (checkpointStr.length() == 0) {
         return offsetMap;
@@ -75,14 +74,15 @@ public class KafkaOffsetGen {
     }
 
     /**
-     * String representation of checkpoint <p> Format: topic1,0:offset0,1:offset1,2:offset2, .....
+     * String representation of checkpoint
+     * <p>
+     * Format: topic1,0:offset0,1:offset1,2:offset2, .....
      */
     public static String offsetsToStr(OffsetRange[] ranges) {
       StringBuilder sb = new StringBuilder();
       // at least 1 partition will be present.
       sb.append(ranges[0].topic() + ",");
-      sb.append(Arrays.stream(ranges)
-          .map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
+      sb.append(Arrays.stream(ranges).map(r -> String.format("%s:%d", r.partition(), r.untilOffset()))
           .collect(Collectors.joining(",")));
       return sb.toString();
     }
@@ -94,10 +94,8 @@ public class KafkaOffsetGen {
      * @param toOffsetMap offsets of where each partitions is currently at
      * @param numEvents maximum number of events to read.
      */
-    public static OffsetRange[] computeOffsetRanges(
-        HashMap<TopicAndPartition, LeaderOffset> fromOffsetMap,
-        HashMap<TopicAndPartition, LeaderOffset> toOffsetMap,
-        long numEvents) {
+    public static OffsetRange[] computeOffsetRanges(HashMap<TopicAndPartition, LeaderOffset> fromOffsetMap,
+        HashMap<TopicAndPartition, LeaderOffset> toOffsetMap, long numEvents) {
 
       Comparator<OffsetRange> byPartition = Comparator.comparing(OffsetRange::partition);
 
@@ -114,8 +112,8 @@ public class KafkaOffsetGen {
       // keep going until we have events to allocate and partitions still not exhausted.
       while (allocedEvents < numEvents && exhaustedPartitions.size() < toOffsetMap.size()) {
         long remainingEvents = numEvents - allocedEvents;
-        long eventsPerPartition = (long) Math
-            .ceil((1.0 * remainingEvents) / (toOffsetMap.size() - exhaustedPartitions.size()));
+        long eventsPerPartition =
+            (long) Math.ceil((1.0 * remainingEvents) / (toOffsetMap.size() - exhaustedPartitions.size()));
 
         // Allocate the remaining events to non-exhausted partitions, in round robin fashion
         for (int i = 0; i < ranges.length; i++) {
@@ -127,6 +125,11 @@ public class KafkaOffsetGen {
               exhaustedPartitions.add(range.partition());
             }
             allocedEvents += toOffset - range.untilOffset();
+            // We need recompute toOffset if allocedEvents larger than numEvents.
+            if (allocedEvents > numEvents) {
+              long offsetsToAdd = Math.min(eventsPerPartition, (numEvents - allocedEvents));
+              toOffset = Math.min(toOffsetMax, toOffset + offsetsToAdd);
+            }
             ranges[i] = OffsetRange.create(range.topicAndPartition(), range.fromOffset(), toOffset);
           }
         }
@@ -162,8 +165,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies
    */
   enum KafkaResetOffsetStrategies {
-    LARGEST,
-    SMALLEST
+    LARGEST, SMALLEST
   }
 
   /**
@@ -193,12 +195,11 @@ public class KafkaOffsetGen {
 
     // Obtain current metadata for the topic
     KafkaCluster cluster = new KafkaCluster(ScalaHelpers.toScalaMap(kafkaParams));
-    Either<ArrayBuffer<Throwable>, Set<TopicAndPartition>> either = cluster.getPartitions(
-        ScalaHelpers.toScalaSet(new HashSet<>(Collections.singletonList(topicName))));
+    Either<ArrayBuffer<Throwable>, Set<TopicAndPartition>> either =
+        cluster.getPartitions(ScalaHelpers.toScalaSet(new HashSet<>(Collections.singletonList(topicName))));
     if (either.isLeft()) {
       // log errors. and bail out.
-      throw new HoodieDeltaStreamerException("Error obtaining partition metadata",
-          either.left().get().head());
+      throw new HoodieDeltaStreamerException("Error obtaining partition metadata", either.left().get().head());
     }
     Set<TopicAndPartition> topicPartitions = either.right().get();
 
@@ -208,26 +209,25 @@ public class KafkaOffsetGen {
     if (lastCheckpointStr.isPresent()) {
       fromOffsets = checkupValidOffsets(cluster, lastCheckpointStr, topicPartitions);
     } else {
-      KafkaResetOffsetStrategies autoResetValue =  KafkaResetOffsetStrategies.valueOf(
-              props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
+      KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
+          .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
       switch (autoResetValue) {
         case SMALLEST:
-          fromOffsets = new HashMap(ScalaHelpers.toJavaMap(
-                  cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
+          fromOffsets =
+              new HashMap(ScalaHelpers.toJavaMap(cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
           break;
         case LARGEST:
-          fromOffsets = new HashMap(
-                  ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
+          fromOffsets =
+              new HashMap(ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
           break;
         default:
-          throw new HoodieNotSupportedException(
-                  "Auto reset value must be one of 'smallest' or 'largest' ");
+          throw new HoodieNotSupportedException("Auto reset value must be one of 'smallest' or 'largest' ");
       }
     }
 
     // Obtain the latest offsets.
-    HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> toOffsets = new HashMap(
-        ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
+    HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> toOffsets =
+        new HashMap(ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long numEvents = Math.min(DEFAULT_MAX_EVENTS_TO_READ, sourceLimit);
@@ -236,22 +236,17 @@ public class KafkaOffsetGen {
     return offsetRanges;
   }
 
-  // check up checkpoint offsets is valid or not, if true,  return checkpoint offsets,
+  // check up checkpoint offsets is valid or not, if true, return checkpoint offsets,
   // else return earliest offsets
-  private HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkupValidOffsets(
-          KafkaCluster cluster,
-          Option<String> lastCheckpointStr,
-          Set<TopicAndPartition> topicPartitions) {
+  private HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkupValidOffsets(KafkaCluster cluster,
+      Option<String> lastCheckpointStr, Set<TopicAndPartition> topicPartitions) {
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> checkpointOffsets =
-            CheckpointUtils.strToOffsets(lastCheckpointStr.get());
+        CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     HashMap<TopicAndPartition, KafkaCluster.LeaderOffset> earliestOffsets =
-            new HashMap(ScalaHelpers.toJavaMap(
-            cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
+        new HashMap(ScalaHelpers.toJavaMap(cluster.getEarliestLeaderOffsets(topicPartitions).right().get()));
 
-    boolean checkpointOffsetReseter = checkpointOffsets.entrySet()
-            .stream()
-            .anyMatch(offset -> offset.getValue().offset()
-                    < earliestOffsets.get(offset.getKey()).offset());
+    boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
+        .anyMatch(offset -> offset.getValue().offset() < earliestOffsets.get(offset.getKey()).offset());
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
   }
 

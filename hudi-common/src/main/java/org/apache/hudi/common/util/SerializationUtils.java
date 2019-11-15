@@ -34,8 +34,7 @@ import org.objenesis.instantiator.ObjectInstantiator;
 
 
 /**
- * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing /
- * deserializing objects.
+ * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
  */
 public class SerializationUtils {
 
@@ -44,10 +43,12 @@ public class SerializationUtils {
       ThreadLocal.withInitial(() -> new KryoSerializerInstance());
 
   // Serialize
-  //-----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   /**
-   * <p>Serializes an {@code Object} to a byte array for storage/serialization.</p>
+   * <p>
+   * Serializes an {@code Object} to a byte array for storage/serialization.
+   * </p>
    *
    * @param obj the object to serialize to bytes
    * @return a byte[] with the converted Serializable
@@ -58,15 +59,18 @@ public class SerializationUtils {
   }
 
   // Deserialize
-  //-----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   /**
-   * <p> Deserializes a single {@code Object} from an array of bytes. </p>
+   * <p>
+   * Deserializes a single {@code Object} from an array of bytes.
+   * </p>
    *
-   * <p> If the call site incorrectly types the return value, a {@link ClassCastException} is thrown
-   * from the call site. Without Generics in this declaration, the call site must type cast and can
-   * cause the same ClassCastException. Note that in both cases, the ClassCastException is in the
-   * call site, not in this method. </p>
+   * <p>
+   * If the call site incorrectly types the return value, a {@link ClassCastException} is thrown from the call site.
+   * Without Generics in this declaration, the call site must type cast and can cause the same ClassCastException. Note
+   * that in both cases, the ClassCastException is in the call site, not in this method.
+   * </p>
    *
    * @param <T> the object type to be deserialized
    * @param objectData the serialized object, must not be null
@@ -109,8 +113,8 @@ public class SerializationUtils {
   }
 
   /**
-   * This class has a no-arg constructor, suitable for use with reflection instantiation.
-   * For Details checkout com.twitter.chill.KryoBase.
+   * This class has a no-arg constructor, suitable for use with reflection instantiation. For Details checkout
+   * com.twitter.chill.KryoBase.
    */
   private static class KryoInstantiator implements Serializable {
 
@@ -153,8 +157,8 @@ public class SerializationUtils {
             final Constructor constructor = type.getConstructor();
             constructor.setAccessible(true);
             return constructor.newInstance();
-          } catch (NoSuchMethodException | IllegalAccessException
-              | InstantiationException | InvocationTargetException e) {
+          } catch (NoSuchMethodException | IllegalAccessException | InstantiationException
+              | InvocationTargetException e) {
             // ignore this exception. we will fall back to default instantiation strategy.
           }
           return super.getInstantiatorStrategy().newInstantiatorOf(type).newInstance();

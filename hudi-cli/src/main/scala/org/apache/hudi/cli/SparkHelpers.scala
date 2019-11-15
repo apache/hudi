@@ -17,6 +17,9 @@
 
 package org.apache.hudi.cli
 
+import java.util
+import java.util.Map
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
@@ -53,11 +56,6 @@ object SparkHelpers {
       }
     }
     writer.close
-  }
-
-  def getBloomFilter(file: String, conf: Configuration): String = {
-    val footer = ParquetFileReader.readFooter(conf, new Path(file));
-    return footer.getFileMetaData().getKeyValueMetaData().get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY)
   }
 }
 
@@ -124,8 +122,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @return
     */
   def fileKeysAgainstBF(conf: Configuration, sqlContext: SQLContext, file: String): Boolean = {
-    val bfStr = SparkHelpers.getBloomFilter(file, conf)
-    val bf = new BloomFilter(bfStr)
+    val bf = ParquetUtils.readBloomFilterFromParquetMetadata(conf, new Path(file))
     val foundCount = sqlContext.parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
       .collect().count(r => !bf.mightContain(r.getString(0)))

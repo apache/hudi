@@ -74,6 +74,11 @@
           "values":"string"
        }],
        "default": null
+    },
+    {
+       "name":"version",
+       "type":["int", "null"],
+       "default": 1
     }
   ]
 }

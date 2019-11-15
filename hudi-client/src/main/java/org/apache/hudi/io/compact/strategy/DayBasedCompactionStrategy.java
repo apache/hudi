@@ -34,21 +34,18 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 /**
- * This strategy orders compactions in reverse order of creation of Hive Partitions. It helps to
- * compact data in latest partitions first and then older capped at the Total_IO allowed.
+ * This strategy orders compactions in reverse order of creation of Hive Partitions. It helps to compact data in latest
+ * partitions first and then older capped at the Total_IO allowed.
  */
 public class DayBasedCompactionStrategy extends CompactionStrategy {
 
   // For now, use SimpleDateFormat as default partition format
   protected static String datePartitionFormat = "yyyy/MM/dd";
   // Sorts compaction in LastInFirstCompacted order
-  protected static Comparator<String> comparator = (String leftPartition,
-      String rightPartition) -> {
+  protected static Comparator<String> comparator = (String leftPartition, String rightPartition) -> {
     try {
-      Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
-          .parse(leftPartition);
-      Date right = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH)
-          .parse(rightPartition);
+      Date left = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH).parse(leftPartition);
+      Date right = new SimpleDateFormat(datePartitionFormat, Locale.ENGLISH).parse(rightPartition);
       return left.after(right) ? -1 : right.after(left) ? 1 : 0;
     } catch (ParseException e) {
       throw new HoodieException("Invalid Partition Date Format", e);
@@ -68,8 +65,7 @@ public class DayBasedCompactionStrategy extends CompactionStrategy {
     List<HoodieCompactionOperation> filteredList = operations.stream()
         .collect(Collectors.groupingBy(HoodieCompactionOperation::getPartitionPath)).entrySet().stream()
         .sorted(Map.Entry.comparingByKey(comparator)).limit(writeConfig.getTargetPartitionsPerDayBasedCompaction())
-        .flatMap(e -> e.getValue().stream())
-        .collect(Collectors.toList());
+        .flatMap(e -> e.getValue().stream()).collect(Collectors.toList());
     return filteredList;
   }
 

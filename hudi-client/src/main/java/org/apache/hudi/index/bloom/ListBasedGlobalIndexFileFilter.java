@@ -30,8 +30,7 @@ class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */
-  ListBasedGlobalIndexFileFilter(
-      Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
+  ListBasedGlobalIndexFileFilter(Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo) {
     super(partitionToFileIndexInfo);
   }
 

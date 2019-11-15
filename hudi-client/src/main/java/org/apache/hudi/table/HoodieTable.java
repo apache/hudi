@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.WriteStatus;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.utils.ClientUtils;
@@ -82,22 +83,21 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   protected HoodieTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     this.config = config;
     this.hadoopConfiguration = new SerializableConfiguration(jsc.hadoopConfiguration());
-    this.viewManager = FileSystemViewManager.createViewManager(
-        new SerializableConfiguration(jsc.hadoopConfiguration()), config.getViewStorageConfig());
+    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(jsc.hadoopConfiguration()),
+        config.getViewStorageConfig());
     this.metaClient = ClientUtils.createMetaClient(jsc, config, true);
     this.index = HoodieIndex.createIndex(config, jsc);
   }
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration,
-          config.getViewStorageConfig());
+      viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration, config.getViewStorageConfig());
     }
     return viewManager;
   }
 
-  public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(
-      HoodieTableMetaClient metaClient, HoodieWriteConfig config, JavaSparkContext jsc) {
+  public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(HoodieTableMetaClient metaClient,
+      HoodieWriteConfig config, JavaSparkContext jsc) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
         return new HoodieCopyOnWriteTable<>(config, jsc);
@@ -192,6 +192,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
+   * Get clean timeline
+   */
+  public HoodieTimeline getCleanTimeline() {
+    return getActiveTimeline().getCleanerTimeline();
+  }
+
+  /**
    * Get only the completed (no-inflights) savepoint timeline
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
@@ -202,8 +209,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the list of savepoints in this table
    */
   public List<String> getSavepoints() {
-    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList());
+    return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
   /**
@@ -214,18 +220,14 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       throw new HoodieSavepointException(
           "Could not get data files for savepoint " + savepointTime + ". No such savepoint.");
     }
-    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION,
-        savepointTime);
+    HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     HoodieSavepointMetadata metadata = null;
     try {
-      metadata = AvroUtils
-          .deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
+      metadata = AvroUtils.deserializeHoodieSavepointMetadata(getActiveTimeline().getInstantDetails(instant).get());
     } catch (IOException e) {
-      throw new HoodieSavepointException(
-          "Could not get savepointed data files for savepoint " + savepointTime, e);
+      throw new HoodieSavepointException("Could not get savepointed data files for savepoint " + savepointTime, e);
     }
-    return metadata.getPartitionMetadata().values().stream()
-        .flatMap(s -> s.getSavepointDataFile().stream());
+    return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
   }
 
   public HoodieActiveTimeline getActiveTimeline() {
@@ -242,43 +244,55 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Perform the ultimate IO for a given upserted (RDD) partition
    */
-  public abstract Iterator<List<WriteStatus>> handleUpsertPartition(String commitTime,
-      Integer partition, Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
+  public abstract Iterator<List<WriteStatus>> handleUpsertPartition(String commitTime, Integer partition,
+      Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
   /**
    * Perform the ultimate IO for a given inserted (RDD) partition
    */
-  public abstract Iterator<List<WriteStatus>> handleInsertPartition(String commitTime,
-      Integer partition, Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
+  public abstract Iterator<List<WriteStatus>> handleInsertPartition(String commitTime, Integer partition,
+      Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
   /**
    * Schedule compaction for the instant time
-   * @param jsc         Spark Context
+   * 
+   * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
    * @return
    */
   public abstract HoodieCompactionPlan scheduleCompaction(JavaSparkContext jsc, String instantTime);
 
   /**
-   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data
-   * access
+   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access
    *
-   * @param jsc                   Spark Context
+   * @param jsc Spark Context
    * @param compactionInstantTime Instant Time
-   * @param compactionPlan        Compaction Plan
+   * @param compactionPlan Compaction Plan
    */
   public abstract JavaRDD<WriteStatus> compact(JavaSparkContext jsc, String compactionInstantTime,
       HoodieCompactionPlan compactionPlan);
 
   /**
-   * Clean partition paths according to cleaning policy and returns the number of files cleaned.
+   * Generates list of files that are eligible for cleaning
+   * 
+   * @param jsc Java Spark Context
+   * @return Cleaner Plan containing list of files to be deleted.
    */
-  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc);
+  public abstract HoodieCleanerPlan scheduleClean(JavaSparkContext jsc);
 
   /**
-   * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1)
-   * Atomically unpublish this commit (2) clean indexing data (3) clean new generated parquet files
-   * / log blocks (4) Finally, delete .<action>.commit or .<action>.inflight file if deleteInstants = true
+   * Cleans the files listed in the cleaner plan associated with clean instant
+   * 
+   * @param jsc Java Spark Context
+   * @param cleanInstant Clean Instant
+   * @return list of Clean Stats
+   */
+  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant);
+
+  /**
+   * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1) Atomically unpublish
+   * this commit (2) clean indexing data (3) clean new generated parquet files / log blocks (4) Finally, delete
+   * .<action>.commit or .<action>.inflight file if deleteInstants = true
    */
   public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, String commit, boolean deleteInstants)
       throws IOException;
@@ -297,6 +311,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Delete Marker directory corresponding to an instant
+   * 
    * @param instantTs Instant Time
    */
   protected void deleteMarkerDir(String instantTs) {
@@ -317,10 +332,10 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
    * retries.
    *
-   * @param jsc       Spark Context
+   * @param jsc Spark Context
    * @param instantTs Instant Timestamp
-   * @param stats   Hoodie Write Stat
-   * @param consistencyCheckEnabled  Consistency Check Enabled
+   * @param stats Hoodie Write Stat
+   * @param consistencyCheckEnabled Consistency Check Enabled
    * @throws HoodieIOException
    */
   protected void cleanFailedWrites(JavaSparkContext jsc, String instantTs, List<HoodieWriteStat> stats,
@@ -343,13 +358,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       // Contains list of partially created files. These needs to be cleaned up.
       invalidDataPaths.removeAll(validDataPaths);
       if (!invalidDataPaths.isEmpty()) {
-        logger.info("Removing duplicate data files created due to spark retries before committing. Paths="
-            + invalidDataPaths);
+        logger.info(
+            "Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
       }
 
       Map<String, List<Pair<String, String>>> groupByPartition = invalidDataPaths.stream()
-          .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp))
-          .collect(Collectors.groupingBy(Pair::getKey));
+          .map(dp -> Pair.of(new Path(dp).getParent().toString(), dp)).collect(Collectors.groupingBy(Pair::getKey));
 
       if (!groupByPartition.isEmpty()) {
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
@@ -394,7 +408,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Ensures all files passed either appear or disappear
-   * @param jsc   JavaSparkContext
+   * 
+   * @param jsc JavaSparkContext
    * @param groupByPartition Files grouped by partition
    * @param visibility Appear/Disappear
    */

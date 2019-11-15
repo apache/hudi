@@ -28,8 +28,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Realtime Record Reader which can do compacted (merge-on-read) record reading or
- * unmerged reading (parquet and log files read in parallel) based on job configuration.
+ * Realtime Record Reader which can do compacted (merge-on-read) record reading or unmerged reading (parquet and log
+ * files read in parallel) based on job configuration.
  */
 public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
@@ -52,8 +52,8 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   /**
    * Construct record reader based on job configuration
    *
-   * @param split      File Split
-   * @param jobConf    Job Configuration
+   * @param split File Split
+   * @param jobConf Job Configuration
    * @param realReader Parquet Record Reader
    * @return Realtime Reader
    */

@@ -27,7 +27,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
+    <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
   <dependencies>

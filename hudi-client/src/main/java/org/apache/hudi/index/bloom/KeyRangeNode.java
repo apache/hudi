@@ -62,15 +62,10 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
   @Override
   public String toString() {
-    return "KeyRangeNode{"
-        + "minRecordKey='" + minRecordKey + '\''
-        + ", maxRecordKey='" + maxRecordKey + '\''
-        + ", fileNameList=" + fileNameList
-        + ", rightSubTreeMax='" + rightSubTreeMax + '\''
-        + ", leftSubTreeMax='" + leftSubTreeMax + '\''
-        + ", rightSubTreeMin='" + rightSubTreeMin + '\''
-        + ", leftSubTreeMin='" + leftSubTreeMin + '\''
-        + '}';
+    return "KeyRangeNode{" + "minRecordKey='" + minRecordKey + '\'' + ", maxRecordKey='" + maxRecordKey + '\''
+        + ", fileNameList=" + fileNameList + ", rightSubTreeMax='" + rightSubTreeMax + '\'' + ", leftSubTreeMax='"
+        + leftSubTreeMax + '\'' + ", rightSubTreeMin='" + rightSubTreeMin + '\'' + ", leftSubTreeMin='" + leftSubTreeMin
+        + '\'' + '}';
   }
 
   /**
@@ -78,8 +73,8 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
    *
    * @param that the {@link KeyRangeNode} to be compared with
    * @return the result of comparison. 0 if both min and max are equal in both. 1 if this {@link KeyRangeNode} is
-   * greater than the {@code that} keyRangeNode. -1 if {@code that} keyRangeNode is greater than this {@link
-   * KeyRangeNode}
+   *         greater than the {@code that} keyRangeNode. -1 if {@code that} keyRangeNode is greater than this
+   *         {@link KeyRangeNode}
    */
   @Override
   public int compareTo(KeyRangeNode that) {

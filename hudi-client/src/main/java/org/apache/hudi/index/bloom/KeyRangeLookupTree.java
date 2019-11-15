@@ -50,25 +50,16 @@ class KeyRangeLookupTree implements Serializable {
    *
    * If no root exists, make {@code newNode} as the root and return the new root.
    *
-   * If current root and newNode matches with min record key and max record key,
-   * merge two nodes. In other words, add files from {@code newNode} to current root.
-   * Return current root.
+   * If current root and newNode matches with min record key and max record key, merge two nodes. In other words, add
+   * files from {@code newNode} to current root. Return current root.
    *
-   * If current root is < newNode
-   *     if current root has no right sub tree
-   *           update current root's right sub tree max and min
-   *           set newNode as right sub tree
-   *     else
-   *        update root's right sub tree min and max with newNode's min and max record key as applicable
-   *        recursively call insert() with root's right subtree as new root
+   * If current root is < newNode if current root has no right sub tree update current root's right sub tree max and min
+   * set newNode as right sub tree else update root's right sub tree min and max with newNode's min and max record key
+   * as applicable recursively call insert() with root's right subtree as new root
    *
-   * else // current root is >= newNode
-   *     if current root has no left sub tree
-   *            update current root's left sub tree max and min
-   *            set newNode as left sub tree
-   *     else
-   *         update root's left sub tree min and max with newNode's min and max record key as applicable
-   *         recursively call insert() with root's left subtree as new root
+   * else // current root is >= newNode if current root has no left sub tree update current root's left sub tree max and
+   * min set newNode as left sub tree else update root's left sub tree min and max with newNode's min and max record key
+   * as applicable recursively call insert() with root's left subtree as new root
    *
    * @param root refers to the current root of the look up tree
    * @param newNode newNode the new {@link KeyRangeNode} to be inserted

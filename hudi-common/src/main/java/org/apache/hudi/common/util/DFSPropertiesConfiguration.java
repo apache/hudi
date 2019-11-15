@@ -63,7 +63,7 @@ public class DFSPropertiesConfiguration {
     int ind = line.indexOf('=');
     String k = line.substring(0, ind).trim();
     String v = line.substring(ind + 1).trim();
-    return new String[]{k, v};
+    return new String[] {k, v};
   }
 
   private void visitFile(Path file) {
@@ -82,6 +82,7 @@ public class DFSPropertiesConfiguration {
 
   /**
    * Add properties from input stream
+   * 
    * @param reader Buffered Reader
    * @throws IOException
    */

@@ -1,0 +1,4 @@
+select symbol, max(ts) from stock_ticks_cow group by symbol HAVING symbol = 'GOOG';
+select symbol, max(ts) from stock_ticks_mor group by symbol HAVING symbol = 'GOOG';
+select symbol, ts, volume, open, close  from stock_ticks_cow where  symbol = 'GOOG';
+select symbol, ts, volume, open, close  from stock_ticks_mor where  symbol = 'GOOG';

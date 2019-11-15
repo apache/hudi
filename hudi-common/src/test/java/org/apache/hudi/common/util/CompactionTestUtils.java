@@ -53,8 +53,7 @@ public class CompactionTestUtils {
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
   public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> setupAndValidateCompactionOperations(
-      HoodieTableMetaClient metaClient, boolean inflight,
-      int numEntriesInPlan1, int numEntriesInPlan2,
+      HoodieTableMetaClient metaClient, boolean inflight, int numEntriesInPlan1, int numEntriesInPlan2,
       int numEntriesInPlan3, int numEntriesInPlan4) throws IOException {
     HoodieCompactionPlan plan1 = createCompactionPlan(metaClient, "000", "001", numEntriesInPlan1, true, true);
     HoodieCompactionPlan plan2 = createCompactionPlan(metaClient, "002", "003", numEntriesInPlan2, false, true);
@@ -78,17 +77,16 @@ public class CompactionTestUtils {
     createDeltaCommit(metaClient, "004");
     createDeltaCommit(metaClient, "006");
 
-    Map<String, String> baseInstantsToCompaction =
-        new ImmutableMap.Builder<String, String>().put("000", "001").put("002", "003")
-            .put("004", "005").put("006", "007").build();
+    Map<String, String> baseInstantsToCompaction = new ImmutableMap.Builder<String, String>().put("000", "001")
+        .put("002", "003").put("004", "005").put("006", "007").build();
     List<Integer> expectedNumEntries =
         Arrays.asList(numEntriesInPlan1, numEntriesInPlan2, numEntriesInPlan3, numEntriesInPlan4);
-    List<HoodieCompactionPlan> plans = new ImmutableList.Builder<HoodieCompactionPlan>()
-        .add(plan1, plan2, plan3, plan4).build();
+    List<HoodieCompactionPlan> plans =
+        new ImmutableList.Builder<HoodieCompactionPlan>().add(plan1, plan2, plan3, plan4).build();
     IntStream.range(0, 4).boxed().forEach(idx -> {
       if (expectedNumEntries.get(idx) > 0) {
-        Assert.assertEquals("check if plan " + idx + " has exp entries",
-            expectedNumEntries.get(idx).longValue(), plans.get(idx).getOperations().size());
+        Assert.assertEquals("check if plan " + idx + " has exp entries", expectedNumEntries.get(idx).longValue(),
+            plans.get(idx).getOperations().size());
       } else {
         Assert.assertNull("Plan " + idx + " has null ops", plans.get(idx).getOperations());
       }
@@ -108,39 +106,37 @@ public class CompactionTestUtils {
 
   public static Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> generateExpectedCompactionOperations(
       List<HoodieCompactionPlan> plans, Map<String, String> baseInstantsToCompaction) {
-    return plans.stream()
-        .flatMap(plan -> {
-          if (plan.getOperations() != null) {
-            return plan.getOperations().stream().map(op -> Pair.of(
-                new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
+    return plans.stream().flatMap(plan -> {
+      if (plan.getOperations() != null) {
+        return plan.getOperations().stream()
+            .map(op -> Pair.of(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()),
                 Pair.of(baseInstantsToCompaction.get(op.getBaseInstantTime()), op)));
-          }
-          return Stream.empty();
-        }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+      }
+      return Stream.empty();
+    }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 
-  public static void scheduleCompaction(HoodieTableMetaClient metaClient,
-      String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
+  public static void scheduleCompaction(HoodieTableMetaClient metaClient, String instantTime,
+      HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
         new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
         AvroUtils.serializeCompactionPlan(compactionPlan));
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) throws IOException {
-    metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
+    metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime),
+        Option.empty());
   }
 
   public static void scheduleInflightCompaction(HoodieTableMetaClient metaClient, String instantTime,
       HoodieCompactionPlan compactionPlan) throws IOException {
     scheduleCompaction(metaClient, instantTime, compactionPlan);
-    metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(
-        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
+    metaClient.getActiveTimeline()
+        .transitionCompactionRequestedToInflight(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
   }
 
   public static HoodieCompactionPlan createCompactionPlan(HoodieTableMetaClient metaClient, String instantId,
-      String compactionInstantId, int numFileIds, boolean createDataFile,
-      boolean deltaCommitsAfterCompactionRequests) {
+      String compactionInstantId, int numFileIds, boolean createDataFile, boolean deltaCommitsAfterCompactionRequests) {
     List<HoodieCompactionOperation> ops = IntStream.range(0, numFileIds).boxed().map(idx -> {
       try {
         String fileId = UUID.randomUUID().toString();
@@ -153,15 +149,13 @@ public class CompactionTestUtils {
             instantId, fileId, Option.of(2));
         FileSlice slice = new FileSlice(DEFAULT_PARTITION_PATHS[0], instantId, fileId);
         if (createDataFile) {
-          slice.setDataFile(new TestHoodieDataFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0]
-              + "/" + FSUtils.makeDataFileName(instantId, TEST_WRITE_TOKEN, fileId)));
+          slice.setDataFile(new TestHoodieDataFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0] + "/"
+              + FSUtils.makeDataFileName(instantId, TEST_WRITE_TOKEN, fileId)));
         }
-        String logFilePath1 = HoodieTestUtils
-            .getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0], instantId, fileId,
-                Option.of(1));
-        String logFilePath2 = HoodieTestUtils
-            .getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0], instantId, fileId,
-                Option.of(2));
+        String logFilePath1 = HoodieTestUtils.getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
+            instantId, fileId, Option.of(1));
+        String logFilePath2 = HoodieTestUtils.getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
+            instantId, fileId, Option.of(2));
         slice.addLogFile(new HoodieLogFile(new Path(logFilePath1)));
         slice.addLogFile(new HoodieLogFile(new Path(logFilePath2)));
         HoodieCompactionOperation op =
@@ -177,7 +171,8 @@ public class CompactionTestUtils {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }).collect(Collectors.toList());
-    return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>());
+    return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>(),
+        CompactionUtils.LATEST_COMPACTION_METADATA_VERSION);
   }
 
   public static class TestHoodieDataFile extends HoodieDataFile {
@@ -185,7 +180,7 @@ public class CompactionTestUtils {
     private final String path;
 
     public TestHoodieDataFile(String path) {
-      super("/tmp/ce481ee7-9e53-4a2e-9992-f9e295fa79c0_11_20180918020003.parquet");
+      super(path);
       this.path = path;
     }
 

@@ -30,7 +30,7 @@
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
   <version>0.5.1-SNAPSHOT</version>
-  <description>Apache Hudi brings stream style processing on big data</description>
+  <description>Apache Hudi (incubating) brings stream style processing on big data</description>
   <url>https://github.com/apache/incubator-hudi</url>
   <name>Hudi</name>
 
@@ -58,7 +58,6 @@
       <name>Apache License, Version 2.0</name>
       <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
-      <comments>A business-friendly OSS license</comments>
     </license>
   </licenses>
 
@@ -66,67 +65,6 @@
     <name>The Apache Software Foundation</name>
     <url>https://www.apache.org</url>
   </organization>
-
-  <developers>
-    <developer>
-      <id>vinothchandar</id>
-      <name>Vinoth Chandar</name>
-      <organization>Confluent Inc</organization>
-    </developer>
-    <developer>
-      <id>prasannarajaperumal</id>
-      <name>Prasanna Rajaperumal</name>
-      <organization>Snowflake</organization>
-    </developer>
-    <developer>
-      <id>n3nash</id>
-      <name>Nishith Agarwal</name>
-      <organization>Uber</organization>
-    </developer>
-    <developer>
-      <id>bvaradar</id>
-      <name>Balaji Varadharajan</name>
-      <organization>Uber</organization>
-    </developer>
-  </developers>
-
-  <contributors>
-    <contributor>
-      <name>Wei Yan</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Siddhartha Gunda</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Omkar Joshi</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Zeeshan Qureshi</name>
-      <organization>Shopify</organization>
-    </contributor>
-    <contributor>
-      <name>Kathy Ge</name>
-      <organization>Shopify</organization>
-    </contributor>
-    <contributor>
-      <name>Kaushik Devarajaiah</name>
-      <organization>Uber</organization>
-    </contributor>
-    <contributor>
-      <name>Anbu Cheeralan</name>
-      <organization>DoubleVerify</organization>
-    </contributor>
-    <contributor>
-      <name>Jiale Tan</name>
-      <organization>Vungle</organization>
-    </contributor>
-  </contributors>
-
-  <inceptionYear>2016</inceptionYear>
-
 
   <properties>
     <maven-jar-plugin.version>2.6</maven-jar-plugin.version>
@@ -150,6 +88,7 @@
     <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
     <scala.libversion>2.11</scala.libversion>
+    <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
     <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
@@ -157,12 +96,17 @@
     <jetty.version>7.6.0.v20120127</jetty.version>
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
-    <notice.dir>${project.basedir}</notice.dir>
-    <notice.file>NOTICE.txt</notice.file>
     <skipTests>false</skipTests>
     <skipITs>${skipTests}</skipITs>
     <skipUTs>${skipTests}</skipUTs>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <main.basedir>${project.basedir}</main.basedir>
+    <mr.bundle.avro.scope>provided</mr.bundle.avro.scope>
+    <mr.bundle.avro.shade.prefix></mr.bundle.avro.shade.prefix>
+    <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
+    <spark.bundle.hive.shade.prefix></spark.bundle.hive.shade.prefix>
+    <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
+    <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
   </properties>
 
   <scm>
@@ -182,7 +126,7 @@
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>8.8</version>
+            <version>8.18</version>
           </dependency>
         </dependencies>
         <configuration>
@@ -219,7 +163,7 @@
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
           <testSourceDirectory>${project.basedir}/src/test/scala</testSourceDirectory>
-          <configLocation>${maven.multiModuleProjectDirectory}/style/scalastyle-config.xml</configLocation>
+          <configLocation>${main.basedir}/style/scalastyle-config.xml</configLocation>
           <outputEncoding>UTF-8</outputEncoding>
         </configuration>
         <executions>
@@ -231,6 +175,34 @@
           </execution>
         </executions>
       </plugin>
+<!--
+      See https://jira.apache.org/jira/browse/HUDI-304
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>1.24.3</version>
+        <configuration>
+          <java>
+            <eclipse>
+              <file>${main.basedir}/style/eclipse-java-google-style.xml</file>
+              <version>4.10.0</version>
+            </eclipse>
+          </java>
+          <scala>
+            <trimTrailingWhitespace/>
+          </scala>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+-->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -277,6 +249,7 @@
           <excludes>
             <exclude>**/IT*.java</exclude>
           </excludes>
+          <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
         </configuration>
       </plugin>
     </plugins>
@@ -334,6 +307,7 @@
           <!-- excludes are inherited -->
           <groupId>org.apache.rat</groupId>
           <artifactId>apache-rat-plugin</artifactId>
+          <version>${apache-rat-plugin.version}</version>
           <configuration>
             <excludeSubProjects>false</excludeSubProjects>
             <numUnapprovedLicenses>0</numUnapprovedLicenses>
@@ -370,6 +344,7 @@
             </licenseFamilies>
             <excludes>
               <exclude>NOTICE</exclude>
+              <exclude>DISCLAIMER-WIP</exclude>
               <exclude>**/.*</exclude>
               <exclude>**/*.json</exclude>
               <exclude>**/*.sqltemplate</exclude>
@@ -379,7 +354,7 @@
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/target/**</exclude>
-              <excludes>**/generated-sources/**</excludes>
+              <exclude>**/generated-sources/**</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -574,7 +549,7 @@
       <dependency>
         <groupId>org.apache.httpcomponents</groupId>
         <artifactId>httpclient</artifactId>
-        <version>4.3.2</version>
+        <version>4.3.6</version>
       </dependency>
 
       <!-- Jackson -->
@@ -872,6 +847,18 @@
         <enabled>false</enabled>
       </snapshots>
     </repository>
+    <repository>
+      <id>confluent</id>
+      <url>https://packages.confluent.io/maven/</url>
+    </repository>
+    <repository>
+      <id>libs-milestone</id>
+      <url>https://repo.spring.io/libs-milestone/</url>
+    </repository>
+    <repository>
+      <id>libs-release</id>
+      <url>https://repo.spring.io/libs-release/</url>
+    </repository>
   </repositories>
 
   <profiles>
@@ -940,6 +927,13 @@
       </activation>
       <properties>
         <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties</surefire-log4j.file>
+      </properties>
+    </profile>
+    <profile>
+      <id>aws-emr-profile</id>
+      <properties>
+        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
+        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
       </properties>
     </profile>
   </profiles>

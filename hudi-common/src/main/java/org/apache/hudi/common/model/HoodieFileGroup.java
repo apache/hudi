@@ -69,8 +69,8 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Potentially add a new file-slice by adding base-instant time
-   * A file-slice without any data-file and log-files can exist (if a compaction just got requested)
+   * Potentially add a new file-slice by adding base-instant time A file-slice without any data-file and log-files can
+   * exist (if a compaction just got requested)
    */
   public void addNewFileSliceAtInstant(String baseInstantTime) {
     if (!fileSlices.containsKey(baseInstantTime)) {
@@ -107,15 +107,13 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * A FileSlice is considered committed, if one of the following is true - There is a committed
-   * data file - There are some log files, that are based off a commit or delta commit
+   * A FileSlice is considered committed, if one of the following is true - There is a committed data file - There are
+   * some log files, that are based off a commit or delta commit
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
     String maxCommitTime = lastInstant.get().getTimestamp();
     return timeline.containsOrBeforeTimelineStarts(slice.getBaseInstantTime())
-        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(),
-        maxCommitTime,
-        HoodieTimeline.LESSER_OR_EQUAL);
+        && HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), maxCommitTime, HoodieTimeline.LESSER_OR_EQUAL);
 
   }
 
@@ -138,9 +136,7 @@ public class HoodieFileGroup implements Serializable {
    */
   public Stream<FileSlice> getAllFileSlices() {
     if (!timeline.empty()) {
-      return fileSlices.entrySet().stream()
-          .map(Map.Entry::getValue)
-          .filter(this::isFileSliceCommitted);
+      return fileSlices.entrySet().stream().map(Map.Entry::getValue).filter(this::isFileSliceCommitted);
     }
     return Stream.empty();
   }
@@ -166,41 +162,32 @@ public class HoodieFileGroup implements Serializable {
    * Obtain the latest file slice, upto a commitTime i.e <= maxCommitTime
    */
   public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxCommitTime) {
-    return Option.fromJavaOptional(getAllFileSlices()
-        .filter(slice ->
-            HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(),
-                maxCommitTime,
-                HoodieTimeline.LESSER_OR_EQUAL))
-        .findFirst());
+    return Option.fromJavaOptional(getAllFileSlices().filter(slice -> HoodieTimeline
+        .compareTimestamps(slice.getBaseInstantTime(), maxCommitTime, HoodieTimeline.LESSER_OR_EQUAL)).findFirst());
   }
 
   /**
    * Obtain the latest file slice, upto a commitTime i.e < maxInstantTime
+   * 
    * @param maxInstantTime Max Instant Time
    * @return
    */
   public Option<FileSlice> getLatestFileSliceBefore(String maxInstantTime) {
-    return Option.fromJavaOptional(getAllFileSlices()
-        .filter(slice ->
-            HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(),
-                maxInstantTime,
-                HoodieTimeline.LESSER))
+    return Option.fromJavaOptional(getAllFileSlices().filter(
+        slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), maxInstantTime, HoodieTimeline.LESSER))
         .findFirst());
   }
 
   public Option<FileSlice> getLatestFileSliceInRange(List<String> commitRange) {
-    return Option.fromJavaOptional(getAllFileSlices()
-        .filter(slice -> commitRange.contains(slice.getBaseInstantTime()))
-        .findFirst());
+    return Option.fromJavaOptional(
+        getAllFileSlices().filter(slice -> commitRange.contains(slice.getBaseInstantTime())).findFirst());
   }
 
   /**
    * Stream of committed data files, sorted reverse commit time
    */
   public Stream<HoodieDataFile> getAllDataFiles() {
-    return getAllFileSlices()
-        .filter(slice -> slice.getDataFile().isPresent())
-        .map(slice -> slice.getDataFile().get());
+    return getAllFileSlices().filter(slice -> slice.getDataFile().isPresent()).map(slice -> slice.getDataFile().get());
   }
 
   @Override

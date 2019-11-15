@@ -32,23 +32,28 @@
                   "fields":[
                      {
                         "name":"partitionPath",
-                        "type":["null","string"]
+                        "type":["null","string"],
+                        "default": null
                      },
                      {
                         "name":"totalLogRecords",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default": null
                      },
                      {
                         "name":"totalLogFiles",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default": null
                      },
                      {
                         "name":"totalUpdatedRecordsCompacted",
-                        "type":["null","long"]
+                        "type":["null","long"],
+                        "default": null
                      },
                      {
                         "name":"hoodieWriteStat",
-                        "type":["null","HoodieWriteStat"]
+                        "type":["null","HoodieWriteStat"],
+                        "default": null
                      }
                   ]
                }

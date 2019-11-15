@@ -32,9 +32,8 @@ public class HoodieParquetConfig {
   private Configuration hadoopConf;
   private double compressionRatio;
 
-  public HoodieParquetConfig(HoodieAvroWriteSupport writeSupport,
-      CompressionCodecName compressionCodecName, int blockSize, int pageSize, long maxFileSize,
-      Configuration hadoopConf, double compressionRatio) {
+  public HoodieParquetConfig(HoodieAvroWriteSupport writeSupport, CompressionCodecName compressionCodecName,
+      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf, double compressionRatio) {
     this.writeSupport = writeSupport;
     this.compressionCodecName = compressionCodecName;
     this.blockSize = blockSize;

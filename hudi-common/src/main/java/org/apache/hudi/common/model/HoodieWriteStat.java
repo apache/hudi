@@ -48,8 +48,8 @@ public class HoodieWriteStat implements Serializable {
   private String prevCommit;
 
   /**
-   * Total number of records written for this file. - for updates, its the entire number of records
-   * in the file - for inserts, its the actual number of records inserted.
+   * Total number of records written for this file. - for updates, its the entire number of records in the file - for
+   * inserts, its the actual number of records inserted.
    */
   private long numWrites;
 
@@ -318,25 +318,13 @@ public class HoodieWriteStat implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieWriteStat{"
-        + "fileId='" + fileId + '\''
-        + ", path='" + path + '\''
-        + ", prevCommit='" + prevCommit + '\''
-        + ", numWrites=" + numWrites
-        + ", numDeletes=" + numDeletes
-        + ", numUpdateWrites=" + numUpdateWrites
-        + ", totalWriteBytes=" + totalWriteBytes
-        + ", totalWriteErrors=" + totalWriteErrors
-        + ", tempPath='" + tempPath + '\''
-        + ", partitionPath='" + partitionPath
-        + '\'' + ", totalLogRecords=" + totalLogRecords
-        + ", totalLogFilesCompacted=" + totalLogFilesCompacted
-        + ", totalLogSizeCompacted=" + totalLogSizeCompacted
-        + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted
-        + ", totalLogBlocks=" + totalLogBlocks
-        + ", totalCorruptLogBlock=" + totalCorruptLogBlock
-        + ", totalRollbackBlocks=" + totalRollbackBlocks
-        + '}';
+    return "HoodieWriteStat{" + "fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
+        + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes + ", numUpdateWrites=" + numUpdateWrites
+        + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors=" + totalWriteErrors + ", tempPath='" + tempPath
+        + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
+        + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
+        + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks
+        + ", totalCorruptLogBlock=" + totalCorruptLogBlock + ", totalRollbackBlocks=" + totalRollbackBlocks + '}';
   }
 
   @Override

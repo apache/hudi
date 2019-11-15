@@ -66,12 +66,9 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
       readOnlyFileHandle.seek(0);
 
       // sort the map in increasing order of offset of value so disk seek is only in one(forward) direction
-      this.metadataIterator = map
-          .entrySet()
-          .stream()
-          .sorted(
-              (Map.Entry<T, DiskBasedMap.ValueMetadata> o1, Map.Entry<T, DiskBasedMap.ValueMetadata> o2) ->
-                  o1.getValue().getOffsetOfValue().compareTo(o2.getValue().getOffsetOfValue()))
+      this.metadataIterator = map.entrySet().stream()
+          .sorted((Map.Entry<T, DiskBasedMap.ValueMetadata> o1, Map.Entry<T, DiskBasedMap.ValueMetadata> o2) -> o1
+              .getValue().getOffsetOfValue().compareTo(o2.getValue().getOffsetOfValue()))
           .collect(Collectors.toList()).iterator();
       this.addShutdownHook();
     }

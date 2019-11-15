@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,14 +32,21 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class TestRocksDBManager {
 
   private static RocksDBDAO dbManager;
 
+  @BeforeClass
+  public static void setUpClass() {
+    dbManager = new RocksDBDAO("/dummy/path",
+        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
+  }
+
   @AfterClass
-  public static void drop() throws IOException {
+  public static void tearDownClass() {
     if (dbManager != null) {
       dbManager.close();
       dbManager = null;
@@ -66,8 +72,6 @@ public class TestRocksDBManager {
       return new Payload(prefix, key, val, family);
     }).collect(Collectors.toList());
 
-    dbManager = new RocksDBDAO("/dummy/path",
-        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath());
     colFamilies.stream().forEach(family -> dbManager.dropColumnFamily(family));
     colFamilies.stream().forEach(family -> dbManager.addColumnFamily(family));
 
@@ -117,8 +121,8 @@ public class TestRocksDBManager {
       prefixes.stream().forEach(prefix -> {
         List<Pair<String, Payload>> gotPayloads =
             dbManager.<Payload>prefixSearch(family, prefix).collect(Collectors.toList());
-        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")",
-            0, gotPayloads.size());
+        Assert.assertEquals("Size check for prefix (" + prefix + ") and family (" + family + ")", 0,
+            gotPayloads.size());
       });
     });
 
@@ -166,10 +170,8 @@ public class TestRocksDBManager {
         return false;
       }
       Payload payload = (Payload) o;
-      return Objects.equals(prefix, payload.prefix)
-          && Objects.equals(key, payload.key)
-          && Objects.equals(val, payload.val)
-          && Objects.equals(family, payload.family);
+      return Objects.equals(prefix, payload.prefix) && Objects.equals(key, payload.key)
+          && Objects.equals(val, payload.val) && Objects.equals(family, payload.family);
     }
 
     @Override

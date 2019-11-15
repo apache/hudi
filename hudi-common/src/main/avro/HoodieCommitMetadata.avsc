@@ -118,14 +118,21 @@
                   ]
                }
             }
-         }]
+         }],
+         "default": null
       },
       {
          "name":"extraMetadata",
          "type":["null", {
             "type":"map",
             "values":"string"
-         }]
+         }],
+         "default": null
+      },
+      {
+         "name":"version",
+         "type":["int", "null"],
+         "default": 1
       }
    ]
 }

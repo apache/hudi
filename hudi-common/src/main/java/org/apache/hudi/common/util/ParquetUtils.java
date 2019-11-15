@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,22 +52,22 @@ public class ParquetUtils {
   /**
    * Read the rowKey list from the given parquet file.
    *
-   * @param filePath      The parquet file path.
+   * @param filePath The parquet file path.
    * @param configuration configuration to build fs object
-   * @return Set          Set of row keys
+   * @return Set Set of row keys
    */
   public static Set<String> readRowKeysFromParquet(Configuration configuration, Path filePath) {
     return filterParquetRowKeys(configuration, filePath, new HashSet<>());
   }
 
   /**
-   * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty,
-   * then this will return all the rowkeys.
+   * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
+   * return all the rowkeys.
    *
-   * @param filePath              The parquet file path.
-   * @param configuration         configuration to build fs object
-   * @param filter                record keys filter
-   * @return Set                  Set of row keys matching candidateRecordKeys
+   * @param filePath The parquet file path.
+   * @param configuration configuration to build fs object
+   * @param filter record keys filter
+   * @return Set Set of row keys matching candidateRecordKeys
    */
   public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
@@ -102,11 +103,9 @@ public class ParquetUtils {
     ParquetMetadata footer;
     try {
       // TODO(vc): Should we use the parallel reading version here?
-      footer = ParquetFileReader
-          .readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
+      footer = ParquetFileReader.readFooter(FSUtils.getFs(parquetFilePath.toString(), conf).getConf(), parquetFilePath);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath,
-          e);
+      throw new HoodieIOException("Failed to read footer for parquet " + parquetFilePath, e);
     }
     return footer;
   }
@@ -118,17 +117,17 @@ public class ParquetUtils {
     return readMetadata(configuration, parquetFilePath).getFileMetaData().getSchema();
   }
 
-  private static List<String> readParquetFooter(Configuration configuration, Path parquetFilePath,
-      String... footerNames) {
-    List<String> footerVals = new ArrayList<>();
+  private static Map<String, String> readParquetFooter(Configuration configuration, boolean required,
+      Path parquetFilePath, String... footerNames) {
+    Map<String, String> footerVals = new HashMap<>();
     ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
     for (String footerName : footerNames) {
       if (metadata.containsKey(footerName)) {
-        footerVals.add(metadata.get(footerName));
-      } else {
-        throw new MetadataNotFoundException("Could not find index in Parquet footer. "
-            + "Looked for key " + footerName + " in " + parquetFilePath);
+        footerVals.put(footerName, metadata.get(footerName));
+      } else if (required) {
+        throw new MetadataNotFoundException(
+            "Could not find index in Parquet footer. " + "Looked for key " + footerName + " in " + parquetFilePath);
       }
     }
     return footerVals;
@@ -141,23 +140,28 @@ public class ParquetUtils {
   /**
    * Read out the bloom filter from the parquet file meta data.
    */
-  public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration,
-      Path parquetFilePath) {
-    String footerVal = readParquetFooter(configuration, parquetFilePath,
-        HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY).get(0);
-    return new BloomFilter(footerVal);
+  public static BloomFilter readBloomFilterFromParquetMetadata(Configuration configuration, Path parquetFilePath) {
+    Map<String, String> footerVals = readParquetFooter(configuration, false, parquetFilePath,
+        HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+        HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    if (null == footerVal) {
+      // We use old style key "com.uber.hoodie.bloomfilter"
+      footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+    }
+    return footerVal != null ? new BloomFilter(footerVal) : null;
   }
 
   public static String[] readMinMaxRecordKeys(Configuration configuration, Path parquetFilePath) {
-    List<String> minMaxKeys = readParquetFooter(configuration, parquetFilePath,
-        HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER,
-        HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
+    Map<String, String> minMaxKeys = readParquetFooter(configuration, true, parquetFilePath,
+        HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
     if (minMaxKeys.size() != 2) {
-      throw new HoodieException(String.format(
-          "Could not read min/max record key out of footer correctly from %s. read) : %s",
-          parquetFilePath, minMaxKeys));
+      throw new HoodieException(
+          String.format("Could not read min/max record key out of footer correctly from %s. read) : %s",
+              parquetFilePath, minMaxKeys));
     }
-    return new String[] {minMaxKeys.get(0), minMaxKeys.get(1)};
+    return new String[] {minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
+        minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
   }
 
   /**

@@ -42,7 +42,14 @@
     <module name="FileTabCharacter">
         <property name="eachLine" value="true"/>
     </module>
+    <module name="SuppressionFilter">
+        <property name="file" value="${checkstyle.suppressions.file}" default="checkstyle-suppressions.xml"/>
+        <property name="optional" value="true"/>
+    </module>
     <module name="TreeWalker">
+        <module name="AvoidNestedBlocks">
+            <property name="allowInSwitchCase" value="true"/>
+        </module>
         <module name="OuterTypeFilename"/>
         <module name="IllegalTokenText">
             <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
@@ -55,7 +62,7 @@
             <property name="allowNonPrintableEscapes" value="true"/>
         </module>
         <module name="LineLength">
-            <property name="max" value="120"/>
+            <property name="max" value="200"/>
             <property name="ignorePattern" value="^ *\* *[^ ]+$"/>
         </module>
         <module name="OneTopLevelClass"/>
@@ -193,7 +200,7 @@
         </module>
         <module name="OverloadMethodsDeclarationOrder"/>
         <module name="VariableDeclarationUsageDistance">
-            <property name="allowedDistance" value="5"/>        
+            <property name="allowedDistance" value="5"/>
         </module>
         -->
         <module name="CustomImportOrder">
@@ -262,5 +269,7 @@
             <property name="illegalPkgs" value="org.apache.commons" />
             <property name="illegalClasses" value="java.util.Optional, com.google.common.base.Optional" />
         </module>
+
+        <module name="EmptyStatement" />
     </module>
 </module>

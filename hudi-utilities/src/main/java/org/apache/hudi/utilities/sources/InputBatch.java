@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 public class InputBatch<T> {
@@ -27,8 +28,7 @@ public class InputBatch<T> {
   private final String checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
 
-  public InputBatch(Option<T> batch, String checkpointForNextBatch,
-      SchemaProvider schemaProvider) {
+  public InputBatch(Option<T> batch, String checkpointForNextBatch, SchemaProvider schemaProvider) {
     this.batch = batch;
     this.checkpointForNextBatch = checkpointForNextBatch;
     this.schemaProvider = schemaProvider;
@@ -49,6 +49,9 @@ public class InputBatch<T> {
   }
 
   public SchemaProvider getSchemaProvider() {
+    if (schemaProvider == null) {
+      throw new HoodieException("Please provide a valid schema provider class!");
+    }
     return schemaProvider;
   }
 }

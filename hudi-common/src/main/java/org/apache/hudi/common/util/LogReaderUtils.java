@@ -49,8 +49,8 @@ public class LogReaderUtils {
       HoodieLogBlock block = reader.prev();
       if (block instanceof HoodieAvroDataBlock && block != null) {
         HoodieAvroDataBlock lastBlock = (HoodieAvroDataBlock) block;
-        if (completedTimeline.containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType
-            .INSTANT_TIME))) {
+        if (completedTimeline
+            .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
           writerSchema = Schema.parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
           break;
         }

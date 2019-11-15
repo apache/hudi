@@ -58,23 +58,22 @@ import org.apache.spark.sql.SparkSession;
 public class UtilHelpers {
   private static Logger logger = LogManager.getLogger(UtilHelpers.class);
 
-  public static Source createSource(String sourceClass, TypedProperties cfg,
-      JavaSparkContext jssc, SparkSession sparkSession, SchemaProvider schemaProvider)
-      throws IOException {
+  public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
+      SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
     try {
       return (Source) ReflectionUtils.loadClass(sourceClass,
-          new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class},
-          cfg, jssc, sparkSession, schemaProvider);
+          new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
+          jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
   }
 
-  public static SchemaProvider createSchemaProvider(String schemaProviderClass,
-      TypedProperties cfg, JavaSparkContext jssc) throws IOException {
+  public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
+      JavaSparkContext jssc) throws IOException {
     try {
-      return schemaProviderClass == null ? null :
-          (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
+      return schemaProviderClass == null ? null
+          : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
     }
@@ -116,7 +115,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file
    *
-   * @param fs         File System
+   * @param fs File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -149,8 +148,7 @@ public class UtilHelpers {
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
-    sparkConf.set("spark.hadoop.mapred.output.compression.codec",
-        "org.apache.hadoop.io.compress.GzipCodec");
+    sparkConf.set("spark.hadoop.mapred.output.compression.codec", "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set("spark.hadoop.mapred.output.compression.type", "BLOCK");
 
     additionalConfigs.entrySet().forEach(e -> sparkConf.set(e.getKey(), e.getValue()));
@@ -168,6 +166,7 @@ public class UtilHelpers {
 
   /**
    * Build Spark Context for ingestion/compaction
+   * 
    * @return
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
@@ -179,25 +178,24 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client
    *
-   * @param jsc         Java Spark Context
-   * @param basePath    Base Path
-   * @param schemaStr   Schema
+   * @param jsc Java Spark Context
+   * @param basePath Base Path
+   * @param schemaStr Schema
    * @param parallelism Parallelism
    */
-  public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath,
-      String schemaStr, int parallelism, Option<String> compactionStrategyClass, TypedProperties properties)
-      throws Exception {
-    HoodieCompactionConfig compactionConfig =
-        compactionStrategyClass.map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
-            .withCompactionStrategy(ReflectionUtils.loadClass(strategy))
-            .build()).orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withParallelism(parallelism, parallelism).withSchema(schemaStr)
-        .combineInput(true, true)
-        .withCompactionConfig(compactionConfig)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withProps(properties)
-        .build();
+  public static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) throws Exception {
+    HoodieCompactionConfig compactionConfig = compactionStrategyClass
+        .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
+            .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
+        .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
+    HoodieWriteConfig config =
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withParallelism(parallelism, parallelism)
+            .withBulkInsertParallelism(parallelism)
+            .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
+            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+            .withProps(properties).build();
     return new HoodieWriteClient(jsc, config);
   }
 
@@ -206,13 +204,11 @@ public class UtilHelpers {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        logger.error(String.format("Error processing records :writeStatus:%s",
-            writeStatus.getStat().toString()));
+        logger.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
       }
     });
     if (errors.value() == 0) {
-      logger.info(
-          String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
+      logger.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
       return 0;
     }
     logger.error(String.format("Import failed with %d errors.", errors.value()));

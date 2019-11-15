@@ -61,8 +61,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
     this.writerSchema = createHoodieWriteSchema(originalSchema);
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(),
-        config.getWriteStatusFailureFraction());
+        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
   }
 
   /**
@@ -104,7 +103,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends H
   }
 
   /**
-   * THe marker path will be  <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename
+   * THe marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename
    */
   private Path makeNewMarkerPath(String partitionPath) {
     Path markerRootPath = new Path(hoodieTable.getMetaClient().getMarkerFolderPath(instantTime));

@@ -43,8 +43,7 @@ public class SparkMain {
    * Commands
    */
   enum SparkCommand {
-    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
-    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR
+    ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR
   }
 
   public static void main(String[] args) throws Exception {
@@ -76,13 +75,12 @@ public class SparkMain {
         break;
       case COMPACT_RUN:
         assert (args.length == 8);
-        returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]),
-            args[5], args[6], Integer.parseInt(args[7]), false);
+        returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
+            Integer.parseInt(args[7]), false);
         break;
       case COMPACT_SCHEDULE:
         assert (args.length == 5);
-        returnCode = compact(jsc, args[1], args[2], args[3], 1,
-            "", args[4], 0, true);
+        returnCode = compact(jsc, args[1], args[2], args[3], 1, "", args[4], 0, true);
         break;
       case COMPACT_VALIDATE:
         assert (args.length == 7);
@@ -113,8 +111,7 @@ public class SparkMain {
     System.exit(returnCode);
   }
 
-  private static int dataLoad(JavaSparkContext jsc, String command,
-      String srcPath, String targetPath, String tableName,
+  private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
       String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMaster,
       String sparkMemory, int retry) throws Exception {
     Config cfg = new Config();
@@ -180,9 +177,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId,
-      String outputPath, int parallelism, String sparkMaster, String sparkMemory, boolean skipValidation,
-      boolean dryRun) throws Exception {
+  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String outputPath,
+      int parallelism, String sparkMaster, String sparkMemory, boolean skipValidation, boolean dryRun)
+      throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_FILE;
@@ -244,8 +241,8 @@ public class SparkMain {
   }
 
   private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withIndexConfig(
-        HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config);
   }
 }

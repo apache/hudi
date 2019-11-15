@@ -33,6 +33,7 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.io.ArrayWritable;
@@ -58,8 +59,7 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.schema.MessageType;
 
 /**
- * Record Reader implementation to merge fresh avro data with base parquet data, to support real
- * time queries.
+ * Record Reader implementation to merge fresh avro data with base parquet data, to support real time queries.
  */
 public abstract class AbstractRealtimeRecordReader {
 
@@ -69,8 +69,7 @@ public abstract class AbstractRealtimeRecordReader {
   // used to choose a trade off between IO vs Memory when performing compaction process
   // Depending on outputfile size and memory provided, choose true to avoid OOM for large file
   // size + small memory
-  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP =
-      "compaction.lazy.block.read.enabled";
+  public static final String COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP = "compaction.lazy.block.read.enabled";
   public static final String DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED = "true";
 
   // Property to set the max memory for dfs inputstream buffer size
@@ -91,21 +90,21 @@ public abstract class AbstractRealtimeRecordReader {
   // Schema handles
   private Schema readerSchema;
   private Schema writerSchema;
+  private Schema hiveSchema;
 
   public AbstractRealtimeRecordReader(HoodieRealtimeFileSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
     LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
     LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    LOG.info("partitioningColumns ==> " + job.get("partition_columns", ""));
+    LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     try {
       this.usesCustomPayload = usesCustomPayload();
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
       baseFileSchema = readSchema(jobConf, split.getPath());
       init();
     } catch (IOException e) {
-      throw new HoodieIOException(
-          "Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
+      throw new HoodieIOException("Could not create HoodieRealtimeRecordReader on path " + this.split.getPath(), e);
     }
   }
 
@@ -116,8 +115,8 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Reads the schema from the parquet file. This is different from ParquetUtils as it uses the
-   * twitter parquet to support hive 1.1.0
+   * Reads the schema from the parquet file. This is different from ParquetUtils as it uses the twitter parquet to
+   * support hive 1.1.0
    */
   private static MessageType readSchema(Configuration conf, Path parquetFilePath) {
     try {
@@ -157,19 +156,19 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Given a comma separated list of field names and positions at which they appear on Hive, return
-   * a ordered list of field names, that can be passed onto storage.
+   * Given a comma separated list of field names and positions at which they appear on Hive, return a ordered list of
+   * field names, that can be passed onto storage.
    */
   private static List<String> orderFields(String fieldNameCsv, String fieldOrderCsv, List<String> partitioningFields) {
 
     String[] fieldOrders = fieldOrderCsv.split(",");
-    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
-        .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
+    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(",")).filter(fn -> !partitioningFields.contains(fn))
+        .collect(Collectors.toList());
 
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
     if (fieldNames.size() != fieldOrders.length) {
-      throw new HoodieException(String
-          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
+      throw new HoodieException(
+          String.format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
               fieldNames.size(), fieldOrders.length));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
@@ -180,39 +179,40 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Generate a reader schema off the provided writeSchema, to just project out the provided
-   * columns
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns
    */
-  public static Schema generateProjectionSchema(Schema writeSchema, List<String> fieldNames) {
+  public static Schema generateProjectionSchema(Schema writeSchema, Map<String, Field> schemaFieldsMap,
+      List<String> fieldNames) {
     /**
-     * Avro & Presto field names seems to be case sensitive (support fields differing only in case)
-     * whereas Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable
-     * using spark.sql.caseSensitive=true
+     * Avro & Presto field names seems to be case sensitive (support fields differing only in case) whereas
+     * Hive/Impala/SparkSQL(default) are case-insensitive. Spark allows this to be configurable using
+     * spark.sql.caseSensitive=true
      *
-     * For a RT table setup with no delta-files (for a latest file-slice) -> we translate parquet schema to Avro
-     * Here the field-name case is dependent on parquet schema. Hive (1.x/2.x/CDH) translate column projections
-     * to lower-cases
+     * For a RT table setup with no delta-files (for a latest file-slice) -> we translate parquet schema to Avro Here
+     * the field-name case is dependent on parquet schema. Hive (1.x/2.x/CDH) translate column projections to
+     * lower-cases
      *
      */
     List<Schema.Field> projectedFields = new ArrayList<>();
-    Map<String, Schema.Field> schemaFieldsMap = writeSchema.getFields().stream()
-        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     for (String fn : fieldNames) {
       Schema.Field field = schemaFieldsMap.get(fn.toLowerCase());
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
-            + "Derived Schema Fields: "
-            + new ArrayList<>(schemaFieldsMap.keySet()));
+            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields
-            .add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
       }
     }
 
-    Schema projectedSchema = Schema
-        .createRecord(writeSchema.getName(), writeSchema.getDoc(), writeSchema.getNamespace(), writeSchema.isError());
+    Schema projectedSchema = Schema.createRecord(writeSchema.getName(), writeSchema.getDoc(),
+        writeSchema.getNamespace(), writeSchema.isError());
     projectedSchema.setFields(projectedFields);
     return projectedSchema;
+  }
+
+  public static Map<String, Field> getNameToFieldMap(Schema schema) {
+    return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(), r))
+        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   /**
@@ -295,16 +295,16 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Hive implementation of ParquetRecordReader results in partition columns not present in the original parquet file
-   * to also be part of the projected schema. Hive expects the record reader implementation to return the row in its
+   * Hive implementation of ParquetRecordReader results in partition columns not present in the original parquet file to
+   * also be part of the projected schema. Hive expects the record reader implementation to return the row in its
    * entirety (with un-projected column having null values). As we use writerSchema for this, make sure writer schema
    * also includes partition columns
    *
    * @param schema Schema to be changed
    */
   private static Schema addPartitionFields(Schema schema, List<String> partitioningFields) {
-    final Set<String> firstLevelFieldNames = schema.getFields().stream().map(Field::name)
-        .map(String::toLowerCase).collect(Collectors.toSet());
+    final Set<String> firstLevelFieldNames =
+        schema.getFields().stream().map(Field::name).map(String::toLowerCase).collect(Collectors.toSet());
     List<String> fieldsToAdd = partitioningFields.stream().map(String::toLowerCase)
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
@@ -313,12 +313,12 @@ public abstract class AbstractRealtimeRecordReader {
 
   /**
    * Goes through the log files in reverse order and finds the schema from the last available data block. If not, falls
-   * back to the schema from the latest parquet file. Finally, sets the partition column and projection fields into
-   * the job conf.
+   * back to the schema from the latest parquet file. Finally, sets the partition column and projection fields into the
+   * job conf.
    */
   private void init() throws IOException {
-    Schema schemaFromLogFile = LogReaderUtils
-        .readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaFilePaths(), jobConf);
+    Schema schemaFromLogFile =
+        LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaFilePaths(), jobConf);
     if (schemaFromLogFile == null) {
       writerSchema = new AvroSchemaConverter().convert(baseFileSchema);
       LOG.debug("Writer Schema From Parquet => " + writerSchema.getFields());
@@ -327,20 +327,46 @@ public abstract class AbstractRealtimeRecordReader {
       LOG.debug("Writer Schema From Log => " + writerSchema.getFields());
     }
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
-    String partitionFields = jobConf.get("partition_columns", "");
+    String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
     List<String> partitioningFields =
-        partitionFields.length() > 0 ? Arrays.stream(partitionFields.split(",")).collect(Collectors.toList())
+        partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
             : new ArrayList<>();
     writerSchema = addPartitionFields(writerSchema, partitioningFields);
-    List<String> projectionFields = orderFields(
-        jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-        jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR),
-        partitioningFields);
+    List<String> projectionFields = orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
+        jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), partitioningFields);
+
+    Map<String, Field> schemaFieldsMap = getNameToFieldMap(writerSchema);
+    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap);
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
-    readerSchema = generateProjectionSchema(writerSchema, projectionFields);
+
+    readerSchema = generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaFilePaths(), split.getPath(), projectionFields));
+  }
+
+  private Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap) {
+    // Get all column names of hive table
+    String hiveColumnString = jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS);
+    String[] hiveColumns = hiveColumnString.split(",");
+    List<Field> hiveSchemaFields = new ArrayList<>();
+
+    for (String columnName : hiveColumns) {
+      Field field = schemaFieldsMap.get(columnName.toLowerCase());
+
+      if (field != null) {
+        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+      } else {
+        // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
+        // They will get skipped as they won't be found in the original schema.
+        LOG.debug("Skipping Hive Column => " + columnName);
+      }
+    }
+
+    Schema hiveSchema = Schema.createRecord(writerSchema.getName(), writerSchema.getDoc(), writerSchema.getNamespace(),
+        writerSchema.isError());
+    hiveSchema.setFields(hiveSchemaFields);
+    return hiveSchema;
   }
 
   public Schema getReaderSchema() {
@@ -351,10 +377,14 @@ public abstract class AbstractRealtimeRecordReader {
     return writerSchema;
   }
 
+  public Schema getHiveSchema() {
+    return hiveSchema;
+  }
+
   public long getMaxCompactionMemoryInBytes() {
     // jobConf.getMemoryForMapTask() returns in MB
-    return (long) Math.ceil(Double
-        .valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
-        * jobConf.getMemoryForMapTask() * 1024 * 1024L);
+    return (long) Math
+        .ceil(Double.valueOf(jobConf.get(COMPACTION_MEMORY_FRACTION_PROP, DEFAULT_COMPACTION_MEMORY_FRACTION))
+            * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 }

@@ -25,10 +25,15 @@
      {"name": "hoodieRestoreMetadata", "type": {
      "type" : "map", "values" : {
         "type": "array",
-        "default": "null",
-        "items": "HoodieRollbackMetadata",
+        "default": null,
+        "items": ["null","HoodieRollbackMetadata"],
         "name": "hoodieRollbackMetadata"
      }
-   }}
+   }},
+     {
+        "name":"version",
+        "type":["int", "null"],
+        "default": 1
+     }
  ]
 }

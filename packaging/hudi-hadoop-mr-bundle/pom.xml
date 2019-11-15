@@ -28,8 +28,7 @@
 
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
-    <notice.dir>${project.basedir}/src/main/resources/META-INF</notice.dir>
-    <notice.file>HUDI_NOTICE.txt</notice.file>
+    <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
 
   <build>
@@ -72,6 +71,7 @@
                   <include>com.esotericsoftware:kryo-shaded</include>
                   <include>org.objenesis:objenesis</include>
                   <include>com.esotericsoftware:minlog</include>
+                  <include>org.apache.avro:avro</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -86,6 +86,10 @@
                 <relocation>
                   <pattern>com.esotericsoftware.minlog.</pattern>
                   <shadedPattern>org.apache.hudi.com.esotericsoftware.minlog.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>${mr.bundle.avro.shade.prefix}org.apache.avro.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
@@ -135,5 +139,21 @@
       <artifactId>parquet-avro</artifactId>
       <scope>compile</scope>
     </dependency>
+
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <scope>${mr.bundle.avro.scope}</scope>
+    </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>mr-bundle-shade-avro</id>
+      <properties>
+        <mr.bundle.avro.scope>compile</mr.bundle.avro.scope>
+        <mr.bundle.avro.shade.prefix>org.apache.hudi.</mr.bundle.avro.shade.prefix>
+      </properties>
+    </profile>
+  </profiles>
 </project>
