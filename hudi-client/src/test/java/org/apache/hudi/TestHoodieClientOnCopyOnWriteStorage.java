@@ -27,6 +27,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,7 +51,6 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
@@ -532,6 +532,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   public void testDeletesWithDeleteApi() throws Exception {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
+    List<String> keysSoFar = new ArrayList<>();
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
@@ -543,6 +544,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     client.startCommitWithTime(commitTime1);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, insertSplitLimit); // this writes ~500kb
     Set<String> keys1 = HoodieClientTestUtils.getRecordKeys(inserts1);
+    keysSoFar.addAll(keys1);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
     List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
 
@@ -556,55 +558,56 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
         100);
 
     // Delete 20 among 100 inserted
-    String commitTime2 = "002";
-    client.startCommitWithTime(commitTime2);
+    testDeletes(client, inserts1, 20, file1, "002", 80, keysSoFar);
 
-    List<HoodieKey> hoodieKeysToDelete1 = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(inserts1), 20);
-    JavaRDD<HoodieKey> deleteKeys1 = jsc.parallelize(hoodieKeysToDelete1, 1);
-    statuses = client.delete(deleteKeys1, commitTime2).collect();
+    // Insert and update 40 records
+    Pair<Set<String>, List<HoodieRecord>> updateBatch2 = testUpdates("003", client, 40, 120);
+    keysSoFar.addAll(updateBatch2.getLeft());
 
+    // Delete 10 records among 40 updated
+    testDeletes(client, updateBatch2.getRight(), 10, file1, "004", 110, keysSoFar);
+
+    // do another batch of updates
+    Pair<Set<String>, List<HoodieRecord>> updateBatch3 = testUpdates("005", client, 40, 150);
+    keysSoFar.addAll(updateBatch3.getLeft());
+
+    // delete non existent keys
+    String commitTime6 = "006";
+    client.startCommitWithTime(commitTime6);
+
+    List<HoodieRecord> dummyInserts3 = dataGen.generateInserts(commitTime6, 20);
+    List<HoodieKey> hoodieKeysToDelete3 = HoodieClientTestUtils
+        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts3), 20);
+    JavaRDD<HoodieKey> deleteKeys3 = jsc.parallelize(hoodieKeysToDelete3, 1);
+    statuses = client.delete(deleteKeys3, commitTime6).collect();
     assertNoWriteErrors(statuses);
+    assertEquals("Just 0 write status for delete.", 0, statuses.size());
 
-    assertEquals("Just 1 file needs to be added.", 1, statuses.size());
-    assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
-    assertEquals("Existing file should be expanded", commitTime1, statuses.get(0).getStat().getPrevCommit());
-    file1 = statuses.get(0).getFileId();
-    Assert.assertEquals("file should contain 80 records",
-        readRowKeysFromParquet(jsc.hadoopConfiguration(), new Path(basePath, statuses.get(0).getStat().getPath()))
-            .size(),
-        80);
-
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
-
-    assertEquals("Expecting 1 commits.", 1,
-        timeline.findInstantsAfter(commitTime1, Integer.MAX_VALUE).countInstants());
-    Assert.assertEquals("Latest commit should be " + commitTime2, commitTime2,
-        timeline.lastInstant().get().getTimestamp());
-    assertEquals("Must contain " + 0 + " records", 0,
-        HoodieClientTestUtils.readCommit(basePath, sqlContext, timeline, commitTime2).count());
-
-    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    List<GenericRecord> records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
-    for (GenericRecord record : records) {
-      String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      assertEquals("only expect commit1", commitTime1, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
-      assertTrue("key expected to be part of commit1", keys1.contains(recordKey));
-      assertFalse("Key deleted", hoodieKeysToDelete1.contains(recordKey));
+    // Check the entire dataset has all records still
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
+    assertEquals("Must contain " + 150 + " records", 150,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
 
-    // Insert and updaete 40 records
-    String commitTime3 = "003";
-    client.startCommitWithTime(commitTime3);
-    List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime3, 40);
-    Set<String> keys2 = HoodieClientTestUtils.getRecordKeys(inserts2);
-    List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>();
-    insertsAndUpdates2.addAll(inserts2);
-    insertsAndUpdates2.addAll(dataGen.generateUpdates(commitTime3, inserts2));
+    // delete another batch. previous delete commit should have persisted the schema. If not,
+    // this will throw exception
+    testDeletes(client, updateBatch3.getRight(), 10, file1, "007", 140, keysSoFar);
+  }
 
-    JavaRDD<HoodieRecord> insertAndUpdatesRDD2 = jsc.parallelize(insertsAndUpdates2, 1);
-    statuses = client.upsert(insertAndUpdatesRDD2, commitTime3).collect();
+  private Pair<Set<String>, List<HoodieRecord>> testUpdates(String commitTime, HoodieWriteClient client,
+      int sizeToInsertAndUpdate, int expectedTotalRecords)
+      throws IOException {
+    client.startCommitWithTime(commitTime);
+    List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, sizeToInsertAndUpdate);
+    Set<String> keys = HoodieClientTestUtils.getRecordKeys(inserts);
+    List<HoodieRecord> insertsAndUpdates = new ArrayList<>();
+    insertsAndUpdates.addAll(inserts);
+    insertsAndUpdates.addAll(dataGen.generateUpdates(commitTime, inserts));
+
+    JavaRDD<HoodieRecord> insertAndUpdatesRDD = jsc.parallelize(insertsAndUpdates, 1);
+    List<WriteStatus> statuses = client.upsert(insertAndUpdatesRDD, commitTime).collect();
     assertNoWriteErrors(statuses);
 
     // Check the entire dataset has all records still
@@ -612,66 +615,73 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + 120 + " records", 120,
+    assertEquals("Must contain " + expectedTotalRecords + " records", expectedTotalRecords,
         HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+    return Pair.of(keys, inserts);
+  }
 
-    // Delete 10 records among 40 updated
-    String commitTime4 = "004";
-    client.startCommitWithTime(commitTime4);
+  private void testDeletes(HoodieWriteClient client, List<HoodieRecord> previousRecords, int sizeToDelete,
+      String existingFile, String commitTime, int exepctedRecords, List<String> keys) {
+    client.startCommitWithTime(commitTime);
 
-    List<HoodieKey> hoodieKeysToDelete2 = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(inserts2), 10);
-    JavaRDD<HoodieKey> deleteKeys2 = jsc.parallelize(hoodieKeysToDelete2, 1);
-    statuses = client.delete(deleteKeys2, commitTime4).collect();
+    List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
+        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(previousRecords), sizeToDelete);
+    JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
+    List<WriteStatus> statuses = client.delete(deleteKeys, commitTime).collect();
 
     assertNoWriteErrors(statuses);
 
     assertEquals("Just 1 file needs to be added.", 1, statuses.size());
-    assertEquals("Existing file should be expanded", file1, statuses.get(0).getFileId());
+    assertEquals("Existing file should be expanded", existingFile, statuses.get(0).getFileId());
 
     // Check the entire dataset has all records still
-    fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
     }
-    assertEquals("Must contain " + 110 + " records", 110,
+    assertEquals("Must contain " + exepctedRecords + " records", exepctedRecords,
         HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
 
-    newFile = new Path(basePath, statuses.get(0).getStat().getPath());
+    Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals("file should contain 110 records", readRowKeysFromParquet(jsc.hadoopConfiguration(), newFile).size(),
-        110);
+        exepctedRecords);
 
-    records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
+    List<GenericRecord> records = ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-      // assertEquals("only expect commit4", commitTime4, record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
-      assertTrue("key expected to be part of commit4", keys2.contains(recordKey) || keys1.contains(recordKey));
-      assertFalse("Key deleted", hoodieKeysToDelete1.contains(recordKey) && hoodieKeysToDelete2.contains(recordKey));
+      assertTrue("key expected to be part of " + commitTime, keys.contains(recordKey));
+      assertFalse("Key deleted", hoodieKeysToDelete.contains(recordKey));
     }
-
-    // delete non existant keys
-    String commitTime5 = "005";
-    client.startCommitWithTime(commitTime5);
-
-    List<HoodieRecord> dummyInserts3 = dataGen.generateInserts(commitTime3, 20);
-    List<HoodieKey> hoodieKeysToDelete3 = HoodieClientTestUtils
-        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts3), 20);
-    JavaRDD<HoodieKey> deleteKeys3 = jsc.parallelize(hoodieKeysToDelete3, 1);
-    statuses = client.delete(deleteKeys3, commitTime5).collect();
-
-    assertNoWriteErrors(statuses);
-
-    assertEquals("Just 0 file needs to be added.", 0, statuses.size());
-
-    // Check the entire dataset has all records still
-    fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
-    for (int i = 0; i < fullPartitionPaths.length; i++) {
-      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
-    }
-    assertEquals("Must contain " + 110 + " records", 110,
-        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
   }
 
+  /**
+   * Test delete with delete api
+   */
+  @Test
+  public void testDeletesWithoutInserts() throws Exception {
+    final String testPartitionPath = "2016/09/26";
+    final int insertSplitLimit = 100;
+    // setup the small file handling params
+    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
+    dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
+
+    HoodieWriteClient client = getHoodieWriteClient(config, false);
+
+    // delete non existent keys
+    String commitTime1 = "001";
+    client.startCommitWithTime(commitTime1);
+
+    List<HoodieRecord> dummyInserts = dataGen.generateInserts(commitTime1, 20);
+    List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
+        .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(dummyInserts), 20);
+    JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
+    try {
+      client.delete(deleteKeys, commitTime1).collect();
+      fail("Should have thrown Exception");
+    } catch (HoodieIOException e) {
+      // ignore
+    }
+  }
 
   /**
    * Test to ensure commit metadata points to valid files

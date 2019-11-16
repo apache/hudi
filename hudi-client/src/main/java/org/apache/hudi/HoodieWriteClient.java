@@ -355,7 +355,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         return upsertRecordsInternal(taggedValidRecords, commitTime, table, true);
       } else {
         // if entire set of keys are non existent
-        return jsc.emptyRDD();
+        JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(Collections.EMPTY_LIST, 1);
+        commit(commitTime, writeStatusRDD, Option.empty());
+        return writeStatusRDD;
       }
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
@@ -1182,8 +1184,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         if (commitMetadata.getExtraMetadata().containsKey(HoodieCommitMetadata.SCHEMA_KEY)) {
           config.setSchema(commitMetadata.getExtraMetadata().get(HoodieCommitMetadata.SCHEMA_KEY));
         } else {
-          throw new HoodieIOException("Deletes issued without any prior commits");
+          throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
         }
+      } else {
+        throw new HoodieIOException("Deletes issued without any prior commits");
       }
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
