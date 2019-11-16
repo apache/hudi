@@ -40,6 +40,7 @@ import org.apache.log4j.Logger;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieCommitMetadata implements Serializable {
 
+  public static final String SCHEMA_KEY = "schema";
   private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;

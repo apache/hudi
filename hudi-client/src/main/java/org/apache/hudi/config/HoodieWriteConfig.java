@@ -122,6 +122,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(AVRO_SCHEMA);
   }
 
+  public void setSchema(String schemaStr) {
+    props.setProperty(AVRO_SCHEMA, schemaStr);
+  }
+
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
   }
