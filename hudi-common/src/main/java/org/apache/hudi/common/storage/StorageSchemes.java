@@ -37,7 +37,7 @@ public enum StorageSchemes {
   // Google Cloud Storage
   GCS("gs", false),
   // Azure WASB
-  WASB("wasb", false), WASBS("wasbs", false)
+  WASB("wasb", false), WASBS("wasbs", false),
   // Azure ADLS
   ADLS("adls", false),
   // View FS for federated setups. If federating across cloud stores, then append support is false
