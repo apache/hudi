@@ -35,12 +35,12 @@ import org.apache.spark.sql.SparkSession;
 public class DFSParquetDeltaInputReader extends DFSDeltaInputReader {
 
   private final SparkSession sparkSession;
-  private final String schemaStr;
   private final String basePath;
   private final Option<String> structName;
   private final Option<String> nameSpace;
+  private final static String PARQUET_EXTENSION = ".parquet";
   protected PathFilter filter = (path) -> {
-    if (path.toUri().toString().contains(".parquet")) {
+    if (path.toUri().toString().contains(PARQUET_EXTENSION)) {
       return true;
     } else {
       return false;

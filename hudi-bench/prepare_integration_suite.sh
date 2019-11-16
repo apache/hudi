@@ -11,7 +11,7 @@ _CALLING_DIR="$(pwd)"
 usage() {
     echo "Usage: $0"
     echo "   --spark-command, prints the spark command"
-    echo "   -h, hdfs-version"
+    echo "   -h, hadoop-version"
     echo "   -s, spark version"
     echo "   -p, parquet version"
     echo "   -a, avro version"
@@ -36,7 +36,7 @@ echo "spark-submit --packages com.databricks:spark-avro_2.11:4.0.0 \
 --payload-class "${10}" \
 --workload-yaml-path "${11}" \
 --input-file-size "${12}" \
---<deltastreamer-ingest>"
+--<use-deltastreamer>"
 }
 
 case "$1" in
@@ -55,8 +55,8 @@ esac
 
 while getopts ":h:s:p:a:s:" opt; do
   case $opt in
-    h) hdfs="$OPTARG"
-    printf "Argument hdfs is %s\n" "$hdfs"
+    h) hadoop="$OPTARG"
+    printf "Argument hadoop is %s\n" "$hadoop"
     ;;
     s) spark="$OPTARG"
     printf "Argument spark is %s\n" "$spark"
@@ -78,12 +78,12 @@ done
 
 get_versions () {
   base_command=''
-  if [ -z "$hdfs" ]
+  if [ -z "$hadoop" ]
    then
     base_command=$base_command
   else
-    hdfs=$1
-    base_command+=' -Dhadoop.version='$hdfs
+    hadoop=$1
+    base_command+=' -Dhadoop.version='$hadoop
   fi
 
   if [ -z "$hive" ]
@@ -96,7 +96,7 @@ get_versions () {
   echo $base_command
 }
 
-versions=$(get_versions $hdfs $hive)
+versions=$(get_versions $hadoop $hive)
 
 final_command='mvn clean install -DskipTests '$versions
 printf "Final command $final_command \n"

@@ -49,7 +49,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     return deltaSyncService.getDeltaSync().syncOnce().getRight();
   }
 
-  public JavaRDD<WriteStatus> insert(Option<String> instantTime) throws Exception { //
+  public JavaRDD<WriteStatus> insert(Option<String> instantTime) throws Exception {
     return upsert(instantTime);
   }
 
@@ -58,7 +58,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     return upsert(instantTime);
   }
 
-  public JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception { //
+  public JavaRDD<WriteStatus> compact(Option<String> instantTime) throws Exception {
     return upsert(instantTime);
   }
 

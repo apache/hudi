@@ -175,7 +175,8 @@ public class HoodieTestSuiteJob {
         required = true)
     public Long limitFileSize = 1024 * 1024 * 120L;
 
-    @Parameter(names = {"--deltastreamer-ingest"}, description = "Choose whether to use HoodieDeltaStreamer to perform"
+    @Parameter(names = {"--use-deltastreamer"}, description = "Choose whether to use HoodieDeltaStreamer to "
+        + "perform"
         + " ingestion. If set to false, HoodieWriteClient will be used")
     public Boolean useDeltaStreamer = false;
 

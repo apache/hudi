@@ -63,8 +63,8 @@ public class DeltaWriter {
   public DeltaWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema,
       boolean rollbackInflight) throws Exception {
     // We ensure that only 1 instance of HoodieWriteClient is instantiated for a DeltaWriter
-    /** This does not instantiate a HoodieWriteClient until a
-     * {@link HoodieDeltaStreamer#commit(HoodieWriteClient, JavaRDD, Option)} is invoked. **/
+    // This does not instantiate a HoodieWriteClient until a
+    // {@link HoodieDeltaStreamer#commit(HoodieWriteClient, JavaRDD, Option)} is invoked.
     this.deltaStreamerWrapper = new HoodieDeltaStreamerWrapper(cfg, jsc);
     this.hoodieReadClient = new HoodieReadClient(jsc, cfg.targetBasePath);
     if (!cfg.useDeltaStreamer) {

@@ -71,7 +71,6 @@ public class TestWorkflowBuilder {
     assertEquals(config.getRepeatCount(), 2);
     assertEquals(config.getNumRecordsInsert(), 0);
     assertEquals(config.getNumRecordsUpsert(), 10000);
-    System.out.println(workflowDag.dagView());
   }
 
 }

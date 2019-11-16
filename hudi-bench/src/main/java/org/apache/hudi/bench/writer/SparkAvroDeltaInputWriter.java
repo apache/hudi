@@ -50,7 +50,7 @@ public class SparkAvroDeltaInputWriter implements DeltaInputWriter<JavaRDD<Gener
 
   @Override
   public boolean canWrite() {
-    throw new NotSupportedException("not applicable for spark based writer");
+    throw new UnsupportedOperationException("not applicable for spark based writer");
   }
 
   @Override

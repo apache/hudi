@@ -36,8 +36,4 @@ public class WorkflowDag<O> {
     return nodeList;
   }
 
-  public String dagView() {
-    return "This should pretty-print the DAG!";
-  }
-
 }

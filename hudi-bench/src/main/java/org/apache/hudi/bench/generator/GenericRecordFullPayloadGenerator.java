@@ -40,7 +40,7 @@ import org.apache.log4j.Logger;
  */
 public class GenericRecordFullPayloadGenerator implements Serializable {
 
-  public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 1024; // 1 MB
+  public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
   private static Logger log = LogManager.getLogger(GenericRecordFullPayloadGenerator.class);
   protected final Random random = new Random();
   // The source schema used to generate a payload

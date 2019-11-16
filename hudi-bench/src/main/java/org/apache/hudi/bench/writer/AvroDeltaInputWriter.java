@@ -39,8 +39,9 @@ import org.apache.log4j.Logger;
  */
 public class AvroDeltaInputWriter implements FileDeltaInputWriter<GenericRecord> {
 
-  public static final String AVRO_EXTENSION = ".avro";
   private static Logger log = Logger.getLogger(AvroDeltaInputWriter.class);
+
+  public static final String AVRO_EXTENSION = ".avro";
   // The maximum file size for an avro file before being rolled over to a new one
   private final Long maxFileSize;
   private final Configuration configuration;
