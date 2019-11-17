@@ -3,7 +3,7 @@ title: Administering Hudi Pipelines
 keywords: hudi, administration, operation, devops
 sidebar: mydoc_sidebar
 permalink: admin_guide.html
-toc: false
+toc: true
 summary: This section offers an overview of tools available to operate an ecosystem of Hudi datasets
 ---
 
@@ -387,7 +387,7 @@ Once the Hudi Client is configured with the right datasetname and environment fo
 These metrics can then be plotted on a standard tool like grafana. Below is a sample commit duration chart.
 
 <figure>
-    <img class="docimage" src="/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
 </figure>
 
 
@@ -422,7 +422,7 @@ Typical upsert() DAG looks like below. Note that Hudi client also caches interme
 Also Spark UI shows sortByKey twice due to the probe job also being shown, nonetheless its just a single sort.
 
 <figure>
-    <img class="docimage" src="/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 100%" />
 </figure>
 
 

@@ -3,7 +3,7 @@ title: Comparison
 keywords: apache, hudi, kafka, kudu, hive, hbase, stream processing
 sidebar: mydoc_sidebar
 permalink: comparison.html
-toc: false
+toc: true
 ---
 
 Apache Hudi填补了在DFS上处理数据的巨大空白，并可以和这些技术很好地共存。然而，

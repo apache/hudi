@@ -3,7 +3,7 @@ title: Querying Hudi Datasets
 keywords: hudi, hive, spark, sql, presto
 sidebar: mydoc_sidebar
 permalink: querying_data.html
-toc: false
+toc: true
 summary: In this page, we go over how to enable SQL queries on Hudi built tables.
 ---
 

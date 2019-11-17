@@ -2,7 +2,7 @@
 title: 性能
 keywords: hudi, index, storage, compaction, cleaning, implementation
 sidebar: mydoc_sidebar
-toc: false
+toc: true
 permalink: performance.html
 ---
 

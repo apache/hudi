@@ -3,7 +3,7 @@ title: S3 Filesystem
 keywords: hudi, hive, aws, s3, spark, presto
 sidebar: mydoc_sidebar
 permalink: s3_hoodie.html
-toc: false
+toc: true
 summary: In this page, we go over how to configure Hudi with S3 filesystem.
 ---
 In this page, we explain how to get your Hudi spark job to store into AWS S3.
