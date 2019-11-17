@@ -36,6 +36,12 @@ public enum StorageSchemes {
   S3A("s3a", false), S3("s3", false),
   // Google Cloud Storage
   GCS("gs", false),
+  // Azure WASB
+  WASB("wasb", false), WASBS("wasbs", false),
+  // Azure ADLS
+  ADL("adl", false),
+  // Azure ADLS Gen2
+  ABFS("abfs", false), ABFSS("abfss", false),
   // View FS for federated setups. If federating across cloud stores, then append support is false
   VIEWFS("viewfs", true);
 
