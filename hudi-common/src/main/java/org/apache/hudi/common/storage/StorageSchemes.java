@@ -39,7 +39,7 @@ public enum StorageSchemes {
   // Azure WASB
   WASB("wasb", false), WASBS("wasbs", false),
   // Azure ADLS
-  ADLS("adls", false),
+  ADL("adl", false),
   // View FS for federated setups. If federating across cloud stores, then append support is false
   VIEWFS("viewfs", true);
 
