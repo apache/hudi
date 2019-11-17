@@ -3,7 +3,7 @@ title: Writing Hudi Datasets
 keywords: hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL
 sidebar: mydoc_sidebar
 permalink: writing_data.html
-toc: false
+toc: true
 summary: In this page, we will discuss some available tools for incrementally ingesting & storing data.
 ---
 

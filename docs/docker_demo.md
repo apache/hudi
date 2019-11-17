@@ -2,7 +2,7 @@
 title: Docker Demo
 keywords: hudi, docker, demo
 sidebar: mydoc_sidebar
-toc: false
+toc: true
 permalink: docker_demo.html
 ---
 

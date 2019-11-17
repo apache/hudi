@@ -3,7 +3,7 @@ title: Concepts
 keywords: hudi, design, storage, views, timeline
 sidebar: mydoc_sidebar
 permalink: concepts.html
-toc: false
+toc: true
 summary: "Here we introduce some basic concepts & give a broad technical overview of Hudi"
 ---
 

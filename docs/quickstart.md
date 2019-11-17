@@ -2,7 +2,7 @@
 title: Quickstart
 keywords: hudi, quickstart
 sidebar: mydoc_sidebar
-toc: false
+toc: true
 permalink: quickstart.html
 ---
 <br/>
