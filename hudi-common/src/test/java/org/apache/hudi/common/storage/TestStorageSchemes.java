@@ -33,7 +33,7 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("s3a"));
     assertFalse(StorageSchemes.isAppendSupported("gs"));
     assertFalse(StorageSchemes.isAppendSupported("wasb"));
-    assertFalse(StorageSchemes.isAppendSupported("adls"));
+    assertFalse(StorageSchemes.isAppendSupported("adl"));
     assertTrue(StorageSchemes.isAppendSupported("viewfs"));
     try {
       StorageSchemes.isAppendSupported("s2");
