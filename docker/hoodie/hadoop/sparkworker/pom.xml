@@ -65,7 +65,7 @@
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
               <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkworker_${docker.spark.version}</repository>
-              <forceTags>true</forceTags>
+              <force>true</force>
               <tag>latest</tag>
             </configuration>
           </execution>
@@ -81,7 +81,7 @@
               <skip>${docker.build.skip}</skip>
               <pullNewerImage>false</pullNewerImage>
               <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}-sparkworker_${docker.spark.version}</repository>
-              <forceTags>true</forceTags>
+              <force>true</force>
               <tag>${project.version}</tag>
             </configuration>
           </execution>
