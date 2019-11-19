@@ -32,7 +32,7 @@ public class ITTestHoodieSanity extends ITTestBase {
     SINGLE_KEY_PARTITIONED, MULTI_KEYS_PARTITIONED, NON_PARTITIONED,
   }
 
-  //@Test
+  @Test
   /**
    * A basic integration test that runs HoodieJavaApp to create a sample COW Hoodie with single partition key data-set
    * and performs upserts on it. Hive integration and upsert functionality is checked by running a count query in hive

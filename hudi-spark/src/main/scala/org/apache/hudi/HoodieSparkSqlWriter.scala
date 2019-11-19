@@ -32,7 +32,7 @@ import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
@@ -192,10 +192,17 @@ private[hudi] object HoodieSparkSqlWriter {
           false
         }
     } else {
-      val ds : Array[Row] =  df.collect()
-      ds.foreach(row => print(row.toString()))
-      val deleteRecords = AvroConversionUtils.createRddForDeletes(df, parameters(RECORDKEY_FIELD_OPT_KEY), parameters(PARTITIONPATH_FIELD_OPT_KEY))
-      val delRecords = deleteRecords.collect()
+
+      val structName = s"${tblName.get}_record"
+      val nameSpace = s"hoodie.${tblName.get}"
+      sparkContext.getConf.registerKryoClasses(
+        Array(classOf[org.apache.avro.generic.GenericData],
+          classOf[org.apache.avro.Schema]))
+
+      // Convert to RDD[HoodieKey]
+      val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
+      val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
+      val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
       if (!exists) {
         throw new HoodieException(s"hoodie dataset at $basePath does not exist")
@@ -209,7 +216,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Issue deletes
       commitTime = client.startCommit()
-      writeStatuses = DataSourceUtils.doDeleteOperation(client, deleteRecords.toJavaRDD(), commitTime) // Check for errors and commit the write.
+      writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
       val errorCount = writeStatuses.rdd.filter(ws => ws.hasErrors).count()
       writeSuccessful =
         if (errorCount == 0) {
