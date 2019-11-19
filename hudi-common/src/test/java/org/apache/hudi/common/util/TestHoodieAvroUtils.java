@@ -24,7 +24,6 @@ import org.codehaus.jackson.JsonNode;
 import org.junit.Assert;
 import org.junit.Test;
 
-
 public class TestHoodieAvroUtils {
 
   private static String EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"testrec\"," + "\"fields\": [ "

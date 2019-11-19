@@ -65,7 +65,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
-
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
  * dataset. Does not maintain any state, queries at runtime to see how far behind the target dataset is from the source
@@ -267,10 +266,8 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
-
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
-
 
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction

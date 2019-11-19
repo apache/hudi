@@ -32,8 +32,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-
 /**
+ *
  */
 public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
 

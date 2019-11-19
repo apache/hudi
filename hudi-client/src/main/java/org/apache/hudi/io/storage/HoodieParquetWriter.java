@@ -51,7 +51,6 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final String commitTime;
   private final Schema schema;
 
-
   public HoodieParquetWriter(String commitTime, Path file, HoodieParquetConfig parquetConfig, Schema schema)
       throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),

@@ -92,7 +92,6 @@ public class HoodieClientTestUtils {
     new File(parentPath + "/" + commitTime + suffix).createNewFile();
   }
 
-
   public static void fakeCommitFile(String basePath, String commitTime) throws IOException {
     fakeMetaFile(basePath, commitTime, HoodieTimeline.COMMIT_EXTENSION);
   }

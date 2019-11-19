@@ -234,7 +234,6 @@ public class HoodieHiveClient {
     return events;
   }
 
-
   /**
    * Scan table partitions
    */
@@ -530,8 +529,6 @@ public class HoodieHiveClient {
     }
     return responses;
   }
-
-
 
   private void createHiveConnection() {
     if (connection == null) {

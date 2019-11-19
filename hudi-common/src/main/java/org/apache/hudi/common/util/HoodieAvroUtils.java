@@ -183,7 +183,6 @@ public class HoodieAvroUtils {
     return record;
   }
 
-
   /**
    * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the old
    * schema

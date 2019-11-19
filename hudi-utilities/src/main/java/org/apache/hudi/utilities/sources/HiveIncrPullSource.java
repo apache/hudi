@@ -63,7 +63,6 @@ public class HiveIncrPullSource extends AvroSource {
 
   private final String incrPullRootPath;
 
-
   /**
    * Configs supported
    */

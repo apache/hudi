@@ -45,7 +45,6 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
     this.keysToDelete = keysToDelete;
   }
 
-
   private HoodieDeleteBlock(Option<byte[]> content, FSDataInputStream inputStream, boolean readBlockLazily,
       Option<HoodieLogBlockContentLocation> blockContentLocation, Map<HeaderMetadataType, String> header,
       Map<HeaderMetadataType, String> footer) {

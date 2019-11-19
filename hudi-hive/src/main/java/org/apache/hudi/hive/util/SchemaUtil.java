@@ -132,7 +132,6 @@ public class SchemaUtil {
     return false;
   }
 
-
   /**
    * Returns equivalent Hive table schema read from a parquet file
    *
@@ -295,7 +294,6 @@ public class SchemaUtil {
     finalStr = finalStr.replaceAll("-", "_");
     return finalStr;
   }
-
 
   private static String hiveCompatibleFieldName(String fieldName, boolean isNested) {
     String result = fieldName;

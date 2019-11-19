@@ -49,7 +49,6 @@ public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializa
 
   private final WorkloadStat globalStat;
 
-
   public WorkloadProfile(JavaRDD<HoodieRecord<T>> taggedRecords) {
     this.taggedRecords = taggedRecords;
     this.partitionPathStatMap = new HashMap<>();

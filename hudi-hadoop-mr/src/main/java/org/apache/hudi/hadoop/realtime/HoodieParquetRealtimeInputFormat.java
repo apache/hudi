@@ -150,7 +150,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     return rtSplits.toArray(new InputSplit[rtSplits.size()]);
   }
 
-
   @Override
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Call the HoodieInputFormat::listStatus to obtain all latest parquet files, based on commit

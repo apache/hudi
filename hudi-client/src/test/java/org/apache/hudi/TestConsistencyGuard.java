@@ -70,7 +70,6 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
         .asList(basePath + "/partition/path/f1_1-0-2_000.parquet", basePath + "/partition/path/f2_1-0-2_000.parquet"));
   }
 
-
   @Test(expected = TimeoutException.class)
   public void testCheckFailingAppears() throws Exception {
     HoodieClientTestUtils.fakeDataFile(basePath, "partition/path", "000", "f1");

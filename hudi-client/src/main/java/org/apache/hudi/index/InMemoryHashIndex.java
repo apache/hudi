@@ -38,7 +38,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 
-
 /**
  * Hoodie Index implementation backed by an in-memory Hash map.
  * <p>

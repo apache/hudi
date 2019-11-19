@@ -80,7 +80,6 @@ public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload>
     return baos.toByteArray();
   }
 
-
   private String unCompressData(byte[] data) throws IOException {
     InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data));
     try {

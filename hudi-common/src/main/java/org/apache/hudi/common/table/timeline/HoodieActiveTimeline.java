@@ -171,7 +171,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails);
   }
 
-
   /**
    * Get only the cleaner action (inflight and completed) in the active timeline
    */
@@ -363,7 +362,6 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     transitionState(requestedInstant, inflight, Option.empty());
     return inflight;
   }
-
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
     Preconditions.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));

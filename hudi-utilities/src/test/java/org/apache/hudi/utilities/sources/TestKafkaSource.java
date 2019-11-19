@@ -78,7 +78,6 @@ public class TestKafkaSource extends UtilitiesTestBase {
     testUtils.teardown();
   }
 
-
   @Test
   public void testJsonKafkaSource() throws IOException {
 
@@ -131,7 +130,6 @@ public class TestKafkaSource extends UtilitiesTestBase {
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch4AsRows.getBatch());
   }
-
 
   private static HashMap<TopicAndPartition, LeaderOffset> makeOffsetMap(int[] partitions, long[] offsets) {
     HashMap<TopicAndPartition, LeaderOffset> map = new HashMap<>();

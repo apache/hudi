@@ -80,7 +80,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import scala.Tuple2;
 
-
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where
  * <p>

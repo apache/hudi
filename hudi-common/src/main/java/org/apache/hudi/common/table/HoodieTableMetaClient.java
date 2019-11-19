@@ -267,7 +267,6 @@ public class HoodieTableMetaClient implements Serializable {
     return archivedTimeline;
   }
 
-
   /**
    * Helper method to initialize a dataset, with given basePath, tableType, name, archiveFolder
    */
@@ -409,7 +408,6 @@ public class HoodieTableMetaClient implements Serializable {
         throw new HoodieException("Could not commit on unknown storage type " + this.getTableType());
     }
   }
-
 
   /**
    * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects

@@ -73,7 +73,6 @@ public class HoodieRealtimeFileSplit extends FileSplit {
     return new String(bytes, StandardCharsets.UTF_8);
   }
 
-
   @Override
   public void write(DataOutput out) throws IOException {
     super.write(out);

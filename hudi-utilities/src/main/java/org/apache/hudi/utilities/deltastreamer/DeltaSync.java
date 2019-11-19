@@ -75,7 +75,6 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import scala.collection.JavaConversions;
 
-
 /**
  * Sync's one batch of data to hoodie dataset
  */
@@ -154,7 +153,6 @@ public class DeltaSync implements Serializable {
    * Table Type
    */
   private final HoodieTableType tableType;
-
 
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
       HoodieTableType tableType, TypedProperties props, JavaSparkContext jssc, FileSystem fs, HiveConf hiveConf,

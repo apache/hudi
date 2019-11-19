@@ -64,7 +64,6 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
   private transient FileSystem fs;
 
-
   public HoodieROTablePathFilter() {
     hoodiePathCache = new HashMap<>();
     nonHoodiePathCache = new HashSet<>();

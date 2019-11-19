@@ -655,7 +655,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         .map(Option::get);
   }
 
-
   protected Option<HoodieDataFile> getLatestDataFile(HoodieFileGroup fileGroup) {
     return Option
         .fromJavaOptional(fileGroup.getAllDataFiles().filter(df -> !isDataFileDueToPendingCompaction(df)).findFirst());

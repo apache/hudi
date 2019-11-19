@@ -287,8 +287,6 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * HELPER METHODS
    *********************************************************************************************************
    */
-
-
   /**
    * Helper to run one or more rounds of cleaning, incrementally syncing the view and then validate
    */

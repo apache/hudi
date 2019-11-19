@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-
 package org.apache.hudi.io.compact.strategy;
 
 import com.google.common.annotations.VisibleForTesting;

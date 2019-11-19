@@ -58,7 +58,6 @@ public class TestRecordReaderValueIterator {
       this.entries = entries;
     }
 
-
     @Override
     public boolean next(IntWritable key, Text value) throws IOException {
       if (currIndex >= entries.size()) {

@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 
-
 package org.apache.hudi.common.util.queue;
 
 import java.util.Arrays;
@@ -142,7 +141,6 @@ public class BoundedInMemoryExecutor<I, O, E> {
       throw new HoodieException(e);
     }
   }
-
 
   public boolean isRemaining() {
     return queue.iterator().hasNext();

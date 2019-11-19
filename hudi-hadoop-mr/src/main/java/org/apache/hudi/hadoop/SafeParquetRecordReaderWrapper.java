@@ -42,7 +42,6 @@ public class SafeParquetRecordReaderWrapper implements RecordReader<NullWritable
   // Number of fields in Value Schema
   private final int numValueFields;
 
-
   public SafeParquetRecordReaderWrapper(RecordReader<NullWritable, ArrayWritable> parquetReader) {
     this.parquetReader = parquetReader;
     ArrayWritable arrayWritable = parquetReader.createValue();

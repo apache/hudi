@@ -111,7 +111,6 @@ public class AvroUtils {
     return serializeAvroMetadata(compactionWorkload, HoodieCompactionPlan.class);
   }
 
-
   public static Option<byte[]> serializeCleanerPlan(HoodieCleanerPlan cleanPlan) throws IOException {
     return serializeAvroMetadata(cleanPlan, HoodieCleanerPlan.class);
   }

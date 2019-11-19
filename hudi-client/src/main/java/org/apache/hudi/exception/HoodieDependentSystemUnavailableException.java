@@ -18,7 +18,6 @@
 
 package org.apache.hudi.exception;
 
-
 /**
  * <p>
  * Exception thrown when dependent system is not available

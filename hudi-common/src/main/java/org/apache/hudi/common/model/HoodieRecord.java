@@ -98,7 +98,6 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     this.data = null;
   }
 
-
   /**
    * Sets the current currentLocation of the record. This should happen exactly-once
    */

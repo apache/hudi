@@ -114,7 +114,6 @@ public class HoodieTableConfig implements Serializable {
     }
   }
 
-
   /**
    * Read the table type from the table properties and if not found, return the default
    */

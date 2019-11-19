@@ -113,7 +113,6 @@ public class InputFormatTestUtil {
     return partitionPath;
   }
 
-
   public static File prepareSimpleParquetDataset(TemporaryFolder basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws Exception {
     basePath.create();

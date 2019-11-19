@@ -57,7 +57,6 @@ public class SchedulerConfGenerator {
         compactionMinShare.toString());
   }
 
-
   /**
    * Helper to set Spark Scheduling Configs dynamically
    *

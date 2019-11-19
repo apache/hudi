@@ -79,7 +79,6 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     return partitionPath;
   }
 
-
   @Override
   public TestRawTripPayload preCombine(TestRawTripPayload another) {
     return another;
@@ -128,7 +127,6 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
     }
     return baos.toByteArray();
   }
-
 
   private String unCompressData(byte[] data) throws IOException {
     try (InflaterInputStream iis = new InflaterInputStream(new ByteArrayInputStream(data))) {

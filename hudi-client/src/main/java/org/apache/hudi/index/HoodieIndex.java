@@ -47,7 +47,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
     this.config = config;
   }
 
-
   public static <T extends HoodieRecordPayload> HoodieIndex<T> createIndex(HoodieWriteConfig config,
       JavaSparkContext jsc) throws HoodieIndexException {
     switch (config.getIndexType()) {
@@ -107,7 +106,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
    * @return Returns true/false depending on whether the impl has this capability
    */
   public abstract boolean canIndexLogFiles();
-
 
   /**
    * An index is "implicit" with respect to storage, if just writing new data to a file slice, updates the index as

@@ -67,7 +67,6 @@ public class HoodieClientExample {
     cli.run();
   }
 
-
   public void run() throws Exception {
 
     SparkConf sparkConf = new SparkConf().setAppName("hoodie-client-example");

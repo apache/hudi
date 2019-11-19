@@ -44,7 +44,6 @@ public final class SourceFormatAdapter {
 
   private final Source source;
 
-
   public SourceFormatAdapter(Source source) {
     this.source = source;
   }

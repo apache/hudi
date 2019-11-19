@@ -39,7 +39,6 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
   public static final String HOODIE_MIN_RECORD_KEY_FOOTER = "hoodie_min_record_key";
   public static final String HOODIE_MAX_RECORD_KEY_FOOTER = "hoodie_max_record_key";
 
-
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, BloomFilter bloomFilter) {
     super(schema, avroSchema);
     this.bloomFilter = bloomFilter;
