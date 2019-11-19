@@ -21,6 +21,16 @@ This pull request is a trivial rework / code cleanup without any test coverage.
 
 This pull request is already covered by existing tests, such as *(please describe tests)*.
 
+(or)
+
+This change added tests and can be verified as follows:
+
+*(example:)*
+
+  - *Added integration tests for end-to-end.*
+  - *Added HoodieClientWriteTest to verify the change.*
+  - *Manually verified the change by running a job locally.*
+
 ## Committer checklist
 
  - [ ] Has a corresponding JIRA in PR title & commit
