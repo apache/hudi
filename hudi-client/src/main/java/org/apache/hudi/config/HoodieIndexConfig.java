@@ -18,15 +18,13 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.index.HoodieIndex;
-
-import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-
+import javax.annotation.concurrent.Immutable;
+import org.apache.hudi.common.bloom.filter.SimpleBloomFilter;
+import org.apache.hudi.index.HoodieIndex;
 
 /**
  * Indexing related config.
@@ -54,8 +52,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   // TODO: On by default. Once stable, we will remove the other mode.
   public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = "hoodie.bloom.index.bucketized.checking";
   public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
-  public static final String BLOOM_INDEX_AUTO_TUNE_ENABLE_PROP = "hoodie.bloom.index.auto.tune.enable";
-  public static final boolean DEFAULT_BLOOM_INDEX_AUTO_TUNE_ENABLE = false;
+  public static final String BLOOM_INDEX_FILTER_TYPE_PROP = "hoodie.bloom.index.filter.type.prop";
+  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE_PROP = SimpleBloomFilter.TYPE_CODE;
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
   public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";
@@ -196,6 +194,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_BUCKETIZED_CHECKING_PROP, DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_KEYS_PER_BUCKET_PROP),
           BLOOM_INDEX_KEYS_PER_BUCKET_PROP, DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET);
+      setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_FILTER_TYPE_PROP),
+          BLOOM_INDEX_FILTER_TYPE_PROP, DEFAULT_BLOOM_INDEX_FILTER_TYPE_PROP);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

@@ -365,7 +365,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public boolean enableAutoTuneBloomFilter() {
-    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_AUTO_TUNE_ENABLE_PROP));
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE_PROP));
+  }
+
+  public String getBloomFilterType() {
+    return props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE_PROP);
   }
 
   /**
