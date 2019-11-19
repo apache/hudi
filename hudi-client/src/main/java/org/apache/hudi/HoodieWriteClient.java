@@ -95,10 +95,7 @@ import scala.Tuple2;
 public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
   private static Logger logger = LogManager.getLogger(HoodieWriteClient.class);
-  private static final String INSERT_STR = "insert";
   private static final String UPDATE_STR = "update";
-  private static final String DELETE_STR = "delete";
-  private static final String BULK_INSERT_STR = "bulk_insert";
   private static final String LOOKUP_STR = "lookup";
   private final boolean rollbackInFlight;
   private final transient HoodieMetrics metrics;
@@ -161,7 +158,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(UPDATE_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPDATE);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -191,7 +188,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(UPDATE_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPDATE);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, true);
     } catch (Throwable e) {
@@ -213,7 +210,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(INSERT_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.INSERT);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -240,7 +237,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(INSERT_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.INSERT);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, false);
     } catch (Throwable e) {
@@ -283,7 +280,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(INSERT_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.BULK_INSERT);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -316,7 +313,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(BULK_INSERT_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.BULK_INSERT);
     try {
       return bulkInsertInternal(preppedRecords, commitTime, table, bulkInsertPartitioner);
     } catch (Throwable e) {
@@ -336,7 +333,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(DELETE_STR);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.DELETE);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieKey> dedupedKeys =
@@ -348,7 +345,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       // perform index loop up to get existing location of records
       JavaRDD<HoodieRecord<T>> taggedRecords = index.tagLocation(dedupedRecords, jsc, table);
       // filter out non existant keys/records
-      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(record -> record.getCurrentLocation() != null);
+      JavaRDD<HoodieRecord<T>> taggedValidRecords = taggedRecords.filter(record -> record.isCurrentLocationKnown());
       if (!taggedValidRecords.isEmpty()) {
         metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
         indexTimer = null;
@@ -1155,10 +1152,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
   }
 
-  private HoodieTable getTableAndInitCtx(String operationType) {
+  private HoodieTable getTableAndInitCtx(OperationType operationType) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
-    if (operationType.equalsIgnoreCase(DELETE_STR)) {
-      addSchemaToConfig(metaClient);
+    if (operationType == OperationType.DELETE) {
+      setWriteSchemaFromLastInstant(metaClient);
     }
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
@@ -1171,9 +1168,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Adds schema to config since deletes may not have schema set in the config.
+   * Sets write schema from last instant since deletes may not have schema set in the config.
    */
-  private void addSchemaToConfig(HoodieTableMetaClient metaClient) {
+  private void setWriteSchemaFromLastInstant(HoodieTableMetaClient metaClient) {
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =
@@ -1404,4 +1401,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
   }
 
+  /**
+   * Refers to different operation types
+   */
+  enum OperationType {
+    INSERT,
+    UPDATE,
+    DELETE,
+    BULK_INSERT
+  }
 }
