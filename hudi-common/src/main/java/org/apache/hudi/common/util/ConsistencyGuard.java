@@ -63,7 +63,6 @@ public interface ConsistencyGuard {
    */
   void waitTillAllFilesDisappear(String dirPath, List<String> files) throws IOException, TimeoutException;
 
-
   /**
    * Wait Till target visibility is reached
    * 

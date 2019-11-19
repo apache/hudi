@@ -218,8 +218,6 @@ public class HiveTestService {
 
   // XXX: From org.apache.hadoop.hive.metastore.HiveMetaStore,
   // with changes to support binding to a specified IP address (not only 0.0.0.0)
-
-
   private static final class ChainedTTransportFactory extends TTransportFactory {
 
     private final TTransportFactory parentTransFactory;
@@ -235,7 +233,6 @@ public class HiveTestService {
       return childTransFactory.getTransport(parentTransFactory.getTransport(trans));
     }
   }
-
 
   private static final class TServerSocketKeepAlive extends TServerSocket {
 

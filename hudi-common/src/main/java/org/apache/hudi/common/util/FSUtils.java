@@ -109,7 +109,6 @@ public class FSUtils {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
   }
 
-
   public static String makeDataFileName(String commitTime, String writeToken, String fileId) {
     return String.format("%s_%s_%s.parquet", fileId, writeToken, commitTime);
   }
@@ -149,7 +148,6 @@ public class FSUtils {
   public static String getFileId(String fullFileName) {
     return fullFileName.split("_")[0];
   }
-
 
   /**
    * Gets all partition paths assuming date partitioning (year, month, day) three levels down.

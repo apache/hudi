@@ -52,7 +52,6 @@ public abstract class LazyIterableIterator<I, O> implements Iterable<O>, Iterato
    */
   protected abstract O computeNext();
 
-
   /**
    * Called once, after all elements are processed.
    */

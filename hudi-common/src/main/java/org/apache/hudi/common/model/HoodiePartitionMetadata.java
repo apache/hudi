@@ -51,7 +51,6 @@ public class HoodiePartitionMetadata {
 
   private static Logger log = LogManager.getLogger(HoodiePartitionMetadata.class);
 
-
   /**
    * Construct metadata from existing partition
    */

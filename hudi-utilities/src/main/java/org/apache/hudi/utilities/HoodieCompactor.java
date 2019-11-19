@@ -35,7 +35,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
-
 public class HoodieCompactor {
 
   private static volatile Logger logger = LogManager.getLogger(HoodieCompactor.class);

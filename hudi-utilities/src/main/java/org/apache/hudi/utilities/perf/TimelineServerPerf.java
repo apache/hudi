@@ -209,7 +209,6 @@ public class TimelineServerPerf implements Serializable {
     }
   }
 
-
   private static class PerfStats implements Serializable {
 
     private final String partition;

@@ -130,7 +130,6 @@ public class FileSystemViewManager {
     return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf);
   }
 
-
   /**
    * Create an in-memory file System view for a dataset
    * 

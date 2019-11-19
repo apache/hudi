@@ -74,7 +74,6 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
-
     public Builder on(boolean metricsOn) {
       props.setProperty(METRICS_ON, String.valueOf(metricsOn));
       return this;

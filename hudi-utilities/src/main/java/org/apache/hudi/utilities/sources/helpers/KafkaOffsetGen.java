@@ -43,7 +43,6 @@ import scala.collection.mutable.ArrayBuffer;
 import scala.collection.mutable.StringBuilder;
 import scala.util.Either;
 
-
 /**
  * Source to read data from Kafka, incrementally
  */
@@ -249,7 +248,6 @@ public class KafkaOffsetGen {
         .anyMatch(offset -> offset.getValue().offset() < earliestOffsets.get(offset.getKey()).offset());
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
   }
-
 
   public String getTopicName() {
     return topicName;

@@ -50,7 +50,6 @@ public class AvroConvertor implements Serializable {
    */
   private transient Injection<GenericRecord, byte[]> recordInjection;
 
-
   public AvroConvertor(String schemaStr) {
     this.schemaStr = schemaStr;
   }
@@ -79,7 +78,6 @@ public class AvroConvertor implements Serializable {
     }
   }
 
-
   public GenericRecord fromJson(String json) throws IOException {
     initSchema();
     initJsonConvertor();
@@ -89,7 +87,6 @@ public class AvroConvertor implements Serializable {
   public Schema getSchema() {
     return new Schema.Parser().parse(schemaStr);
   }
-
 
   public GenericRecord fromAvroBinary(byte[] avroBinary) {
     initSchema();

@@ -294,7 +294,6 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
     return new HoodieLogFormatVersion(inputStream.readInt());
   }
 
-
   private boolean readMagic() throws IOException {
     try {
       boolean hasMagic = hasNextMagic();

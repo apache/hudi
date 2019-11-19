@@ -93,7 +93,6 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
     in.defaultReadObject();
   }
 
-
   public static Path getArchiveLogPath(String archiveFolder) {
     return new Path(archiveFolder, HOODIE_COMMIT_ARCHIVE_LOG_FILE);
   }

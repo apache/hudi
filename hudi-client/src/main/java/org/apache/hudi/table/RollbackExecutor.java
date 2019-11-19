@@ -212,7 +212,6 @@ public class RollbackExecutor implements Serializable {
     return results;
   }
 
-
   private Map<HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
     Map<HeaderMetadataType, String> header = Maps.newHashMap();

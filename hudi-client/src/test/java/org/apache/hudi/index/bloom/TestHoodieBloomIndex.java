@@ -291,7 +291,6 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     }
   }
 
-
   @Test
   public void testTagLocation() throws Exception {
     // We have some records to be tagged (two different partitions)
@@ -432,7 +431,6 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
       }
     }
   }
-
 
   @Test
   public void testBloomFilterFalseError() throws IOException, InterruptedException {

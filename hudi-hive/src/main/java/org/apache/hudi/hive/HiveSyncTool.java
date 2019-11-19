@@ -157,7 +157,6 @@ public class HiveSyncTool {
     }
   }
 
-
   /**
    * Syncs the list of storage parititions passed in (checks if the partition is in hive, if not adds it or if the
    * partition path does not match, it updates the partition path)

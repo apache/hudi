@@ -35,7 +35,6 @@ public class HoodieCLI {
   public static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
 
-
   public enum CLIState {
     INIT, DATASET, SYNC
   }

@@ -97,7 +97,6 @@ public interface HoodieLogFormat {
     public HoodieLogBlock prev() throws IOException;
   }
 
-
   /**
    * Builder class to construct the default log format writer
    */

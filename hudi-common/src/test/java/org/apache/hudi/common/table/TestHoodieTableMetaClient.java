@@ -123,5 +123,4 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertArrayEquals(new Text("data3").getBytes(), archivedTimeline.getInstantDetails(instant3).get());
   }
 
-
 }

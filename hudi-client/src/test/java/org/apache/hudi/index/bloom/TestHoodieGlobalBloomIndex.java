@@ -196,7 +196,6 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     assertEquals(new HashSet<>(Arrays.asList("f4", "f1")), new HashSet<>(recordKeyToFileComps.get("005")));
   }
 
-
   @Test
   public void testTagLocation() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();

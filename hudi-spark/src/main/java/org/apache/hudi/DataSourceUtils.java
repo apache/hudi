@@ -160,7 +160,6 @@ public class DataSourceUtils {
     return new HoodieWriteClient<>(jssc, writeConfig, true);
   }
 
-
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
       String commitTime, String operation) {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {

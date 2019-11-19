@@ -20,7 +20,6 @@ package org.apache.hudi.common.util.queue;
 
 import java.util.Iterator;
 
-
 /**
  * Consume entries from queue and execute callback function
  */
@@ -58,6 +57,5 @@ public abstract class BoundedInMemoryQueueConsumer<I, O> {
    * Return result of consuming records so far
    */
   protected abstract O getResult();
-
 
 }

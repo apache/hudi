@@ -22,7 +22,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
-
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class InstantDTO {
 

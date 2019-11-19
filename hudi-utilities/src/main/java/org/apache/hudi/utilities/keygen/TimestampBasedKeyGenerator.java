@@ -48,7 +48,6 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   private final String outputDateFormat;
 
-
   /**
    * Supported configs
    */

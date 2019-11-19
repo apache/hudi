@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-
 public abstract class HoodieIOHandle<T extends HoodieRecordPayload> {
 
   protected final String instantTime;

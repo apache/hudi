@@ -53,7 +53,6 @@ public class SavepointsCommand implements CommandMarker {
     return HoodieCLI.tableMetadata != null;
   }
 
-
   @CliAvailabilityIndicator({"savepoint create"})
   public boolean isCreateSavepointAvailable() {
     return HoodieCLI.tableMetadata != null;
@@ -127,7 +126,6 @@ public class SavepointsCommand implements CommandMarker {
     return "Savepoint " + commitTime + " rolled back";
   }
 
-
   @CliCommand(value = "savepoints refresh", help = "Refresh the savepoints")
   public String refreshMetaClient() throws IOException {
     HoodieCLI.refreshTableMetadata();
@@ -139,6 +137,5 @@ public class SavepointsCommand implements CommandMarker {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     return new HoodieWriteClient(jsc, config, false);
   }
-
 
 }

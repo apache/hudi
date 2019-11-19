@@ -250,7 +250,6 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
   }
 
-
   private List<HoodieRecord> newHoodieRecords(int n, String time) throws Exception {
     List<HoodieRecord> records = new ArrayList<>();
     for (int i = 0; i < n; i++) {
@@ -387,7 +386,6 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     assertEquals("If the number of records are more than 1150, then there should be a new file", 3, counts);
   }
 
-
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,
       String testPartitionPath, boolean autoSplitInserts) throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
@@ -419,7 +417,6 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     return partitioner;
   }
 
-
   @Test
   public void testUpsertPartitioner() throws Exception {
     final String testPartitionPath = "2016/09/26";
@@ -428,7 +425,6 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     List<HoodieCopyOnWriteTable.InsertBucket> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
     assertEquals("Total of 2 insert buckets", 2, insertBuckets.size());
   }
-
 
   @Test
   public void testUpsertPartitionerWithSmallInsertHandling() throws Exception {

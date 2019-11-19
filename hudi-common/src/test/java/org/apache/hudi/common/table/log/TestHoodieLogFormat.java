@@ -471,7 +471,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   }
 
-
   @Test
   public void testAppendAndReadOnCorruptedLog() throws IOException, URISyntaxException, InterruptedException {
     Writer writer =
@@ -555,7 +554,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertFalse("We should have no more blocks left", reader.hasNext());
     reader.close();
   }
-
 
   @Test
   public void testAvroLogRecordReaderBasic() throws IOException, URISyntaxException, InterruptedException {

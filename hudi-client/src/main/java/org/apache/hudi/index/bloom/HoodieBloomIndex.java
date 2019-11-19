@@ -268,7 +268,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     }
   }
 
-
   @Override
   public boolean rollbackCommit(String commitTime) {
     // Nope, don't need to do anything.

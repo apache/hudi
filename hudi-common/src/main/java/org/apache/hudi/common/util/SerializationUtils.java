@@ -32,7 +32,6 @@ import java.lang.reflect.InvocationTargetException;
 import org.apache.hudi.exception.HoodieSerializationException;
 import org.objenesis.instantiator.ObjectInstantiator;
 
-
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
  */

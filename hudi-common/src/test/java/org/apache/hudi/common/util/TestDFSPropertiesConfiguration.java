@@ -41,7 +41,6 @@ public class TestDFSPropertiesConfiguration {
   private static MiniDFSCluster dfsCluster;
   private static DistributedFileSystem dfs;
 
-
   @BeforeClass
   public static void initClass() throws Exception {
     hdfsTestService = new HdfsTestService();

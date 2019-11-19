@@ -27,7 +27,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.function.Function2;
 
-
 /**
  * Map function that handles a sorted stream of HoodieRecords
  */

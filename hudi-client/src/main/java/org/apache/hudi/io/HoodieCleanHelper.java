@@ -170,7 +170,6 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
     return deletePaths;
   }
 
-
   /**
    * Selects the versions for file for cleaning, such that it
    * <p>

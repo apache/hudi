@@ -86,7 +86,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
         dataFileToBeMerged);
   }
 
-
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
     return HoodieAvroUtils.addMetadataFields(originalSchema);
   }

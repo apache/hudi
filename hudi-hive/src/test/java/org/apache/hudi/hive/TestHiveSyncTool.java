@@ -148,7 +148,6 @@ public class TestHiveSyncTool {
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
   }
 
-
   @Test
   public void testBasicSync() throws Exception {
     TestUtil.hiveSyncConfig.useJdbc = this.useJdbc;
