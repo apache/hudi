@@ -230,7 +230,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
   private def syncHive(basePath: Path, fs: FileSystem, parameters: Map[String, String]): Boolean = {
     val hiveSyncConfig: HiveSyncConfig = buildSyncConfig(basePath, parameters)
-    val hiveConf: HiveConf = new HiveConf()
+    val hiveConf: HiveConf = new HiveConf(true)
     hiveConf.addResource(fs.getConf)
     new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable()
     true

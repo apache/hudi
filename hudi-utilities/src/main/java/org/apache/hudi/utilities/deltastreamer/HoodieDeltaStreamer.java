@@ -99,7 +99,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   private static HiveConf getDefaultHiveConf(Configuration cfg) {
-    HiveConf hiveConf = new HiveConf();
+    HiveConf hiveConf = new HiveConf(true);
     hiveConf.addResource(cfg);
     return hiveConf;
   }

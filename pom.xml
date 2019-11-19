@@ -80,9 +80,10 @@
     <log4j.version>1.2.17</log4j.version>
     <slf4j.version>1.7.5</slf4j.version>
     <joda.version>2.9.9</joda.version>
-    <hadoop.version>2.7.3</hadoop.version>
-    <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.1</hive.version>
+    <hadoop.groupid>io.hops</hadoop.groupid>
+    <hadoop.version>2.8.2.8</hadoop.version>
+    <hive.groupid>io.hops.hive</hive.groupid>
+    <hive.version>3.0.0.1</hive.version>
     <metrics.version>4.0.2</metrics.version>
     <spark.version>2.1.0</spark.version>
     <avro.version>1.7.7</avro.version>
@@ -576,7 +577,7 @@
 
       <!-- Hadoop -->
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-client</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
@@ -592,7 +593,7 @@
         </exclusions>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-common</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
@@ -608,19 +609,19 @@
         </exclusions>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-hdfs</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-auth</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-mapreduce-client-core</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
@@ -632,7 +633,7 @@
         </exclusions>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-mapreduce-client-common</artifactId>
         <version>${hadoop.version}</version>
         <scope>provided</scope>
@@ -644,13 +645,13 @@
         </exclusions>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-hdfs</artifactId>
         <classifier>tests</classifier>
         <version>${hadoop.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.hadoop</groupId>
+        <groupId>${hadoop.groupid}</groupId>
         <artifactId>hadoop-common</artifactId>
         <classifier>tests</classifier>
         <version>${hadoop.version}</version>
@@ -826,6 +827,17 @@
     </dependencies>
   </dependencyManagement>
   <repositories>
+    <repository>
+      <id>Hops</id>
+      <name>Hops Repo</name>
+      <url>https://bbc1.sics.se/archiva/repository/Hops/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
     <repository>
       <id>Maven Central</id>
       <name>Maven Repository</name>

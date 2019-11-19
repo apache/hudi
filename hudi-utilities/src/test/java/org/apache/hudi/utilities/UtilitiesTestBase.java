@@ -143,7 +143,7 @@ public class UtilitiesTestBase {
    * @throws IOException
    */
   private static void clearHiveDb() throws IOException {
-    HiveConf hiveConf = new HiveConf();
+    HiveConf hiveConf = new HiveConf(true);
     // Create Dummy hive sync config
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig("/dummy", "dummy");
     hiveConf.addResource(hiveServer.getHiveConf());
