@@ -43,7 +43,7 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
 
   public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out, ConsistencyGuard consistencyGuard,
       Runnable closeCallback) throws IOException {
-    super(out);
+    super(out, null);
     this.path = path;
     this.closeCallback = closeCallback;
     this.consistencyGuard = consistencyGuard;
