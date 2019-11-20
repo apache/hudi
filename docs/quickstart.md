@@ -75,7 +75,7 @@ val roViewDF = spark.
     read.
     format("org.apache.hudi").
     load(basePath + "/*/*/*/*")
-roViewDF.registerTempTable("hudi_ro_table")
+roViewDF.createOrReplaceTempView("hudi_ro_table")
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare > 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
 ```
@@ -111,6 +111,13 @@ This can be achieved using Hudi's incremental view and providing a begin time fr
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case). 
 
 ```Scala
+// reload data
+spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*").
+    createOrReplaceTempView("hudi_ro_table")
+
 val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
