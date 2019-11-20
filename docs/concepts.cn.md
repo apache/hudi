@@ -135,7 +135,7 @@ Hudi支持以下存储数据的视图
 以下内容说明了存储的工作方式，并显示了对近实时表和读优化表的查询。
 
 <figure>
-    <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 100%" />
 </figure>
 
 此示例中发生了很多有趣的事情，这些带出了该方法的微妙之处。
