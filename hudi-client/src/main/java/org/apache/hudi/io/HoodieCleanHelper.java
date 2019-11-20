@@ -174,12 +174,13 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    * Selects the versions for file for cleaning, such that it
    * <p>
    * - Leaves the latest version of the file untouched - For older versions, - It leaves all the commits untouched which
-   * has occured in last <code>config.getCleanerCommitsRetained()</code> commits - It leaves ONE commit before this
+   * has occurred in last <code>config.getCleanerCommitsRetained()</code> commits - It leaves ONE commit before this
    * window. We assume that the max(query execution time) == commit_batch_time * config.getCleanerCommitsRetained().
-   * This is 12 hours by default. This is essential to leave the file used by the query thats running for the max time.
+   * This is 5 hours by default (assuming ingestion is running every 30 minutes). This is essential to leave the file
+   * used by the query that is running for the max time.
    * <p>
    * This provides the effect of having lookback into all changes that happened in the last X commits. (eg: if you
-   * retain 24 commits, and commit batch time is 30 mins, then you have 12 hrs of lookback)
+   * retain 10 commits, and commit batch time is 30 mins, then you have 5 hrs of lookback)
    * <p>
    * This policy is the default.
    */
