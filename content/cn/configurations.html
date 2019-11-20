@@ -207,8 +207,7 @@
     <!-- Content Row -->
     <div class="row">
         <!-- Sidebar Column -->
-        <div class="col-md-3">
-
+        <div class="col-md-2">
           
 
 
@@ -219,7 +218,7 @@
 
 
 <ul id="mysidebar" class="nav">
-    <li class="sidebarTitle">Latest Version</li>
+    <li class="sidebarTitle">Version (0.5.0-incubating)</li>
     
     
     
@@ -316,14 +315,14 @@
            -->
     </li>
 </ul>
-</div>
 
 <!-- this highlights the active parent class in the navgoco sidebar. this is critical so that the parent expands when you're viewing a page. This must appear below the sidebar code above. Otherwise, if placed inside customscripts.js, the script runs before the sidebar code runs and the class never gets inserted.-->
 <script>$("li.active").parents('li').toggleClass("active");</script>
 
-    <!-- Content Column -->
-    <div class="col-md-9">
-        <div class="post-header">
+        </div>
+        <!-- Content Column -->
+        <div class="col-md-8">
+            <div class="post-header">
    <h1 class="post-title-main">配置</h1>
 </div>
 
@@ -334,32 +333,6 @@
    
     <div class="summary">在这里，我们列出了所有可能的配置及其含义。</div>
    
-
-    
-    
-<!-- this handles the automatic toc. use ## for subheads to auto-generate the on-page minitoc. if you use html tags, you must supply an ID for the heading element in order for it to appear in the minitoc. -->
-<script>
-$( document ).ready(function() {
-  // Handler for .ready() called.
-
-$('#toc').toc({ minimumHeaders: 0, listType: 'ul', showSpeed: 0, headers: 'h2,h3,h4' });
-
-/* this offset helps account for the space taken up by the floating toolbar. */
-$('#toc').on('click', 'a', function() {
-  var target = $(this.getAttribute('href'))
-    , scroll_target = target.offset().top
-
-  $(window).scrollTop(scroll_target - 10);
-  return false
-})
-  
-});
-</script>
-
-<div id="toc"></div>
-
-    
-
 
     
 
@@ -864,11 +837,37 @@ Hudi提供了一个选项，可以通过将对该分区中的插入作为对现�
 </footer>
 
 
-    </div>
+        </div>
+        <div class="col-md-2">
+            
+            
+<!-- this handles the automatic toc. use ## for subheads to auto-generate the on-page minitoc. if you use html tags, you must supply an ID for the heading element in order for it to appear in the minitoc. -->
+<script>
+$( document ).ready(function() {
+  // Handler for .ready() called.
+
+$('#toc').toc({ minimumHeaders: 0, listType: 'ul', showSpeed: 0, headers: 'h2,h3,h4' });
+
+/* this offset helps account for the space taken up by the floating toolbar. */
+$('#toc').on('click', 'a', function() {
+  var target = $(this.getAttribute('href'))
+    , scroll_target = target.offset().top
+
+  $(window).scrollTop(scroll_target - 130);
+  return false
+})
+  
+});
+</script>
+
+<div id="toc"></div>
+
+            
+        </div>
     <!-- /.row -->
-</div>
-<!-- /.container -->
     </div>
+<!-- /.container -->
+</div>
 
 </body>
 

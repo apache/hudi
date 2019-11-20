@@ -147,7 +147,7 @@ their columnar base file, to keep the query performance in check (larger delta l
 Following illustrates how the storage works, and shows queries on both near-real time table and read optimized table.
 
 <figure>
-    <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 100%" />
 </figure>
 
 There are lot of interesting things happening in this example, which bring out the subtleties in the approach.
