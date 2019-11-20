@@ -34,11 +34,11 @@ import org.apache.spark.sql.SparkSession;
  */
 public class DFSParquetDeltaInputReader extends DFSDeltaInputReader {
 
+  private static final String PARQUET_EXTENSION = ".parquet";
   private final SparkSession sparkSession;
   private final String basePath;
   private final Option<String> structName;
   private final Option<String> nameSpace;
-  private final static String PARQUET_EXTENSION = ".parquet";
   protected PathFilter filter = (path) -> {
     if (path.toUri().toString().contains(PARQUET_EXTENSION)) {
       return true;
@@ -50,7 +50,6 @@ public class DFSParquetDeltaInputReader extends DFSDeltaInputReader {
   public DFSParquetDeltaInputReader(SparkSession sparkSession, String schemaStr, String basePath,
       Option<String> structName, Option<String> nameSpace) {
     this.sparkSession = sparkSession;
-    this.schemaStr = schemaStr;
     this.basePath = basePath;
     this.structName = structName;
     this.nameSpace = nameSpace;
@@ -80,7 +79,6 @@ public class DFSParquetDeltaInputReader extends DFSDeltaInputReader {
   public JavaRDD<GenericRecord> read(int numPartitions, int numFiles, double percentageRecordsPerFile) {
     throw new UnsupportedOperationException("cannot generate updates");
   }
-
 
   @Override
   protected long analyzeSingleFile(String filePath) {

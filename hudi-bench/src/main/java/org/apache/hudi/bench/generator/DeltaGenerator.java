@@ -68,7 +68,8 @@ public class DeltaGenerator implements Serializable {
   private List<String> partitionPathFieldNames;
   private int batchId;
 
-  public DeltaGenerator(DeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession, String schemaStr,
+  public DeltaGenerator(DeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
+      String schemaStr,
       KeyGenerator keyGenerator) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
@@ -120,7 +121,8 @@ public class DeltaGenerator implements Serializable {
         adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsUpsert());
       } else {
         deltaInputReader =
-            new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(), schemaStr);
+            new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(),
+                schemaStr);
         if (config.getFractionUpsertPerFile() > 0) {
           adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(),
               config.getFractionUpsertPerFile());

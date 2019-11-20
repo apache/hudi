@@ -79,7 +79,6 @@ public class DFSAvroDeltaInputReader extends DFSDeltaInputReader {
     throw new UnsupportedOperationException("cannot generate updates");
   }
 
-
   @Override
   protected long analyzeSingleFile(String filePath) {
     JavaRDD<GenericRecord> recordsFromOneFile = SparkBasedReader

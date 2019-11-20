@@ -682,7 +682,7 @@ public class HoodieHiveClient {
     }
   }
 
-  public HiveMetaStoreClient getClient() {
+  public IMetaStoreClient getClient() {
     return client;
   }
 }

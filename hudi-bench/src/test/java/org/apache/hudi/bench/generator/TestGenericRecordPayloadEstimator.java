@@ -24,7 +24,6 @@ import org.apache.avro.Schema;
 import org.apache.hudi.common.util.collection.Pair;
 import org.junit.Test;
 
-
 public class TestGenericRecordPayloadEstimator {
 
   @Test

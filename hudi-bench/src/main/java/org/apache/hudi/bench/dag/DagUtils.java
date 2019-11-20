@@ -39,21 +39,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.bench.configuration.DeltaConfig;
 import org.apache.hudi.bench.configuration.DeltaConfig.Config;
-import org.apache.hudi.bench.dag.nodes.BulkInsertNode;
-import org.apache.hudi.bench.dag.nodes.CompactNode;
 import org.apache.hudi.bench.dag.nodes.DagNode;
-import org.apache.hudi.bench.dag.nodes.HiveQueryNode;
-import org.apache.hudi.bench.dag.nodes.HiveSyncNode;
-import org.apache.hudi.bench.dag.nodes.InsertNode;
-import org.apache.hudi.bench.dag.nodes.RollbackNode;
-import org.apache.hudi.bench.dag.nodes.ScheduleCompactNode;
-import org.apache.hudi.bench.dag.nodes.SparkSQLQueryNode;
-import org.apache.hudi.bench.dag.nodes.UpsertNode;
-import org.apache.hudi.bench.dag.nodes.ValidateNode;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 
 /**
  * Utility class to SerDe workflow dag
@@ -161,7 +150,6 @@ public class DagUtils {
         default:
           configsMap.put(entry.getKey(), getValue(entry.getValue()));
           break;
-        // add any new scope added under CONFIG
       }
     }
     return configsMap;
