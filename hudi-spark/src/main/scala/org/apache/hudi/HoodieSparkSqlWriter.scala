@@ -193,6 +193,11 @@ private[hudi] object HoodieSparkSqlWriter {
         }
     } else {
 
+      // Handle save modes
+      if (mode != SaveMode.Append) {
+        throw new HoodieException(s"\"Append\" is the only save mode applicable for $operation operation")
+      }
+
       val structName = s"${tblName.get}_record"
       val nameSpace = s"hoodie.${tblName.get}"
       sparkContext.getConf.registerKryoClasses(

@@ -353,7 +353,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       } else {
         // if entire set of keys are non existent
         JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(Collections.EMPTY_LIST, 1);
-        commit(commitTime, writeStatusRDD, Option.empty());
+        commitOnAutoCommit(commitTime, writeStatusRDD, table.getMetaClient().getCommitActionType());
         return writeStatusRDD;
       }
     } catch (Throwable e) {
