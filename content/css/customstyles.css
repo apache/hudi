@@ -83,7 +83,10 @@ padding-top: 60px;
 margin-top: -40px
 }
 
-body h1 {margin-top:80px;}
+body h1 {
+    margin-top:0px;
+    padding-top:80px;
+}
 
 .post-content img {
     margin: 12px 0px 3px 0px;
@@ -257,38 +260,63 @@ ul#results-container a: hover {
 }
 
 div#toc ul li {
-    margin: 8px 0px 8px 22px;
-    font-size: 90%;
-    list-style: square;
+    margin: 0px 0px 4px 10px;
+    padding-right: 10px;
+    font-size: 1.2rem;
+    list-style: none;
+    border-top: 1px solid whitesmoke;
+    line-height: 24px;
 }
+
+div#toc {
+    height: 80%;
+    overflow:auto;
+}
+
 div#toc ul {
-    background-color: whitesmoke;
-    padding: 5px;
+    background-color: #fafafa;
+    box-sizing: border-box;
+    padding: 0px;
     border-radius: 5px;
     max-width: 300px;
     color: gray;
+    display: table;
+    margin: 0px;
+}
+
+div#toc a {
+    color: #333;
+    display: block;
+    outline: none;
+    text-decoration: none;
+}
+
+div#toc ul li a:hover {
+    background-color: #347DBE;
+    color: #f5f5f5;
+}
+
+div#toc ul li.active {
+    background-color: #347DBE;
 }
 
 div#toc ul li ul {
-    padding-left:8px;
-
+    padding-left:12px;
 }
 
 div#toc ul li ul li::before {
-    content: "–  ";
+    content: "";
 }
 
 div#toc >ul::before {
-    content: "Table of Contents";
     font-weight: 500;
     color: #555;
-    text-align:center;
-    margin-left:auto;
-    margin-right:auto;
+    text-align:left;
     width:70px;
-    padding-top:20px;
+    padding-top:0px;
     padding-bottom:20px;
     padding-left:10px;
+    font-size: 1.2rem;
 }
 
 li.dropdownActive a {
@@ -327,6 +355,8 @@ a.accordion-toggle, a.accordion-collapsed {
 /* navgoco sidebar styles (customized) */
 .nav, .nav ul, .nav li {
     list-style: none;
+    line-height: 24px;
+    height: auto;
 }
 
 .nav ul {
@@ -374,7 +404,7 @@ a.accordion-toggle, a.accordion-collapsed {
 }
 
 .nav a:hover, .nav li.active > a {
-    background-color: #8D8D8D;
+    background-color: #214C86;
     color: #f5f5f5;
 }
 
@@ -383,16 +413,18 @@ background-color: #347DBE;
 }
 
 .nav li a {
-    font-size: 12px;
+    font-size: 1.2rem;
     line-height: 18px;
     padding: 2px 10px;
+    font-weight: 400;
     background-color: #f1f1f1;
 }
 
 .nav > li > a {
-    font-size: 14px;
+    font-size: 1.2rem;
     line-height: 20px;
     padding: 4px 10px;
+    font-weight: 400;
 }
 
 ul#mysidebar {
@@ -882,7 +914,7 @@ span.soft {
 @media (min-width: 1000px) {
 
     ul#mysidebar {
-        width: 225px;
+        width: 150px;
     }
 }
 
@@ -1162,6 +1194,10 @@ div.box.box1 {
         font-size: 14px;
     }
 
+#toc {
+    margin-top: 80px;
+    position: fixed
+}
 /*
  * Let's target IE to respect aspect ratios and sizes for img tags containing SVG files
  *
