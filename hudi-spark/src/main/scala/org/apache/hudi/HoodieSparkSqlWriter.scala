@@ -195,7 +195,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Handle save modes
       if (mode != SaveMode.Append) {
-        throw new HoodieException(s"\"Append\" is the only save mode applicable for $operation operation")
+        throw new HoodieException(s"Append is the only save mode applicable for $operation operation")
       }
 
       val structName = s"${tblName.get}_record"

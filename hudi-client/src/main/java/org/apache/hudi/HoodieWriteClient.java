@@ -158,7 +158,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPDATE);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPSERT);
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -188,7 +188,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPDATE);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.UPSERT_PREPPED);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, true);
     } catch (Throwable e) {
@@ -237,7 +237,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.INSERT);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.INSERT_PREPPED);
     try {
       return upsertRecordsInternal(preppedRecords, commitTime, table, false);
     } catch (Throwable e) {
@@ -313,7 +313,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime,
       Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(OperationType.BULK_INSERT);
+    HoodieTable<T> table = getTableAndInitCtx(OperationType.BULK_INSERT_PREPPED);
     try {
       return bulkInsertInternal(preppedRecords, commitTime, table, bulkInsertPartitioner);
     } catch (Throwable e) {
@@ -1406,8 +1406,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   enum OperationType {
     INSERT,
-    UPDATE,
+    INSERT_PREPPED,
+    UPSERT,
+    UPSERT_PREPPED,
     DELETE,
-    BULK_INSERT
+    BULK_INSERT,
+    BULK_INSERT_PREPPED
   }
 }

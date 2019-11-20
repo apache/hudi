@@ -18,6 +18,8 @@
 
 package org.apache.hudi;
 
+import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
+import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -662,7 +664,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
     // setup the small file handling params
-    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
+    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, true); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
 
     HoodieWriteClient client = getHoodieWriteClient(config, false);
@@ -878,7 +880,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    * Build Hoodie Write Config for small data file sizes
    */
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder();
+    return getSmallInsertWriteConfig(insertSplitSize, false);
+  }
+
+  /**
+   * Build Hoodie Write Config for small data file sizes
+   */
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema) {
+    HoodieWriteConfig.Builder builder = getConfigBuilder(useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA);
     return builder
         .withCompactionConfig(
             HoodieCompactionConfig.newBuilder().compactionSmallFileSize(HoodieTestDataGenerator.SIZE_PER_RECORD * 15)

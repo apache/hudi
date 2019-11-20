@@ -110,13 +110,23 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     return getConfigBuilder().build();
   }
 
+
   /**
    * Get Config builder with default configs set
    *
    * @return Config Builder
    */
   HoodieWriteConfig.Builder getConfigBuilder() {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
+  }
+
+  /**
+   * Get Config builder with default configs set
+   *
+   * @return Config Builder
+   */
+  HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
