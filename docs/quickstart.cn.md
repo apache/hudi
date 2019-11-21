@@ -108,6 +108,13 @@ Hudi还提供了获取给定提交时间戳以来已更改的记录流的功能�
 如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。
 
 ```Java
+// reload data
+spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*").
+    createOrReplaceTempView("hudi_ro_table")
+
 val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 

@@ -42,7 +42,7 @@ hudi->create --path /user/hive/warehouse/table1 --tableName hoodie_table_1 --tab
 18/09/06 15:57:15 INFO table.HoodieTableMetaClient: Finished Loading Table of type COPY_ON_WRITE from ...
 ```
 
-To see the description of hudi table, use the command:
+使用desc命令可以查看hudi表的描述信息:
 
 ```Java
 hoodie:hoodie_table_1->desc
