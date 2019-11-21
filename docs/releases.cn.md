@@ -14,7 +14,7 @@ toc: true
 
 ### 下载
   * 源码包 : [Apache Hudi(incubating) 0.5.0-incubating Source Release](https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
-  * 这里提供与此版本对应的 Apache Hudi (incubating) JAR 包，[here](https://repository.apache.org/#nexus-search;quick~hudi)
+  * [这里](https://repository.apache.org/#nexus-search;quick~hudi)提供与此版本对应的 Apache Hudi (incubating) JAR 包。
 
 ### 发布要点
   * Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)
@@ -25,8 +25,8 @@ toc: true
   * HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables
 
 ### 此版本的迁移指南
-  这是 Apache Hudi (incubating) 的第一次发布。 在此版本之前，Hudi Jars 使用 "com.uber.hoodie" maven co-ordinates 来发布。这里有迁移指南 [migration guide](https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi)
+  这是 Apache Hudi (incubating) 的第一次发布。 在此版本之前，Hudi Jars 使用 "com.uber.hoodie" maven co-ordinates 来发布。这里有[迁移指南](https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi)。
 
-### 原始发布说明书
-  获取原始发布说明书 [here](https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346087)
+### 原始发布记录
+  获取原始[发布记录](https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346087)
 
