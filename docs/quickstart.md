@@ -159,7 +159,7 @@ instead of `--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple storage types/views and 
 Hudi datasets can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
-[demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that showcases all of this on a docker based setup with all 
+[demo video](https://www.youtube.com/watch?v=VhNgUsxdrD0) that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
 steps [here](docker_demo.html) to get a taste for it. Also, if you are looking for ways to migrate your existing data 
 to Hudi, refer to [migration guide](migration_guide.html). 

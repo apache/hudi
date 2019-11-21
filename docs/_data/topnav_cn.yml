@@ -3,8 +3,8 @@
 topnav:
 - title: Topnav
   items:
-    - title: 新闻
-      url: /news
+    - title: 发布
+      url: /releases.html
     - title: 社区
       url: /community.html
     - title: 代码
