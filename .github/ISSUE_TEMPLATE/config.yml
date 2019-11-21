@@ -1,3 +1,4 @@
+
 blank_issues_enabled: false
 contact_links:
   - name: FAQ
@@ -5,5 +6,4 @@ contact_links:
     about: Do checkout frequently asked questions before filing an issue.
   - name: Hudi Issue Tracker
     url: https://issues.apache.org/jira/projects/HUDI
-    about: Reporting bugs on jira helps us better track the issue, but it is not manditory as of now.
-
+    about: If you have triaged this as a bug, then file an issue directly.
