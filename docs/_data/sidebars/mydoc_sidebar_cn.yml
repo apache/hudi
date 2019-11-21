@@ -2,8 +2,8 @@
 
 entries:
 - title: sidebar
-  product: Latest
-  version: Version
+  product: Version
+  version: (0.5.0-incubating)
   folders:
 
   - title: Getting Started

@@ -3,7 +3,7 @@ title: Concepts
 keywords: hudi, design, storage, views, timeline
 sidebar: mydoc_sidebar
 permalink: concepts.html
-toc: false
+toc: true
 summary: "Here we introduce some basic concepts & give a broad technical overview of Hudi"
 ---
 
@@ -147,7 +147,7 @@ their columnar base file, to keep the query performance in check (larger delta l
 Following illustrates how the storage works, and shows queries on both near-real time table and read optimized table.
 
 <figure>
-    <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_mor.png" alt="hudi_mor.png" style="max-width: 100%" />
 </figure>
 
 There are lot of interesting things happening in this example, which bring out the subtleties in the approach.

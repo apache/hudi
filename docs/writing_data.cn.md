@@ -3,7 +3,7 @@ title: 写入 Hudi 数据集
 keywords: hudi, incremental, batch, stream, processing, Hive, ETL, Spark SQL
 sidebar: mydoc_sidebar
 permalink: writing_data.html
-toc: false
+toc: true
 summary: 这一页里，我们将讨论一些可用的工具，这些工具可用于增量摄取和存储数据。
 ---
 

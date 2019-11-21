@@ -208,8 +208,7 @@
     <!-- Content Row -->
     <div class="row">
         <!-- Sidebar Column -->
-        <div class="col-md-3">
-
+        <div class="col-md-2">
           
 
 
@@ -317,14 +316,14 @@
            -->
     </li>
 </ul>
-</div>
 
 <!-- this highlights the active parent class in the navgoco sidebar. this is critical so that the parent expands when you're viewing a page. This must appear below the sidebar code above. Otherwise, if placed inside customscripts.js, the script runs before the sidebar code runs and the class never gets inserted.-->
 <script>$("li.active").parents('li').toggleClass("active");</script>
 
-    <!-- Content Column -->
-    <div class="col-md-9">
-        <div class="post-header">
+        </div>
+        <!-- Content Column -->
+        <div class="col-md-8">
+            <div class="post-header">
    <h1 class="post-title-main">Migration Guide</h1>
 </div>
 
@@ -335,9 +334,6 @@
    
     <div class="summary">In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset</div>
    
-
-    
-
 
     
 
@@ -446,11 +442,14 @@ hudi-&gt;hdfsparquetimport
 </footer>
 
 
-    </div>
+        </div>
+        <div class="col-md-2">
+            
+        </div>
     <!-- /.row -->
-</div>
-<!-- /.container -->
     </div>
+<!-- /.container -->
+</div>
 
 </body>
 

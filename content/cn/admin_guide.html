@@ -207,8 +207,7 @@
     <!-- Content Row -->
     <div class="row">
         <!-- Sidebar Column -->
-        <div class="col-md-3">
-
+        <div class="col-md-2">
           
 
 
@@ -219,7 +218,7 @@
 
 
 <ul id="mysidebar" class="nav">
-    <li class="sidebarTitle">Latest Version</li>
+    <li class="sidebarTitle">Version (0.5.0-incubating)</li>
     
     
     
@@ -316,14 +315,14 @@
            -->
     </li>
 </ul>
-</div>
 
 <!-- this highlights the active parent class in the navgoco sidebar. this is critical so that the parent expands when you're viewing a page. This must appear below the sidebar code above. Otherwise, if placed inside customscripts.js, the script runs before the sidebar code runs and the class never gets inserted.-->
 <script>$("li.active").parents('li').toggleClass("active");</script>
 
-    <!-- Content Column -->
-    <div class="col-md-9">
-        <div class="post-header">
+        </div>
+        <!-- Content Column -->
+        <div class="col-md-8">
+            <div class="post-header">
    <h1 class="post-title-main">Administering Hudi Pipelines</h1>
 </div>
 
@@ -334,9 +333,6 @@
    
     <div class="summary">本节概述了可用于操作Hudi数据集生态系统的工具</div>
    
-
-    
-
 
     
 
@@ -685,7 +681,7 @@ Compaction successfully repaired
 <p>然后可以将这些指标绘制在grafana等标准工具上。以下是提交持续时间图表示例。</p>
 
 <figure>
-    <img class="docimage" src="/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_commit_duration.png" alt="hudi_commit_duration.png" style="max-width: 100%" />
 </figure>
 
 <h2 id="troubleshooting">故障排除</h2>
@@ -721,7 +717,7 @@ Compaction successfully repaired
 <p>典型的upsert() DAG如下所示。请注意，Hudi客户端会缓存中间的RDD，以智能地并调整文件大小和Spark并行度。
 另外，由于还显示了探针作业，Spark UI显示了两次sortByKey，但它只是一个排序。</p>
 <figure>
-    <img class="docimage" src="/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 1000px" />
+    <img class="docimage" src="/images/hudi_upsert_dag.png" alt="hudi_upsert_dag.png" style="max-width: 100%" />
 </figure>
 
 <p>概括地说，有两个步骤</p>
@@ -788,11 +784,37 @@ Compaction successfully repaired
 </footer>
 
 
-    </div>
+        </div>
+        <div class="col-md-2">
+            
+            
+<!-- this handles the automatic toc. use ## for subheads to auto-generate the on-page minitoc. if you use html tags, you must supply an ID for the heading element in order for it to appear in the minitoc. -->
+<script>
+$( document ).ready(function() {
+  // Handler for .ready() called.
+
+$('#toc').toc({ minimumHeaders: 0, listType: 'ul', showSpeed: 0, headers: 'h2,h3,h4' });
+
+/* this offset helps account for the space taken up by the floating toolbar. */
+$('#toc').on('click', 'a', function() {
+  var target = $(this.getAttribute('href'))
+    , scroll_target = target.offset().top
+
+  $(window).scrollTop(scroll_target - 130);
+  return false
+})
+  
+});
+</script>
+
+<div id="toc"></div>
+
+            
+        </div>
     <!-- /.row -->
-</div>
-<!-- /.container -->
     </div>
+<!-- /.container -->
+</div>
 
 </body>
 

@@ -2,7 +2,7 @@
 title: Developer Setup
 keywords: hudi, ide, developer, setup
 sidebar: mydoc_sidebar
-toc: false
+toc: true
 permalink: contributing.html
 ---
 ## Pre-requisites

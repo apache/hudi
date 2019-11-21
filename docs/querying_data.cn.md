@@ -3,7 +3,7 @@ title: 查询 Hudi 数据集
 keywords: hudi, hive, spark, sql, presto
 sidebar: mydoc_sidebar
 permalink: querying_data.html
-toc: false
+toc: true
 summary: 在这一页里，我们介绍了如何在Hudi构建的表上启用SQL查询。
 ---
 

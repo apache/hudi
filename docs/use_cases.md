@@ -3,7 +3,7 @@ title: Use Cases
 keywords: hudi, data ingestion, etl, real time, use cases
 sidebar: mydoc_sidebar
 permalink: use_cases.html
-toc: false
+toc: true
 summary: "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
 
 ---
