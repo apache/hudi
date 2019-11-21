@@ -15,9 +15,11 @@ labels: question
 - If you have triaged this as a bug, then file an [issue](https://issues.apache.org/jira/projects/HUDI/issues) directly.
 
 **Describe the problem you faced**
+
 A clear and concise description of the problem.
 
 **To Reproduce**
+
 Steps to reproduce the behavior:
 
 1.
@@ -26,21 +28,22 @@ Steps to reproduce the behavior:
 4.
 
 **Expected behavior**
+
 A clear and concise description of what you expected to happen.
 
 **Environment Description**
 
-Hudi version :
+* Hudi version :
 
-Spark version :
+* Spark version :
 
-Hive version :
+* Hive version :
 
-Hadoop version :
+* Hadoop version :
 
-Storage(HDFS/S3/GCS..) :
+* Storage (HDFS/S3/GCS..) :
 
-Running on Docker? :
+* Running on Docker? (yes/no) :
 
 
 **Additional context**
