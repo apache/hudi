@@ -967,8 +967,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Clean up any stale/old files/data lying around (either on file storage or index storage) based on the
    * configurations and CleaningPolicy used. (typically files that no longer can be used by a running query can be
    * cleaned)
-   * 
-   * @throws HoodieIOException
    */
   public void clean() throws HoodieIOException {
     cleanClient.clean();
@@ -980,7 +978,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * cleaned)
    *
    * @param startCleanTime Cleaner Instant Timestamp
-   * @return
    * @throws HoodieIOException in case of any IOException
    */
   protected HoodieCleanMetadata clean(String startCleanTime) throws HoodieIOException {
@@ -1175,7 +1172,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =
-          activeTimeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType()))
+              .lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
             activeTimeline.getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
