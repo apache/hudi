@@ -1,0 +1,9 @@
+
+blank_issues_enabled: false
+contact_links:
+  - name: FAQ
+    url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
+    about: Do checkout frequently asked questions before filing an issue.
+  - name: Hudi Issue Tracker
+    url: https://issues.apache.org/jira/projects/HUDI
+    about: If you have triaged this as a bug, then file an issue directly.
