@@ -20,7 +20,7 @@ bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --
 
 设置表名、基本路径和数据生成器来为本指南生成记录。
 
-```Java
+```Scala
 import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._
 import org.apache.spark.sql.SaveMode._
@@ -40,7 +40,7 @@ val dataGen = new DataGenerator
 ## 插入数据 {#inserts}
 生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。
 
-```Java
+```Scala
 val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("org.apache.hudi").
@@ -66,7 +66,7 @@ df.write.format("org.apache.hudi").
 
 将数据文件加载到数据帧中。
 
-```Java
+```Scala
 val roViewDF = spark.
     read.
     format("org.apache.hudi").
@@ -84,7 +84,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到数据帧并将数据帧写入hudi数据集。
 
-```Java
+```Scala
 val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));
 df.write.format("org.apache.hudi").
@@ -107,7 +107,14 @@ Hudi还提供了获取给定提交时间戳以来已更改的记录流的功能�
 这可以通过使用Hudi的增量视图并提供所需更改的开始时间来实现。
 如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。
 
-```Java
+```Scala
+// reload data
+spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*").
+    createOrReplaceTempView("hudi_ro_table")
+
 val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
@@ -128,7 +135,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 让我们看一下如何查询特定时间的数据。可以通过将结束时间指向特定的提交时间，将开始时间指向"000"(表示最早的提交时间)来表示特定时间。
 
-```Java
+```Scala
 val beginTime = "000" // Represents all commits > this time.
 val endTime = commits(commits.length - 2) // commit time we are interested in
 
