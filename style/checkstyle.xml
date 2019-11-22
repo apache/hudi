@@ -294,8 +294,7 @@
 
         <!-- Checks for redundant imports. -->
         <module name="RedundantImport">
-            <message key="import.redundancy"
-                     value="Redundant import {0}."/>
+            <message key="import.redundancy" value="Redundant import {0}."/>
         </module>
 
         <!-- Checks for star import. -->
