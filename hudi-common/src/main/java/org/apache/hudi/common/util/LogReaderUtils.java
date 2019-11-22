@@ -51,7 +51,7 @@ public class LogReaderUtils {
         HoodieAvroDataBlock lastBlock = (HoodieAvroDataBlock) block;
         if (completedTimeline
             .containsOrBeforeTimelineStarts(lastBlock.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME))) {
-          writerSchema = Schema.parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
+          writerSchema = new Schema.Parser().parse(lastBlock.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
           break;
         }
       }
