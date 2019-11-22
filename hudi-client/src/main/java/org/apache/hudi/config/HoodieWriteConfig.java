@@ -51,6 +51,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
+  private static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
   private static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
   private static final String ROLLBACK_PARALLELISM = "hoodie.rollback.parallelism";
   private static final String WRITE_BUFFER_LIMIT_BYTES = "hoodie.write.buffer.limit.bytes";
@@ -59,6 +60,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_COMBINE_BEFORE_INSERT = "false";
   private static final String COMBINE_BEFORE_UPSERT_PROP = "hoodie.combine.before.upsert";
   private static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
+  private static final String COMBINE_BEFORE_DELETE_PROP = "hoodie.combine.before.delete";
+  private static final String DEFAULT_COMBINE_BEFORE_DELETE = "true";
   private static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
   private static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
   private static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
@@ -119,6 +122,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(AVRO_SCHEMA);
   }
 
+  public void setSchema(String schemaStr) {
+    props.setProperty(AVRO_SCHEMA, schemaStr);
+  }
+
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
   }
@@ -143,6 +150,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(UPSERT_PARALLELISM));
   }
 
+  public int getDeleteShuffleParallelism() {
+    return Integer.parseInt(props.getProperty(DELETE_PARALLELISM));
+  }
+
   public int getRollbackParallelism() {
     return Integer.parseInt(props.getProperty(ROLLBACK_PARALLELISM));
   }
@@ -157,6 +168,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean shouldCombineBeforeUpsert() {
     return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_UPSERT_PROP));
+  }
+
+  public boolean shouldCombineBeforeDelete() {
+    return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_DELETE_PROP));
   }
 
   public StorageLevel getWriteStatusStorageLevel() {
@@ -666,11 +681,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_PARALLELISM), BULKINSERT_PARALLELISM,
           DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM, DEFAULT_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(DELETE_PARALLELISM), DELETE_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,
           DEFAULT_COMBINE_BEFORE_INSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_UPSERT_PROP), COMBINE_BEFORE_UPSERT_PROP,
           DEFAULT_COMBINE_BEFORE_UPSERT);
+      setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_DELETE_PROP), COMBINE_BEFORE_DELETE_PROP,
+          DEFAULT_COMBINE_BEFORE_DELETE);
       setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL), WRITE_STATUS_STORAGE_LEVEL,
           DEFAULT_WRITE_STATUS_STORAGE_LEVEL);
       setDefaultOnCondition(props, !props.containsKey(HOODIE_AUTO_COMMIT_PROP), HOODIE_AUTO_COMMIT_PROP,
