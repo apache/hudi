@@ -42,6 +42,14 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String GRAPHITE_SERVER_HOST = GRAPHITE_PREFIX + ".host";
   public static final String DEFAULT_GRAPHITE_SERVER_HOST = "localhost";
 
+  // Csv
+  public static final String CSV_KEY_PERIOD = "period";
+  public static final String CSV_KEY_UNIT = "unit";
+  public static final String CSV_KEY_DIR = "directory";
+  public static final int CSV_DEFAULT_PERIOD = 10;
+  public static final String CSV_DEFAULT_UNIT = "SECONDS";
+  public static final String CSV_DEFAULT_DIR = "/tmp/";
+
   public static final String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
   public static final int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
 

@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -455,6 +456,21 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getGraphiteMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX);
+  }
+
+  public int getCsvKeyPeriod() {
+    String pollPeriod = props.getProperty(HoodieMetricsConfig.CSV_KEY_PERIOD);
+    return StringUtils.isNullOrEmpty(pollPeriod) ? HoodieMetricsConfig.CSV_DEFAULT_PERIOD : Integer.parseInt(pollPeriod);
+  }
+
+  public String getCsvKeyUnit() {
+    String pollUnit = props.getProperty(HoodieMetricsConfig.CSV_KEY_UNIT);
+    return StringUtils.isNullOrEmpty(pollUnit) ? HoodieMetricsConfig.CSV_DEFAULT_UNIT : pollUnit;
+  }
+
+  public String getCsvKeyDir() {
+    String pollDir = props.getProperty(HoodieMetricsConfig.CSV_KEY_DIR);
+    return StringUtils.isNullOrEmpty(pollDir) ? HoodieMetricsConfig.CSV_DEFAULT_DIR : pollDir;
   }
 
   /**

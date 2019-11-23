@@ -40,6 +40,9 @@ public class MetricsReporterFactory {
       case INMEMORY:
         reporter = new InMemoryMetricsReporter();
         break;
+      case CSV:
+        reporter = new CsvMetricsReporter(config, registry);
+        break;
       default:
         logger.error("Reporter type[" + type + "] is not supported.");
         break;
