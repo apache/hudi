@@ -24,22 +24,25 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.junit.Before;
+
 import org.junit.Test;
 
-public class TestHoodieMetrics {
+/**
+ * Test for the Jmx metrics report.
+ */
+public class TestHoodieJmxMetrics extends TestHoodieMetrics {
 
-  @Before
-  public void start() {
+  @Override public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
     new HoodieMetrics(config, "raw_table");
   }
 
   @Test
   public void testRegisterGauge() {
-    registerGauge("metric1", 123L);
-    assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString().equals("123"));
+    registerGauge("jmx_metric", 123L);
+    assertTrue(Metrics.getInstance().getRegistry().getGauges()
+        .get("jmx_metric").getValue().toString().equals("123"));
   }
 }

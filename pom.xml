@@ -83,7 +83,7 @@
     <hadoop.version>2.7.3</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
     <hive.version>2.3.1</hive.version>
-    <metrics.version>4.0.2</metrics.version>
+    <metrics.version>4.1.1</metrics.version>
     <spark.version>2.1.0</spark.version>
     <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
@@ -490,6 +490,21 @@
       <dependency>
         <groupId>io.dropwizard.metrics</groupId>
         <artifactId>metrics-graphite</artifactId>
+        <version>${metrics.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.dropwizard.metrics</groupId>
+        <artifactId>metrics-jmx</artifactId>
+        <version>${metrics.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.dropwizard.metrics</groupId>
+        <artifactId>metrics-jvm</artifactId>
+        <version>${metrics.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.dropwizard.metrics</groupId>
+        <artifactId>metrics-json</artifactId>
         <version>${metrics.version}</version>
       </dependency>
       <dependency>

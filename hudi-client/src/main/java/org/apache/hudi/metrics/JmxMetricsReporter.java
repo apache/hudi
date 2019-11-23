@@ -19,34 +19,46 @@
 package org.apache.hudi.metrics;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.hudi.config.HoodieWriteConfig;
+import com.codahale.metrics.jmx.JmxReporter;
+
+import java.io.Closeable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Factory class for creating MetricsReporter.
+ * Implementation of Jmx reporter, which used to report jmx metric.
  */
-public class MetricsReporterFactory {
+public class JmxMetricsReporter extends MetricsReporter {
+  private static Logger logger = LogManager.getLogger(JmxMetricsReporter.class);
 
-  private static Logger logger = LogManager.getLogger(MetricsReporterFactory.class);
+  private final MetricRegistry registry;
+  private final JmxReporter jmxReporter;
 
-  public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    MetricsReporterType type = config.getMetricsReporterType();
-    MetricsReporter reporter = null;
-    switch (type) {
-      case GRAPHITE:
-        reporter = new MetricsGraphiteReporter(config, registry);
-        break;
-      case INMEMORY:
-        reporter = new InMemoryMetricsReporter();
-        break;
-      case JMX:
-        reporter = new JmxMetricsReporter(registry);
-        break;
-      default:
-        logger.error("Reporter type[" + type + "] is not supported.");
-        break;
+  public JmxMetricsReporter(MetricRegistry registry) {
+    this.registry = registry;
+    this.jmxReporter = createJmxReport();
+  }
+
+  @Override
+  public void start() {
+    if (jmxReporter != null) {
+      jmxReporter.start();
+    } else {
+      logger.error("Cannot start as the jmxReporter is null.");
     }
-    return reporter;
+  }
+
+  @Override public void report() {
+
+  }
+
+  @Override
+  public Closeable getReporter() {
+    return jmxReporter;
+  }
+
+  private JmxReporter createJmxReport() {
+    return JmxReporter.forRegistry(registry).build();
   }
 }
