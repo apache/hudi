@@ -18,10 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-
 import com.codahale.metrics.CsvReporter;
 import com.codahale.metrics.MetricRegistry;
 
@@ -29,6 +25,12 @@ import java.io.Closeable;
 import java.io.File;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 
 /**
  * Implementation of CSV reporter, which save metrics to CSV files.
