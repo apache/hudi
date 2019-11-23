@@ -59,7 +59,7 @@ public class CsvMetricsReporter extends MetricsReporter {
     if (csvReporter != null) {
       csvReporter.start(pollPeriod, pollUnit);
     } else {
-      logger.error("Cannot start as the graphiteReporter is null.");
+      logger.error("Cannot start as the csvReporter is null.");
     }
   }
 
@@ -68,7 +68,7 @@ public class CsvMetricsReporter extends MetricsReporter {
     if (csvReporter != null) {
       csvReporter.report();
     } else {
-      logger.error("Cannot report metrics as the graphiteReporter is null.");
+      logger.error("Cannot report metrics as the csvReporter is null.");
     }
   }
 

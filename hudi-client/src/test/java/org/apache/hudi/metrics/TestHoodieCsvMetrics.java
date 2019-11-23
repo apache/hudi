@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import static org.apache.hudi.metrics.Metrics.registerGauge;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -27,11 +25,11 @@ import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.Before;
-import org.junit.Test;
 
+/**
+ * Test for the Csv metrics report.
+ */
 public class TestHoodieCsvMetrics extends TestHoodieMetrics {
-
-  private HoodieMetrics metrics = null;
 
   @Before
   public void start() {
@@ -41,12 +39,6 @@ public class TestHoodieCsvMetrics extends TestHoodieMetrics {
     when(config.getCsvKeyPeriod()).thenReturn(HoodieMetricsConfig.CSV_DEFAULT_PERIOD);
     when(config.getCsvKeyUnit()).thenReturn(HoodieMetricsConfig.CSV_DEFAULT_UNIT);
     when(config.getCsvKeyDir()).thenReturn(HoodieMetricsConfig.CSV_DEFAULT_DIR);
-    metrics = new HoodieMetrics(config, "raw_table");
-  }
-
-  @Test
-  public void testRegisterGauge() {
-    registerGauge("metric1", 123L);
-    assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString().equals("123"));
+    new HoodieMetrics(config, "raw_table");
   }
 }

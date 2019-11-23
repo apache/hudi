@@ -29,14 +29,12 @@ import org.junit.Test;
 
 public class TestHoodieMetrics {
 
-  private HoodieMetrics metrics = null;
-
   @Before
   public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
-    metrics = new HoodieMetrics(config, "raw_table");
+    new HoodieMetrics(config, "raw_table");
   }
 
   @Test
