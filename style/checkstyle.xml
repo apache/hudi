@@ -292,11 +292,6 @@
                      value="Import {0} appears after other imports that it should precede"/>
         </module>
 
-        <!-- Checks for redundant imports. -->
-        <module name="RedundantImport">
-            <message key="import.redundancy" value="Redundant import {0}."/>
-        </module>
-
         <!-- Checks for star import. -->
         <module name="AvoidStarImport" />
 
