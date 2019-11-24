@@ -87,7 +87,6 @@
                   <include>com.twitter:bijection-core_2.11</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
-                  <include>io.dropwizard.metrics:metrics-jmx</include>
                   <include>com.yammer.metrics:metrics-core</include>
 
                   <include>org.apache.hive:hive-common</include>

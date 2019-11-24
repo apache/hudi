@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 /**
  * Interface for implementing a Reporter.
@@ -28,7 +29,7 @@ public abstract class MetricsReporter {
   /**
    * Push out metrics at scheduled intervals
    */
-  public abstract void start();
+  public abstract void start() throws IOException;
 
   /**
    * Deterministically push out metrics

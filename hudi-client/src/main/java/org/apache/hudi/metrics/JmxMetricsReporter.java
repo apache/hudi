@@ -18,11 +18,16 @@
 
 package org.apache.hudi.metrics;
 
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.jmx.JmxReporter;
-
 import java.io.Closeable;
 
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.rmi.registry.LocateRegistry;
+import javax.management.remote.JMXConnectorServer;
+import javax.management.remote.JMXConnectorServerFactory;
+import javax.management.remote.JMXServiceURL;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -30,35 +35,51 @@ import org.apache.log4j.Logger;
  * Implementation of Jmx reporter, which used to report jmx metric.
  */
 public class JmxMetricsReporter extends MetricsReporter {
+
   private static Logger logger = LogManager.getLogger(JmxMetricsReporter.class);
+  private final JMXConnectorServer connector;
+  private String host;
+  private int port;
 
-  private final MetricRegistry registry;
-  private final JmxReporter jmxReporter;
-
-  public JmxMetricsReporter(MetricRegistry registry) {
-    this.registry = registry;
-    this.jmxReporter = createJmxReport();
+  public JmxMetricsReporter(HoodieWriteConfig config) {
+    try {
+      // Check the host and port here
+      this.host = config.getJmxHost();
+      this.port = config.getJmxPort();
+      if (host == null || port == 0) {
+        throw new RuntimeException(
+            String.format("Jmx cannot be initialized with host[%s] and port[%s].",
+                host, port));
+      }
+      LocateRegistry.createRegistry(port);
+      String serviceUrl =
+          "service:jmx:rmi://" + host + ":" + port + "/jndi/rmi://" + host + ":" + port + "/jmxrmi";
+      JMXServiceURL url = new JMXServiceURL(serviceUrl);
+      this.connector = JMXConnectorServerFactory
+          .newJMXConnectorServer(url, null, ManagementFactory.getPlatformMBeanServer());
+    } catch (Exception e) {
+      String msg = "Jmx initialize failed: ";
+      logger.error(msg, e);
+      throw new HoodieException(msg, e);
+    }
   }
 
   @Override
-  public void start() {
-    if (jmxReporter != null) {
-      jmxReporter.start();
+  public void start() throws IOException {
+    if (connector != null) {
+      connector.start();
     } else {
       logger.error("Cannot start as the jmxReporter is null.");
     }
   }
 
-  @Override public void report() {
+  @Override
+  public void report() {
 
   }
 
   @Override
   public Closeable getReporter() {
-    return jmxReporter;
-  }
-
-  private JmxReporter createJmxReport() {
-    return JmxReporter.forRegistry(registry).build();
+    return null;
   }
 }

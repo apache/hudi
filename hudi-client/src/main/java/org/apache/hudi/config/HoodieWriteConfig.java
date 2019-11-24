@@ -471,6 +471,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX);
   }
 
+  public String getJmxHost() {
+    return props.getProperty(HoodieMetricsConfig.JMX_HOST);
+  }
+
+  public int getJmxPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.JMX_PORT));
+  }
+
   /**
    * memory configs
    */

@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.Test;
@@ -32,10 +33,13 @@ import org.junit.Test;
  */
 public class TestHoodieJmxMetrics extends TestHoodieMetrics {
 
-  @Override public void start() {
+  @Override
+  public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
+    when(config.getJmxHost()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_HOST);
+    when(config.getJmxPort()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_PORT);
     new HoodieMetrics(config, "raw_table");
   }
 

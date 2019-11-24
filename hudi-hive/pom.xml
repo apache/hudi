@@ -129,18 +129,6 @@
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
     </dependency>
-    <dependency>
-      <groupId>io.dropwizard.metrics</groupId>
-      <artifactId>metrics-jmx</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.dropwizard.metrics</groupId>
-      <artifactId>metrics-jvm</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.dropwizard.metrics</groupId>
-      <artifactId>metrics-json</artifactId>
-    </dependency>
 
     <!-- Hoodie - Test -->
     <dependency>
