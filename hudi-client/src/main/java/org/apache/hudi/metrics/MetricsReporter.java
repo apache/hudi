@@ -36,4 +36,6 @@ public abstract class MetricsReporter {
   public abstract void report();
 
   public abstract Closeable getReporter();
+
+  public abstract void stop();
 }
