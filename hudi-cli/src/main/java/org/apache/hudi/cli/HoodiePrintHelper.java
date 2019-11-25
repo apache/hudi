@@ -59,6 +59,10 @@ public class HoodiePrintHelper {
       return HoodiePrintHelper.print(rowHeader);
     }
 
+    if (!sortByField.isEmpty() && !rowHeader.containsField(sortByField)) {
+      return String.format("Field[%s] is not in table, given columns[%s]", sortByField, rowHeader.getFieldNames());
+    }
+
     Table table =
         new Table(rowHeader, fieldNameToConverterMap, Option.ofNullable(sortByField.isEmpty() ? null : sortByField),
             Option.ofNullable(isDescending), Option.ofNullable(limit <= 0 ? null : limit)).addAllRows(rows).flip();
