@@ -20,7 +20,6 @@ package org.apache.hudi.metrics;
 
 import java.io.Closeable;
 
-import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.rmi.registry.LocateRegistry;
 import javax.management.remote.JMXConnectorServer;
@@ -65,17 +64,20 @@ public class JmxMetricsReporter extends MetricsReporter {
   }
 
   @Override
-  public void start() throws IOException {
-    if (connector != null) {
-      connector.start();
-    } else {
-      logger.error("Cannot start as the jmxReporter is null.");
+  public void start() {
+    try {
+      if (connector != null) {
+        connector.start();
+      } else {
+        logger.error("Cannot start as the jmxReporter is null.");
+      }
+    } catch (Exception e) {
+      throw new HoodieException(e);
     }
   }
 
   @Override
   public void report() {
-
   }
 
   @Override
