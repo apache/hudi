@@ -68,4 +68,8 @@ public class TableHeader {
   public int getNumFields() {
     return fieldNames.size();
   }
+
+  public boolean containsField(String fieldName) {
+    return fieldNames.contains(fieldName);
+  }
 }
