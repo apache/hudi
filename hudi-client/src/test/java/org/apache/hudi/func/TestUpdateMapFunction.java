@@ -100,7 +100,7 @@ public class TestUpdateMapFunction extends HoodieClientTestHarness {
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config2 = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-    final Schema schema = Schema.parse(config2.getSchema());
+    final Schema schema = new Schema.Parser().parse(config2.getSchema());
     final WriteStatus insertResult = statuses.get(0);
     String fileId = insertResult.getFileId();
 

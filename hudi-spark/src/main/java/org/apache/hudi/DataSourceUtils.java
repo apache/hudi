@@ -103,9 +103,9 @@ public class DataSourceUtils {
   /**
    * Create a key generator class via reflection, passing in any configs needed.
    *
-   * If the class name of key generator is configured through the properties file, i.e., {@code
-   * props}, use the corresponding key generator class; otherwise, use the default key generator class specified in
-   * {@code DataSourceWriteOptions}.
+   * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the
+   * corresponding key generator class; otherwise, use the default key generator class specified in {@code
+   * DataSourceWriteOptions}.
    */
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     String keyGeneratorClass = props.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
@@ -135,7 +135,7 @@ public class DataSourceUtils {
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
+          new Class<?>[]{GenericRecord.class, Comparable.class}, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -181,6 +181,11 @@ public class DataSourceUtils {
       // default is upsert
       return client.upsert(hoodieRecords, commitTime);
     }
+  }
+
+  public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
+      String commitTime) {
+    return client.delete(hoodieKeys, commitTime);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,

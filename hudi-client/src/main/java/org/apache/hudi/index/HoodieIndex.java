@@ -72,7 +72,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Seri
 
   /**
    * Looks up the index and tags each incoming record with a location of a file that contains the row (if it is actually
-   * present)
+   * present).
    */
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, JavaSparkContext jsc,
       HoodieTable<T> hoodieTable) throws HoodieIndexException;

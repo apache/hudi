@@ -147,15 +147,15 @@ public class ITTestHoodieSanity extends ITTestBase {
     stdOutErr = executeHiveCommand("show tables like '" + hiveTableName + "'");
     Assert.assertEquals("Table exists", hiveTableName, stdOutErr.getLeft());
 
-    // Ensure row count is 100 (without duplicates)
+    // Ensure row count is 80 (without duplicates) (100 - 20 deleted)
     stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName);
-    Assert.assertEquals("Expecting 100 rows to be present in the new table", 100,
+    Assert.assertEquals("Expecting 100 rows to be present in the new table", 80,
         Integer.parseInt(stdOutErr.getLeft().trim()));
 
-    // If is MOR table, ensure realtime table row count is 100 (without duplicates)
+    // If is MOR table, ensure realtime table row count is 100 - 20 = 80 (without duplicates)
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName + "_rt");
-      Assert.assertEquals("Expecting 100 rows to be present in the realtime table,", 100,
+      Assert.assertEquals("Expecting 100 rows to be present in the realtime table,", 80,
           Integer.parseInt(stdOutErr.getLeft().trim()));
     }
 
@@ -167,7 +167,7 @@ public class ITTestHoodieSanity extends ITTestBase {
 
     // Run the count query again. Without Hoodie, all versions are included. So we get a wrong count
     stdOutErr = executeHiveCommand("select count(1) from " + hiveTableName);
-    Assert.assertEquals("Expecting 200 rows to be present in the new table", 200,
+    Assert.assertEquals("Expecting 280 rows to be present in the new table", 280,
         Integer.parseInt(stdOutErr.getLeft().trim()));
   }
 

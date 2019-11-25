@@ -66,8 +66,8 @@ object DataSourceReadOptions {
 
   /**
     * For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions,
-    *  filters appearing late in the sequence of transformations cannot be automatically pushed down.
-    *  This option allows setting filters directly on Hoodie Source
+    * filters appearing late in the sequence of transformations cannot be automatically pushed down.
+    * This option allows setting filters directly on Hoodie Source
     */
   val PUSH_DOWN_INCR_FILTERS_OPT_KEY = "hoodie.datasource.read.incr.filters"
 }
@@ -85,6 +85,7 @@ object DataSourceWriteOptions {
   val BULK_INSERT_OPERATION_OPT_VAL = "bulk_insert"
   val INSERT_OPERATION_OPT_VAL = "insert"
   val UPSERT_OPERATION_OPT_VAL = "upsert"
+  val DELETE_OPERATION_OPT_VAL = "delete"
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
@@ -152,31 +153,31 @@ object DataSourceWriteOptions {
   val DEFAULT_COMMIT_METADATA_KEYPREFIX_OPT_VAL = "_"
 
   /**
-   *  Flag to indicate whether to drop duplicates upon insert.
-   *  By default insert will accept duplicates, to gain extra performance.
-   */
+    * Flag to indicate whether to drop duplicates upon insert.
+    * By default insert will accept duplicates, to gain extra performance.
+    */
   val INSERT_DROP_DUPS_OPT_KEY = "hoodie.datasource.write.insert.drop.duplicates"
   val DEFAULT_INSERT_DROP_DUPS_OPT_VAL = "false"
 
   /**
-   *  Flag to indicate how many times streaming job should retry for a failed microbatch
-   *  By default 3
-   */
+    * Flag to indicate how many times streaming job should retry for a failed microbatch
+    * By default 3
+    */
   val STREAMING_RETRY_CNT_OPT_KEY = "hoodie.datasource.write.streaming.retry.count"
   val DEFAULT_STREAMING_RETRY_CNT_OPT_VAL = "3"
 
   /**
-   *  Flag to indicate how long (by millisecond) before a retry should issued for failed microbatch
-   *  By default 2000 and it will be doubled by every retry
-   */
+    * Flag to indicate how long (by millisecond) before a retry should issued for failed microbatch
+    * By default 2000 and it will be doubled by every retry
+    */
   val STREAMING_RETRY_INTERVAL_MS_OPT_KEY = "hoodie.datasource.write.streaming.retry.interval.ms"
   val DEFAULT_STREAMING_RETRY_INTERVAL_MS_OPT_VAL = "2000"
 
   /**
-   *  Flag to indicate whether to ignore any non exception error (e.g. writestatus error)
-   *  within a streaming microbatch
-   *  By default true (in favor of streaming progressing over data integrity)
-   */
+    * Flag to indicate whether to ignore any non exception error (e.g. writestatus error)
+    * within a streaming microbatch
+    * By default true (in favor of streaming progressing over data integrity)
+    */
   val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY = "hoodie.datasource.write.streaming.ignore.failed.batch"
   val DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL = "true"
 

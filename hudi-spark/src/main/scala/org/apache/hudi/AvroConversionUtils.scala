@@ -20,6 +20,7 @@ package org.apache.hudi
 import com.databricks.spark.avro.SchemaConverters
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{Schema, SchemaBuilder}
+import org.apache.hudi.common.model.HoodieKey
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types._
@@ -41,6 +42,10 @@ object AvroConversionUtils {
       }
   }
 
+  def createRddForDeletes(df: DataFrame, rowField: String, partitionField: String): RDD[HoodieKey] = {
+    df.rdd.map(row => (new HoodieKey(row.getAs[String](rowField), row.getAs[String](partitionField))))
+  }
+
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
     if (rdd.isEmpty()) {
       ss.emptyDataFrame
@@ -48,12 +53,12 @@ object AvroConversionUtils {
       ss.createDataFrame(rdd.mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {
-          val schema = Schema.parse(schemaStr)
+          val schema = new Schema.Parser().parse(schemaStr)
           val dataType = convertAvroSchemaToStructType(schema)
           val convertor = AvroConversionHelper.createConverterToRow(schema, dataType)
           records.map { x => convertor(x).asInstanceOf[Row] }
         }
-      }, convertAvroSchemaToStructType(Schema.parse(schemaStr))).asInstanceOf[Dataset[Row]]
+      }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr))).asInstanceOf[Dataset[Row]]
     }
   }
 
