@@ -206,11 +206,6 @@
             <property name="allowedDistance" value="5"/>
         </module>
         -->
-        <module name="CustomImportOrder">
-            <property name="sortImportsInGroupAlphabetically" value="true"/>
-            <property name="separateLineBetweenGroups" value="true"/>
-            <property name="customImportOrderRules" value="STATIC###THIRD_PARTY_PACKAGE"/>
-        </module>
         <module name="UnusedImports"/>
         <module name="RedundantImport"/>
 
@@ -274,5 +269,31 @@
         </module>
 
         <module name="EmptyStatement" />
+
+        <!-- Checks for Java Docs. -->
+        <module name="JavadocStyle">
+            <property name="severity" value="info"/>
+        </module>
+        <module name="JavadocType">
+            <property name="severity" value="info"/>
+            <property name="scope" value="protected"/>
+            <property name="allowMissingParamTags" value="true"/>
+        </module>
+
+        <!-- Checks for out of order import statements. -->
+        <module name="ImportOrder">
+            <property name="severity" value="info"/>
+            <property name="groups" value="org.apache.hudi,*,javax,java,scala"/>
+            <property name="separated" value="true"/>
+            <property name="sortStaticImportsAlphabetically" value="true"/>
+            <property name="option" value="bottom"/>
+            <property name="tokens" value="STATIC_IMPORT, IMPORT"/>
+            <message key="import.ordering"
+                     value="Import {0} appears after other imports that it should precede"/>
+        </module>
+
+        <!-- Checks for star import. -->
+        <module name="AvoidStarImport" />
+
     </module>
 </module>
