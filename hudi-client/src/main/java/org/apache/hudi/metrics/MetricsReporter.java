@@ -29,7 +29,7 @@ public abstract class MetricsReporter {
   /**
    * Push out metrics at scheduled intervals
    */
-  public abstract void start() throws IOException;
+  public abstract void start();
 
   /**
    * Deterministically push out metrics
