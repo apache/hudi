@@ -52,6 +52,17 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class DataSourceUtils {
 
   /**
+   * Obtain value of the provided nullable field as string, denoted by dot notation. e.g: a.b.c
+   */
+  public static String getNullableNestedFieldValAsString(GenericRecord record, String fieldName) {
+    try {
+      return getNestedFieldValAsString(record, fieldName);
+    } catch (HoodieException e) {
+      return null;
+    }
+  }
+
+  /**
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
    */
   public static String getNestedFieldValAsString(GenericRecord record, String fieldName) {

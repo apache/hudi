@@ -21,7 +21,7 @@ package org.apache.hudi;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyException;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -43,15 +43,16 @@ public class SimpleKeyGenerator extends KeyGenerator {
   @Override
   public HoodieKey getKey(GenericRecord record) {
     if (recordKeyField == null || partitionPathField == null) {
-      throw new HoodieException("Unable to find field names for record key or partition path in cfg");
+      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
     }
 
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField);
-    String partitionPath;
-    try {
-      partitionPath = DataSourceUtils.getNestedFieldValAsString(record, partitionPathField);
-    } catch (HoodieException e) {
-      // if field is not found, lump it into default partition
+    String recordKey = DataSourceUtils.getNullableNestedFieldValAsString(record, recordKeyField);
+    if (recordKey == null || recordKey.isEmpty()) {
+      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+    }
+
+    String partitionPath = DataSourceUtils.getNullableNestedFieldValAsString(record, partitionPathField);
+    if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = DEFAULT_PARTITION_PATH;
     }
 

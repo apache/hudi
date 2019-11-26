@@ -30,6 +30,7 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.SimpleKeyGenerator;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 
@@ -98,8 +99,11 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       }
       Date timestamp = this.timestampType == TimestampType.EPOCHMILLISECONDS ? new Date(unixTime) : new Date(unixTime * 1000);
 
-      return new HoodieKey(DataSourceUtils.getNestedFieldValAsString(record, recordKeyField),
-          partitionPathFormat.format(timestamp));
+      String recordKey = DataSourceUtils.getNullableNestedFieldValAsString(record, recordKeyField);
+      if (recordKey == null || recordKey.isEmpty()) {
+        throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+      }
+      return new HoodieKey(recordKey, partitionPathFormat.format(timestamp));
     } catch (ParseException pe) {
       throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, pe);
     }
