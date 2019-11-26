@@ -35,6 +35,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display hudi dataset options.
+ */
 @Component
 public class DatasetsCommand implements CommandMarker {
 
@@ -67,7 +70,7 @@ public class DatasetsCommand implements CommandMarker {
   }
 
   /**
-   * Create a Hoodie Table if it does not exist
+   * Create a Hoodie Table if it does not exist.
    *
    * @param path Base Path
    * @param name Hoodie Table Name
@@ -113,7 +116,7 @@ public class DatasetsCommand implements CommandMarker {
   }
 
   /**
-   * Describes table properties
+   * Describes table properties.
    */
   @CliCommand(value = "desc", help = "Describle Hoodie Table properties")
   public String descTable() {

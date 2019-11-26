@@ -59,6 +59,9 @@ import org.springframework.stereotype.Component;
 import scala.Tuple2;
 import scala.Tuple3;
 
+/**
+ * CLI command to display log file options.
+ */
 @Component
 public class HoodieLogFileCommand implements CommandMarker {
 

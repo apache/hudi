@@ -26,6 +26,9 @@ import java.sql.Statement;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.joda.time.DateTime;
 
+/**
+ * Hive connection related utilities.
+ */
 public class HiveUtil {
 
   private static final String driverName = "org.apache.hive.jdbc.HiveDriver";

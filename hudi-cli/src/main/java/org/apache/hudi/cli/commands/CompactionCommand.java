@@ -59,6 +59,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display compaction related options.
+ */
 @Component
 public class CompactionCommand implements CommandMarker {
 

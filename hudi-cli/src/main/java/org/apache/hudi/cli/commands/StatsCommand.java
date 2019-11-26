@@ -47,6 +47,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to displays stats options.
+ */
 @Component
 public class StatsCommand implements CommandMarker {
 

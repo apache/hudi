@@ -42,6 +42,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display rollback options.
+ */
 @Component
 public class RollbacksCommand implements CommandMarker {
 
@@ -115,7 +118,7 @@ public class RollbacksCommand implements CommandMarker {
   }
 
   /**
-   * An Active timeline containing only rollbacks
+   * An Active timeline containing only rollbacks.
    */
   class RollbackTimeline extends HoodieActiveTimeline {
 

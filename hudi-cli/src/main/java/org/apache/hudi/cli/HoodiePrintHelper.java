@@ -25,12 +25,12 @@ import java.util.function.Function;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Helper class to render table for hoodie-cli
+ * Helper class to render table for hoodie-cli.
  */
 public class HoodiePrintHelper {
 
   /**
-   * Print header and raw rows
+   * Print header and raw rows.
    *
    * @param header Header
    * @param rows Raw Rows
@@ -41,7 +41,7 @@ public class HoodiePrintHelper {
   }
 
   /**
-   * Serialize Table to printable string
+   * Serialize Table to printable string.
    *
    * @param rowHeader Row Header
    * @param fieldNameToConverterMap Field Specific Converters
@@ -71,7 +71,7 @@ public class HoodiePrintHelper {
   }
 
   /**
-   * Render rows in Table
+   * Render rows in Table.
    *
    * @param buffer Table
    * @return output
@@ -86,7 +86,7 @@ public class HoodiePrintHelper {
   }
 
   /**
-   * Render only header of the table
+   * Render only header of the table.
    *
    * @param header Table Header
    * @return output
@@ -98,7 +98,7 @@ public class HoodiePrintHelper {
   }
 
   /**
-   * Print Text table
+   * Print Text table.
    *
    * @param headers Headers
    * @param data Table

@@ -44,6 +44,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display commits options.
+ */
 @Component
 public class CommitsCommand implements CommandMarker {
 

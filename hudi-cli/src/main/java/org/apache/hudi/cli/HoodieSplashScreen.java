@@ -24,6 +24,9 @@ import org.springframework.shell.plugin.support.DefaultBannerProvider;
 import org.springframework.shell.support.util.OsUtils;
 import org.springframework.stereotype.Component;
 
+/**
+ * This class is responsible to print the splash screen at the start of the application.
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class HoodieSplashScreen extends DefaultBannerProvider {
