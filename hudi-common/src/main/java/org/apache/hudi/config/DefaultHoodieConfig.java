@@ -22,7 +22,7 @@ import java.io.Serializable;
 import java.util.Properties;
 
 /**
- * Default Way to load Hoodie config through a java.util.Properties
+ * Default Way to load Hoodie config through a {@link java.util.Properties}.
  */
 public class DefaultHoodieConfig implements Serializable {
 

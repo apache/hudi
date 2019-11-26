@@ -24,6 +24,9 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 
+/**
+ * A model class defines hoodie rolling stat.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HoodieRollingStat implements Serializable {
 

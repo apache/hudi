@@ -75,7 +75,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
-   * For serailizing and de-serializing
+   * For serializing and de-serializing.
    *
    * @deprecated
    */

@@ -39,7 +39,7 @@ import java.util.Map;
 
 
 /**
- * Abstract class defining a block in HoodieLogFile
+ * Abstract class defining a block in HoodieLogFile.
  */
 public abstract class HoodieLogBlock {
 
@@ -188,7 +188,7 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}
+   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}.
    */
   public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
 
@@ -229,7 +229,7 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * When lazyReading of blocks is turned on, inflate the content of a log block from disk
+   * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
   protected void inflate() throws IOException {
 
@@ -258,7 +258,7 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Handles difference in seek behavior for GCS and non-GCS input stream
+   * Handles difference in seek behavior for GCS and non-GCS input stream.
    * 
    * @param inputStream Input Stream
    * @param pos Position to seek

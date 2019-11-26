@@ -32,6 +32,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+/**
+ * Tests file I/O utils.
+ */
 public class TestFileIOUtils extends HoodieCommonTestHarness {
 
   @Test

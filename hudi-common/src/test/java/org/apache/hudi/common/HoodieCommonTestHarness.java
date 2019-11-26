@@ -30,6 +30,9 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 
+/**
+ * The common hoodie test harness to provide the basic infrastructure.
+ */
 public class HoodieCommonTestHarness {
 
   protected String basePath = null;

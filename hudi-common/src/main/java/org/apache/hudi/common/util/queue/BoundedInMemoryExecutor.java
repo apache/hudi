@@ -78,7 +78,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Start all Producers
+   * Start all Producers.
    */
   public ExecutorCompletionService<Boolean> startProducers() {
     // Latch to control when and which producer thread will close the queue
@@ -110,7 +110,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Start only consumer
+   * Start only consumer.
    */
   private Future<E> startConsumer() {
     return consumer.map(consumer -> {
@@ -131,7 +131,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Main API to run both production and consumption
+   * Main API to run both production and consumption.
    */
   public E execute() {
     try {

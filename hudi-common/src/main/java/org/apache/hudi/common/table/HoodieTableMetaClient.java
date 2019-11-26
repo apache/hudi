@@ -112,7 +112,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * For serailizing and de-serializing
+   * For serailizing and de-serializing.
    *
    * @deprecated
    */
@@ -166,7 +166,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Returns Marker folder path
+   * Returns Marker folder path.
    * 
    * @param instantTs Instant Timestamp
    * @return
@@ -202,7 +202,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Get the FS implementation for this table
+   * Get the FS implementation for this table.
    */
   public HoodieWrapperFileSystem getFs() {
     if (fs == null) {
@@ -218,7 +218,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Return raw file-system
+   * Return raw file-system.
    * 
    * @return
    */
@@ -231,7 +231,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Get the active instants as a timeline
+   * Get the active instants as a timeline.
    *
    * @return Active instants timeline
    */
@@ -243,7 +243,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Reload ActiveTimeline and cache
+   * Reload ActiveTimeline and cache.
    *
    * @return Active instants timeline
    */
@@ -258,7 +258,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Get the archived commits as a timeline. This is costly operation, as all data from the archived files are read.
-   * This should not be used, unless for historical debugging purposes
+   * This should not be used, unless for historical debugging purposes.
    *
    * @return Active commit timeline
    */
@@ -270,7 +270,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a dataset, with given basePath, tableType, name, archiveFolder
+   * Helper method to initialize a dataset, with given basePath, tableType, name, archiveFolder.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, String tableType,
       String tableName, String archiveLogFolder) throws IOException {
@@ -283,7 +283,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path, as a given storage type and table name
+   * Helper method to initialize a given path, as a given storage type and table name.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
       HoodieTableType tableType, String tableName, String payloadClassName) throws IOException {
@@ -297,7 +297,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path as a hoodie dataset with configs passed in as as Properties
+   * Helper method to initialize a given path as a hoodie dataset with configs passed in as as Properties.
    *
    * @return Instance of HoodieTableMetaClient
    */
@@ -350,7 +350,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Get the commit timeline visible for this table
+   * Get the commit timeline visible for this table.
    */
   public HoodieTimeline getCommitsTimeline() {
     switch (this.getTableType()) {
@@ -384,7 +384,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Get the compacted commit timeline visible for this table
+   * Get the compacted commit timeline visible for this table.
    */
   public HoodieTimeline getCommitTimeline() {
     switch (this.getTableType()) {
@@ -398,7 +398,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Gets the commit action type
+   * Gets the commit action type.
    */
   public String getCommitActionType() {
     switch (this.getTableType()) {
@@ -412,7 +412,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects
+   * Helper method to scan all hoodie-instant metafiles and construct HoodieInstant objects.
    *
    * @param fs FileSystem
    * @param metaPath Meta Path where hoodie instants are present

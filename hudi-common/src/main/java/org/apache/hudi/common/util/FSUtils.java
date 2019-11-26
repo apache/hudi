@@ -56,7 +56,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Utility functions related to accessing the file storage
+ * Utility functions related to accessing the file storage.
  */
 public class FSUtils {
 
@@ -105,7 +105,7 @@ public class FSUtils {
   }
 
   /**
-   * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append)
+   * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append).
    */
   public static String makeWriteToken(int taskPartitionId, int stageId, long taskAttemptId) {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
@@ -168,7 +168,7 @@ public class FSUtils {
   }
 
   /**
-   * Given a base partition and a partition path, return relative path of partition path to the base path
+   * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
     basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
@@ -183,7 +183,7 @@ public class FSUtils {
 
   /**
    * Obtain all the partition paths, that are present in this table, denoted by presence of
-   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
+   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}.
    */
   public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
     final Path basePath = new Path(basePathStr);
@@ -284,7 +284,7 @@ public class FSUtils {
   }
 
   /**
-   * Get the file extension from the log file
+   * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
@@ -329,7 +329,7 @@ public class FSUtils {
   }
 
   /**
-   * Get TaskId used in log-path
+   * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -341,7 +341,7 @@ public class FSUtils {
   }
 
   /**
-   * Get Write-Token used in log-path
+   * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -352,7 +352,7 @@ public class FSUtils {
   }
 
   /**
-   * Get StageId used in log-path
+   * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -364,7 +364,7 @@ public class FSUtils {
   }
 
   /**
-   * Get Task Attempt Id used in log-path
+   * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -403,14 +403,14 @@ public class FSUtils {
   }
 
   /**
-   * Get the latest log file written from the list of log files passed in
+   * Get the latest log file written from the list of log files passed in.
    */
   public static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).findFirst());
   }
 
   /**
-   * Get all the log files for the passed in FileId in the partition path
+   * Get all the log files for the passed in FileId in the partition path.
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
@@ -421,7 +421,7 @@ public class FSUtils {
   }
 
   /**
-   * Get the latest log version for the fileId in the partition path
+   * Get the latest log version for the fileId in the partition path.
    */
   public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
       final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
@@ -435,7 +435,7 @@ public class FSUtils {
   }
 
   /**
-   * computes the next log version for the specified fileId in the partition path
+   * computes the next log version for the specified fileId in the partition path.
    */
   public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {

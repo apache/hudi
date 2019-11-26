@@ -76,6 +76,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+/**
+ * Tests hoodie log format {@link HoodieLogFormat}.
+ */
 @SuppressWarnings("Duplicates")
 @RunWith(Parameterized.class)
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {

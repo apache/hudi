@@ -59,7 +59,7 @@ public class ZookeeperTestService {
   private static final int CONNECTION_TIMEOUT = 30000;
 
   /**
-   * Configuration settings
+   * Configuration settings.
    */
   private Configuration hadoopConf;
   private String workDir;
@@ -69,7 +69,7 @@ public class ZookeeperTestService {
   private int tickTime = 0;
 
   /**
-   * Embedded ZooKeeper cluster
+   * Embedded ZooKeeper cluster.
    */
   private NIOServerCnxnFactory standaloneServerFactory;
   private ZooKeeperServer zooKeeperServer;

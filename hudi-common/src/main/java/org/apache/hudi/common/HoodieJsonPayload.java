@@ -36,6 +36,9 @@ import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
+/**
+ * Hoodie json payload.
+ */
 public class HoodieJsonPayload implements HoodieRecordPayload<HoodieJsonPayload> {
 
   private byte[] jsonDataCompressed;

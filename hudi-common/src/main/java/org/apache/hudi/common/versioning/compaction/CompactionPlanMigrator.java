@@ -25,7 +25,7 @@ import org.apache.hudi.common.versioning.MetadataMigrator;
 import java.util.Arrays;
 
 /**
- * Responsible for handling different versions of compaction plan
+ * Responsible for handling different versions of compaction plan.
  */
 public class CompactionPlanMigrator extends MetadataMigrator<HoodieCompactionPlan> {
 

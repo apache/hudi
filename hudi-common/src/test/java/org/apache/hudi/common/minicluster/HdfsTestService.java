@@ -41,7 +41,7 @@ public class HdfsTestService {
   private static final Logger logger = LogManager.getLogger(HdfsTestService.class);
 
   /**
-   * Configuration settings
+   * Configuration settings.
    */
   private Configuration hadoopConf;
   private String workDir;
@@ -53,7 +53,7 @@ public class HdfsTestService {
   private int datanodeHttpPort = 50075;
 
   /**
-   * Embedded HDFS cluster
+   * Embedded HDFS cluster.
    */
   private MiniDFSCluster miniDfsCluster;
 

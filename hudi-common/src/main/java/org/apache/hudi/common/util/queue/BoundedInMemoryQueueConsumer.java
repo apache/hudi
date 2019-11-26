@@ -21,12 +21,12 @@ package org.apache.hudi.common.util.queue;
 import java.util.Iterator;
 
 /**
- * Consume entries from queue and execute callback function
+ * Consume entries from queue and execute callback function.
  */
 public abstract class BoundedInMemoryQueueConsumer<I, O> {
 
   /**
-   * API to de-queue entries to memory bounded queue
+   * API to de-queue entries to memory bounded queue.
    *
    * @param queue In Memory bounded queue
    */
@@ -44,17 +44,17 @@ public abstract class BoundedInMemoryQueueConsumer<I, O> {
   }
 
   /**
-   * Consumer One record
+   * Consumer One record.
    */
   protected abstract void consumeOneRecord(I record);
 
   /**
-   * Notifies implementation that we have exhausted consuming records from queue
+   * Notifies implementation that we have exhausted consuming records from queue.
    */
   protected abstract void finish();
 
   /**
-   * Return result of consuming records so far
+   * Return result of consuming records so far.
    */
   protected abstract O getResult();
 

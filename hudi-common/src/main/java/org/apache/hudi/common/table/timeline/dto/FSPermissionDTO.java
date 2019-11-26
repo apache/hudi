@@ -26,7 +26,7 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import java.io.Serializable;
 
 /**
- * A serializable FS Permission
+ * A serializable FS Permission.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FSPermissionDTO implements Serializable {

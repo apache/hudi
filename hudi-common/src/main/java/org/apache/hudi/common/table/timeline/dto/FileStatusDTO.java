@@ -26,6 +26,9 @@ import org.apache.hadoop.fs.FileStatus;
 
 import java.io.IOException;
 
+/**
+ * The data transfer object of file status.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FileStatusDTO {
 

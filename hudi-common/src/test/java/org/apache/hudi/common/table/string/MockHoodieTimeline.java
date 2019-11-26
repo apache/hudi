@@ -28,6 +28,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * A mocked {@link HoodieActiveTimeline}.
+ */
 public class MockHoodieTimeline extends HoodieActiveTimeline {
 
   public MockHoodieTimeline(Stream<String> completed, Stream<String> inflights) throws IOException {

@@ -34,8 +34,7 @@ import java.util.stream.Collectors;
 
 /**
  * Encapsulates all the needed information about a compaction and make a decision whether this compaction is effective
- * or not
- *
+ * or not.
  */
 public class CompactionOperation implements Serializable {
 
@@ -118,7 +117,7 @@ public class CompactionOperation implements Serializable {
   }
 
   /**
-   * Convert Avro generated Compaction operation to POJO for Spark RDD operation
+   * Convert Avro generated Compaction operation to POJO for Spark RDD operation.
    * 
    * @param operation Hoodie Compaction Operation
    * @return

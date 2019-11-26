@@ -35,7 +35,7 @@ import java.util.Objects;
 public class HoodieInstant implements Serializable {
 
   /**
-   * Instant State
+   * Instant State.
    */
   public enum State {
     // Requested State (valid state for Compaction)
@@ -53,7 +53,7 @@ public class HoodieInstant implements Serializable {
   private String timestamp;
 
   /**
-   * Load the instant from the meta FileStatus
+   * Load the instant from the meta FileStatus.
    */
   public HoodieInstant(FileStatus fileStatus) {
     // First read the instant timestamp. [==>20170101193025<==].commit
@@ -111,7 +111,7 @@ public class HoodieInstant implements Serializable {
   }
 
   /**
-   * Get the filename for this instant
+   * Get the filename for this instant.
    */
   public String getFileName() {
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {

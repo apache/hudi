@@ -31,10 +31,13 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.zip.CRC32;
 
+/**
+ * A utility class supports spillable map.
+ */
 public class SpillableMapUtils {
 
   /**
-   * Using the schema and payload class, read and convert the bytes on disk to a HoodieRecord
+   * Using the schema and payload class, read and convert the bytes on disk to a HoodieRecord.
    */
   public static byte[] readBytesFromDisk(RandomAccessFile file, long valuePosition, int valueLength)
       throws IOException {
@@ -43,7 +46,8 @@ public class SpillableMapUtils {
   }
 
   /**
-   * |crc|timestamp|sizeOfKey|SizeOfValue|key|value|
+   * Reads the given file with specific pattern(|crc|timestamp|sizeOfKey|SizeOfValue|key|value|) then
+   * returns an instance of {@link FileEntry}.
    */
   private static FileEntry readInternal(RandomAccessFile file, long valuePosition, int valueLength) throws IOException {
     file.seek(valuePosition);
@@ -86,7 +90,7 @@ public class SpillableMapUtils {
   }
 
   /**
-   * Generate a checksum for a given set of bytes
+   * Generate a checksum for a given set of bytes.
    */
   public static long generateChecksum(byte[] data) {
     CRC32 crc = new CRC32();
@@ -96,14 +100,14 @@ public class SpillableMapUtils {
 
   /**
    * Compute a bytes representation of the payload by serializing the contents This is used to estimate the size of the
-   * payload (either in memory or when written to disk)
+   * payload (either in memory or when written to disk).
    */
   public static <R> long computePayloadSize(R value, SizeEstimator<R> valueSizeEstimator) throws IOException {
     return valueSizeEstimator.sizeEstimate(value);
   }
 
   /**
-   * Utility method to convert bytes to HoodieRecord using schema and payload class
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
     String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
@@ -114,7 +118,7 @@ public class SpillableMapUtils {
   }
 
   /**
-   * Utility method to convert bytes to HoodieRecord using schema and payload class
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, String payloadClazz) {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),

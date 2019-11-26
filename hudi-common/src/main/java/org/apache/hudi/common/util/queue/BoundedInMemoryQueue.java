@@ -95,7 +95,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   private long numSamples = 0;
 
   /**
-   * Construct BoundedInMemoryQueue with default SizeEstimator
+   * Construct BoundedInMemoryQueue with default SizeEstimator.
    *
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
@@ -105,7 +105,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Construct BoundedInMemoryQueue with passed in size estimator
+   * Construct BoundedInMemoryQueue with passed in size estimator.
    *
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
@@ -155,7 +155,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Inserts record into queue after applying transformation
+   * Inserts record into queue after applying transformation.
    *
    * @param t Item to be queueed
    */
@@ -178,7 +178,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Checks if records are either available in the queue or expected to be written in future
+   * Checks if records are either available in the queue or expected to be written in future.
    */
   private boolean expectMoreRecords() {
     return !isWriteDone.get() || (isWriteDone.get() && !queue.isEmpty());
@@ -220,7 +220,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Puts an empty entry to queue to denote termination
+   * Puts an empty entry to queue to denote termination.
    */
   public void close() throws InterruptedException {
     // done queueing records notifying queue-reader.
@@ -234,7 +234,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * API to allow producers and consumer to communicate termination due to failure
+   * API to allow producers and consumer to communicate termination due to failure.
    */
   public void markAsFailed(Exception e) {
     this.hasFailed.set(e);
@@ -249,7 +249,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Iterator for the memory bounded queue
+   * Iterator for the memory bounded queue.
    */
   private final class QueueIterator implements Iterator<O> {
 

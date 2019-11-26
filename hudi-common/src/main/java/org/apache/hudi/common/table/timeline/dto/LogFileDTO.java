@@ -24,6 +24,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hadoop.fs.FileStatus;
 
+/**
+ * The data transfer object of log file.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class LogFileDTO {
 

@@ -27,6 +27,9 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Objects;
 
+/**
+ * Tests serialization utils.
+ */
 public class TestSerializationUtils {
 
   @Test

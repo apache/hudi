@@ -47,6 +47,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * A utility class for testing schema.
+ */
 public class SchemaTestUtil {
 
   public static Schema getSimpleSchema() throws IOException {

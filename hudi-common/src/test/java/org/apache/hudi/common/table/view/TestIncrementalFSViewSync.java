@@ -71,6 +71,9 @@ import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
 
+/**
+ * Tests incremental file system view sync.
+ */
 public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
   private static final transient Logger log = LogManager.getLogger(TestIncrementalFSViewSync.class);
@@ -188,7 +191,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Tests FS View incremental syncing behavior when multiple instants gets committed
+   * Tests FS View incremental syncing behavior when multiple instants gets committed.
    */
   @Test
   public void testMultipleTransitions() throws IOException {
@@ -290,7 +293,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    *********************************************************************************************************
    */
   /**
-   * Helper to run one or more rounds of cleaning, incrementally syncing the view and then validate
+   * Helper to run one or more rounds of cleaning, incrementally syncing the view and then validate.
    */
   private void testCleans(SyncableFileSystemView view, List<String> newCleanerInstants,
       Map<String, List<String>> instantsToFiles, List<String> cleanedInstants) {
@@ -300,7 +303,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Simulates one of more cleaning, incrementally sync the view and validate the view
+   * Simulates one of more cleaning, incrementally sync the view and validate the view.
    *
    * @param view Hoodie View
    * @param newCleanerInstants Cleaner Instants
@@ -351,7 +354,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Simulates one of more restores, incrementally sync the view and validate the view
+   * Simulates one of more restores, incrementally sync the view and validate the view.
    *
    * @param view Hoodie View
    * @param newRestoreInstants Restore Instants
@@ -402,7 +405,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Simulate a Cleaner operation cleaning up an instant
+   * Simulate a Cleaner operation cleaning up an instant.
    *
    * @param view Hoodie View
    * @param instant Instant to be cleaner
@@ -423,7 +426,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Simulate Restore of an instant in timeline and fsview
+   * Simulate Restore of an instant in timeline and fsview.
    *
    * @param view Hoodie View
    * @param instant Instant to be rolled-back
@@ -464,7 +467,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Utility to delete a list of files and group the deleted files by partitions
+   * Utility to delete a list of files and group the deleted files by partitions.
    *
    * @param files List of files to be deleted
    */
@@ -487,7 +490,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Schedule a pending compaction and validate
+   * Schedule a pending compaction and validate.
    *
    * @param view Hoodie View
    * @param instantTime COmpaction Instant Time
@@ -524,7 +527,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Unschedule a compaction instant and validate incremental fs view
+   * Unschedule a compaction instant and validate incremental fs view.
    *
    * @param view Hoodie View
    * @param compactionInstantTime Compaction Instant to be removed
@@ -547,7 +550,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing
+   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing.
    *
    * @param view Hoodie View
    * @param instants Ingestion/Commit INstants
@@ -561,7 +564,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing
+   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing.
    *
    * @param view Hoodie View
    * @param instants Ingestion/Commit INstants
@@ -580,7 +583,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing
+   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing.
    *
    * @param view Hoodie View
    * @param instants Ingestion/Commit INstants
@@ -592,7 +595,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing
+   * Perform one or more rounds of ingestion/compaction and validate incremental timeline syncing.
    *
    * @param view Hoodie View
    * @param instants Ingestion/Commit INstants
@@ -655,7 +658,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
   }
 
   /**
-   * Check for equality of views
+   * Check for equality of views.
    *
    * @param view1 View1
    * @param view2 View2

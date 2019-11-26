@@ -26,6 +26,9 @@ import org.apache.hadoop.fs.Path;
 import java.io.Serializable;
 import java.util.Objects;
 
+/**
+ * Hoodie data file.
+ */
 public class HoodieDataFile implements Serializable {
 
   private transient FileStatus fileStatus;

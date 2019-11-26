@@ -25,6 +25,9 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 
+/**
+ * A wrapped configuration which can be serialized.
+ */
 public class SerializableConfiguration implements Serializable {
 
   private transient Configuration configuration;

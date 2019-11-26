@@ -22,6 +22,9 @@ import org.junit.Test;
 
 import java.io.IOException;
 
+/**
+ * Tests bloom filter.
+ */
 public class TestBloomFilter {
 
   @Test

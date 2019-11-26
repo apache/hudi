@@ -21,6 +21,9 @@ package org.apache.hudi.common.model;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
+/**
+ * The hoodie archived log file.
+ */
 public class HoodieArchivedLogFile extends HoodieLogFile {
 
   public static final String ARCHIVE_EXTENSION = ".archive";

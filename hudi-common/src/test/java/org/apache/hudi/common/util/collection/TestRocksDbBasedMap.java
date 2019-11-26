@@ -36,6 +36,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * Tests RocksDB based map.
+ */
 public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 
   @Before

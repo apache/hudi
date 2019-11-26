@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Helper class to generate compaction plan from FileGroup/FileSlice abstraction
+ * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.
  */
 public class CompactionUtils {
 
@@ -55,7 +55,7 @@ public class CompactionUtils {
   public static final Integer LATEST_COMPACTION_METADATA_VERSION = COMPACTION_METADATA_VERSION_2;
 
   /**
-   * Generate compaction operation from file-slice
+   * Generate compaction operation from file-slice.
    *
    * @param partitionPath Partition path
    * @param fileSlice File Slice
@@ -80,7 +80,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Generate compaction plan from file-slices
+   * Generate compaction plan from file-slices.
    *
    * @param partitionFileSlicePairs list of partition file-slice pairs
    * @param extraMetadata Extra Metadata
@@ -100,7 +100,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Build Avro generated Compaction operation payload from compaction operation POJO for serialization
+   * Build Avro generated Compaction operation payload from compaction operation POJO for serialization.
    */
   public static HoodieCompactionOperation buildHoodieCompactionOperation(CompactionOperation op) {
     return HoodieCompactionOperation.newBuilder().setFileId(op.getFileId()).setBaseInstantTime(op.getBaseInstantTime())
@@ -110,7 +110,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Build Compaction operation payload from Avro version for using in Spark executors
+   * Build Compaction operation payload from Avro version for using in Spark executors.
    *
    * @param hc HoodieCompactionOperation
    */
@@ -119,7 +119,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Get all pending compaction plans along with their instants
+   * Get all pending compaction plans along with their instants.
    *
    * @param metaClient Hoodie Meta Client
    */
@@ -145,7 +145,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Get all PartitionPath + file-ids with pending Compaction operations and their target compaction instant time
+   * Get all PartitionPath + file-ids with pending Compaction operations and their target compaction instant time.
    *
    * @param metaClient Hoodie Table Meta Client
    */
@@ -192,7 +192,7 @@ public class CompactionUtils {
   }
 
   /**
-   * Return all pending compaction instant times
+   * Return all pending compaction instant times.
    * 
    * @return
    */

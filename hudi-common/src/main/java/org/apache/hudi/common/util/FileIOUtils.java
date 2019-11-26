@@ -31,7 +31,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 
 /**
- * Bunch of utility methods for working with files and byte streams
+ * Bunch of utility methods for working with files and byte streams.
  */
 public class FileIOUtils {
 

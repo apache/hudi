@@ -50,6 +50,9 @@ import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PAT
 import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.HoodieTimeline.DELTA_COMMIT_ACTION;
 
+/**
+ * The utility class to support testing compaction.
+ */
 public class CompactionTestUtils {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
@@ -177,6 +180,9 @@ public class CompactionTestUtils {
         CompactionUtils.LATEST_COMPACTION_METADATA_VERSION);
   }
 
+  /**
+   * The hoodie data file for testing.
+   */
   public static class TestHoodieDataFile extends HoodieDataFile {
 
     private final String path;

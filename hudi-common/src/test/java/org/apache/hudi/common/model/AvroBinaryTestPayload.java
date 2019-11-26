@@ -28,6 +28,9 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
+/**
+ * The implementation of {@link HoodieRecordPayload} base on avro for testing.
+ */
 public class AvroBinaryTestPayload implements HoodieRecordPayload {
 
   private final byte[] recordBytes;

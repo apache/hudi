@@ -31,6 +31,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
+/**
+ * A utility class for reflection.
+ */
 public class ReflectionUtils {
 
   private static Map<String, Class<?>> clazzCache = new HashMap<>();
@@ -56,7 +59,7 @@ public class ReflectionUtils {
   }
 
   /**
-   * Instantiate a given class with a generic record payload
+   * Instantiate a given class with a generic record payload.
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
       Class<?>... constructorArgTypes) {
@@ -87,7 +90,7 @@ public class ReflectionUtils {
   }
 
   /**
-   * Return stream of top level class names in the same class path as passed-in class
+   * Return stream of top level class names in the same class path as passed-in class.
    * 
    * @param clazz
    */

@@ -54,7 +54,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * A proxy for table file-system view which translates local View API calls to REST calls to remote timeline service
+ * A proxy for table file-system view which translates local View API calls to REST calls to remote timeline service.
  */
 public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, Serializable {
 

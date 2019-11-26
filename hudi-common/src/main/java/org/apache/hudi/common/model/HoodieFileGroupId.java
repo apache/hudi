@@ -22,7 +22,7 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Unique ID to identify a file-group in a data-set
+ * Unique ID to identify a file-group in a data-set.
  */
 public class HoodieFileGroupId implements Serializable {
 

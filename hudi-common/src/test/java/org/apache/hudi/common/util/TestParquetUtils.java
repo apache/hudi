@@ -44,6 +44,9 @@ import java.util.UUID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Tests parquet utils.
+ */
 public class TestParquetUtils extends HoodieCommonTestHarness {
 
   @Before

@@ -23,6 +23,9 @@ import org.apache.hudi.common.table.SyncableFileSystemView;
 
 import java.io.IOException;
 
+/**
+ * Tests rocks db based file system view.
+ */
 public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemView {
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {
