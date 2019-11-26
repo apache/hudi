@@ -19,10 +19,11 @@
 package org.apache.hudi.hive;
 
 import com.beust.jcommander.internal.Lists;
-import java.util.List;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+
+import java.util.List;
 
 /**
  * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not straight forward and
