@@ -18,11 +18,12 @@
 
 package org.apache.hudi.metrics;
 
-import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import com.codahale.metrics.Timer;
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

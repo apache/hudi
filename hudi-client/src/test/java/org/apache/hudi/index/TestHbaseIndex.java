@@ -18,23 +18,6 @@
 
 package org.apache.hudi.index;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyObject;
-import static org.mockito.Mockito.atMost;
-import static org.mockito.Mockito.times;
-
-import java.util.Arrays;
-import java.util.List;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseTestingUtility;
-import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.Get;
-import org.apache.hadoop.hbase.client.HTable;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
@@ -52,6 +35,16 @@ import org.apache.hudi.index.hbase.HBaseIndex;
 import org.apache.hudi.index.hbase.HBaseIndex.HbasePutBatchSizeCalculator;
 import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseTestingUtility;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.Connection;
+import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -62,7 +55,17 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.mockito.Mockito;
+
+import java.util.Arrays;
+import java.util.List;
+
 import scala.Tuple2;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.times;
 
 /**
  * Note :: HBaseTestingUtility is really flaky with issues where the HbaseMiniCluster fails to shutdown across tests,

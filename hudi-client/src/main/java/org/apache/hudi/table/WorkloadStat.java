@@ -18,10 +18,11 @@
 
 package org.apache.hudi.table;
 
-import java.io.Serializable;
-import java.util.HashMap;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.collection.Pair;
+
+import java.io.Serializable;
+import java.util.HashMap;
 
 /**
  * Wraps stats about a single partition path.

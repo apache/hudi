@@ -18,14 +18,6 @@
 
 package org.apache.hudi.config;
 
-import com.google.common.base.Preconditions;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Map;
-import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -35,8 +27,19 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.metrics.MetricsReporterType;
+
+import com.google.common.base.Preconditions;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.storage.StorageLevel;
+
+import javax.annotation.concurrent.Immutable;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.Properties;
 
 /**
  * Class storing configs for the {@link HoodieWriteClient}

@@ -18,11 +18,12 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
 
 public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
 

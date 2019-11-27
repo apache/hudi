@@ -18,8 +18,9 @@
 
 package org.apache.hudi.io.strategy;
 
-import java.util.UUID;
 import org.apache.hudi.common.model.HoodieDataFile;
+
+import java.util.UUID;
 
 public class TestHoodieDataFile extends HoodieDataFile {
 

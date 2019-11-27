@@ -18,7 +18,12 @@
 
 package org.apache.hudi.io.compact.strategy;
 
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.config.HoodieWriteConfig;
+
 import com.google.common.annotations.VisibleForTesting;
+
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Comparator;
@@ -26,9 +31,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.config.HoodieWriteConfig;
 
 /**
  * This strategy ensures that the last N partitions are picked up even if there are later partitions created for the

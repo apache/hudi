@@ -18,16 +18,19 @@
 
 package org.apache.hudi.config;
 
-import com.google.common.base.Preconditions;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
+
+import com.google.common.base.Preconditions;
+
+import javax.annotation.concurrent.Immutable;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Compaction related config

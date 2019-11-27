@@ -19,6 +19,7 @@
 package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 

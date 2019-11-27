@@ -18,14 +18,16 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.io.Closeables;
-import java.io.Closeable;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Closeable;
 
 /**
  * This is the main class of the metrics system.

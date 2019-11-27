@@ -18,11 +18,13 @@
 
 package org.apache.hudi.io.compact.strategy;
 
-import com.google.common.collect.Lists;
-import java.util.List;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import com.google.common.collect.Lists;
+
+import java.util.List;
 
 /**
  * CompactionStrategy which looks at total IO to be done for the compaction (read + write) and limits the list of

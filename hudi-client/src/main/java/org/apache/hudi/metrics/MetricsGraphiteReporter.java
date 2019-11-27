@@ -18,16 +18,18 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.config.HoodieWriteConfig;
+
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Implementation of Graphite reporter, which connects to the Graphite server, and send metrics to that server.

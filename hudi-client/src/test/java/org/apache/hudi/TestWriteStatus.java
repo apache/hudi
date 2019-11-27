@@ -18,13 +18,15 @@
 
 package org.apache.hudi;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-import java.io.IOException;
 import org.apache.hudi.common.model.HoodieRecord;
+
 import org.junit.Test;
 import org.mockito.Mockito;
+
+import java.io.IOException;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TestWriteStatus {
   @Test

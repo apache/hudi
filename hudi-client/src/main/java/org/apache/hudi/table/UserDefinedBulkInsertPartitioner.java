@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+
 import org.apache.spark.api.java.JavaRDD;
 
 /**

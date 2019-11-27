@@ -18,18 +18,20 @@
 
 package org.apache.hudi;
 
-import java.io.IOException;
-import java.io.Serializable;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages

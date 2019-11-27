@@ -18,9 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -30,7 +27,13 @@ import org.apache.hudi.func.LazyIterableIterator;
 import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupHandle.KeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.function.Function2;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import scala.Tuple2;
 
 /**
