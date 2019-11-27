@@ -104,5 +104,5 @@ class DefaultSource extends RelationProvider
       outputMode)
   }
 
-  override def shortName(): String = "hoodie"
+  override def shortName(): String = "hudi"
 }
