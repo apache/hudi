@@ -18,20 +18,22 @@
 
 package org.apache.hudi.timeline.service;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import io.javalin.Javalin;
-import java.io.IOException;
-import java.io.Serializable;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.SerializableConfiguration;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FSUtils;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import io.javalin.Javalin;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * A stand alone timeline service exposing File-System View interfaces to clients

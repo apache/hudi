@@ -18,8 +18,19 @@
 
 package org.apache.hudi.utilities.adhoc;
 
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
+
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -27,15 +38,6 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * This is an one-time use class meant for migrating the configuration for "hoodie.compaction.payload.class" in

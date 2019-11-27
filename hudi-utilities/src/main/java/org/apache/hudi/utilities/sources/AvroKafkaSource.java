@@ -18,14 +18,15 @@
 
 package org.apache.hudi.utilities.sources;
 
-import io.confluent.kafka.serializers.KafkaAvroDecoder;
-import kafka.serializer.StringDecoder;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+
+import io.confluent.kafka.serializers.KafkaAvroDecoder;
+import kafka.serializer.StringDecoder;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;

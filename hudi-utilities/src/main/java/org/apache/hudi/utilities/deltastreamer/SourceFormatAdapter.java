@@ -18,11 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
-import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.AvroSource;
@@ -32,10 +27,16 @@ import org.apache.hudi.utilities.sources.ParquetSource;
 import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructType;
+
+import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
+import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
  * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer)

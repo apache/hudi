@@ -16,11 +16,6 @@
  * limitations under the License.
  */
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -33,6 +28,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -41,6 +40,9 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Sample program that writes & reads hoodie datasets via the Spark datasource

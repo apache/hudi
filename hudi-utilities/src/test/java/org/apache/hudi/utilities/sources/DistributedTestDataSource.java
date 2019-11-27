@@ -18,17 +18,19 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.util.Iterator;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.config.TestSourceConfig;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.Iterator;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * A Test DataSource which scales test-data generation by using spark parallelism.

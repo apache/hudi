@@ -18,10 +18,11 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;
+
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * Simple Key generator for unpartitioned Hive Tables

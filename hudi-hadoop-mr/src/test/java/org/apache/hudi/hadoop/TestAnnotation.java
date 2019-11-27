@@ -18,10 +18,11 @@
 
 package org.apache.hudi.hadoop;
 
-import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 import java.lang.annotation.Annotation;
-import org.junit.Test;
+
+import static org.junit.Assert.assertTrue;
 
 public class TestAnnotation {
 

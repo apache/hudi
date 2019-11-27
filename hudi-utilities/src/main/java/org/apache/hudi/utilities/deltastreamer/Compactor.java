@@ -18,17 +18,19 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import java.io.IOException;
-import java.io.Serializable;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * Run one round of compaction

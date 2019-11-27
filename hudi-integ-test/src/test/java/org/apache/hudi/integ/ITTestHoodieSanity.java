@@ -20,6 +20,7 @@ package org.apache.hudi.integ;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.model.HoodieTableType;
+
 import org.junit.Assert;
 import org.junit.Test;
 

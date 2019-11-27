@@ -18,6 +18,13 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.util.Option;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.SparkConf;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -25,11 +32,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.util.Option;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.SparkConf;
 
 /**
  * Utility Class to generate Spark Scheduling allocation file. This kicks in only when user sets

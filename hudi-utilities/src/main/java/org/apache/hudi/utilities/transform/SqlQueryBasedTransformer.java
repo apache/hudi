@@ -18,14 +18,16 @@
 
 package org.apache.hudi.utilities.transform;
 
-import java.util.UUID;
 import org.apache.hudi.common.util.TypedProperties;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.UUID;
 
 /**
  * A transformer that allows a sql-query template be used to transform the source before writing to Hudi data-set.

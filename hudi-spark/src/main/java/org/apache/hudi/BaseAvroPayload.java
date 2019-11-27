@@ -18,12 +18,14 @@
 
 package org.apache.hudi;
 
-import java.io.IOException;
-import java.io.Serializable;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.generic.GenericRecord;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * Base class for all AVRO record based payloads, that can be ordered based on a field

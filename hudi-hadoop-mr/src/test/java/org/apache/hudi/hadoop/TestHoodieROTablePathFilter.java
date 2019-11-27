@@ -18,19 +18,21 @@
 
 package org.apache.hudi.hadoop;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import org.apache.hadoop.fs.Path;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.HoodieCommonTestHarness;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  *

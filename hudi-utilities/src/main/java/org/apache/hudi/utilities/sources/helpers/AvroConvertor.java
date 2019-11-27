@@ -18,13 +18,15 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.avro.MercifulJsonConverter;
+
 import com.twitter.bijection.Injection;
 import com.twitter.bijection.avro.GenericAvroCodecs;
-import java.io.IOException;
-import java.io.Serializable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.avro.MercifulJsonConverter;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
