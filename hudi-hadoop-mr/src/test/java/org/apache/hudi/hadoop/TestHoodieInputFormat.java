@@ -18,10 +18,8 @@
 
 package org.apache.hudi.hadoop;
 
-import static org.junit.Assert.assertEquals;
+import org.apache.hudi.common.util.FSUtils;
 
-import java.io.File;
-import java.io.IOException;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.io.ArrayWritable;
@@ -30,11 +28,15 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.common.util.FSUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.io.File;
+import java.io.IOException;
+
+import static org.junit.Assert.assertEquals;
 
 public class TestHoodieInputFormat {
 

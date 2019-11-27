@@ -18,14 +18,15 @@
 
 package org.apache.hudi.utilities;
 
-import static org.junit.Assert.assertEquals;
-
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
+
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 public class TestFlatteningTransformer {
 

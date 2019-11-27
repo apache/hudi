@@ -18,14 +18,16 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import java.io.IOException;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
 
 /**
  * Realtime Record Reader which can do compacted (merge-on-read) record reading or unmerged reading (parquet and log

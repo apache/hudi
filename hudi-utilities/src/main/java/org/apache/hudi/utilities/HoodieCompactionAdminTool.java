@@ -18,21 +18,23 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.util.List;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.CompactionAdminClient;
 import org.apache.hudi.CompactionAdminClient.RenameOpResult;
 import org.apache.hudi.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.List;
 
 public class HoodieCompactionAdminTool {
 

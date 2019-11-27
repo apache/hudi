@@ -18,14 +18,16 @@
 
 package org.apache.hudi.utilities;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-
-import java.util.Map;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.SchedulerConfGenerator;
+
 import org.junit.Test;
+
+import java.util.Map;
+
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class TestSchedulerConfGenerator {
 

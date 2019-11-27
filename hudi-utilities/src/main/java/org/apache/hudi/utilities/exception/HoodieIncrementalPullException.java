@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.exception;
 
-import java.sql.SQLException;
 import org.apache.hudi.exception.HoodieException;
+
+import java.sql.SQLException;
 
 public class HoodieIncrementalPullException extends HoodieException {
 

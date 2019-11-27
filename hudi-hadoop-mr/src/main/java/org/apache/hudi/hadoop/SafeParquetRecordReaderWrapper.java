@@ -18,11 +18,12 @@
 
 package org.apache.hudi.hadoop;
 
-import java.io.IOException;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.RecordReader;
+
+import java.io.IOException;
 
 /**
  * Record Reader for parquet. Records read from this reader is safe to be buffered for concurrent processing.

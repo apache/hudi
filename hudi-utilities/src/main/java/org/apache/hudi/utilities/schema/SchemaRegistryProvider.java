@@ -18,16 +18,18 @@
 
 package org.apache.hudi.utilities.schema;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
-import java.net.URL;
-import java.util.Collections;
-import org.apache.avro.Schema;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.net.URL;
+import java.util.Collections;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry

@@ -18,12 +18,14 @@
 
 package org.apache.hudi;
 
-import java.util.Arrays;
-import java.util.List;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieKeyException;
+
+import org.apache.avro.generic.GenericRecord;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.integ;
 
-import com.google.common.collect.ImmutableList;
-import java.util.List;
 import org.apache.hudi.common.util.collection.Pair;
+
+import com.google.common.collect.ImmutableList;
 import org.junit.Test;
+
+import java.util.List;
 
 /**
  * Goes through steps described in https://hudi.incubator.apache.org/docker_demo.html
