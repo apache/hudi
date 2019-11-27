@@ -82,6 +82,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
             .toString(), 1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
         new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+    fileSinkWriter.open();
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {
@@ -119,6 +120,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
             1024 * 1024L);
     GenericRecordFullPayloadGenerator payloadGenerator =
         new GenericRecordFullPayloadGenerator(schemaProvider.getSourceSchema());
+    fileSinkWriter.open();
     // 2. Generate 100 avro payloads and write them to an avro file
     IntStream.range(0, 100).forEach(a -> {
       try {
@@ -131,10 +133,11 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     String oldFilePath = fileSinkWriter.getWriteStats().getFilePath();
     assertFalse(oldFilePath == null);
     FileDeltaInputWriter<GenericRecord> newFileSinkWriter = fileSinkWriter.getNewWriter();
+    newFileSinkWriter.close();
     WriteStats newStats = newFileSinkWriter.getWriteStats();
-    assertEquals(newStats.getBytesWritten(), 0);
+    assertEquals(newStats.getBytesWritten(), 3674);
     assertEquals(newStats.getRecordsWritten(), 0);
-    assertTrue(newStats.getFilePath() == null);
+    assertTrue(newStats.getFilePath() != null);
   }
 
 }

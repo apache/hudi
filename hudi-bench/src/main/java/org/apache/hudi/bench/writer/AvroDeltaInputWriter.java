@@ -100,7 +100,10 @@ public class AvroDeltaInputWriter implements FileDeltaInputWriter<GenericRecord>
 
   @Override
   public FileDeltaInputWriter getNewWriter() throws IOException {
-    return new AvroDeltaInputWriter(this.configuration, this.basePath, this.schema.toString(), this.maxFileSize);
+    AvroDeltaInputWriter avroDeltaInputWriter = new AvroDeltaInputWriter(this.configuration, this.basePath, this
+        .schema.toString(), this.maxFileSize);
+    avroDeltaInputWriter.open();
+    return avroDeltaInputWriter;
   }
 
   public FileSystem getFs() {
@@ -113,6 +116,6 @@ public class AvroDeltaInputWriter implements FileDeltaInputWriter<GenericRecord>
 
   @Override
   public WriteStats getWriteStats() {
-    return writeStats;
+    return this.writeStats;
   }
 }
