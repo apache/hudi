@@ -171,7 +171,7 @@ public class HoodieHiveClient {
 
   /**
    * Generate Hive Partition from partition values
-   * 
+   *
    * @param partition Partition path
    * @return
    */

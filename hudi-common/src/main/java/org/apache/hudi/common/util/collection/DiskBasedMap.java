@@ -26,7 +26,6 @@ import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.AbstractMap;
 import java.util.Collection;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -213,7 +212,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     try {
       byte[] val = SerializationUtils.serialize(value);
       Integer valueSize = val.length;
-      Long timestamp = new Date().getTime();
+      Long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
           new DiskBasedMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);

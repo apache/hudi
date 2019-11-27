@@ -80,7 +80,7 @@ public class UpgradePayloadFromUberToApache implements Serializable {
               newPropsMap.put(HoodieCompactionConfig.PAYLOAD_CLASS_PROP, newPayloadClass);
               Properties props = new Properties();
               props.putAll(newPropsMap);
-              tableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaPath), props);
+              HoodieTableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaPath), props);
               logger.info("Finished upgrade for " + basePath);
             }
           }
