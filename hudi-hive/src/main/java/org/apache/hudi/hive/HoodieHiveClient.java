@@ -179,7 +179,7 @@ public class HoodieHiveClient {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
     Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
         "Partition key parts " + syncConfig.partitionFields + " does not match with partition values " + partitionValues
-             + ". Check partition strategy. ");
+            + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
     for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
       partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`=" + "'" + partitionValues.get(i) + "'");
@@ -215,7 +215,7 @@ public class HoodieHiveClient {
       List<String> hivePartitionValues = tablePartition.getValues();
       Collections.sort(hivePartitionValues);
       String fullTablePartitionPath =
-              Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
+          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
 
@@ -278,7 +278,7 @@ public class HoodieHiveClient {
     if (syncConfig.useJdbc) {
       if (!doesTableExist()) {
         throw new IllegalArgumentException(
-                "Failed to get schema for table " + syncConfig.tableName + " does not exist");
+            "Failed to get schema for table " + syncConfig.tableName + " does not exist");
       }
       Map<String, String> schema = Maps.newHashMap();
       ResultSet result = null;
@@ -356,7 +356,7 @@ public class HoodieHiveClient {
           // compaction commit
           // Get a datafile written and get the schema from that file
           Option<HoodieInstant> lastCompactionCommit =
-                  metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+              metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
           LOG.info("Found the last compaction commit as " + lastCompactionCommit);
 
           Option<HoodieInstant> lastDeltaCommit;
@@ -447,7 +447,7 @@ public class HoodieHiveClient {
     LOG.info("Reading schema from " + parquetFilePath);
     if (!fs.exists(parquetFilePath)) {
       throw new IllegalArgumentException(
-              "Failed to read schema from data file " + parquetFilePath + ". File does not exist.");
+          "Failed to read schema from data file " + parquetFilePath + ". File does not exist.");
     }
     ParquetMetadata fileFooter =
         ParquetFileReader.readFooter(fs.getConf(), parquetFilePath, ParquetMetadataConverter.NO_FILTER);
