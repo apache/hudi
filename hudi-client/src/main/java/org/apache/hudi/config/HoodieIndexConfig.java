@@ -54,6 +54,9 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
   public static final String BLOOM_INDEX_FILTER_TYPE_PROP = "hoodie.bloom.index.filter.type.prop";
   public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE_PROP = SimpleBloomFilter.TYPE_CODE;
+  public static final String DYNAMIC_BLOOM_FILTER_MAX_ENTRIES = "hoodie.index.dynamic.bloom.max.entries";
+  public static final String DEFAULT_DYNAMIC_BLOOM_FILTER_MAX_ENTRIES = "100000";
+
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
   public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";
@@ -196,6 +199,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_KEYS_PER_BUCKET_PROP, DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET);
       setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_FILTER_TYPE_PROP),
           BLOOM_INDEX_FILTER_TYPE_PROP, DEFAULT_BLOOM_INDEX_FILTER_TYPE_PROP);
+      setDefaultOnCondition(props, !props.contains(DYNAMIC_BLOOM_FILTER_MAX_ENTRIES),
+          BLOOM_INDEX_FILTER_TYPE_PROP, DEFAULT_DYNAMIC_BLOOM_FILTER_MAX_ENTRIES);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

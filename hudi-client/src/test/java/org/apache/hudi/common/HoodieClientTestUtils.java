@@ -220,7 +220,7 @@ public class HoodieClientTestUtils {
       List<HoodieRecord> records, Schema schema, BloomFilter filter, boolean createCommitTime) throws IOException {
 
     if (filter == null) {
-      filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, SimpleBloomFilter.TYPE_CODE);
+      filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, SimpleBloomFilter.TYPE_CODE);
     }
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);

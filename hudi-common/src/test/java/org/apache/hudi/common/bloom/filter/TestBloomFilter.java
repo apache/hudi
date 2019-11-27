@@ -16,17 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.common.bloom.filter;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
-import org.apache.hudi.common.bloom.filter.HoodieDynamicBloomFilter;
-import org.apache.hudi.common.bloom.filter.SimpleBloomFilter;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -47,7 +43,7 @@ public class TestBloomFilter {
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][]{
         {SimpleBloomFilter.TYPE_CODE},
-        {HoodieDynamicBloomFilter.TYPE_CODE}
+        {HoodieDynamicBoundedBloomFilter.TYPE_CODE}
     });
   }
 
@@ -61,8 +57,7 @@ public class TestBloomFilter {
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
-      BloomFilter filter = BloomFilterFactory
-          .createBloomFilter(100, 0.0000001, versionToTest);
+      BloomFilter filter = getBloomFilter(versionToTest, size, 0.000001, size * 10);
       for (int i = 0; i < size; i++) {
         String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
         inputs.add(key);
@@ -87,8 +82,7 @@ public class TestBloomFilter {
     int[] sizes = {100, 1000, 10000};
     for (int size : sizes) {
       inputs = new ArrayList<>();
-      BloomFilter filter = BloomFilterFactory
-          .createBloomFilter(100, 0.0000001, versionToTest);
+      BloomFilter filter = getBloomFilter(versionToTest, size, 0.000001, size * 10);
       for (int i = 0; i < size; i++) {
         String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
         inputs.add(key);
@@ -101,6 +95,14 @@ public class TestBloomFilter {
       for (String key : inputs) {
         assert (recreatedBloomFilter.mightContain(key));
       }
+    }
+  }
+
+  BloomFilter getBloomFilter(String typeCode, int numEntries, double errorRate, int maxEntries) {
+    if (typeCode.equalsIgnoreCase(SimpleBloomFilter.TYPE_CODE)) {
+      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, typeCode);
+    } else {
+      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
     }
   }
 }

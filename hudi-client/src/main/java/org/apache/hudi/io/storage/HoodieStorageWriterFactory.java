@@ -54,6 +54,7 @@ public class HoodieStorageWriterFactory {
       throws IOException {
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
+            config.getDynamicBloomFilterMaxNumEntries(),
             config.getBloomFilterType());
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);

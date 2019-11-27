@@ -25,48 +25,47 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import javax.xml.bind.DatatypeConverter;
-import org.apache.hadoop.util.bloom.DynamicBloomFilter;
 import org.apache.hadoop.util.bloom.Key;
 import org.apache.hudi.exception.HoodieIndexException;
 
 /**
- * Hudi's Dynamic Bloom Filter based out of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
+ * Hoodie's dynamic bloom bounded bloom filter
  */
-public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements BloomFilter {
+public class HoodieDynamicBoundedBloomFilter extends LocalDynamicBloomFilter implements BloomFilter {
 
   public static final String TYPE_CODE_PREFIX = "DYNAMIC";
   public static final String TYPE_CODE = TYPE_CODE_PREFIX + "_V0";
-  private DynamicBloomFilter dynamicBloomFilter;
+  private LocalDynamicBloomFilter localDynamicBloomFilter;
 
   /**
-   * Instantiates {@link HoodieDynamicBloomFilter} with the given args
+   * Instantiates {@link HoodieDynamicBoundedBloomFilter} with the given args
    *
    * @param numEntries The total number of entries.
    * @param errorRate maximum allowable error rate.
    * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
-   * @return the {@link HoodieDynamicBloomFilter} thus created
+   * @return the {@link HoodieDynamicBoundedBloomFilter} thus created
    */
-  HoodieDynamicBloomFilter(int numEntries, double errorRate, int hashType) {
+  HoodieDynamicBoundedBloomFilter(int numEntries, double errorRate, int hashType, int maxNoOfEntries) {
     // Bit size
     int bitSize = BloomFilterUtils.getBitSize(numEntries, errorRate);
     // Number of the hash functions
     int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
-    this.dynamicBloomFilter = new DynamicBloomFilter(bitSize, numHashs, hashType, numEntries);
+    this.localDynamicBloomFilter = new LocalDynamicBloomFilter(bitSize, numHashs, hashType, numEntries, maxNoOfEntries);
   }
 
   /**
-   * Generate {@link HoodieDynamicBloomFilter} from the given {@code serString} serialized string
+   * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized string
    *
-   * @param serString the serialized string which represents the {@link HoodieDynamicBloomFilter}
+   * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
    * @param typeCode type code of the bloom filter
    */
-  HoodieDynamicBloomFilter(String serString, String typeCode) {
+  HoodieDynamicBoundedBloomFilter(String serString, String typeCode) {
     // ignoring the type code for now, since we have just one version
     byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
-      dynamicBloomFilter = new DynamicBloomFilter();
-      dynamicBloomFilter.readFields(dis);
+      localDynamicBloomFilter = new LocalDynamicBloomFilter();
+      localDynamicBloomFilter.readFields(dis);
       dis.close();
     } catch (IOException e) {
       throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
@@ -75,12 +74,12 @@ public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements Bloo
 
   @Override
   public void add(String key) {
-    dynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    localDynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
   @Override
   public boolean mightContain(String key) {
-    return dynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return localDynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
   @Override
@@ -88,7 +87,7 @@ public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements Bloo
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     try {
-      dynamicBloomFilter.write(dos);
+      localDynamicBloomFilter.write(dos);
       byte[] bytes = baos.toByteArray();
       dos.close();
       return DatatypeConverter.printBase64Binary(bytes);
@@ -99,6 +98,7 @@ public class HoodieDynamicBloomFilter extends DynamicBloomFilter implements Bloo
 
   @Override
   public String getBloomFilterTypeCode() {
-    return HoodieDynamicBloomFilter.TYPE_CODE;
+    return HoodieDynamicBoundedBloomFilter.TYPE_CODE;
   }
 }
+

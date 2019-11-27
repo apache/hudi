@@ -33,24 +33,12 @@ public class BloomFilterFactory {
    * @param bloomFilterTypeCode bloom filter type code
    * @return the {@link BloomFilter} thus created
    */
-  public static BloomFilter createBloomFilter(int numEntries, double errorRate, String bloomFilterTypeCode) {
-    return createBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH, bloomFilterTypeCode);
-  }
-
-  /**
-   * Creates a new {@link BloomFilter} with the given args
-   *
-   * @param numEntries total number of entries
-   * @param errorRate max allowed error rate
-   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
-   * @param bloomFilterTypeCode bloom filter type code
-   * @return the {@link BloomFilter} thus created
-   */
-  public static BloomFilter createBloomFilter(int numEntries, double errorRate, int hashType, String bloomFilterTypeCode) {
-    if (bloomFilterTypeCode.equals(SimpleBloomFilter.TYPE_CODE)) {
-      return new SimpleBloomFilter(numEntries, errorRate, hashType);
-    } else if (bloomFilterTypeCode.contains(HoodieDynamicBloomFilter.TYPE_CODE_PREFIX)) {
-      return new HoodieDynamicBloomFilter(numEntries, errorRate, hashType);
+  public static BloomFilter createBloomFilter(int numEntries, double errorRate, int maxNumberOfEntries,
+      String bloomFilterTypeCode) {
+    if (bloomFilterTypeCode.equalsIgnoreCase(SimpleBloomFilter.TYPE_CODE)) {
+      return new SimpleBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH);
+    } else if (bloomFilterTypeCode.contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
+      return new HoodieDynamicBoundedBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH, maxNumberOfEntries);
     } else {
       throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
     }
@@ -66,8 +54,8 @@ public class BloomFilterFactory {
   public static BloomFilter fromString(String serString, String bloomFilterTypeCode) {
     if (bloomFilterTypeCode.equals(SimpleBloomFilter.TYPE_CODE)) {
       return new SimpleBloomFilter(serString);
-    } else if (bloomFilterTypeCode.contains(HoodieDynamicBloomFilter.TYPE_CODE_PREFIX)) {
-      return new HoodieDynamicBloomFilter(serString, bloomFilterTypeCode);
+    } else if (bloomFilterTypeCode.contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
+      return new HoodieDynamicBoundedBloomFilter(serString, bloomFilterTypeCode);
     } else {
       throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
     }

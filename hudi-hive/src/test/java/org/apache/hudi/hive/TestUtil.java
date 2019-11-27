@@ -269,7 +269,7 @@ public class TestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = (isParquetSchemaSimple ? SchemaTestUtil.getSimpleSchema() : SchemaTestUtil.getEvolvedSchema());
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, SimpleBloomFilter.TYPE_CODE);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1, SimpleBloomFilter.TYPE_CODE);
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, filter);
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,

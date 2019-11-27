@@ -372,6 +372,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE_PROP);
   }
 
+  public int getDynamicBloomFilterMaxNumEntries() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.DYNAMIC_BLOOM_FILTER_MAX_ENTRIES));
+  }
+
   /**
    * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
    * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for

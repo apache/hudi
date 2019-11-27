@@ -109,7 +109,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   private void writeParquetFile(String filePath, List<String> rowKeys) throws Exception {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, SimpleBloomFilter.TYPE_CODE);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1, SimpleBloomFilter.TYPE_CODE);
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,

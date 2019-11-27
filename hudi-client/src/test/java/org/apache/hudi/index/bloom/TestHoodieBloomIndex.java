@@ -250,7 +250,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
     // record2, record3).
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, SimpleBloomFilter.TYPE_CODE);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, SimpleBloomFilter.TYPE_CODE);
     filter.add(record3.getRecordKey());
     String filename = HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1, record2),
         schema, filter, true);
@@ -453,7 +453,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
 
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, SimpleBloomFilter.TYPE_CODE);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, SimpleBloomFilter.TYPE_CODE);
     filter.add(record2.getRecordKey());
     String filename =
         HoodieClientTestUtils.writeParquetFile(basePath, "2016/01/31", Arrays.asList(record1), schema, filter, true);

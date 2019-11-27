@@ -20,9 +20,13 @@ package org.apache.hudi.common.bloom.filter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInput;
 import java.io.DataInputStream;
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
 import javax.xml.bind.DatatypeConverter;
 import org.apache.hadoop.util.bloom.Key;
@@ -103,8 +107,32 @@ public class SimpleBloomFilter implements BloomFilter {
     }
   }
 
+  private void writeObject(ObjectOutputStream os)
+      throws IOException {
+    filter.write(os);
+  }
+
+  private void readObject(ObjectInputStream is)
+      throws IOException, ClassNotFoundException {
+    filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    filter.readFields(is);
+  }
+
+  // @Override
+  public void write(DataOutput out) throws IOException {
+    out.write(filter.toString().getBytes());
+  }
+
+  //@Override
+  public void readFields(DataInput in) throws IOException {
+    filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    filter.readFields(in);
+  }
+
+
   @Override
   public String getBloomFilterTypeCode() {
     return SimpleBloomFilter.TYPE_CODE;
   }
+
 }
