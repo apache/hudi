@@ -73,8 +73,6 @@ class TestDataSource extends AssertionsForJUnit {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    println(basePath)
-
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
