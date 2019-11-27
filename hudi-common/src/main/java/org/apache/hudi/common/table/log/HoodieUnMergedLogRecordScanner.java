@@ -28,7 +28,7 @@ import org.apache.hadoop.fs.FileSystem;
 import java.util.List;
 
 /**
- * A scanner used scan hoodie unmerged log records.
+ * A scanner used to scan hoodie unmerged log records.
  */
 public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 

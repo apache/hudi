@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.SyncableFileSystemView;
 import java.io.IOException;
 
 /**
- * Tests rocks db based file system view.
+ * Tests RocksDB based file system view {@link SyncableFileSystemView}.
  */
 public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemView {
 

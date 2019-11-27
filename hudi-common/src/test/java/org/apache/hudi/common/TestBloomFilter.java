@@ -23,7 +23,7 @@ import org.junit.Test;
 import java.io.IOException;
 
 /**
- * Tests bloom filter.
+ * Tests bloom filter {@link BloomFilter}.
  */
 public class TestBloomFilter {
 

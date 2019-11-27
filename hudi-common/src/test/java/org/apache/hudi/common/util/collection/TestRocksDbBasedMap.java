@@ -37,7 +37,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Tests RocksDB based map.
+ * Tests RocksDB based map {@link RocksDBBasedMap}.
  */
 public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 

@@ -19,7 +19,7 @@
 package org.apache.hudi.exception;
 
 /**
- * An exception throws when occurs schema compatibility problems.
+ * An exception thrown when schema has compatibility problems.
  */
 public class SchemaCompatabilityException extends HoodieException {
 

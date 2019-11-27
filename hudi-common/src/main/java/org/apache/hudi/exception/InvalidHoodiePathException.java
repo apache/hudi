@@ -21,7 +21,7 @@ package org.apache.hudi.exception;
 import org.apache.hadoop.fs.Path;
 
 /**
- * An exception throws when meet invalid hoodie path.
+ * An exception thrown when hoodie path is invalid.
  */
 public class InvalidHoodiePathException extends HoodieException {
 

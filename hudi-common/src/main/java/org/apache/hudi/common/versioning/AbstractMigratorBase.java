@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 /**
  * The basic abstraction of migrator.
  *
- * @param <T> Metadata Type
+ * @param <T> Metadata Type.
  */
 public abstract class AbstractMigratorBase<T> implements VersionMigrator<T> {
 

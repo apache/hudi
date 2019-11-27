@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Tests RocksDB manager.
+ * Tests RocksDB manager {@link RocksDBDAO}.
  */
 public class TestRocksDBManager {
 
