@@ -18,29 +18,35 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.junit.Before;
-import org.junit.Test;
-
 import static org.apache.hudi.metrics.Metrics.registerGauge;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestHoodieMetrics {
+import org.apache.hudi.config.HoodieMetricsConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 
-  @Before
+import org.junit.Test;
+
+/**
+ * Test for the Jmx metrics report.
+ */
+public class TestHoodieJmxMetrics extends TestHoodieMetrics {
+
+  @Override
   public void start() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
+    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
+    when(config.getJmxHost()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_HOST);
+    when(config.getJmxPort()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_PORT);
     new HoodieMetrics(config, "raw_table");
   }
 
   @Test
   public void testRegisterGauge() {
-    registerGauge("metric1", 123L);
-    assertTrue(Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString().equals("123"));
+    registerGauge("jmx_metric", 123L);
+    assertTrue(Metrics.getInstance().getRegistry().getGauges()
+        .get("jmx_metric").getValue().toString().equals("123"));
   }
 }

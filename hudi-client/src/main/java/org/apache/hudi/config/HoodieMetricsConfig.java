@@ -47,6 +47,14 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
   public static final int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
 
+  // Jmx
+  public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
+  public static final String JMX_HOST = JMX_PREFIX + ".host";
+  public static final String DEFAULT_JMX_HOST = "localhost";
+
+  public static final String JMX_PORT = JMX_PREFIX + ".port";
+  public static final int DEFAULT_JMX_PORT = 9889;
+
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 
   private HoodieMetricsConfig(Properties props) {

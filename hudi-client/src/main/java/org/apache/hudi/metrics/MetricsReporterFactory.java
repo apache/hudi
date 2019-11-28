@@ -41,6 +41,9 @@ public class MetricsReporterFactory {
       case INMEMORY:
         reporter = new InMemoryMetricsReporter();
         break;
+      case JMX:
+        reporter = new JmxMetricsReporter(config);
+        break;
       default:
         logger.error("Reporter type[" + type + "] is not supported.");
         break;
