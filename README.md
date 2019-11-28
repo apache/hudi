@@ -15,11 +15,17 @@
   limitations under the License.
 -->
 
-# Hudi
+# Apache Hudi (Incubating)
 Apache Hudi (Incubating) (pronounced Hoodie) stands for `Hadoop Upserts Deletes and Incrementals`. 
 Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS or any Hadoop FileSystem compatible storage).
 
-### Features
+<http://hudi.apache.org/>
+
+[![Build Status](https://travis-ci.org/apache/incubator-hudi.svg?branch=master)](https://travis-ci.org/apache/incubator-hudi)
+[![GitHub release](https://img.shields.io/github/release/apache/incubator-hudi.svg)](https://github.com/apache/incubator-hudi/releases)
+[![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+
+## Features
 * Upsert support with fast, pluggable indexing
 * Atomically publish data with rollback support
 * Snapshot isolation between writer & queries 
@@ -35,17 +41,22 @@ Hudi provides the ability to query via three types of views:
 
 Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 
-### Building Apache Hudi from source {#building-hudi}
+## Building Apache Hudi from source
 
-Hudi requires Java 8 to be installed on a *nix system. Check out [code](https://github.com/apache/incubator-hudi) and 
-normally build the maven project, from command line:
+Prerequisites for building Hudi:
+
+* Unix-like system (like Linux, Mac OS X)
+* Java 8 (Java 9 or 10 may work)
+* Git
+* Maven (recommend version 3.2.5)
 
 ```
 # Checkout code and build
-git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
+git clone https://github.com/apache/incubator-hudi.git
+cd incubator-hudi
 mvn clean package -DskipTests -DskipITs
 ```
 
-### Quickstart
+## Quickstart
 
-Try [https://hudi.apache.org/quickstart.html](https://hudi.apache.org/quickstart.html) to quickly explore Hudi's capabilities using spark-shell. 
+Please visit [https://hudi.apache.org/quickstart.html](https://hudi.apache.org/quickstart.html) to quickly explore Hudi's capabilities using spark-shell. 
