@@ -19,7 +19,6 @@
 package org.apache.hudi.metrics;
 
 import java.io.Closeable;
-import java.io.IOException;
 
 /**
  * Interface for implementing a Reporter.
