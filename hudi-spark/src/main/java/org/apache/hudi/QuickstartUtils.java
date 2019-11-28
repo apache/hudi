@@ -162,7 +162,7 @@ public class QuickstartUtils {
       String randomString = generateRandomString();
       List<HoodieRecord> updates = new ArrayList<>();
       for (int i = 0; i < n; i++) {
-        HoodieKey key = existingKeys.get(rand.nextInt(numExistingKeys - 1));
+        HoodieKey key = existingKeys.get(rand.nextInt(numExistingKeys));
         HoodieRecord record = generateUpdateRecord(key, randomString);
         updates.add(record);
       }
