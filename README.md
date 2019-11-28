@@ -48,7 +48,7 @@ Prerequisites for building Hudi:
 * Unix-like system (like Linux, Mac OS X)
 * Java 8 (Java 9 or 10 may work)
 * Git
-* Maven (recommend version 3.2.5)
+* Maven
 
 ```
 # Checkout code and build
