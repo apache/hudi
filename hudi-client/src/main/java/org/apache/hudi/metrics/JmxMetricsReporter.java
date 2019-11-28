@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import com.google.common.base.Preconditions;
 import java.io.Closeable;
 
 import java.lang.management.ManagementFactory;
@@ -66,11 +67,8 @@ public class JmxMetricsReporter extends MetricsReporter {
   @Override
   public void start() {
     try {
-      if (connector != null) {
-        connector.start();
-      } else {
-        logger.error("Cannot start as the jmxReporter is null.");
-      }
+      Preconditions.checkNotNull(connector, "Cannot start as the jmxReporter is null.");
+      connector.start();
     } catch (Exception e) {
       throw new HoodieException(e);
     }
