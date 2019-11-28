@@ -63,7 +63,7 @@ class TestDataSource extends AssertionsForJUnit {
     fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
   }
 
-  @Test def testShotNameStorage() {
+  @Test def testShortNameStorage() {
     // Insert Operation
     val records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
     val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
