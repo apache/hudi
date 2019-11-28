@@ -52,8 +52,7 @@ Prerequisites for building Hudi:
 
 ```
 # Checkout code and build
-git clone https://github.com/apache/incubator-hudi.git
-cd incubator-hudi
+git clone https://github.com/apache/incubator-hudi.git && cd incubator-hudi
 mvn clean package -DskipTests -DskipITs
 ```
 
