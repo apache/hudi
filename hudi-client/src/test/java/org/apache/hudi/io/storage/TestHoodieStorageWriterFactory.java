@@ -18,17 +18,19 @@
 
 package org.apache.hudi.io.storage;
 
-import static org.junit.Assert.fail;
-
-import java.io.IOException;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.TestHoodieClientBase;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.io.IOException;
+
+import static org.junit.Assert.fail;
 
 /**
  * Tests for {@link HoodieStorageWriterFactory}.

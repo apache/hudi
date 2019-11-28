@@ -18,19 +18,6 @@
 
 package org.apache.hudi.io.strategy;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -44,8 +31,23 @@ import org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy;
 import org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.io.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.io.compact.strategy.UnBoundedPartitionAwareCompactionStrategy;
+
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.stream.Collectors;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class TestHoodieCompactionStrategy {
 

@@ -18,12 +18,14 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.metrics.MetricsReporterType;
+
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
-import org.apache.hudi.metrics.MetricsReporterType;
 
 /**
  * Fetch the configurations used by the Metrics system.

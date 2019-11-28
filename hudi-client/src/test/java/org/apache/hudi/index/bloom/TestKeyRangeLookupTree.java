@@ -18,8 +18,7 @@
 
 package org.apache.hudi.index.bloom;
 
-import static junit.framework.TestCase.assertEquals;
-import static junit.framework.TestCase.assertTrue;
+import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,7 +26,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import org.junit.Test;
+
+import static junit.framework.TestCase.assertEquals;
+import static junit.framework.TestCase.assertTrue;
 
 /**
  * Tests {@link KeyRangeLookupTree}

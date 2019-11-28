@@ -18,18 +18,20 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.Hashing;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 
 /**
  * Partitions bloom filter checks by spreading out comparisons across buckets of work.

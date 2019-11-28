@@ -18,18 +18,20 @@
 
 package org.apache.hudi;
 
-import static org.junit.Assert.assertTrue;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.spark.api.java.JavaRDD;
-import org.junit.Assert;
-import org.junit.Test;
+
+import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
 /**

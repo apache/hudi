@@ -19,6 +19,7 @@
 package org.apache.hudi.index.bloom;
 
 import com.google.common.base.Objects;
+
 import java.io.Serializable;
 
 /**

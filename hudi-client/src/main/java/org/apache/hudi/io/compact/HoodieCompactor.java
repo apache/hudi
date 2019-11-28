@@ -18,16 +18,18 @@
 
 package org.apache.hudi.io.compact;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.Set;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Set;
 
 /**
  * A HoodieCompactor runs compaction on a hoodie table

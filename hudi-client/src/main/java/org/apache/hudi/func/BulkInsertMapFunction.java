@@ -18,14 +18,16 @@
 
 package org.apache.hudi.func;
 
-import java.util.Iterator;
-import java.util.List;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.function.Function2;
+
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * Map function that handles a sorted stream of HoodieRecords

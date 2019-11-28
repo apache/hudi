@@ -18,8 +18,9 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 public class HoodieParquetConfig {

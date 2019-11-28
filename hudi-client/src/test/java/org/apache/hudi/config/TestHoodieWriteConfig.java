@@ -18,17 +18,19 @@
 
 package org.apache.hudi.config;
 
-import static org.junit.Assert.assertEquals;
+import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import com.google.common.collect.Maps;
+import org.junit.Test;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Date;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.hudi.config.HoodieWriteConfig.Builder;
-import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 public class TestHoodieWriteConfig {
 

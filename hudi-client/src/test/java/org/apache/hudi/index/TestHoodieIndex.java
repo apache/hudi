@@ -18,17 +18,18 @@
 
 package org.apache.hudi.index;
 
-import static org.junit.Assert.assertTrue;
-
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.hbase.HBaseIndex;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.assertTrue;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 

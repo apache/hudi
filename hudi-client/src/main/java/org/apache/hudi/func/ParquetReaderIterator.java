@@ -18,11 +18,13 @@
 
 package org.apache.hudi.func;
 
-import java.io.IOException;
-import java.util.Iterator;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueue;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.parquet.hadoop.ParquetReader;
+
+import java.io.IOException;
+import java.util.Iterator;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in

@@ -18,12 +18,6 @@
 
 package org.apache.hudi.func;
 
-import static org.apache.hudi.func.CopyOnWriteLazyInsertIterable.getTransformFunction;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.util.List;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,11 +26,20 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.func.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
+
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.List;
+
 import scala.Tuple2;
+
+import static org.apache.hudi.func.CopyOnWriteLazyInsertIterable.getTransformFunction;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
