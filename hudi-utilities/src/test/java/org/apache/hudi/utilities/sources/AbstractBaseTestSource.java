@@ -18,6 +18,16 @@
 
 package org.apache.hudi.utilities.sources;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -105,16 +115,51 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       numUpdates = Math.min(numExistingKeys, sourceLimit - numInserts);
     }
 
-    LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
-    long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
-        + ", Free Memory=" + Runtime.getRuntime().freeMemory());
+    Stream<GenericRecord> deleteStream = Stream.empty();
+    Stream<GenericRecord> updateStream;
+    if (numExistingKeys > 50) {
+      LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
+          + maxUniqueKeys);
+      long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+      LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
+          + ", Free Memory=" + Runtime.getRuntime().freeMemory());
+      Stream<HoodieRecord> initialUpdateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates);
 
-    Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
-        .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      List<HoodieRecord> deleteRecords = new ArrayList<>();
+      List<HoodieRecord> updateRecrods = new ArrayList<>();
+
+      List<HoodieRecord> initialUpdateList = initialUpdateStream.collect(Collectors.toList());
+      deleteRecords = initialUpdateList.subList(0, 50);
+      updateRecrods = initialUpdateList.subList(50, initialUpdateList.size());
+
+      deleteStream = deleteRecords.stream().map(
+          hr ->
+          {
+            try {
+              HoodieRecord rec = new HoodieRecord(hr.getKey(),
+                  dataGenerator.generateRandomDeleteValue(hr.getKey(), commitTime));
+              return rec;
+            } catch (IOException e) {
+              throw new HoodieIOException("Exception thrown while generating Delete records");
+            }
+          }).map(hr -> {
+        GenericRecord gRec = AbstractBaseTestSource.toGenericRecord(hr, dataGenerator);
+        return gRec;
+      });
+
+      updateStream = updateRecrods.stream().map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+    } else {
+      LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+      long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+      LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
+          + ", Free Memory=" + Runtime.getRuntime().freeMemory());
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
+          .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+    }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts)
         .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-    return Stream.concat(updateStream, insertStream);
+
+    return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, HoodieTestDataGenerator dataGenerator) {

@@ -21,6 +21,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -62,7 +63,18 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     // combining strategy here trivially ignores currentValue on disk and writes this record
-    return getInsertValue(schema);
+    Object deleteMarker = null;
+    try {
+      deleteMarker = DataSourceUtils.getNestedFieldVal(
+          null, "_hoodie_delete_marker");
+    } catch (HoodieException e){
+      // ignore if not found
+    }
+    if(deleteMarker != null && (boolean)deleteMarker == true){
+      return Option.empty();
+    } else {
+      return getInsertValue(schema);
+    }
   }
 
   @Override
