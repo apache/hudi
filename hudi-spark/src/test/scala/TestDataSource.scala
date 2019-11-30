@@ -63,6 +63,19 @@ class TestDataSource extends AssertionsForJUnit {
     fs = FSUtils.getFs(basePath, spark.sparkContext.hadoopConfiguration)
   }
 
+  @Test def testShortNameStorage() {
+    // Insert Operation
+    val records = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
+    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+  }
+
   @Test def testCopyOnWriteStorage() {
     // Insert Operation
     val records1 = DataSourceTestUtils.convertToStringList(dataGen.generateInserts("000", 100)).toList
