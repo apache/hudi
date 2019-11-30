@@ -43,7 +43,7 @@ Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 
 ## Building Apache Hudi from source
 
-Prerequisites for building Hudi:
+Prerequisites for building Apache Hudi:
 
 * Unix-like system (like Linux, Mac OS X)
 * Java 8 (Java 9 or 10 may work)
