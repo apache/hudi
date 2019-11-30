@@ -32,6 +32,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display sync options.
+ */
 @Component
 public class HoodieSyncCommand implements CommandMarker {
 

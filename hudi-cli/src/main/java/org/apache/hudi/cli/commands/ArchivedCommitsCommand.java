@@ -45,6 +45,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display archived commits and stats if available.
+ */
 @Component
 public class ArchivedCommitsCommand implements CommandMarker {
 

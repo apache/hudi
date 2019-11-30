@@ -29,13 +29,16 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 
+/**
+ * Utility functions dealing with Spark.
+ */
 public class SparkUtil {
 
   public static Logger logger = Logger.getLogger(SparkUtil.class);
   public static final String DEFUALT_SPARK_MASTER = "yarn-client";
 
   /**
-   * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro
+   * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro.
    */
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
     String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())

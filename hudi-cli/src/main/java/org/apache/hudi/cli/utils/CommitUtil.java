@@ -25,6 +25,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
+/**
+ * Utilities related to commit operation.
+ */
 public class CommitUtil {
 
   public static long countNewRecords(HoodieTableMetaClient target, List<String> commitsToCatchup) throws IOException {

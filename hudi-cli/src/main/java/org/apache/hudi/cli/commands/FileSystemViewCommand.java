@@ -47,6 +47,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display file system options.
+ */
 @Component
 public class FileSystemViewCommand implements CommandMarker {
 
@@ -206,7 +209,7 @@ public class FileSystemViewCommand implements CommandMarker {
   }
 
   /**
-   * Build File System View
+   * Build File System View.
    * 
    * @param globRegex Path Regex
    * @param maxInstant Max Instants to be used for displaying file-instants

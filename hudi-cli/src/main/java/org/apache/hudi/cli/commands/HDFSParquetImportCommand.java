@@ -33,6 +33,9 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 import scala.collection.JavaConverters;
 
+/**
+ * CLI command for importing parquet dataset to hudi dataset.
+ */
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
 

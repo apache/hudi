@@ -34,6 +34,9 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI command to display and trigger repair options.
+ */
 @Component
 public class RepairsCommand implements CommandMarker {
 

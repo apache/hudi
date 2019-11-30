@@ -63,7 +63,7 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Main API to add row to the table
+   * Main API to add row to the table.
    * 
    * @param row Row
    */
@@ -82,7 +82,7 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Add all rows
+   * Add all rows.
    * 
    * @param rows Rows to be aded
    * @return
@@ -93,7 +93,7 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Add all rows
+   * Add all rows.
    * 
    * @param rows Rows to be added
    * @return
@@ -104,7 +104,7 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * API to let the table know writing is over and reading is going to start
+   * API to let the table know writing is over and reading is going to start.
    */
   public Table flip() {
     this.finishedAdding = true;
@@ -113,7 +113,7 @@ public class Table implements Iterable<List<String>> {
   }
 
   /**
-   * Sorting of rows by a specified field
+   * Sorting of rows by a specified field.
    * 
    * @return
    */
