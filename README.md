@@ -22,8 +22,8 @@ Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS
 <http://hudi.apache.org/>
 
 [![Build Status](https://travis-ci.org/apache/incubator-hudi.svg?branch=master)](https://travis-ci.org/apache/incubator-hudi)
-[![GitHub release](https://img.shields.io/github/release/apache/incubator-hudi.svg)](https://github.com/apache/incubator-hudi/releases)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)
 
 ## Features
 * Upsert support with fast, pluggable indexing
