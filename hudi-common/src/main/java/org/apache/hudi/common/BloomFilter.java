@@ -18,16 +18,19 @@
 
 package org.apache.hudi.common;
 
+import org.apache.hudi.exception.HoodieIndexException;
+
+import org.apache.hadoop.util.bloom.Key;
+import org.apache.hadoop.util.hash.Hash;
+
+import javax.xml.bind.DatatypeConverter;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import javax.xml.bind.DatatypeConverter;
-import org.apache.hadoop.util.bloom.Key;
-import org.apache.hadoop.util.hash.Hash;
-import org.apache.hudi.exception.HoodieIndexException;
 
 /**
  * A Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.

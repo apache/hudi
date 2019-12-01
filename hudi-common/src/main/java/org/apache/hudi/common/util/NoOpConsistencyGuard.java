@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.List;
 import org.apache.hadoop.fs.Path;
+
+import java.util.List;
 
 /**
  * Default Consistency guard that does nothing. Used for HDFS deployments

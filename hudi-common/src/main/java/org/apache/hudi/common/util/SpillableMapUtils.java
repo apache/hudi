@@ -18,16 +18,18 @@
 
 package org.apache.hudi.common.util;
 
-import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.util.zip.CRC32;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.DiskBasedMap.FileEntry;
 import org.apache.hudi.common.util.collection.io.storage.SizeAwareDataOutputStream;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+
+import org.apache.avro.generic.GenericRecord;
+
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.zip.CRC32;
 
 public class SpillableMapUtils {
 

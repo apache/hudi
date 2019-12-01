@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.model;
 
-import java.util.List;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.util.List;
 
 public class TestHoodieCommitMetadata {
 

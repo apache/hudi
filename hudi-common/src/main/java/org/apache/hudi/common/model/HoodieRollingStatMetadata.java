@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * This class holds statistics about files belonging to a dataset

@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.table.view;
 
-import java.io.IOException;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
+
+import java.io.IOException;
 
 public class TestRocksDbBasedFileSystemView extends TestHoodieTableFileSystemView {
 

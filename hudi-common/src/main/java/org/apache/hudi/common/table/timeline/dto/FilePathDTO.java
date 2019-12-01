@@ -20,9 +20,10 @@ package org.apache.hudi.common.table.timeline.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.hadoop.fs.Path;
+
 import java.net.URI;
 import java.net.URISyntaxException;
-import org.apache.hadoop.fs.Path;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FilePathDTO {

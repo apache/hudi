@@ -18,11 +18,13 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Command block issues a specific command to the scanner

@@ -20,9 +20,11 @@ package org.apache.hudi.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import java.io.Serializable;
-import javax.annotation.Nullable;
 import org.apache.hadoop.fs.Path;
+
+import javax.annotation.Nullable;
+
+import java.io.Serializable;
 
 /**
  * Statistics about a single Hoodie write operation.

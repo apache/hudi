@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Every Hoodie dataset has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which

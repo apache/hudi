@@ -18,13 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -38,8 +31,17 @@ import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
 import org.apache.hudi.common.versioning.compaction.CompactionV1MigrationHandler;
 import org.apache.hudi.common.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction

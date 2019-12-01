@@ -18,15 +18,17 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
+import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CompactionOpDTO {

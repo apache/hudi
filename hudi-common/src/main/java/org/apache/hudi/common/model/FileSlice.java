@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.stream.Stream;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Within a file group, a slice is a combination of data file written at a commit time and list of log files, containing

@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hadoop.fs.Path;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
-import org.apache.hadoop.fs.Path;
 
 /**
  * Ensures file create/delete operation is visible

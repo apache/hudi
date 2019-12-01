@@ -18,11 +18,13 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
+
 import java.io.Serializable;
 import java.util.List;
-import org.apache.hudi.common.util.Option;
 
 /**
  * A Single Record managed by Hoodie TODO - Make this generic

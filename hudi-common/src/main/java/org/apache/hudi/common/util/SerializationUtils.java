@@ -18,19 +18,21 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieSerializationException;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.FieldSerializer;
 import com.esotericsoftware.reflectasm.ConstructorAccess;
+import org.objenesis.instantiator.ObjectInstantiator;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import org.apache.hudi.exception.HoodieSerializationException;
-import org.objenesis.instantiator.ObjectInstantiator;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.

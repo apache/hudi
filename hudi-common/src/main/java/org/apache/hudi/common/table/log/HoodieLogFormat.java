@@ -18,19 +18,21 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Iterator;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Iterator;
 
 /**
  * File Format for Hoodie Log Files. The File Format consists of blocks each separated with a MAGIC sync marker. A Block

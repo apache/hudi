@@ -18,8 +18,9 @@
 
 package org.apache.hudi.common;
 
-import java.io.IOException;
 import org.junit.Test;
+
+import java.io.IOException;
 
 public class TestBloomFilter {
 

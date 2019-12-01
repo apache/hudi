@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.versioning;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.collection.Pair;
+
 import com.google.common.base.Preconditions;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * Migrates a specific metadata type stored in .hoodie folder to latest version

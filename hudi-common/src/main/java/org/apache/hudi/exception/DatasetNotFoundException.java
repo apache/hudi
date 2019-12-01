@@ -18,9 +18,10 @@
 
 package org.apache.hudi.exception;
 
-import java.io.IOException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
+import java.io.IOException;
 
 /**
  * <p>
