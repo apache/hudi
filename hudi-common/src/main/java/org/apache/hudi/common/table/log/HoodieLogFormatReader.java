@@ -18,16 +18,18 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 

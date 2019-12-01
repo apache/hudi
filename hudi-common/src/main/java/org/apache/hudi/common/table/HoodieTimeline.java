@@ -18,15 +18,16 @@
 
 package org.apache.hudi.common.table;
 
-import java.io.Serializable;
-import java.util.function.BiPredicate;
-import java.util.function.Predicate;
-import java.util.stream.Stream;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+
+import java.io.Serializable;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * HoodieTimeline is a view of meta-data instants in the hoodie dataset. Instants are specific points in time

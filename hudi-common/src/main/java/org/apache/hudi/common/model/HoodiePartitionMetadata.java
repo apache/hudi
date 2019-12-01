@@ -18,15 +18,17 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.IOException;
-import java.util.Properties;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.Properties;
 
 /**
  * The metadata that goes into the meta file in each partition

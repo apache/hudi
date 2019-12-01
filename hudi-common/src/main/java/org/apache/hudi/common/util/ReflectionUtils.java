@@ -18,16 +18,18 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
+
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.exception.HoodieException;
 
 public class ReflectionUtils {
 

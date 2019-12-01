@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
+import org.apache.hudi.common.model.HoodieLogFile;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hudi.common.model.HoodieLogFile;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class LogFileDTO {

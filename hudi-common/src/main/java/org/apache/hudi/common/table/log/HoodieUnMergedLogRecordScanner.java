@@ -18,12 +18,14 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.util.List;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+
+import java.util.List;
 
 public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 

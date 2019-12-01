@@ -18,22 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
-import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
-import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
-import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
-import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
-
-import com.google.common.collect.ImmutableMap;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieCommonTestHarness;
@@ -46,9 +30,27 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieDataFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
+
+import com.google.common.collect.ImmutableMap;
+import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
+import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
+import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
+import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
+import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
 
 public class TestCompactionUtils extends HoodieCommonTestHarness {
 

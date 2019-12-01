@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieException;
+
 import java.io.IOException;
 import java.net.ServerSocket;
-import org.apache.hudi.exception.HoodieException;
 
 public class NetworkUtils {
 

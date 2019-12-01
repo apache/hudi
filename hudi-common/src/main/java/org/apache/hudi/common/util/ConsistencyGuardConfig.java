@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.config.DefaultHoodieConfig;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import org.apache.hudi.config.DefaultHoodieConfig;
 
 public class ConsistencyGuardConfig extends DefaultHoodieConfig {
 

@@ -18,14 +18,16 @@
 
 package org.apache.hudi.common.table.view;
 
-import java.util.concurrent.ConcurrentHashMap;
 import org.apache.hudi.common.SerializableConfiguration;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.util.Functions.Function2;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A container that can potentially hold one or more dataset's file-system views. There is one view for each dataset.

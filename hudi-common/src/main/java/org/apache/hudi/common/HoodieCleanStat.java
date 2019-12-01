@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common;
 
-import java.io.Serializable;
-import java.util.List;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+
+import java.io.Serializable;
+import java.util.List;
 
 /**
  * Collects stats about a single partition clean operation

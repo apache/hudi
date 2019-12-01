@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.function.Function;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.function.Function;
 
 /**
  * Buffer producer which allows custom functions to insert entries to queue.

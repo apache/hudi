@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import java.io.Serializable;
-import java.util.List;
-import java.util.stream.Stream;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -34,8 +31,13 @@ import org.apache.hudi.common.util.Functions.Function2;
 import org.apache.hudi.common.util.Functions.Function3;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * A file system view which proxies request to a preferred File System View implementation. In case of error, flip all

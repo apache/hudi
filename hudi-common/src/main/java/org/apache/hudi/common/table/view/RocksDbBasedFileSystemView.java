@@ -18,16 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import com.google.common.base.Preconditions;
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -40,8 +30,20 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RocksDBDAO;
 import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.collection.Pair;
+
+import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A file-system view implementation on top of embedded Rocks DB store. For each DataSet : 3 column Family is added for

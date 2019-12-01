@@ -18,18 +18,20 @@
 
 package org.apache.hudi.common.minicluster;
 
+import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
+
 import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
-import java.io.File;
-import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.File;
+import java.io.IOException;
 
 /**
  * An HDFS minicluster service implementation.

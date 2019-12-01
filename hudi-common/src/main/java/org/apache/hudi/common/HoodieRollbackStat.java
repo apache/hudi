@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common;
 
+import org.apache.hadoop.fs.FileStatus;
+
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileStatus;
 
 /**
  * Collects stats about a single partition clean operation

@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.Map;
 import org.apache.avro.Schema;
 import org.codehaus.jackson.JsonNode;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.util.Map;
 
 public class TestHoodieAvroUtils {
 

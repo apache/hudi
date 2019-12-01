@@ -18,13 +18,14 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.exception.HoodieException;
+
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import org.apache.hudi.exception.HoodieException;
 
 /**
  * Iterable to lazily fetch values spilled to disk. This class uses RandomAccessFile to randomly access the position of

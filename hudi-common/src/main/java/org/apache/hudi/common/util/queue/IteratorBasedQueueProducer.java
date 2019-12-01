@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.Iterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.Iterator;
 
 /**
  * Iterator based producer which pulls entry from iterator and produces items for the queue

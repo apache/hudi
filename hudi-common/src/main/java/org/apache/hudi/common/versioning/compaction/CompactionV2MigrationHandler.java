@@ -18,15 +18,17 @@
 
 package org.apache.hudi.common.versioning.compaction;
 
-import com.google.common.base.Preconditions;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.versioning.AbstractMigratorBase;
+
+import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.Path;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * With version 2 of compaction plan, paths are no longer absolute.

@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common;
 
+import org.apache.hadoop.conf.Configuration;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import org.apache.hadoop.conf.Configuration;
 
 public class SerializableConfiguration implements Serializable {
 

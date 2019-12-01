@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table;
 
-import java.util.List;
-import java.util.stream.Stream;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -27,6 +25,9 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Interface for viewing the table file system.
