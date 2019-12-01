@@ -417,7 +417,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
           new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1));
     }).collect(Collectors.toList());
 
-    HoodieCleanMetadata cleanMetadata = AvroUtils.convertCleanMetadata(cleanInstant, Option.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata = AvroUtils.convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
     metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant),
         AvroUtils.serializeCleanMetadata(cleanMetadata));
   }
