@@ -35,9 +35,9 @@ Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS
 * Timeline metadata to track lineage
  
 Hudi provides the ability to query via three types of views:
- * **Read Optimized View** - Provides excellent snapshot query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/))
+ * **Read Optimized View** - Provides excellent snapshot query performance via purely columnar storage (e.g. [Parquet](https://parquet.apache.org/)).
  * **Incremental View** - Provides a change stream with records inserted or updated after a point in time.
- * **Real-time View** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](http://avro.apache.org/docs/current/mr.html))
+ * **Real-time View** - Provides snapshot queries on real-time data, using a combination of columnar & row-based storage (e.g [Parquet](https://parquet.apache.org/) + [Avro](http://avro.apache.org/docs/current/mr.html)).
 
 Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 
