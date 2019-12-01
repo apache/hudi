@@ -41,7 +41,7 @@ Hudi provides the ability to query via three types of views:
 
 Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 
-## Building Apache Hudi from source
+## Building Apache Hudi from source {#building-hudi}
 
 Prerequisites for building Apache Hudi:
 
