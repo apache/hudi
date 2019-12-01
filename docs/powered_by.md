@@ -10,9 +10,13 @@ toc: false
 
 #### Uber
 
-Hudi was originally developed at [Uber](https://uber.com), to achieve [low latency database ingestion, with high efficiency](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32).
-It has been in production since Aug 2016, powering ~100 highly business critical tables on Hadoop, worth 100s of TBs(including top 10 including trips,riders,partners).
-It also powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
+Apache Hudi was originally developed at [Uber](https://uber.com), to achieve [low latency database ingestion, with high efficiency](http://www.slideshare.net/vinothchandar/hadoop-strata-talk-uber-your-hadoop-has-arrived/32).
+It has been in production since Aug 2016, powering the massive [100PB data lake](https://eng.uber.com/uber-big-data-platform/), including highly business critical tables like core trips,riders,partners. It also 
+powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
+
+#### Amazon EMR
+Amazon Web Services is the World's leading cloud services provider. Apache Hudi is [pre-installed](https://aws.amazon.com/emr/features/hudi/) with the AWS Elastic Map Reduce 
+offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
 
 #### EMIS Health
 
