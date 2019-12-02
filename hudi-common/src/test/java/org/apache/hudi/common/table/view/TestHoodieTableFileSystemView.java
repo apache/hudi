@@ -68,7 +68,7 @@ import static org.junit.Assert.assertTrue;
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
-  private static final transient Logger log = LogManager.getLogger(TestHoodieTableFileSystemView.class);
+  private static final transient Logger LOG = LogManager.getLogger(TestHoodieTableFileSystemView.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -495,7 +495,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     roView.getAllDataFiles(partitionPath);
 
     fileSliceList = rtView.getLatestFileSlices(partitionPath).collect(Collectors.toList());
-    log.info("FILESLICE LIST=" + fileSliceList);
+    LOG.info("FILESLICE LIST=" + fileSliceList);
     dataFiles = fileSliceList.stream().map(FileSlice::getDataFile).filter(Option::isPresent).map(Option::get)
         .collect(Collectors.toList());
     assertEquals("Expect only one data-files in latest view as there is only one file-group", 1, dataFiles.size());

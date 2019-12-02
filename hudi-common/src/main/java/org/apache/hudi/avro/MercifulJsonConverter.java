@@ -41,7 +41,7 @@ import java.util.Map;
  */
 public class MercifulJsonConverter {
 
-  private static final Map<Schema.Type, JsonToAvroFieldProcessor> fieldTypeProcessors = getFieldTypeProcessors();
+  private static final Map<Schema.Type, JsonToAvroFieldProcessor> FIELD_TYPE_PROCESSORS = getFieldTypeProcessors();
 
   private final ObjectMapper mapper;
 
@@ -125,7 +125,7 @@ public class MercifulJsonConverter {
       throw new HoodieJsonToAvroConversionException(null, name, schema);
     }
 
-    JsonToAvroFieldProcessor processor = fieldTypeProcessors.get(schema.getType());
+    JsonToAvroFieldProcessor processor = FIELD_TYPE_PROCESSORS.get(schema.getType());
     if (null != processor) {
       return processor.convertToAvro(value, name, schema);
     }

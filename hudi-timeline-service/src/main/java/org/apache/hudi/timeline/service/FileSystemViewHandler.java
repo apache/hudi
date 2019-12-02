@@ -53,8 +53,8 @@ import java.util.stream.Collectors;
  */
 public class FileSystemViewHandler {
 
-  private static final ObjectMapper mapper = new ObjectMapper();
-  private static final Logger logger = LogManager.getLogger(FileSystemViewHandler.class);
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  private static final Logger LOG = LogManager.getLogger(FileSystemViewHandler.class);
 
   private final FileSystemViewManager viewManager;
   private final Javalin app;
@@ -88,8 +88,8 @@ public class FileSystemViewHandler {
     String timelineHashFromClient = ctx.queryParam(RemoteHoodieTableFileSystemView.TIMELINE_HASH, "");
     HoodieTimeline localTimeline =
         viewManager.getFileSystemView(basePath).getTimeline().filterCompletedAndCompactionInstants();
-    if (logger.isDebugEnabled()) {
-      logger.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Client [ LastTs=" + lastKnownInstantFromClient + ", TimelineHash=" + timelineHashFromClient
           + "], localTimeline=" + localTimeline.getInstants().collect(Collectors.toList()));
     }
 
@@ -119,7 +119,7 @@ public class FileSystemViewHandler {
       synchronized (view) {
         if (isLocalViewBehind(ctx)) {
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          logger.warn("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+          LOG.warn("Syncing view as client passed last known instant " + lastKnownInstantFromClient
               + " as last known instant but server has the folling timeline :"
               + localTimeline.getInstants().collect(Collectors.toList()));
           view.sync();
@@ -134,9 +134,9 @@ public class FileSystemViewHandler {
     boolean prettyPrint = ctx.queryParam("pretty") != null ? true : false;
     long beginJsonTs = System.currentTimeMillis();
     String result =
-        prettyPrint ? mapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : mapper.writeValueAsString(obj);
+        prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : OBJECT_MAPPER.writeValueAsString(obj);
     long endJsonTs = System.currentTimeMillis();
-    logger.debug("Jsonify TimeTaken=" + (endJsonTs - beginJsonTs));
+    LOG.debug("Jsonify TimeTaken=" + (endJsonTs - beginJsonTs));
     ctx.result(result);
   }
 
@@ -347,12 +347,12 @@ public class FileSystemViewHandler {
         }
       } catch (RuntimeException re) {
         success = false;
-        logger.error("Got runtime exception servicing request " + context.queryString(), re);
+        LOG.error("Got runtime exception servicing request " + context.queryString(), re);
         throw re;
       } finally {
         long endTs = System.currentTimeMillis();
         long timeTakenMillis = endTs - beginTs;
-        logger
+        LOG
             .info(String.format(
                 "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
                     + "Success=%s, Query=%s, Host=%s, synced=%s",

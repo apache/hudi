@@ -51,7 +51,7 @@ public interface HoodieLogFormat {
    * The current version of the log format. Anytime the log format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
-  int currentVersion = 1;
+  int CURRENT_VERSION = 1;
 
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
@@ -104,7 +104,7 @@ public interface HoodieLogFormat {
    */
   class WriterBuilder {
 
-    private static final Logger log = LogManager.getLogger(WriterBuilder.class);
+    private static final Logger LOG = LogManager.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
 
@@ -188,7 +188,7 @@ public interface HoodieLogFormat {
     }
 
     public Writer build() throws IOException, InterruptedException {
-      log.info("Building HoodieLogFormat Writer");
+      LOG.info("Building HoodieLogFormat Writer");
       if (fs == null) {
         throw new IllegalArgumentException("fs is not specified");
       }
@@ -210,7 +210,7 @@ public interface HoodieLogFormat {
       }
 
       if (logVersion == null) {
-        log.info("Computing the next log version for " + logFileId + " in " + parentPath);
+        LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
         Option<Pair<Integer, String>> versionAndWriteToken =
             FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
         if (versionAndWriteToken.isPresent()) {
@@ -222,7 +222,7 @@ public interface HoodieLogFormat {
           // Use rollover write token as write token to create new log file with tokens
           logWriteToken = rolloverLogWriteToken;
         }
-        log.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
+        LOG.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
             + " with write-token " + logWriteToken);
       }
 
@@ -234,7 +234,7 @@ public interface HoodieLogFormat {
 
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, commitTime, logVersion, logWriteToken));
-      log.info("HoodieLogFile on path " + logPath);
+      LOG.info("HoodieLogFile on path " + logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath);
 
       if (bufferSize == null) {

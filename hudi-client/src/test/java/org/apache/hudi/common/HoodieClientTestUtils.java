@@ -72,7 +72,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieClientTestUtils {
 
-  private static final transient Logger log = LogManager.getLogger(HoodieClientTestUtils.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
   private static final Random RANDOM = new Random();
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
@@ -166,7 +166,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
-      log.info("Path :" + paths.values());
+      LOG.info("Path :" + paths.values());
       return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
           .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
     } catch (Exception e) {

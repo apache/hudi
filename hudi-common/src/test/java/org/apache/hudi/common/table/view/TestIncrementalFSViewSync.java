@@ -73,7 +73,7 @@ import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
 
 public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
-  private static final transient Logger log = LogManager.getLogger(TestIncrementalFSViewSync.class);
+  private static final transient Logger LOG = LogManager.getLogger(TestIncrementalFSViewSync.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
@@ -314,7 +314,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     Assert.assertEquals(newCleanerInstants.size(), cleanedInstants.size());
     long initialFileSlices = partitions.stream().mapToLong(p -> view.getAllFileSlices(p).count()).findAny().getAsLong();
     long exp = initialFileSlices;
-    log.info("Initial File Slices :" + exp);
+    LOG.info("Initial File Slices :" + exp);
     for (int idx = 0; idx < newCleanerInstants.size(); idx++) {
       String instant = cleanedInstants.get(idx);
       try {
@@ -331,8 +331,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
         Assert.assertEquals(State.COMPLETED, view.getLastInstant().get().getState());
         Assert.assertEquals(HoodieTimeline.CLEAN_ACTION, view.getLastInstant().get().getAction());
         partitions.forEach(p -> {
-          log.info("PARTTITION : " + p);
-          log.info("\tFileSlices :" + view.getAllFileSlices(p).collect(Collectors.toList()));
+          LOG.info("PARTTITION : " + p);
+          LOG.info("\tFileSlices :" + view.getAllFileSlices(p).collect(Collectors.toList()));
         });
 
         partitions.forEach(p -> Assert.assertEquals(fileIdsPerPartition.size(), view.getLatestFileSlices(p).count()));
@@ -373,7 +373,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
             isDeltaCommit ? initialFileSlices : initialFileSlices - ((idx + 1) * fileIdsPerPartition.size());
         view.sync();
         Assert.assertTrue(view.getLastInstant().isPresent());
-        log.info("Last Instant is :" + view.getLastInstant().get());
+        LOG.info("Last Instant is :" + view.getLastInstant().get());
         if (isRestore) {
           Assert.assertEquals(newRestoreInstants.get(idx), view.getLastInstant().get().getTimestamp());
           Assert.assertEquals(isRestore ? HoodieTimeline.RESTORE_ACTION : HoodieTimeline.ROLLBACK_ACTION,
@@ -610,7 +610,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     int multiple = begin;
     for (int idx = 0; idx < instants.size(); idx++) {
       String instant = instants.get(idx);
-      log.info("Adding instant=" + instant);
+      LOG.info("Adding instant=" + instant);
       HoodieInstant lastInstant = lastInstants.get(idx);
       // Add a non-empty ingestion to COW table
       List<String> filePaths =

@@ -54,7 +54,7 @@ import java.util.stream.Stream;
  */
 public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
 
-  private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
+  private static final Logger LOG = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
   // Write only file
@@ -111,7 +111,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
       writeOnlyFile.getParentFile().mkdir();
     }
     writeOnlyFile.createNewFile();
-    log.info("Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host ("
+    LOG.info("Spilling to file location " + writeOnlyFile.getAbsolutePath() + " in host ("
         + InetAddress.getLocalHost().getHostAddress() + ") with hostname (" + InetAddress.getLocalHost().getHostName()
         + ")");
     // Make sure file is deleted when JVM exits

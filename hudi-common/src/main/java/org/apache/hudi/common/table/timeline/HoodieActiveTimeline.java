@@ -67,7 +67,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           INFLIGHT_CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION,
           REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
-  private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
@@ -92,7 +92,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     try {
       this.setInstants(HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
           new Path(metaClient.getMetaPath()), includedExtensions));
-      log.info("Loaded instants " + getInstants());
+      LOG.info("Loaded instants " + getInstants());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
@@ -210,30 +210,30 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void createInflight(HoodieInstant instant) {
-    log.info("Creating a new in-flight instant " + instant);
+    LOG.info("Creating a new in-flight instant " + instant);
     // Create the in-flight file
     createFileInMetaPath(instant.getFileName(), Option.empty());
   }
 
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
-    log.info("Marking instant complete " + instant);
+    LOG.info("Marking instant complete " + instant);
     Preconditions.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     transitionState(instant, HoodieTimeline.getCompletedInstant(instant), data);
-    log.info("Completed " + instant);
+    LOG.info("Completed " + instant);
   }
 
   public void revertToInflight(HoodieInstant instant) {
-    log.info("Reverting " + instant + " to inflight ");
+    LOG.info("Reverting " + instant + " to inflight ");
     revertStateTransition(instant, HoodieTimeline.getInflightInstant(instant));
-    log.info("Reverted " + instant + " to inflight");
+    LOG.info("Reverted " + instant + " to inflight");
   }
 
   public HoodieInstant revertToRequested(HoodieInstant instant) {
-    log.warn("Reverting " + instant + " to requested ");
+    LOG.warn("Reverting " + instant + " to requested ");
     HoodieInstant requestedInstant = HoodieTimeline.getRequestedInstant(instant);
     revertStateTransition(instant, HoodieTimeline.getRequestedInstant(instant));
-    log.warn("Reverted " + instant + " to requested");
+    LOG.warn("Reverted " + instant + " to requested");
     return requestedInstant;
   }
 
@@ -249,12 +249,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void deleteInstantFile(HoodieInstant instant) {
-    log.info("Deleting instant " + instant);
+    LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
     try {
       boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
       if (result) {
-        log.info("Removed in-flight " + instant);
+        LOG.info("Removed in-flight " + instant);
       } else {
         throw new HoodieIOException("Could not delete in-flight instant " + instant);
       }
@@ -391,7 +391,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (!success) {
           throw new HoodieIOException("Could not rename " + currFilePath + " to " + revertFilePath);
         }
-        log.info("Renamed " + currFilePath + " to " + revertFilePath);
+        LOG.info("Renamed " + currFilePath + " to " + revertFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete revert " + curr, e);
@@ -429,7 +429,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       // If the path does not exist, create it first
       if (!metaClient.getFs().exists(fullPath)) {
         if (metaClient.getFs().createNewFile(fullPath)) {
-          log.info("Created a new file in meta path: " + fullPath);
+          LOG.info("Created a new file in meta path: " + fullPath);
         } else {
           throw new HoodieIOException("Failed to create file " + fullPath);
         }

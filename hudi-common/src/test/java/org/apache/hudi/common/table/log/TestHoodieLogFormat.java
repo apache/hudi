@@ -493,7 +493,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(500);
     // Write out some bytes
@@ -521,7 +521,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(500);
     // Write out some bytes
@@ -691,7 +691,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(1000);
 
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
 
     // Write out some header
@@ -1063,7 +1063,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(100);
     outputStream.flush();
@@ -1076,7 +1076,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(100);
     outputStream.flush();
@@ -1096,7 +1096,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(100);
     outputStream.flush();

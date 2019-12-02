@@ -54,7 +54,7 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline {
   private HoodieTableMetaClient metaClient;
   private Map<String, byte[]> readCommits = new HashMap<>();
 
-  private static final transient Logger log = LogManager.getLogger(HoodieArchivedTimeline.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieArchivedTimeline.class);
 
   public HoodieArchivedTimeline(HoodieTableMetaClient metaClient) {
     // Read back the commits to make sure

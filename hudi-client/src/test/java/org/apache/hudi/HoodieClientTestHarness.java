@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
-  private static final Logger logger = LoggerFactory.getLogger(HoodieClientTestHarness.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
 
   protected transient JavaSparkContext jsc = null;
   protected transient SQLContext sqlContext;
@@ -119,13 +119,13 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void cleanupSparkContexts() {
     if (sqlContext != null) {
-      logger.info("Clearing sql context cache of spark-session used in previous test-case");
+      LOG.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
       sqlContext = null;
     }
 
     if (jsc != null) {
-      logger.info("Closing spark context used in previous test-case");
+      LOG.info("Closing spark context used in previous test-case");
       jsc.close();
       jsc.stop();
       jsc = null;
@@ -157,7 +157,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void cleanupFileSystem() throws IOException {
     if (fs != null) {
-      logger.warn("Closing file-system instance used in previous test-run");
+      LOG.warn("Closing file-system instance used in previous test-run");
       fs.close();
     }
   }

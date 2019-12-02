@@ -58,7 +58,7 @@ import scala.Tuple2;
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
-  private static final Logger logger = LogManager.getLogger(HoodieReadClient.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
 
   /**
    * TODO: We need to persist the index type into hoodie.properties and be able to access the index just with a simple

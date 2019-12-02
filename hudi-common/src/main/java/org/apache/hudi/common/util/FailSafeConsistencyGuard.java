@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
-  private static final transient Logger log = LogManager.getLogger(FailSafeConsistencyGuard.class);
+  private static final transient Logger LOG = LogManager.getLogger(FailSafeConsistencyGuard.class);
 
   private final FileSystem fs;
   private final ConsistencyGuardConfig consistencyGuardConfig;
@@ -86,7 +86,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
     retryTillSuccess((retryNum) -> {
       try {
-        log.info("Trying " + retryNum);
+        LOG.info("Trying " + retryNum);
         FileStatus[] entries = fs.listStatus(dir);
         List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
             .map(p -> p.toString()).collect(Collectors.toList());
@@ -95,7 +95,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
         switch (event) {
           case DISAPPEAR:
-            log.info("Following files are visible" + candidateFiles);
+            LOG.info("Following files are visible" + candidateFiles);
             // If no candidate files gets removed, it means all of them have disappeared
             return !altered;
           case APPEAR:
@@ -104,7 +104,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
             return candidateFiles.isEmpty();
         }
       } catch (IOException ioe) {
-        log.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
+        LOG.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
       }
       return false;
     }, "Timed out waiting for files to become visible");
@@ -155,7 +155,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
           return;
         }
       } catch (IOException ioe) {
-        log.warn("Got IOException waiting for file visibility. Retrying", ioe);
+        LOG.warn("Got IOException waiting for file visibility. Retrying", ioe);
       }
 
       sleepSafe(waitMs);
@@ -176,7 +176,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   private void retryTillSuccess(Function<Integer, Boolean> predicate, String timedOutMessage) throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
-    log.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
+    LOG.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
     while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       boolean success = predicate.apply(attempt);
       if (success) {
