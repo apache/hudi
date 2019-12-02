@@ -46,9 +46,15 @@
   }, {
     "name" : "fare",
     "type" : "double"
-  }, {
-    "name" : "haversine_distance",
-    "type" : "double"
+  },
+  {
+     "name" : "_hoodie_delete_marker",
+     "type" : "boolean",
+     "default" : false
+  },
+  {
+     "name" : "haversine_distance",
+     "type" : "double"
   }]
 }
 

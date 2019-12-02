@@ -20,11 +20,8 @@ package org.apache.hudi.utilities.sources;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -36,19 +33,10 @@ import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.config.TestSourceConfig;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Stream;
 
 public abstract class AbstractBaseTestSource extends AvroSource {
 
@@ -86,12 +74,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   }
 
   protected AbstractBaseTestSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+                                   SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
   }
 
   protected static Stream<GenericRecord> fetchNextBatch(TypedProperties props, int sourceLimit, String commitTime,
-      int partition) {
+                                                        int partition) {
     int maxUniqueKeys =
         props.getInteger(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, TestSourceConfig.DEFAULT_MAX_UNIQUE_RECORDS);
 
@@ -104,10 +92,12 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
     int numInserts = sourceLimit - numUpdates;
     LOG.info("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
+    boolean reachedMax = false;
 
     if (numInserts + numExistingKeys > maxUniqueKeys) {
       // Limit inserts so that maxUniqueRecords is maintained
       numInserts = Math.max(0, maxUniqueKeys - numExistingKeys);
+      reachedMax = true;
     }
 
     if ((numInserts + numUpdates) < sourceLimit) {
@@ -117,48 +107,22 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
     Stream<GenericRecord> deleteStream = Stream.empty();
     Stream<GenericRecord> updateStream;
-    if (numExistingKeys > 50) {
-      LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
+    long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
+        + ", Free Memory=" + Runtime.getRuntime().freeMemory());
+    if (!reachedMax && numUpdates >= 50) {
+      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + (numUpdates - 50) + ", NumDeletes=50, maxUniqueRecords="
           + maxUniqueKeys);
-      long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-      LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
-          + ", Free Memory=" + Runtime.getRuntime().freeMemory());
-      Stream<HoodieRecord> initialUpdateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates);
-
-      List<HoodieRecord> deleteRecords = new ArrayList<>();
-      List<HoodieRecord> updateRecrods = new ArrayList<>();
-
-      List<HoodieRecord> initialUpdateList = initialUpdateStream.collect(Collectors.toList());
-      deleteRecords = initialUpdateList.subList(0, 50);
-      updateRecrods = initialUpdateList.subList(50, initialUpdateList.size());
-
-      deleteStream = deleteRecords.stream().map(
-          hr ->
-          {
-            try {
-              HoodieRecord rec = new HoodieRecord(hr.getKey(),
-                  dataGenerator.generateRandomDeleteValue(hr.getKey(), commitTime));
-              return rec;
-            } catch (IOException e) {
-              throw new HoodieIOException("Exception thrown while generating Delete records");
-            }
-          }).map(hr -> {
-        GenericRecord gRec = AbstractBaseTestSource.toGenericRecord(hr, dataGenerator);
-        return gRec;
-      });
-
-      updateStream = updateRecrods.stream().map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(commitTime, 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
+      updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates - 50).map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     } else {
-      LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
-      long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-      LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
-          + ", Free Memory=" + Runtime.getRuntime().freeMemory());
+      LOG.info("After adjustments => NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
       updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)
           .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
     }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(commitTime, numInserts)
         .map(hr -> AbstractBaseTestSource.toGenericRecord(hr, dataGenerator));
-
     return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 

@@ -72,6 +72,18 @@ public class DataSourceUtils {
   }
 
   /**
+   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c. Return null if not found
+   */
+  public static Object getNestedFieldValOrNull(GenericRecord record, String fieldName) {
+    try {
+      return getNestedFieldVal(record, fieldName);
+    } catch (HoodieException e) {
+      // ignore if not found
+      return null;
+    }
+  }
+
+  /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
    */
   public static Object getNestedFieldVal(GenericRecord record, String fieldName) {
@@ -103,7 +115,7 @@ public class DataSourceUtils {
 
   /**
    * Create a key generator class via reflection, passing in any configs needed.
-   *
+   * <p>
    * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the
    * corresponding key generator class; otherwise, use the default key generator class specified in {@code
    * DataSourceWriteOptions}.
@@ -125,7 +137,7 @@ public class DataSourceUtils {
       throws IOException {
     try {
       return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[]{GenericRecord.class, Comparable.class}, record, orderingVal);
+          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
@@ -140,7 +152,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
-      String tblName, Map<String, String> parameters) {
+                                                     String tblName, Map<String, String> parameters) {
 
     // inline compaction is on by default for MOR
     boolean inlineCompact = parameters.get(DataSourceWriteOptions.STORAGE_TYPE_OPT_KEY())
@@ -162,7 +174,7 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-      String commitTime, String operation) {
+                                                      String commitTime, String operation) {
     if (operation.equals(DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL())) {
       return client.bulkInsert(hoodieRecords, commitTime);
     } else if (operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL())) {
@@ -174,19 +186,19 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doDeleteOperation(HoodieWriteClient client, JavaRDD<HoodieKey> hoodieKeys,
-      String commitTime) {
+                                                       String commitTime) {
     return client.delete(hoodieKeys, commitTime);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
-      String payloadClass) throws IOException {
+                                                String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
     return new HoodieRecord<>(hKey, payload);
   }
 
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> timelineService) {
+                                                     HoodieWriteConfig writeConfig, Option<EmbeddedTimelineService> timelineService) {
     HoodieReadClient client = null;
     try {
       client = new HoodieReadClient<>(jssc, writeConfig, timelineService);
@@ -205,7 +217,7 @@ public class DataSourceUtils {
 
   @SuppressWarnings("unchecked")
   public static JavaRDD<HoodieRecord> dropDuplicates(JavaSparkContext jssc, JavaRDD<HoodieRecord> incomingHoodieRecords,
-      Map<String, String> parameters, Option<EmbeddedTimelineService> timelineService) {
+                                                     Map<String, String> parameters, Option<EmbeddedTimelineService> timelineService) {
     HoodieWriteConfig writeConfig =
         HoodieWriteConfig.newBuilder().withPath(parameters.get("path")).withProps(parameters).build();
     return dropDuplicates(jssc, incomingHoodieRecords, writeConfig, timelineService);

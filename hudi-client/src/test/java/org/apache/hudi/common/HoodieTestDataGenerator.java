@@ -57,6 +57,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
  * <p>
@@ -78,7 +79,8 @@ public class HoodieTestDataGenerator {
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},"
-      + "{\"name\":\"fare\",\"type\": \"double\"}," + "{\"name\": \"_hoodie_delete_marker\", \"type\": [\"null\",\"string\"], \"default\": null} ]}";
+      + "{\"name\":\"fare\",\"type\": \"double\"},"
+      + "{\"name\": \"_hoodie_delete_marker\", \"type\": \"boolean\", \"default\": false} ]}";
   public static String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,double,string";
   public static Schema avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
@@ -121,7 +123,8 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format for a delete
    */
   public static TestRawTripPayload generateRandomDeleteValue(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0, true);
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0,
+        true);
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
@@ -151,7 +154,9 @@ public class HoodieTestDataGenerator {
     rec.put("end_lon", rand.nextDouble());
     rec.put("fare", rand.nextDouble() * 100);
     if (isDeleteRecord) {
-      rec.put("_hoodie_delete_marker", "true");
+      rec.put("_hoodie_delete_marker", true);
+    } else {
+      rec.put("_hoodie_delete_marker", false);
     }
     return rec;
   }
@@ -382,7 +387,6 @@ public class HoodieTestDataGenerator {
     return generateUniqueDeleteStream(n).collect(Collectors.toList());
   }
 
-
   /**
    * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
    *
@@ -435,8 +439,43 @@ public class HoodieTestDataGenerator {
         index = (index + 1) % numExistingKeys;
         kp = existingKeys.get(index);
       }
+      existingKeys.remove(kp);
+      numExistingKeys--;
       used.add(kp);
       return kp.key;
+    });
+  }
+
+  /**
+   * Generates deduped delete records previously inserted, randomly distributed across the keys above.
+   *
+   * @param commitTime Commit Timestamp
+   * @param n          Number of unique records
+   * @return stream of hoodie records for delete
+   */
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String commitTime, Integer n) {
+    final Set<KeyPartition> used = new HashSet<>();
+
+    if (n > numExistingKeys) {
+      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+    }
+
+    return IntStream.range(0, n).boxed().map(i -> {
+      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
+      KeyPartition kp = existingKeys.get(index);
+      // Find the available keyPartition starting from randomly chosen one.
+      while (used.contains(kp)) {
+        index = (index + 1) % numExistingKeys;
+        kp = existingKeys.get(index);
+      }
+      existingKeys.remove(kp);
+      numExistingKeys--;
+      used.add(kp);
+      try {
+        return new HoodieRecord(kp.key, generateRandomDeleteValue(kp.key, commitTime));
+      } catch (IOException e) {
+        throw new HoodieIOException(e.getMessage(), e);
+      }
     });
   }
 

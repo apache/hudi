@@ -350,11 +350,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     cfg.sourceLimit = 2000;
     cfg.operation = Operation.UPSERT;
     new HoodieDeltaStreamer(cfg, jsc).sync();
-    TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
-    TestHelpers.assertDistanceCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertRecordCount(1950, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertDistanceCount(1950, datasetBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
-    assertEquals(2000, counts.get(0).getLong(1));
+    assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
   }
 
   @Test
@@ -394,8 +394,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       } else {
         TestHelpers.assertAtleastNCompactionCommits(5, datasetBasePath, dfs);
       }
-      TestHelpers.assertRecordCount(totalRecords, datasetBasePath + "/*/*.parquet", sqlContext);
-      TestHelpers.assertDistanceCount(totalRecords, datasetBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertRecordCount(totalRecords + 200, datasetBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertDistanceCount(totalRecords + 200, datasetBasePath + "/*/*.parquet", sqlContext);
       return true;
     }, 180);
     ds.shutdownGracefully();
@@ -455,12 +455,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     cfg.sourceLimit = 2000;
     cfg.operation = Operation.UPSERT;
     new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
-    TestHelpers.assertRecordCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
-    TestHelpers.assertDistanceCount(2000, datasetBasePath + "/*/*.parquet", sqlContext);
-    TestHelpers.assertDistanceCountWithExactValue(2000, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertRecordCount(1950, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertDistanceCount(1950, datasetBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertDistanceCountWithExactValue(1950, datasetBasePath + "/*/*.parquet", sqlContext);
     lastInstantForUpstreamTable = TestHelpers.assertCommitMetadata("00001", datasetBasePath, dfs, 2);
     List<Row> counts = TestHelpers.countsPerCommit(datasetBasePath + "/*/*.parquet", sqlContext);
-    assertEquals(2000, counts.get(0).getLong(1));
+    assertEquals(1950, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     // Incrementally pull changes in upstream hudi table and apply to downstream table
     downstreamCfg =
@@ -474,7 +474,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String finalInstant =
         TestHelpers.assertCommitMetadata(lastInstantForUpstreamTable, downstreamDatasetBasePath, dfs, 2);
     counts = TestHelpers.countsPerCommit(downstreamDatasetBasePath + "/*/*.parquet", sqlContext);
-    assertEquals(2000, counts.get(0).getLong(1));
+    assertEquals(2000, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
 
     // Test Hive integration
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), dfs);
@@ -569,7 +569,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
      * @param lat2 Latitude of destination
      * @param lon1 Longitude of source
      * @param lon2 Longitude of destination
-     * @return
      */
     @Override
     public Double call(Double lat1, Double lat2, Double lon1, Double lon2) {

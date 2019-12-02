@@ -43,9 +43,15 @@
   }, {
     "name" : "end_lon",
     "type" : "double"
-  }, {
+  },
+  {
     "name" : "fare",
     "type" : "double"
+  },
+  {
+    "name" : "_hoodie_delete_marker",
+    "type" : "boolean",
+    "default" : false
   } ]
 }
 
