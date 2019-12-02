@@ -75,7 +75,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class TestHoodieRealtimeRecordReader {
@@ -505,7 +505,7 @@ public class TestHoodieRealtimeRecordReader {
     JobConf jobConf = new JobConf();
     List<Schema.Field> fields = schema.getFields();
 
-    assert (firstSchemaFields.containsAll(fields) == false);
+    assertFalse(firstSchemaFields.containsAll(fields));
 
     // Try to read all the fields passed by the new schema
     setHiveColumnNameProps(fields, jobConf, true);
