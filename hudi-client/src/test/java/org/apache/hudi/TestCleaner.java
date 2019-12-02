@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
@@ -77,6 +78,7 @@ import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import scala.Tuple3;
 
 import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.junit.Assert.assertEquals;
@@ -631,31 +633,31 @@ public class TestCleaner extends TestHoodieClientBase {
         partition2, deletePathPatterns2, successDeleteFiles2,
         failedDeleteFiles2, commitTime);
 
-    // map with absolutely file path.
-    Map<String, List<List<String>>> oldExpected = new HashMap<>();
-    oldExpected.put(partition1, Arrays.asList(deletePathPatterns1, successDeleteFiles1, failedDeleteFiles1));
-    oldExpected.put(partition2, Arrays.asList(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
+    // map with absolute file path.
+    Map<String, Tuple3> oldExpected = new HashMap<>();
+    oldExpected.put(partition1, new Tuple3<>(deletePathPatterns1, successDeleteFiles1, failedDeleteFiles1));
+    oldExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
     // map with relative path.
-    Map<String, List<List<String>>> newExpected = new HashMap<>();
-    newExpected.put(partition1, Arrays.asList(Arrays.asList(fileName1, fileName2), Arrays.asList(fileName1), Arrays.asList(fileName2)));
-    newExpected.put(partition2, Arrays.asList(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
+    Map<String, Tuple3> newExpected = new HashMap<>();
+    newExpected.put(partition1, new Tuple3<>(Arrays.asList(fileName1, fileName2), Arrays.asList(fileName1), Arrays.asList(fileName2)));
+    newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
 
     HoodieCleanMetadata metadata =
-        AvroUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
+        CleanerUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
 
-    Assert.assertEquals(AvroUtils.LATEST_CLEAN_METADATA_VERSION, metadata.getVersion());
+    Assert.assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, metadata.getVersion());
     testCleanMetadataPathEquality(metadata, newExpected);
 
     CleanMetadataMigrator migrator = new CleanMetadataMigrator(metaClient);
     HoodieCleanMetadata oldMetadata =
-        migrator.migrateToVersion(metadata, metadata.getVersion(), AvroUtils.CLEAN_METADATA_VERSION_1);
-    Assert.assertEquals(AvroUtils.CLEAN_METADATA_VERSION_1, oldMetadata.getVersion());
+        migrator.migrateToVersion(metadata, metadata.getVersion(), CleanerUtils.CLEAN_METADATA_VERSION_1);
+    Assert.assertEquals(CleanerUtils.CLEAN_METADATA_VERSION_1, oldMetadata.getVersion());
     testCleanMetadataEquality(metadata, oldMetadata);
     testCleanMetadataPathEquality(oldMetadata, oldExpected);
 
     HoodieCleanMetadata newMetadata = migrator.upgradeToLatest(oldMetadata, oldMetadata.getVersion());
-    Assert.assertEquals(AvroUtils.LATEST_CLEAN_METADATA_VERSION, newMetadata.getVersion());
+    Assert.assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, newMetadata.getVersion());
     testCleanMetadataEquality(oldMetadata, newMetadata);
     testCleanMetadataPathEquality(newMetadata, newExpected);
     testCleanMetadataPathEquality(oldMetadata, oldExpected);
@@ -683,7 +685,7 @@ public class TestCleaner extends TestHoodieClientBase {
     Assert.assertEquals(policies1, policies2);
   }
 
-  private void testCleanMetadataPathEquality(HoodieCleanMetadata metadata, Map<String, List<List<String>>> expected) {
+  private void testCleanMetadataPathEquality(HoodieCleanMetadata metadata, Map<String, Tuple3> expected) {
 
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = metadata.getPartitionMetadata();
 
@@ -691,9 +693,9 @@ public class TestCleaner extends TestHoodieClientBase {
       String partitionPath = entry.getKey();
       HoodieCleanPartitionMetadata partitionMetadata = entry.getValue();
 
-      Assert.assertTrue(expected.get(partitionPath).contains(partitionMetadata.getDeletePathPatterns()));
-      Assert.assertTrue(expected.get(partitionPath).contains(partitionMetadata.getSuccessDeleteFiles()));
-      Assert.assertTrue(expected.get(partitionPath).contains(partitionMetadata.getFailedDeleteFiles()));
+      Assert.assertEquals(expected.get(partitionPath)._1(), partitionMetadata.getDeletePathPatterns());
+      Assert.assertEquals(expected.get(partitionPath)._2(), partitionMetadata.getSuccessDeleteFiles());
+      Assert.assertEquals(expected.get(partitionPath)._3(), partitionMetadata.getFailedDeleteFiles());
     }
   }
 

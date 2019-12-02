@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -417,7 +418,8 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
           new ArrayList<>(), Integer.toString(Integer.parseInt(instant) + 1));
     }).collect(Collectors.toList());
 
-    HoodieCleanMetadata cleanMetadata = AvroUtils.convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
+    HoodieCleanMetadata cleanMetadata = CleanerUtils
+        .convertCleanMetadata(metaClient, cleanInstant, Option.empty(), cleanStats);
     metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant),
         AvroUtils.serializeCleanMetadata(cleanMetadata));
   }

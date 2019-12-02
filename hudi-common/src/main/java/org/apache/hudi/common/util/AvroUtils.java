@@ -19,7 +19,6 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -27,12 +26,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
-import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
-import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
-import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
@@ -55,35 +49,6 @@ import java.util.Map;
 public class AvroUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
-
-  public static final Integer CLEAN_METADATA_VERSION_1 = CleanV1MigrationHandler.VERSION;
-  public static final Integer CLEAN_METADATA_VERSION_2 = CleanV2MigrationHandler.VERSION;
-  public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
-
-  public static HoodieCleanMetadata convertCleanMetadata(HoodieTableMetaClient metaClient,
-      String startCleanTime, Option<Long> durationInMs, List<HoodieCleanStat> cleanStats) {
-    ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
-    int totalDeleted = 0;
-    String earliestCommitToRetain = null;
-    for (HoodieCleanStat stat : cleanStats) {
-      HoodieCleanPartitionMetadata metadata =
-          new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
-              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getDeletePathPatterns());
-      partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
-      totalDeleted += stat.getSuccessDeleteFiles().size();
-      if (earliestCommitToRetain == null) {
-        // This will be the same for all partitions
-        earliestCommitToRetain = stat.getEarliestCommitToRetain();
-      }
-    }
-
-    HoodieCleanMetadata metadata = new HoodieCleanMetadata(startCleanTime,
-        durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        partitionMetadataBuilder.build(), DEFAULT_VERSION);
-
-    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    return metadataMigrator.upgradeToLatest(metadata, metadata.getVersion());
-  }
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime, Option<Long> durationInMs,
       List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {
