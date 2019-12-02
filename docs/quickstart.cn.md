@@ -151,7 +151,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 ## 从这开始下一步？
 
-您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source-building-hudi)来快速入门，
+您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source)来快速入门，
 并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar`，
 而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
 
