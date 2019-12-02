@@ -82,7 +82,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 ## 更新数据 {#updates}
 
-这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并DataFrame写入hudi数据集。
+这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并将DataFrame写入hudi数据集。
 
 ```Scala
 val updates = convertToStringList(dataGen.generateUpdates(10))

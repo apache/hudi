@@ -407,7 +407,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 <h2 id="updates">更新数据</h2>
 
-<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并DataFrame写入hudi数据集。</p>
+<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并将DataFrame写入hudi数据集。</p>
 
 <pre><code class="language-Java">val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));

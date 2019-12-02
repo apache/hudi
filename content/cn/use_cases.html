@@ -341,7 +341,7 @@
 <p>将外部源(如事件日志、数据库、外部源)的数据摄取到<a href="http://martinfowler.com/bliki/DataLake.html">Hadoop数据湖</a>是一个众所周知的问题。
 尽管这些数据对整个组织来说是最有价值的，但不幸的是，在大多数(如果不是全部)Hadoop部署中都使用零散的方式解决，即使用多个不同的摄取工具。</p>
 
-<p>对于RDBMS摄取，Hudi提供 <strong>通过Upserts提供了更快加载</strong>，而不是昂贵且低效的批量加载。例如，您可以读取MySQL Binlog或<a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop增量导入</a>并将其应用于
+<p>对于RDBMS摄取，Hudi提供<strong>通过Upserts提供了更快加载</strong>，而不是昂贵且低效的批量加载。例如，您可以读取MySQL Binlog或<a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop增量导入</a>并将其应用于
 DFS上的等效Hudi表。这比<a href="https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457">批量合并任务</a>及<a href="http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/">复杂的手工合并工作流</a>更快/更有效率。</p>
 
 <p>对于NoSQL数据存储，如<a href="http://cassandra.apache.org/">Cassandra</a> / <a href="http://www.project-voldemort.com/voldemort/">Voldemort</a> / <a href="https://hbase.apache.org/">HBase</a>，即使是中等规模大小也会存储数十亿行。
