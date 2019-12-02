@@ -1,5 +1,5 @@
 ---
-title: Concepts
+title: 概念
 keywords: hudi, design, storage, views, timeline
 sidebar: mydoc_sidebar
 permalink: concepts.html

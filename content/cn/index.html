@@ -228,14 +228,14 @@
             
             
             
-            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="quickstart.html">快速入门</a></li>
             
             
             
             
             
             
-            <li><a href="use_cases.html">用户案例</a></li>
+            <li><a href="use_cases.html">使用案例</a></li>
             
             
             
@@ -341,14 +341,14 @@
 <ul>
   <li><strong>读优化视图</strong> - 在纯列式存储上提供出色的查询性能，非常像<a href="https://parquet.apache.org/">parquet</a>表。</li>
   <li><strong>增量视图</strong> - 在数据集之上提供一个变更流并提供给下游的作业或ETL任务。</li>
-  <li><strong>准实时的表</strong> - 使用基于列存储(例如 Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)和行存储以提供对实时数据的查询</li>
+  <li><strong>准实时的表</strong> - 使用基于列存储和行存储(例如 Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)以提供对实时数据的查询</li>
 </ul>
 
 <figure>
     <img class="docimage" src="/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-<p>通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于<a href="https://prestodb.io">presto</a>和<a href="https://spark.apache.org/sql/">spark</a>等交互式SQL引擎，同时能够从处理/ETL框架（如<a href="https://hive.apache.org/">hive</a>&amp; <a href="https://spark.apache.org/docs/latest/">spark</a>中进行增量消费以构建派生（Hudi）数据集。</p>
+<p>通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于<a href="https://prestodb.io">presto</a>和<a href="https://spark.apache.org/sql/">spark</a>等交互式SQL引擎，同时能够从处理/ETL框架（如<a href="https://hive.apache.org/">hive</a>和<a href="https://spark.apache.org/docs/latest/">spark</a>中进行增量消费以构建派生（Hudi）数据集。</p>
 
 <p>Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见<a href="quickstart.html">快速启动</a>。</p>
 

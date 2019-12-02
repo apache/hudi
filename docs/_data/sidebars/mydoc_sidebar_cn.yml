@@ -10,11 +10,11 @@ entries:
     output: web
     folderitems:
 
-    - title: Quickstart
+    - title: 快速入门
       url: /quickstart.html
       output: web
 
-    - title: 用户案例
+    - title: 使用案例
       url: /use_cases.html
       output: web
 

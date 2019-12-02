@@ -228,14 +228,14 @@
             
             
             
-            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="quickstart.html">快速入门</a></li>
             
             
             
             
             
             
-            <li><a href="use_cases.html">用户案例</a></li>
+            <li><a href="use_cases.html">使用案例</a></li>
             
             
             
@@ -381,7 +381,7 @@ df.write.format("org.apache.hudi").
 
 <p><code class="highlighter-rouge">mode(Overwrite)</code>覆盖并重新创建数据集(如果已经存在)。
 您可以检查在<code class="highlighter-rouge">/tmp/hudi_cow_table/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>下生成的数据。我们提供了一个记录键
-(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/county/city</code>）和组合逻辑(<code class="highlighter-rouge">ts</code><a href="#sample-schema">schema</a>)
+(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/county/city</code>）和组合逻辑(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">ts</code>)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?">对Hudi中的数据进行建模</a>，
 有关将数据提取到Hudi中的方法的信息，请参阅<a href="https://hudi.apache.org/writing_data.html">写入Hudi数据集</a>。
@@ -390,7 +390,7 @@ df.write.format("org.apache.hudi").
 
 <h2 id="query">查询数据</h2>
 
-<p>将数据文件加载到数据帧中。</p>
+<p>将数据文件加载到DataFrame中。</p>
 
 <pre><code class="language-Java">val roViewDF = spark.
     read.
@@ -407,7 +407,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 <h2 id="updates">更新数据</h2>
 
-<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到数据帧并将数据帧写入hudi数据集。</p>
+<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并DataFrame写入hudi数据集。</p>
 
 <pre><code class="language-Java">val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));

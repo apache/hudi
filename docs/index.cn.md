@@ -10,7 +10,7 @@ Hudi（发音为“hoodie”）摄取与管理处于DFS([HDFS](http://hadoop.apa
 
  * **读优化视图** - 在纯列式存储上提供出色的查询性能，非常像[parquet](https://parquet.apache.org/)表。
  * **增量视图** - 在数据集之上提供一个变更流并提供给下游的作业或ETL任务。
- * **准实时的表** - 使用基于列存储(例如 Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))和行存储以提供对实时数据的查询
+ * **准实时的表** - 使用基于列存储和行存储(例如 Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))以提供对实时数据的查询
 
 
 
