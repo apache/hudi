@@ -41,7 +41,7 @@ public class CleanerUtils {
     for (HoodieCleanStat stat : cleanStats) {
       HoodieCleanPartitionMetadata metadata =
           new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
-              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getDeletePathPatterns());
+              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles());
       partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
       if (earliestCommitToRetain == null) {
