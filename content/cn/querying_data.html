@@ -491,7 +491,7 @@ Upsert实用程序（<code class="highlighter-rouge">HoodieDeltaStreamer</code>�
 <pre><code class="language-Scala">spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 </code></pre>
 
-<p>如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark数据帧。</p>
+<p>如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark DataFrame。</p>
 
 <pre><code class="language-Scala">Dataset&lt;Row&gt; hoodieROViewDF = spark.read().format("org.apache.hudi")
 // pass any path glob, can include hudi &amp; non-hudi datasets

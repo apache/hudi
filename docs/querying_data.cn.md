@@ -96,7 +96,7 @@ Spark可将Hudi jars和捆绑包轻松部署和管理到作业/笔记本中。�
 spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.class", classOf[org.apache.hudi.hadoop.HoodieROTablePathFilter], classOf[org.apache.hadoop.fs.PathFilter]);
 ```
 
-如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark数据帧。
+如果您希望通过数据源在DFS上使用全局路径，则只需执行以下类似操作即可得到Spark DataFrame。
 
 ```Scala
 Dataset<Row> hoodieROViewDF = spark.read().format("org.apache.hudi")
