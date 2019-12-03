@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TimelineDiffHelper;
 import org.apache.hudi.common.util.TimelineDiffHelper.TimelineDiffResult;
@@ -261,7 +262,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     HoodieCleanMetadata cleanMetadata =
         AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get());
     cleanMetadata.getPartitionMetadata().entrySet().stream().forEach(entry -> {
-      removeFileSlicesForPartition(timeline, instant, entry.getKey(), entry.getValue().getSuccessDeleteFiles());
+      final String basePath = metaClient.getBasePath();
+      final String partitionPath = entry.getValue().getPartitionPath();
+      List<String> fullPathList = entry.getValue().getSuccessDeleteFiles()
+          .stream().map(fileName -> new Path(FSUtils
+              .getPartitionPath(basePath, partitionPath), fileName).toString())
+          .collect(Collectors.toList());
+      removeFileSlicesForPartition(timeline, instant, entry.getKey(), fullPathList);
     });
     log.info("Done Syncing cleaner instant (" + instant + ")");
   }
