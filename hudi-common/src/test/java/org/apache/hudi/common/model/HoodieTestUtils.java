@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
@@ -269,7 +270,8 @@ public class HoodieTestUtils {
             .exists();
   }
 
-  public static void createCleanFiles(String basePath, String commitTime, Configuration configuration)
+  public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
+      String commitTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
@@ -280,8 +282,9 @@ public class HoodieTestUtils {
           DEFAULT_PARTITION_PATHS[rand.nextInt(DEFAULT_PARTITION_PATHS.length)], new ArrayList<>(), new ArrayList<>(),
           new ArrayList<>(), commitTime);
       // Create the clean metadata
+
       HoodieCleanMetadata cleanMetadata =
-          AvroUtils.convertCleanMetadata(commitTime, Option.of(0L), Arrays.asList(cleanStats));
+          CleanerUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStats));
       // Write empty clean metadata
       os.write(AvroUtils.serializeCleanMetadata(cleanMetadata).get());
     } finally {
@@ -289,8 +292,9 @@ public class HoodieTestUtils {
     }
   }
 
-  public static void createCleanFiles(String basePath, String commitTime) throws IOException {
-    createCleanFiles(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
+  public static void createCleanFiles(HoodieTableMetaClient metaClient,
+      String basePath, String commitTime) throws IOException {
+    createCleanFiles(metaClient, basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
   }
 
   public static String makeTestFileName(String instant) {

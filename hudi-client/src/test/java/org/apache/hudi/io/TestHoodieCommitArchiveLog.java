@@ -141,13 +141,13 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
-    HoodieTestUtils.createCleanFiles(basePath, "100", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "100", dfs.getConf());
     HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "101");
-    HoodieTestUtils.createCleanFiles(basePath, "101", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "102", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "103", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "104", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "105", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "101", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "102", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", dfs.getConf());
     HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "106", "107");
 
     // reload the timeline and get all the commmits before archive
