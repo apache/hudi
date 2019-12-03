@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.common.util.Option;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -28,7 +30,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Table to be rendered. This class takes care of ordering rows and limiting before renderer renders it.

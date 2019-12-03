@@ -18,21 +18,23 @@
 
 package org.apache.hudi.cli.commands;
 
-import java.io.IOException;
-import java.util.List;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.util.FSUtils;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * CLI command to display and trigger repair options.

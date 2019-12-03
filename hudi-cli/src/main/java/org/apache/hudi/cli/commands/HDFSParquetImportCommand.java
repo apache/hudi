@@ -23,6 +23,7 @@ import org.apache.hudi.cli.commands.SparkMain.SparkCommand;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -31,6 +32,7 @@ import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
+
 import scala.collection.JavaConverters;
 
 /**

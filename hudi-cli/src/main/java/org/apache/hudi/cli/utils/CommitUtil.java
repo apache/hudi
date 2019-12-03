@@ -18,12 +18,13 @@
 
 package org.apache.hudi.cli.utils;
 
-import java.io.IOException;
-import java.util.List;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * Utilities related to commit operation.

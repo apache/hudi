@@ -18,16 +18,18 @@
 
 package org.apache.hudi.cli.utils;
 
-import java.io.File;
-import java.net.URISyntaxException;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
+
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
+
+import java.io.File;
+import java.net.URISyntaxException;
 
 /**
  * Utility functions dealing with Spark.

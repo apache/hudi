@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -32,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
@@ -39,6 +37,10 @@ import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * CLI command to display savepoint options.
