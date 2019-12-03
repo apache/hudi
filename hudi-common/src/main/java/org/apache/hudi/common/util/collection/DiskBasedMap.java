@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
+import com.uber.hoodie.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.io.storage.SizeAwareDataOutputStream;
@@ -53,6 +54,7 @@ import org.apache.log4j.Logger;
  */
 public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
 
+  public static int BUFFER_SIZE = 128 * 1024;  // 128 KB
   private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
@@ -68,8 +70,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   // FilePath to store the spilled data
   private String filePath;
   // Thread-safe random access file
-  private ThreadLocal<RandomAccessFile> randomAccessFile = new ThreadLocal<>();
-  private Queue<RandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
+  private ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
+  private Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
 
   public DiskBasedMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
@@ -77,7 +79,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     this.filePath = writeOnlyFile.getPath();
     initFile(writeOnlyFile);
     this.fileOutputStream = new FileOutputStream(writeOnlyFile, true);
-    this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream);
+    this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream, BUFFER_SIZE);
     this.filePosition = new AtomicLong(0L);
   }
 
@@ -86,11 +88,11 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
    * 
    * @return
    */
-  private RandomAccessFile getRandomAccessFile() {
+  private BufferedRandomAccessFile getRandomAccessFile() {
     try {
-      RandomAccessFile readHandle = randomAccessFile.get();
+      BufferedRandomAccessFile readHandle = randomAccessFile.get();
       if (readHandle == null) {
-        readHandle = new RandomAccessFile(filePath, "r");
+        readHandle = new BufferedRandomAccessFile(filePath, "r");
         readHandle.seek(0);
         randomAccessFile.set(readHandle);
         openedAccessFiles.offer(readHandle);
@@ -133,7 +135,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
           }
 
           while (!openedAccessFiles.isEmpty()) {
-            RandomAccessFile file = openedAccessFiles.poll();
+            BufferedRandomAccessFile file = openedAccessFiles.poll();
             if (null != file) {
               try {
                 file.close();
@@ -149,6 +151,14 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
         }
       }
     });
+  }
+
+  private void flushToDisk() {
+    try {
+      writeOnlyFileHandle.flush();
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to flush to DiskBasedMap file", e);
+    }
   }
 
   /**
@@ -208,8 +218,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     }
   }
 
-  @Override
-  public synchronized R put(T key, R value) {
+  private synchronized R put(T key, R value, boolean flush) {
     try {
       byte[] val = SerializationUtils.serialize(value);
       Integer valueSize = val.length;
@@ -220,10 +229,18 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
       filePosition
           .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
               serializedKey.length, valueSize, serializedKey, val, timestamp)));
+      if (flush) {
+        flushToDisk();
+      }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to store data in Disk Based map", io);
     }
     return value;
+  }
+
+  @Override
+  public R put(T key, R value) {
+    return put(key, value, true);
   }
 
   @Override
@@ -236,8 +253,9 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   @Override
   public void putAll(Map<? extends T, ? extends R> m) {
     for (Map.Entry<? extends T, ? extends R> entry : m.entrySet()) {
-      put(entry.getKey(), entry.getValue());
+      put(entry.getKey(), entry.getValue(), false);
     }
+    flushToDisk();
   }
 
   @Override
@@ -258,7 +276,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   }
 
   public Stream<R> valueStream() {
-    final RandomAccessFile file = getRandomAccessFile();
+    final BufferedRandomAccessFile file = getRandomAccessFile();
     return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file));
   }
 
