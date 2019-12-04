@@ -124,7 +124,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits) that produce new data, in the active timeline *
+   * Get all instants (commits, delta commits) that produce new data, in the active timeline.
    */
   public HoodieTimeline getCommitsTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
@@ -141,7 +141,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   /**
    * Get all instants (commits, delta commits, clean, savepoint, rollback) that result in actions, in the active
-   * timeline *
+   * timeline.
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
@@ -149,14 +149,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only pure commits (inflight and completed) in the active timeline
+   * Get only pure commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCommitTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
   }
 
   /**
-   * Get only the delta commits (inflight and completed) in the active timeline
+   * Get only the delta commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getDeltaCommitTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(DELTA_COMMIT_ACTION),
@@ -164,7 +164,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions
+   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions.
    *
    * @param actions actions allowed in the timeline
    */
@@ -174,7 +174,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the cleaner action (inflight and completed) in the active timeline
+   * Get only the cleaner action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCleanerTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(CLEAN_ACTION),
@@ -182,7 +182,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the rollback action (inflight and completed) in the active timeline
+   * Get only the rollback action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getRollbackTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
@@ -190,7 +190,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the save point action (inflight and completed) in the active timeline
+   * Get only the save point action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getSavePointTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(SAVEPOINT_ACTION),
@@ -198,7 +198,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the restore action (inflight and completed) in the active timeline
+   * Get only the restore action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getRestoreTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(RESTORE_ACTION),
@@ -269,9 +269,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
-  /**
-   * BEGIN - COMPACTION RELATED META-DATA MANAGEMENT
-   **/
+  //-----------------------------------------------------------------
+  //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
+  //-----------------------------------------------------------------
 
   public Option<byte[]> getInstantAuxiliaryDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
@@ -279,7 +279,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Revert compaction State from inflight to requested
+   * Revert compaction State from inflight to requested.
    *
    * @param inflightInstant Inflight Instant
    * @return requested instant
@@ -295,7 +295,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Compaction State from requested to inflight
+   * Transition Compaction State from requested to inflight.
    *
    * @param requestedInstant Requested instant
    * @return inflight instant
@@ -310,7 +310,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Compaction State from inflight to Committed
+   * Transition Compaction State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
    * @param data Extra Metadata
@@ -329,12 +329,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInPath(fullPath, data);
   }
 
-  /**
-   * END - COMPACTION RELATED META-DATA MANAGEMENT
-   **/
+  //-----------------------------------------------------------------
+  //      END - COMPACTION RELATED META-DATA MANAGEMENT
+  //-----------------------------------------------------------------
 
   /**
-   * Transition Clean State from inflight to Committed
+   * Transition Clean State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
    * @param data Extra Metadata
@@ -352,7 +352,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Clean State from requested to inflight
+   * Transition Clean State from requested to inflight.
    *
    * @param requestedInstant requested instant
    * @return commit instant

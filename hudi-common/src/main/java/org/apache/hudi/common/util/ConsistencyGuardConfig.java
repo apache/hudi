@@ -25,6 +25,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+/**
+ * The consistency guard relevant config options.
+ */
 public class ConsistencyGuardConfig extends DefaultHoodieConfig {
 
   private static final String CONSISTENCY_CHECK_ENABLED_PROP = "hoodie.consistency.check.enabled";
@@ -67,6 +70,9 @@ public class ConsistencyGuardConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP));
   }
 
+  /**
+   * The builder used to build consistency configurations.
+   */
   public static class Builder {
 
     private final Properties props = new Properties();

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+/**
+ * Hoodie file format.
+ */
 public enum HoodieFileFormat {
   PARQUET(".parquet"), HOODIE_LOG(".log");
 

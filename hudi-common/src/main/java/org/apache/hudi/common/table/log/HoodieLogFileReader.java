@@ -49,7 +49,7 @@ import java.util.Map;
 
 /**
  * Scans a log file and provides block level iterator on the log file Loads the entire block contents in memory Can emit
- * either a DataBlock, CommandBlock, DeleteBlock or CorruptBlock (if one is found)
+ * either a DataBlock, CommandBlock, DeleteBlock or CorruptBlock (if one is found).
  */
 class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
@@ -104,7 +104,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   /**
-   * Close the inputstream if not closed when the JVM exits
+   * Close the inputstream if not closed when the JVM exits.
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -331,7 +331,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   /**
-   * hasPrev is not idempotent
+   * hasPrev is not idempotent.
    */
   @Override
   public boolean hasPrev() {

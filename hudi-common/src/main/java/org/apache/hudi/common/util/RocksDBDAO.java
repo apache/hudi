@@ -82,7 +82,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Initialized Rocks DB instance
+   * Initialized Rocks DB instance.
    */
   private void init() throws HoodieException {
     try {
@@ -127,7 +127,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Helper to load managed column family descriptors
+   * Helper to load managed column family descriptors.
    */
   private List<ColumnFamilyDescriptor> loadManagedColumnFamilies(DBOptions dbOptions) throws RocksDBException {
     final List<ColumnFamilyDescriptor> managedColumnFamilies = new ArrayList<>();
@@ -150,7 +150,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform a batch write operation
+   * Perform a batch write operation.
    */
   public void writeBatch(BatchHandler handler) {
     WriteBatch batch = new WriteBatch();
@@ -165,7 +165,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Helper to add put operation in batch
+   * Helper to add put operation in batch.
    *
    * @param batch Batch Handle
    * @param columnFamilyName Column Family
@@ -183,7 +183,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Helper to add put operation in batch
+   * Helper to add put operation in batch.
    *
    * @param batch Batch Handle
    * @param columnFamilyName Column Family
@@ -203,7 +203,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform single PUT on a column-family
+   * Perform single PUT on a column-family.
    *
    * @param columnFamilyName Column family name
    * @param key Key
@@ -220,7 +220,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform single PUT on a column-family
+   * Perform single PUT on a column-family.
    *
    * @param columnFamilyName Column family name
    * @param key Key
@@ -237,7 +237,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Helper to add delete operation in batch
+   * Helper to add delete operation in batch.
    *
    * @param batch Batch Handle
    * @param columnFamilyName Column Family
@@ -252,7 +252,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Helper to add delete operation in batch
+   * Helper to add delete operation in batch.
    *
    * @param batch Batch Handle
    * @param columnFamilyName Column Family
@@ -267,7 +267,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform a single Delete operation
+   * Perform a single Delete operation.
    *
    * @param columnFamilyName Column Family name
    * @param key Key to be deleted
@@ -281,7 +281,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform a single Delete operation
+   * Perform a single Delete operation.
    *
    * @param columnFamilyName Column Family name
    * @param key Key to be deleted
@@ -295,7 +295,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Retrieve a value for a given key in a column family
+   * Retrieve a value for a given key in a column family.
    *
    * @param columnFamilyName Column Family Name
    * @param key Key to be retrieved
@@ -312,7 +312,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Retrieve a value for a given key in a column family
+   * Retrieve a value for a given key in a column family.
    *
    * @param columnFamilyName Column Family Name
    * @param key Key to be retrieved
@@ -329,7 +329,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform a prefix search and return stream of key-value pairs retrieved
+   * Perform a prefix search and return stream of key-value pairs retrieved.
    *
    * @param columnFamilyName Column Family Name
    * @param prefix Prefix Key
@@ -358,7 +358,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Perform a prefix delete and return stream of key-value pairs retrieved
+   * Perform a prefix delete and return stream of key-value pairs retrieved.
    *
    * @param columnFamilyName Column Family Name
    * @param prefix Prefix Key
@@ -396,7 +396,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Add a new column family to store
+   * Add a new column family to store.
    *
    * @param columnFamilyName Column family name
    */
@@ -416,7 +416,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Note : Does not delete from underlying DB. Just closes the handle
+   * Note : Does not delete from underlying DB. Just closes the handle.
    *
    * @param columnFamilyName Column Family Name
    */
@@ -437,7 +437,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Close the DAO object
+   * Close the DAO object.
    */
   public synchronized void close() {
     if (!closed) {
@@ -462,7 +462,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * Functional interface for stacking operation to Write batch
+   * Functional interface for stacking operation to Write batch.
    */
   public interface BatchHandler {
 

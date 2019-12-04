@@ -31,6 +31,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * A helper class used to diff timeline.
+ */
 public class TimelineDiffHelper {
 
   protected static Logger log = LogManager.getLogger(TimelineDiffHelper.class);
@@ -97,6 +100,9 @@ public class TimelineDiffHelper {
     }).collect(Collectors.toList());
   }
 
+  /**
+   * A diff result of timeline.
+   */
   public static class TimelineDiffResult {
 
     private final List<HoodieInstant> newlySeenInstants;

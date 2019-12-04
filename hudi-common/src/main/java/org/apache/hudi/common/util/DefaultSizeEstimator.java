@@ -19,7 +19,7 @@
 package org.apache.hudi.common.util;
 
 /**
- * Default implementation of size-estimator that uses Twitter's ObjectSizeCalculator
+ * Default implementation of size-estimator that uses Twitter's ObjectSizeCalculator.
  * 
  * @param <T>
  */

@@ -36,7 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Delete block contains a list of keys to be deleted from scanning the blocks so far
+ * Delete block contains a list of keys to be deleted from scanning the blocks so far.
  */
 public class HoodieDeleteBlock extends HoodieLogBlock {
 

@@ -34,7 +34,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 /**
- * Tests basic functionality of {@link DFSPropertiesConfiguration}
+ * Tests basic functionality of {@link DFSPropertiesConfiguration}.
  */
 public class TestDFSPropertiesConfiguration {
 

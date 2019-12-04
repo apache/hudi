@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Compaction V1 has absolute paths as part of compaction operations
+ * Compaction V1 has absolute paths as part of compaction operations.
  */
 public class CompactionV1MigrationHandler extends AbstractMigratorBase<HoodieCompactionPlan> {
 

@@ -28,7 +28,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * File System View Storage Configurations
+ * File System View Storage Configurations.
  */
 public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
@@ -105,6 +105,9 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
     return props.getProperty(ROCKSDB_BASE_PATH_PROP);
   }
 
+  /**
+   * The builder used to build {@link FileSystemViewStorageConfig}.
+   */
   public static class Builder {
 
     private final Properties props = new Properties();

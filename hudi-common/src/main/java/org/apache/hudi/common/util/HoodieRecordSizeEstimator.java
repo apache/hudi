@@ -27,7 +27,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Size Estimator for Hoodie record payload
+ * Size Estimator for Hoodie record payload.
  * 
  * @param <T>
  */

@@ -46,6 +46,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * A utility class for avro.
+ */
 public class AvroUtils {
 
   private static final Integer DEFAULT_VERSION = 1;

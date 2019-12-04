@@ -99,7 +99,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Refresh commits timeline
+   * Refresh commits timeline.
    * 
    * @param visibleActiveTimeline Visible Active Timeline
    */
@@ -129,7 +129,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Build FileGroups from passed in file-status
+   * Build FileGroups from passed in file-status.
    */
   protected List<HoodieFileGroup> buildFileGroups(FileStatus[] statuses, HoodieTimeline timeline,
       boolean addPendingCompactionFileSlice) {
@@ -180,7 +180,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Clears the partition Map and reset view states
+   * Clears the partition Map and reset view states.
    */
   public final void reset() {
     try {
@@ -197,12 +197,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Allows all view metadata in file system view storage to be reset by subclasses
+   * Allows all view metadata in file system view storage to be reset by subclasses.
    */
   protected abstract void resetViewState();
 
   /**
-   * Allows lazily loading the partitions if needed
+   * Allows lazily loading the partitions if needed.
    *
    * @param partition partition to be loaded if not present
    */
@@ -244,7 +244,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Helper to convert file-status to data-files
+   * Helper to convert file-status to data-files.
    *
    * @param statuses List of File-Status
    */
@@ -255,7 +255,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Helper to convert file-status to log-files
+   * Helper to convert file-status to log-files.
    *
    * @param statuses List of FIle-Status
    */
@@ -267,7 +267,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * With async compaction, it is possible to see partial/complete data-files due to inflight-compactions, Ignore those
-   * data-files
+   * data-files.
    *
    * @param dataFile Data File
    */
@@ -282,7 +282,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Returns true if the file-group is under pending-compaction and the file-slice' baseInstant matches compaction
-   * Instant
+   * Instant.
    *
    * @param fileSlice File Slice
    */
@@ -296,7 +296,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * With async compaction, it is possible to see partial/complete data-files due to inflight-compactions, Ignore those
-   * data-files
+   * data-files.
    *
    * @param fileSlice File Slice
    */
@@ -378,7 +378,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Get Latest data file for a partition and file-Id
+   * Get Latest data file for a partition and file-Id.
    */
   public final Option<HoodieDataFile> getLatestDataFile(String partitionStr, String fileId) {
     try {
@@ -432,7 +432,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Get Latest File Slice for a given fileId in a given partition
+   * Get Latest File Slice for a given fileId in a given partition.
    */
   public final Option<FileSlice> getLatestFileSlice(String partitionStr, String fileId) {
     try {
@@ -552,7 +552,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // Fetch APIs to be implemented by concrete sub-classes
 
   /**
-   * Check if there is an outstanding compaction scheduled for this file
+   * Check if there is an outstanding compaction scheduled for this file.
    *
    * @param fgId File-Group Id
    * @return true if there is a pending compaction, false otherwise
@@ -560,28 +560,28 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected abstract boolean isPendingCompactionScheduledForFileId(HoodieFileGroupId fgId);
 
   /**
-   * resets the pending compaction operation and overwrite with the new list
+   * resets the pending compaction operation and overwrite with the new list.
    *
    * @param operations Pending Compaction Operations
    */
   abstract void resetPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
 
   /**
-   * Add pending compaction operations to store
+   * Add pending compaction operations to store.
    *
    * @param operations Pending compaction operations to be added
    */
   abstract void addPendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
 
   /**
-   * Remove pending compaction operations from store
+   * Remove pending compaction operations from store.
    *
    * @param operations Pending compaction operations to be removed
    */
   abstract void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
 
   /**
-   * Return pending compaction operation for a file-group
+   * Return pending compaction operation for a file-group.
    *
    * @param fileGroupId File-Group Id
    */
@@ -589,19 +589,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       HoodieFileGroupId fileGroupId);
 
   /**
-   * Fetch all pending compaction operations
+   * Fetch all pending compaction operations.
    */
   abstract Stream<Pair<String, CompactionOperation>> fetchPendingCompactionOperations();
 
   /**
-   * Checks if partition is pre-loaded and available in store
+   * Checks if partition is pre-loaded and available in store.
    *
    * @param partitionPath Partition Path
    */
   abstract boolean isPartitionAvailableInStore(String partitionPath);
 
   /**
-   * Add a complete partition view to store
+   * Add a complete partition view to store.
    *
    * @param partitionPath Partition Path
    * @param fileGroups File Groups for the partition path
@@ -609,7 +609,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups);
 
   /**
-   * Fetch all file-groups stored for a partition-path
+   * Fetch all file-groups stored for a partition-path.
    *
    * @param partitionPath Partition path for which the file-groups needs to be retrieved.
    * @return file-group stream
@@ -617,19 +617,19 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partitionPath);
 
   /**
-   * Fetch all Stored file-groups across all partitions loaded
+   * Fetch all Stored file-groups across all partitions loaded.
    *
    * @return file-group stream
    */
   abstract Stream<HoodieFileGroup> fetchAllStoredFileGroups();
 
   /**
-   * Check if the view is already closed
+   * Check if the view is already closed.
    */
   abstract boolean isClosed();
 
   /**
-   * Default implementation for fetching latest file-slice in commit range
+   * Default implementation for fetching latest file-slice in commit range.
    *
    * @param commitsToReturn Commits
    */
@@ -639,7 +639,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching all file-slices for a partition-path
+   * Default implementation for fetching all file-slices for a partition-path.
    *
    * @param partitionPath Partition path
    * @return file-slice stream
@@ -650,7 +650,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching latest data-files for the partition-path
+   * Default implementation for fetching latest data-files for the partition-path.
    */
   Stream<HoodieDataFile> fetchLatestDataFiles(final String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath).map(this::getLatestDataFile).filter(Option::isPresent)
@@ -663,14 +663,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching latest data-files across all partitions
+   * Default implementation for fetching latest data-files across all partitions.
    */
   Stream<HoodieDataFile> fetchLatestDataFiles() {
     return fetchAllStoredFileGroups().map(this::getLatestDataFile).filter(Option::isPresent).map(Option::get);
   }
 
   /**
-   * Default implementation for fetching all data-files for a partition
+   * Default implementation for fetching all data-files for a partition.
    *
    * @param partitionPath partition-path
    */
@@ -680,7 +680,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching file-group
+   * Default implementation for fetching file-group.
    */
   Option<HoodieFileGroup> fetchHoodieFileGroup(String partitionPath, String fileId) {
     return Option.fromJavaOptional(fetchAllStoredFileGroups(partitionPath)
@@ -688,7 +688,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching latest file-slices for a partition path
+   * Default implementation for fetching latest file-slices for a partition path.
    */
   Stream<FileSlice> fetchLatestFileSlices(String partitionPath) {
     return fetchAllStoredFileGroups(partitionPath).map(HoodieFileGroup::getLatestFileSlice).filter(Option::isPresent)
@@ -696,7 +696,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching latest file-slices for a partition path as of instant
+   * Default implementation for fetching latest file-slices for a partition path as of instant.
    *
    * @param partitionPath Partition Path
    * @param maxCommitTime Instant Time
@@ -727,7 +727,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * If the file-slice is because of pending compaction instant, this method merges the file-slice with the one before
-   * the compaction instant time
+   * the compaction instant time.
    *
    * @param fileGroup File Group for which the file slice belongs to
    * @param fileSlice File Slice which needs to be merged
@@ -749,7 +749,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching latest data-file
+   * Default implementation for fetching latest data-file.
    * 
    * @param partitionPath Partition path
    * @param fileId File Id
@@ -761,7 +761,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Default implementation for fetching file-slice
+   * Default implementation for fetching file-slice.
    * 
    * @param partitionPath Partition path
    * @param fileId File Id
@@ -810,7 +810,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * Return Only Commits and Compaction timeline for building file-groups
+   * Return Only Commits and Compaction timeline for building file-groups.
    * 
    * @return
    */

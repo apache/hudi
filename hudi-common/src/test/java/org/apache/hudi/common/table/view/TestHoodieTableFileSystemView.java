@@ -65,6 +65,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Tests hoodie table file system view {@link HoodieTableFileSystemView}.
+ */
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
@@ -221,7 +224,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   }
 
   /**
-   * Helper method to test Views in the presence of concurrent compaction
+   * Helper method to test Views in the presence of concurrent compaction.
    * 
    * @param skipCreatingDataFile if set, first File Slice will not have data-file set. This would simulate inserts going
    *        directly to log files

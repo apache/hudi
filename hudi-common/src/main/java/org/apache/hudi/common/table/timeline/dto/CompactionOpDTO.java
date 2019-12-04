@@ -30,6 +30,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * The data transfer object of compaction.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CompactionOpDTO {
 

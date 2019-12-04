@@ -26,7 +26,7 @@ import java.io.Serializable;
 import java.util.List;
 
 /**
- * Collects stats about a single partition clean operation
+ * Collects stats about a single partition clean operation.
  */
 public class HoodieCleanStat implements Serializable {
 
@@ -80,6 +80,9 @@ public class HoodieCleanStat implements Serializable {
     return new Builder();
   }
 
+  /**
+   * A builder used to build {@link HoodieCleanStat}.
+   */
   public static class Builder {
 
     private HoodieCleaningPolicy policy;

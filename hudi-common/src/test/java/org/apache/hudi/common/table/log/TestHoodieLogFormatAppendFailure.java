@@ -55,7 +55,7 @@ import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
 /**
  * This class is intentionally using a different way of setting up the MiniDFSCluster and not relying on
  * {@link MiniClusterUtil} to reproduce append() issue : https://issues.apache.org/jira/browse/HDFS-6325 Reference :
- * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch
+ * https://issues.apache.org/jira/secure/attachment/12645053/HDFS-6325.patch.
  */
 public class TestHoodieLogFormatAppendFailure {
 

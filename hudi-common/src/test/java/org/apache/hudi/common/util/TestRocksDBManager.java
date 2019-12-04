@@ -37,6 +37,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * Tests RocksDB manager {@link RocksDBDAO}.
+ */
 public class TestRocksDBManager {
 
   private static RocksDBDAO dbManager;
@@ -133,6 +136,9 @@ public class TestRocksDBManager {
     Assert.assertFalse(new File(rocksDBBasePath).exists());
   }
 
+  /**
+   * A payload definition for {@link TestRocksDBManager}.
+   */
   public static class Payload implements Serializable {
 
     private final String prefix;

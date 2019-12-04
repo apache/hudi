@@ -125,7 +125,7 @@ public class HoodieLogFile implements Serializable {
   }
 
   /**
-   * Comparator to order log-files
+   * Comparator to order log-files.
    */
   public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
 

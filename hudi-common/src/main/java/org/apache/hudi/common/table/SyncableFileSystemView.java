@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table;
 
-/*
+/**
  * A consolidated file-system view interface exposing both realtime and read-optimized views along with
  * update operations.
  */
@@ -28,19 +28,19 @@ public interface SyncableFileSystemView
 
 
   /**
-   * Allow View to release resources and close
+   * Allow View to release resources and close.
    */
   void close();
 
   /**
-   * Reset View so that they can be refreshed
+   * Reset View so that they can be refreshed.
    */
   void reset();
 
   /**
    * Read the latest timeline and refresh the file-system view to match the current state of the file-system. The
    * refresh can either be done incrementally (from reading file-slices in metadata files) or from scratch by reseting
-   * view storage
+   * view storage.
    */
   void sync();
 }

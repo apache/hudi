@@ -35,7 +35,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * A consistency checker that fails if it is unable to meet the required condition within a specified timeout
+ * A consistency checker that fails if it is unable to meet the required condition within a specified timeout.
  */
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
@@ -71,7 +71,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper function to wait for all files belonging to single directory to appear
+   * Helper function to wait for all files belonging to single directory to appear.
    * 
    * @param dirPath Dir Path
    * @param files Files to appear/disappear
@@ -111,7 +111,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper to check of file visibility
+   * Helper to check of file visibility.
    * 
    * @param filePath File Path
    * @param visibility Visibility
@@ -140,7 +140,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper function to wait till file either appears/disappears
+   * Helper function to wait till file either appears/disappears.
    * 
    * @param filePath File Path
    * @param visibility
@@ -167,7 +167,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Retries the predicate for condfigurable number of times till we the predicate returns success
+   * Retries the predicate for condfigurable number of times till we the predicate returns success.
    * 
    * @param predicate Predicate Function
    * @param timedOutMessage Timed-Out message for logging

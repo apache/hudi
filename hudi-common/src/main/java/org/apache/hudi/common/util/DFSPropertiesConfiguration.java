@@ -82,7 +82,7 @@ public class DFSPropertiesConfiguration {
   }
 
   /**
-   * Add properties from input stream
+   * Add properties from input stream.
    * 
    * @param reader Buffered Reader
    * @throws IOException

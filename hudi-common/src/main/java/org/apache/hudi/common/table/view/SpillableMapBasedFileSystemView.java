@@ -38,7 +38,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * Table FileSystemView implementation where view is stored in spillable disk using fixed memory
+ * Table FileSystemView implementation where view is stored in spillable disk using fixed memory.
  */
 public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 

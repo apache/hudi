@@ -23,6 +23,9 @@ import org.junit.Test;
 
 import java.util.List;
 
+/**
+ * Tests hoodie commit metadata {@link HoodieCommitMetadata}.
+ */
 public class TestHoodieCommitMetadata {
 
   @Test

@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Collects stats about a single partition clean operation
+ * Collects stats about a single partition clean operation.
  */
 public class HoodieRollbackStat implements Serializable {
 
@@ -66,6 +66,9 @@ public class HoodieRollbackStat implements Serializable {
     return new Builder();
   }
 
+  /**
+   * A builder used to build {@link HoodieRollbackStat}.
+   */
   public static class Builder {
 
     private List<String> successDeleteFiles;

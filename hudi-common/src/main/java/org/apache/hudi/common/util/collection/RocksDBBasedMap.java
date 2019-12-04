@@ -27,6 +27,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * A map's implementation based on RocksDB.
+ */
 public final class RocksDBBasedMap<K extends Serializable, R extends Serializable> implements Map<K, R> {
 
   private static final String COL_FAMILY_NAME = "map_handle";

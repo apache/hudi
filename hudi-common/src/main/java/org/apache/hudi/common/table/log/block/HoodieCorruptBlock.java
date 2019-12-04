@@ -28,7 +28,7 @@ import java.util.Map;
 
 /**
  * Corrupt block is emitted whenever the scanner finds the length of the block written at the beginning does not match
- * (did not find a EOF or a sync marker after the length)
+ * (did not find a EOF or a sync marker after the length).
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 

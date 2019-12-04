@@ -25,7 +25,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 /**
- * Type-aware extension of {@link java.util.Properties}
+ * Type-aware extension of {@link java.util.Properties}.
  */
 public class TypedProperties extends Properties implements Serializable {
 

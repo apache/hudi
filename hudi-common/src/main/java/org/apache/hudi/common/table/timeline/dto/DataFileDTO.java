@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieDataFile;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * The data transfer object of data file.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DataFileDTO {
 

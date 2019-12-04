@@ -21,21 +21,21 @@ package org.apache.hudi.common.versioning;
 import java.io.Serializable;
 
 /**
- * Responsible for upgrading and downgrading metadata versions for a specific metadata
+ * Responsible for upgrading and downgrading metadata versions for a specific metadata.
  * 
  * @param <T> Metadata Type
  */
 public interface VersionMigrator<T> extends Serializable {
 
   /**
-   * Version of Metadata that this class will handle
+   * Version of Metadata that this class will handle.
    * 
    * @return
    */
   Integer getManagedVersion();
 
   /**
-   * Upgrades metadata of type T from previous version to this version
+   * Upgrades metadata of type T from previous version to this version.
    * 
    * @param input Metadata as of previous version.
    * @return Metadata compatible with the version managed by this class
@@ -43,7 +43,7 @@ public interface VersionMigrator<T> extends Serializable {
   T upgradeFrom(T input);
 
   /**
-   * Downgrades metadata of type T from next version to this version
+   * Downgrades metadata of type T from next version to this version.
    * 
    * @param input Metadata as of next highest version
    * @return Metadata compatible with the version managed by this class

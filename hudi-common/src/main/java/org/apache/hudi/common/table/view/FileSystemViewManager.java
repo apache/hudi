@@ -82,7 +82,7 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Main API to get the file-system view for the base-path
+   * Main API to get the file-system view for the base-path.
    * 
    * @param basePath
    * @return
@@ -92,7 +92,7 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Closes all views opened
+   * Closes all views opened.
    */
   public void close() {
     this.globalViewMap.values().stream().forEach(v -> v.close());
@@ -102,7 +102,7 @@ public class FileSystemViewManager {
   // FACTORY METHODS FOR CREATING FILE-SYSTEM VIEWS
 
   /**
-   * Create RocksDB based file System view for a dataset
+   * Create RocksDB based file System view for a dataset.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
@@ -117,7 +117,7 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Create a spillable Map based file System view for a dataset
+   * Create a spillable Map based file System view for a dataset.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
@@ -133,7 +133,7 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Create an in-memory file System view for a dataset
+   * Create an in-memory file System view for a dataset.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
@@ -149,7 +149,7 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Create a remote file System view for a dataset
+   * Create a remote file System view for a dataset.
    * 
    * @param conf Hadoop Configuration
    * @param viewConf View Storage Configuration
@@ -165,7 +165,7 @@ public class FileSystemViewManager {
   }
 
   /**
-   * Main Factory method for building file-system views
+   * Main Factory method for building file-system views.
    * 
    * @param conf Hadoop Configuration
    * @param config View Storage Configuration

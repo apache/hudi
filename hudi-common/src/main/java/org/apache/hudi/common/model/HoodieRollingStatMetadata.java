@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This class holds statistics about files belonging to a dataset
+ * This class holds statistics about files belonging to a dataset.
  */
 public class HoodieRollingStatMetadata implements Serializable {
 

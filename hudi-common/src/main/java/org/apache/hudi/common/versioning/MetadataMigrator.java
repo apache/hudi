@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Migrates a specific metadata type stored in .hoodie folder to latest version
+ * Migrates a specific metadata type stored in .hoodie folder to latest version.
  * 
  * @param <T>
  */
@@ -46,7 +46,7 @@ public class MetadataMigrator<T> {
   }
 
   /**
-   * Upgrade Metadata version to its latest
+   * Upgrade Metadata version to its latest.
    * 
    * @param metadata Metadata
    * @param metadataVersion Current version of metadata
@@ -67,7 +67,7 @@ public class MetadataMigrator<T> {
   }
 
   /**
-   * Migrate metadata to a specific version
+   * Migrate metadata to a specific version.
    * 
    * @param metadata Hoodie Table Meta Client
    * @param metadataVersion Metadata Version

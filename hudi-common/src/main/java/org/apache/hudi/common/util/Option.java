@@ -39,14 +39,14 @@ public final class Option<T> implements Serializable {
   private final T val;
 
   /**
-   * Convert to java Optional
+   * Convert to java Optional.
    */
   public Optional<T> toJavaOptional() {
     return Optional.ofNullable(val);
   }
 
   /**
-   * Convert from java.util.Optional
+   * Convert from java.util.Optional.
    * 
    * @param v java.util.Optional object
    * @param <T> type of the value stored in java.util.Optional object

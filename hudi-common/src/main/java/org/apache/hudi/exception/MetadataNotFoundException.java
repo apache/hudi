@@ -19,7 +19,7 @@
 package org.apache.hudi.exception;
 
 /**
- * Thrown when expected metadata is not found
+ * Thrown when expected metadata is not found.
  */
 public class MetadataNotFoundException extends HoodieException {
 

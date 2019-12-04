@@ -211,25 +211,27 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     deflate();
   }
 
-  /********************************* DEPRECATED METHODS ***********************************/
+  //----------------------------------------------------------------------------------------
+  //                                  DEPRECATED METHODS
+  //----------------------------------------------------------------------------------------
 
-  @Deprecated
-  @VisibleForTesting
   /**
    * This constructor is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
-   * HoodieLogFormat V1
+   * HoodieLogFormat V1.
    */
+  @Deprecated
+  @VisibleForTesting
   public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
     super(new HashMap<>(), new HashMap<>(), Option.empty(), Option.empty(), null, false);
     this.records = records;
     this.schema = schema;
   }
 
-  @Deprecated
   /**
    * This method is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
-   * HoodieLogFormat V1
+   * HoodieLogFormat V1.
    */
+  @Deprecated
   public static HoodieLogBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));

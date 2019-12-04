@@ -21,6 +21,9 @@ package org.apache.hudi.common.table.view;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 
+/**
+ * Tests spillable map based file system view {@link SyncableFileSystemView}.
+ */
 public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSystemView {
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) {

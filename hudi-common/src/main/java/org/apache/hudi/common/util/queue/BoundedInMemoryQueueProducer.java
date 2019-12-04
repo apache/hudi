@@ -26,7 +26,7 @@ package org.apache.hudi.common.util.queue;
 public interface BoundedInMemoryQueueProducer<I> {
 
   /**
-   * API to enqueue entries to memory bounded queue
+   * API to enqueue entries to memory bounded queue.
    *
    * @param queue In Memory bounded queue
    */

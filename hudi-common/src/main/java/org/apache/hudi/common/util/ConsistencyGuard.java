@@ -25,19 +25,19 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Ensures file create/delete operation is visible
+ * Ensures file create/delete operation is visible.
  */
 public interface ConsistencyGuard {
 
   /**
-   * File Visibility
+   * File Visibility.
    */
   enum FileVisibility {
     APPEAR, DISAPPEAR,
   }
 
   /**
-   * Wait for file to be listable based on configurable timeout
+   * Wait for file to be listable based on configurable timeout.
    * 
    * @param filePath
    * @throws IOException when having trouble listing the path
@@ -46,7 +46,7 @@ public interface ConsistencyGuard {
   void waitTillFileAppears(Path filePath) throws IOException, TimeoutException;
 
   /**
-   * Wait for file to be listable based on configurable timeout
+   * Wait for file to be listable based on configurable timeout.
    * 
    * @param filePath
    * @throws IOException when having trouble listing the path
@@ -55,17 +55,17 @@ public interface ConsistencyGuard {
   void waitTillFileDisappears(Path filePath) throws IOException, TimeoutException;
 
   /**
-   * Wait till all passed files belonging to a directory shows up in the listing
+   * Wait till all passed files belonging to a directory shows up in the listing.
    */
   void waitTillAllFilesAppear(String dirPath, List<String> files) throws IOException, TimeoutException;
 
   /**
-   * Wait till all passed files belonging to a directory disappears from listing
+   * Wait till all passed files belonging to a directory disappears from listing.
    */
   void waitTillAllFilesDisappear(String dirPath, List<String> files) throws IOException, TimeoutException;
 
   /**
-   * Wait Till target visibility is reached
+   * Wait Till target visibility is reached.
    * 
    * @param dirPath Directory Path
    * @param files Files

@@ -137,7 +137,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Remove Pending compaction instant
+   * Remove Pending compaction instant.
    *
    * @param timeline New Hoodie Timeline
    * @param instant Compaction Instant to be removed
@@ -151,7 +151,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found compaction instant
+   * Add newly found compaction instant.
    *
    * @param timeline Hoodie Timeline
    * @param instant Compaction Instant
@@ -182,7 +182,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found commit/delta-commit instant
+   * Add newly found commit/delta-commit instant.
    *
    * @param timeline Hoodie Timeline
    * @param instant Instant
@@ -211,7 +211,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found restore instant
+   * Add newly found restore instant.
    *
    * @param timeline Hoodie Timeline
    * @param instant Restore Instant
@@ -235,7 +235,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found rollback instant
+   * Add newly found rollback instant.
    *
    * @param timeline Hoodie Timeline
    * @param instant Rollback Instant
@@ -252,7 +252,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Add newly found clean instant
+   * Add newly found clean instant.
    *
    * @param timeline Timeline
    * @param instant Clean instant
@@ -291,7 +291,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
   }
 
   /**
-   * Apply mode whether to add or remove the delta view
+   * Apply mode whether to add or remove the delta view.
    */
   enum DeltaApplyMode {
     ADD, REMOVE

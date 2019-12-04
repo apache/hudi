@@ -31,6 +31,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Tests spillable map test utils.
+ */
 public class SpillableMapTestUtils {
 
   public static final String DUMMY_COMMIT_TIME = "DUMMY_COMMIT_TIME";

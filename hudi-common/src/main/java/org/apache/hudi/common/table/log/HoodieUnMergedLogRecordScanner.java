@@ -27,6 +27,9 @@ import org.apache.hadoop.fs.FileSystem;
 
 import java.util.List;
 
+/**
+ * A scanner used to scan hoodie unmerged log records.
+ */
 public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 
   private final LogRecordScannerCallback callback;
@@ -49,6 +52,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
   }
 
+  /**
+   * A callback for log record scanner.
+   */
   @FunctionalInterface
   public static interface LogRecordScannerCallback {
 

@@ -119,7 +119,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   /**
-   * Scan Log files
+   * Scan Log files.
    */
   public void scan() {
     HoodieLogFormatReader logFormatReaderWrapper = null;
@@ -255,7 +255,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   /**
-   * Checks if the current logblock belongs to a later instant
+   * Checks if the current logblock belongs to a later instant.
    */
   private boolean isNewInstantBlock(HoodieLogBlock logBlock) {
     return currentInstantLogBlocks.size() > 0 && currentInstantLogBlocks.peek().getBlockType() != CORRUPT_BLOCK
@@ -279,14 +279,14 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   /**
-   * Process next record
+   * Process next record.
    *
    * @param hoodieRecord Hoodie Record to process
    */
   protected abstract void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception;
 
   /**
-   * Process next deleted key
+   * Process next deleted key.
    *
    * @param key Deleted record key
    */
@@ -319,7 +319,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   /**
-   * Return progress of scanning as a float between 0.0 to 1.0
+   * Return progress of scanning as a float between 0.0 to 1.0.
    */
   public float getProgress() {
     return progress;

@@ -64,7 +64,7 @@ public class HoodieAvroUtils {
   private static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   /**
-   * Convert a given avro record to bytes
+   * Convert a given avro record to bytes.
    */
   public static byte[] avroToBytes(GenericRecord record) throws IOException {
     GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<>(record.getSchema());
@@ -78,7 +78,7 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Convert serialized bytes back into avro record
+   * Convert serialized bytes back into avro record.
    */
   public static GenericRecord bytesToAvro(byte[] bytes, Schema schema) throws IOException {
     BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(bytes, reuseDecoder.get());
@@ -96,7 +96,7 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Adds the Hoodie metadata fields to the given schema
+   * Adds the Hoodie metadata fields to the given schema.
    */
   public static Schema addMetadataFields(Schema schema) {
     List<Schema.Field> parentFields = new ArrayList<>();
@@ -187,7 +187,7 @@ public class HoodieAvroUtils {
 
   /**
    * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the old
-   * schema
+   * schema.
    */
   public static GenericRecord rewriteRecord(GenericRecord record, Schema newSchema) {
     return rewrite(record, record.getSchema(), newSchema);
@@ -195,7 +195,7 @@ public class HoodieAvroUtils {
 
   /**
    * Given a avro record with a given schema, rewrites it into the new schema while setting fields only from the new
-   * schema
+   * schema.
    */
   public static GenericRecord rewriteRecordWithOnlyNewSchemaFields(GenericRecord record, Schema newSchema) {
     return rewrite(record, newSchema, newSchema);

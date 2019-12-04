@@ -56,7 +56,7 @@ public interface HoodieLogFormat {
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
   /**
-   * Writer interface to allow appending block to this file format
+   * Writer interface to allow appending block to this file format.
    */
   interface Writer extends Closeable {
 
@@ -66,7 +66,7 @@ public interface HoodieLogFormat {
     HoodieLogFile getLogFile();
 
     /**
-     * Append Block returns a new Writer if the log is rolled
+     * Append Block returns a new Writer if the log is rolled.
      */
     Writer appendBlock(HoodieLogBlock block) throws IOException, InterruptedException;
 
@@ -74,7 +74,7 @@ public interface HoodieLogFormat {
   }
 
   /**
-   * Reader interface which is an Iterator of HoodieLogBlock
+   * Reader interface which is an Iterator of HoodieLogBlock.
    */
   interface Reader extends Closeable, Iterator<HoodieLogBlock> {
 
@@ -84,14 +84,14 @@ public interface HoodieLogFormat {
     HoodieLogFile getLogFile();
 
     /**
-     * Read log file in reverse order and check if prev block is present
+     * Read log file in reverse order and check if prev block is present.
      * 
      * @return
      */
     public boolean hasPrev();
 
     /**
-     * Read log file in reverse order and return prev block if present
+     * Read log file in reverse order and return prev block if present.
      * 
      * @return
      * @throws IOException
@@ -100,7 +100,7 @@ public interface HoodieLogFormat {
   }
 
   /**
-   * Builder class to construct the default log format writer
+   * Builder class to construct the default log format writer.
    */
   class WriterBuilder {
 

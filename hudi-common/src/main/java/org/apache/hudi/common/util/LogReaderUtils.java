@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Utils class for performing various log file reading operations
+ * Utils class for performing various log file reading operations.
  */
 public class LogReaderUtils {
 

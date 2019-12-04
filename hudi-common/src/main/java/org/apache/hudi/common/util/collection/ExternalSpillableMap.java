@@ -106,35 +106,35 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * A custom iterator to wrap over iterating in-memory + disk spilled data
+   * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
   public Iterator<R> iterator() {
     return new IteratorWrapper<>(inMemoryMap.values().iterator(), getDiskBasedMap().iterator());
   }
 
   /**
-   * Number of entries in DiskBasedMap
+   * Number of entries in DiskBasedMap.
    */
   public int getDiskBasedMapNumEntries() {
     return getDiskBasedMap().size();
   }
 
   /**
-   * Number of bytes spilled to disk
+   * Number of bytes spilled to disk.
    */
   public long getSizeOfFileOnDiskInBytes() {
     return getDiskBasedMap().sizeOfFileOnDiskInBytes();
   }
 
   /**
-   * Number of entries in InMemoryMap
+   * Number of entries in InMemoryMap.
    */
   public int getInMemoryMapNumEntries() {
     return inMemoryMap.size();
   }
 
   /**
-   * Approximate memory footprint of the in-memory map
+   * Approximate memory footprint of the in-memory map.
    */
   public long getCurrentInMemoryMapSize() {
     return currentInMemoryMapSize;
@@ -257,7 +257,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   /**
    * Iterator that wraps iterating over all the values for this map 1) inMemoryIterator - Iterates over all the data
-   * in-memory map 2) diskLazyFileIterator - Iterates over all the data spilled to disk
+   * in-memory map 2) diskLazyFileIterator - Iterates over all the data spilled to disk.
    */
   private class IteratorWrapper<R> implements Iterator<R> {
 

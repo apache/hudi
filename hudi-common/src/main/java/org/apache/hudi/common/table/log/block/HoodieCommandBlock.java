@@ -27,12 +27,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Command block issues a specific command to the scanner
+ * Command block issues a specific command to the scanner.
  */
 public class HoodieCommandBlock extends HoodieLogBlock {
 
   private final HoodieCommandBlockTypeEnum type;
 
+  /**
+   * Hoodie command block type enum.
+   */
   public enum HoodieCommandBlockTypeEnum {
     ROLLBACK_PREVIOUS_BLOCK
   }

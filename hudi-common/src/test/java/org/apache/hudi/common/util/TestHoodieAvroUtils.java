@@ -25,6 +25,9 @@ import org.junit.Test;
 
 import java.util.Map;
 
+/**
+ * Tests hoodie avro utilities.
+ */
 public class TestHoodieAvroUtils {
 
   private static String EXAMPLE_SCHEMA = "{\"type\": \"record\"," + "\"name\": \"testrec\"," + "\"fields\": [ "

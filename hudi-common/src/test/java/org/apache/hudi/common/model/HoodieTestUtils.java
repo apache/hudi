@@ -80,6 +80,9 @@ import java.util.stream.Stream;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+/**
+ * A utility class for testing.
+ */
 public class HoodieTestUtils {
 
   public static final String TEST_EXTENSION = ".test";

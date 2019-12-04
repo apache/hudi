@@ -24,7 +24,7 @@ import org.apache.log4j.Logger;
 import java.util.Iterator;
 
 /**
- * Iterator based producer which pulls entry from iterator and produces items for the queue
+ * Iterator based producer which pulls entry from iterator and produces items for the queue.
  *
  * @param <I> Item type produced for the buffer.
  */

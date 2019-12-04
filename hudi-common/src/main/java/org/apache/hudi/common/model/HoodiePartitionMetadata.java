@@ -31,7 +31,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * The metadata that goes into the meta file in each partition
+ * The metadata that goes into the meta file in each partition.
  */
 public class HoodiePartitionMetadata {
 
@@ -40,12 +40,12 @@ public class HoodiePartitionMetadata {
   public static final String COMMIT_TIME_KEY = "commitTime";
 
   /**
-   * Contents of the metadata
+   * Contents of the metadata.
    */
   private final Properties props;
 
   /**
-   * Path to the partition, about which we have the metadata
+   * Path to the partition, about which we have the metadata.
    */
   private final Path partitionPath;
 
@@ -54,7 +54,7 @@ public class HoodiePartitionMetadata {
   private static Logger log = LogManager.getLogger(HoodiePartitionMetadata.class);
 
   /**
-   * Construct metadata from existing partition
+   * Construct metadata from existing partition.
    */
   public HoodiePartitionMetadata(FileSystem fs, Path partitionPath) {
     this.fs = fs;
@@ -118,7 +118,7 @@ public class HoodiePartitionMetadata {
   }
 
   /**
-   * Read out the metadata for this partition
+   * Read out the metadata for this partition.
    */
   public void readFromFS() throws IOException {
     FSDataInputStream is = null;

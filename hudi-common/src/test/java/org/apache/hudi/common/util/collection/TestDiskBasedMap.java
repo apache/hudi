@@ -53,6 +53,9 @@ import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Tests dis based map {@link DiskBasedMap}.
+ */
 public class TestDiskBasedMap extends HoodieCommonTestHarness {
 
   @Before

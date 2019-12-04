@@ -50,6 +50,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Tests external spillable map {@link ExternalSpillableMap}.
+ */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class TestExternalSpillableMap extends HoodieCommonTestHarness {
 

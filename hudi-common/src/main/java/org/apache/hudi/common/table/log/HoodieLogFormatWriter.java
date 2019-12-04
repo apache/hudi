@@ -40,7 +40,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 
 /**
- * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct
+ * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct.
  */
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 

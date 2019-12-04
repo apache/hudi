@@ -25,6 +25,9 @@ import org.apache.zookeeper.server.ZooKeeperServer;
 
 import java.io.IOException;
 
+/**
+ * A utility class about mini cluster.
+ */
 public class MiniClusterUtil {
 
   private static MiniDFSCluster dfsCluster;
