@@ -40,7 +40,7 @@ import java.lang.reflect.InvocationTargetException;
 public class SerializationUtils {
 
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
-  private static final ThreadLocal<KryoSerializerInstance> serializerRef =
+  private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
       ThreadLocal.withInitial(() -> new KryoSerializerInstance());
 
   // Serialize
@@ -56,7 +56,7 @@ public class SerializationUtils {
    * @throws IOException if the serialization fails
    */
   public static byte[] serialize(final Object obj) throws IOException {
-    return serializerRef.get().serialize(obj);
+    return SERIALIZER_REF.get().serialize(obj);
   }
 
   // Deserialize
@@ -83,7 +83,7 @@ public class SerializationUtils {
     if (objectData == null) {
       throw new IllegalArgumentException("The byte[] must not be null");
     }
-    return (T) serializerRef.get().deserialize(objectData);
+    return (T) SERIALIZER_REF.get().deserialize(objectData);
   }
 
   private static class KryoSerializerInstance implements Serializable {

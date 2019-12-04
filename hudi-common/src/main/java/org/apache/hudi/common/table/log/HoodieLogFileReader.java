@@ -54,11 +54,11 @@ import java.util.Map;
 class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
-  private static final Logger log = LogManager.getLogger(HoodieLogFileReader.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
 
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;
-  private static final byte[] magicBuffer = new byte[6];
+  private static final byte[] MAGIC_BUFFER = new byte[6];
   private final Schema readerSchema;
   private HoodieLogFormat.LogFormatVersion nextBlockVersion;
   private boolean readBlockLazily;
@@ -112,7 +112,7 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
         try {
           close();
         } catch (Exception e) {
-          log.warn("unable to close input stream for log file " + logFile, e);
+          LOG.warn("unable to close input stream for log file " + logFile, e);
           // fail silently for any sort of exception
         }
       }
@@ -210,12 +210,12 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   private HoodieLogBlock createCorruptBlock() throws IOException {
-    log.info("Log " + logFile + " has a corrupted block at " + inputStream.getPos());
+    LOG.info("Log " + logFile + " has a corrupted block at " + inputStream.getPos());
     long currentPos = inputStream.getPos();
     long nextBlockOffset = scanForNextAvailableBlockOffset();
     // Rewind to the initial start and read corrupted bytes till the nextBlockOffset
     inputStream.seek(currentPos);
-    log.info("Next available block in " + logFile + " starts at " + nextBlockOffset);
+    LOG.info("Next available block in " + logFile + " starts at " + nextBlockOffset);
     int corruptedBlockSize = (int) (nextBlockOffset - currentPos);
     long contentPosition = inputStream.getPos();
     byte[] corruptedBytes = HoodieLogBlock.readOrSkipContent(inputStream, corruptedBlockSize, readBlockLazily);
@@ -313,8 +313,8 @@ class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean hasNextMagic() throws IOException {
     long pos = inputStream.getPos();
     // 1. Read magic header from the start of the block
-    inputStream.readFully(magicBuffer, 0, 6);
-    if (!Arrays.equals(magicBuffer, HoodieLogFormat.MAGIC)) {
+    inputStream.readFully(MAGIC_BUFFER, 0, 6);
+    if (!Arrays.equals(MAGIC_BUFFER, HoodieLogFormat.MAGIC)) {
       return false;
     }
     return true;

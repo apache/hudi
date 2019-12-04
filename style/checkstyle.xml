@@ -295,5 +295,11 @@
         <!-- Checks for star import. -->
         <module name="AvoidStarImport" />
 
+        <!-- Checks for constant name. -->
+        <module name="ConstantName" />
+
+        <!-- Checks for simple boolean expressions. -->
+        <module name="SimplifyBooleanExpression"/>
+
     </module>
 </module>

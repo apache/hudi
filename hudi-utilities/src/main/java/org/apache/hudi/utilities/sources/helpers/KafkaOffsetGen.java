@@ -176,8 +176,8 @@ public class KafkaOffsetGen {
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
     private static final KafkaResetOffsetStrategies DEFAULT_AUTO_RESET_OFFSET = KafkaResetOffsetStrategies.LARGEST;
-    public static final long defaultMaxEventsFromKafkaSource = 5000000;
-    public static long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = defaultMaxEventsFromKafkaSource;
+    public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
+    public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
 
   private final HashMap<String, String> kafkaParams;
@@ -234,9 +234,9 @@ public class KafkaOffsetGen {
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long maxEventsToReadFromKafka = props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP,
-        Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE);
+        Config.maxEventsFromKafkaSource);
     maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
-        ? Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE : maxEventsToReadFromKafka;
+        ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
     OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
 

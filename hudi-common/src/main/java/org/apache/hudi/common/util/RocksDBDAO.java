@@ -55,7 +55,7 @@ import java.util.stream.Stream;
  */
 public class RocksDBDAO {
 
-  protected static final transient Logger log = LogManager.getLogger(RocksDBDAO.class);
+  protected static final transient Logger LOG = LogManager.getLogger(RocksDBDAO.class);
 
   private transient ConcurrentHashMap<String, ColumnFamilyHandle> managedHandlesMap;
   private transient ConcurrentHashMap<String, ColumnFamilyDescriptor> managedDescriptorMap;
@@ -86,7 +86,7 @@ public class RocksDBDAO {
    */
   private void init() throws HoodieException {
     try {
-      log.info("DELETING RocksDB persisted at " + rocksDBBasePath);
+      LOG.info("DELETING RocksDB persisted at " + rocksDBBasePath);
       FileIOUtils.deleteDirectory(new File(rocksDBBasePath));
 
       managedHandlesMap = new ConcurrentHashMap<>();
@@ -99,7 +99,7 @@ public class RocksDBDAO {
       dbOptions.setLogger(new org.rocksdb.Logger(dbOptions) {
         @Override
         protected void log(InfoLogLevel infoLogLevel, String logMsg) {
-          log.info("From Rocks DB : " + logMsg);
+          LOG.info("From Rocks DB : " + logMsg);
         }
       });
       final List<ColumnFamilyDescriptor> managedColumnFamilies = loadManagedColumnFamilies(dbOptions);
@@ -121,7 +121,7 @@ public class RocksDBDAO {
         managedDescriptorMap.put(familyNameFromDescriptor, descriptor);
       }
     } catch (RocksDBException | IOException re) {
-      log.error("Got exception opening rocks db instance ", re);
+      LOG.error("Got exception opening rocks db instance ", re);
       throw new HoodieException(re);
     }
   }
@@ -135,10 +135,10 @@ public class RocksDBDAO {
     List<byte[]> existing = RocksDB.listColumnFamilies(options, rocksDBBasePath);
 
     if (existing.isEmpty()) {
-      log.info("No column family found. Loading default");
+      LOG.info("No column family found. Loading default");
       managedColumnFamilies.add(getColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY));
     } else {
-      log.info("Loading column families :" + existing.stream().map(String::new).collect(Collectors.toList()));
+      LOG.info("Loading column families :" + existing.stream().map(String::new).collect(Collectors.toList()));
       managedColumnFamilies
           .addAll(existing.stream().map(RocksDBDAO::getColumnFamilyDescriptor).collect(Collectors.toList()));
     }
@@ -352,7 +352,7 @@ public class RocksDBDAO {
       }
     }
 
-    log.info("Prefix Search for (query=" + prefix + ") on " + columnFamilyName + ". Total Time Taken (msec)="
+    LOG.info("Prefix Search for (query=" + prefix + ") on " + columnFamilyName + ". Total Time Taken (msec)="
         + timer.endTimer() + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
     return results.stream();
   }
@@ -366,7 +366,7 @@ public class RocksDBDAO {
    */
   public <T extends Serializable> void prefixDelete(String columnFamilyName, String prefix) {
     Preconditions.checkArgument(!closed);
-    log.info("Prefix DELETE (query=" + prefix + ") on " + columnFamilyName);
+    LOG.info("Prefix DELETE (query=" + prefix + ") on " + columnFamilyName);
     final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName));
     it.seek(prefix.getBytes());
     // Find first and last keys to be deleted
@@ -389,7 +389,7 @@ public class RocksDBDAO {
         // Delete the last entry
         getRocksDB().delete(lastEntry.getBytes());
       } catch (RocksDBException e) {
-        log.error("Got exception performing range delete");
+        LOG.error("Got exception performing range delete");
         throw new HoodieException(e);
       }
     }

@@ -90,7 +90,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
-            String.valueOf(Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE));
+            String.valueOf(Config.maxEventsFromKafkaSource));
     return props;
   }
 
@@ -151,7 +151,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
-    Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 500;
+    Config.maxEventsFromKafkaSource = 500;
 
     /*
     1. Extract without any checkpoint => get all the data, respecting default upper cap since both sourceLimit and
@@ -168,7 +168,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     assertEquals(1500, fetch2.getBatch().get().count());
 
     //reset the value back since it is a static variable
-    Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = Config.defaultMaxEventsFromKafkaSource;
+    Config.maxEventsFromKafkaSource = Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
 
   @Test

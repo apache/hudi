@@ -58,12 +58,12 @@ public class SpillableMapUtils {
     byte[] key = new byte[keySize];
     file.read(key, 0, keySize);
     byte[] value = new byte[valueSize];
-    if (!(valueSize == valueLength)) {
+    if (valueSize != valueLength) {
       throw new HoodieCorruptedDataException("unequal size of payload written to external file, data may be corrupted");
     }
     file.read(value, 0, valueSize);
     long crcOfReadValue = generateChecksum(value);
-    if (!(crc == crcOfReadValue)) {
+    if (crc != crcOfReadValue) {
       throw new HoodieCorruptedDataException(
           "checksum of payload written to external disk does not match, " + "data may be corrupted");
     }

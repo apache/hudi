@@ -46,7 +46,7 @@ import java.util.zip.InflaterInputStream;
  */
 public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayload> {
 
-  private static final transient ObjectMapper mapper = new ObjectMapper();
+  private static final transient ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private String partitionPath;
   private String rowKey;
   private byte[] jsonDataCompressed;
@@ -71,7 +71,7 @@ public class TestRawTripPayload implements HoodieRecordPayload<TestRawTripPayloa
   public TestRawTripPayload(String jsonData) throws IOException {
     this.jsonDataCompressed = compressData(jsonData);
     this.dataSize = jsonData.length();
-    Map<String, Object> jsonRecordMap = mapper.readValue(jsonData, Map.class);
+    Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = jsonRecordMap.get("time").toString().split("T")[0].replace("-", "/");
     this.isDeleted = false;

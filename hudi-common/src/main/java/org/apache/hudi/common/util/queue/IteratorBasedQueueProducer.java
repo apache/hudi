@@ -30,7 +30,7 @@ import java.util.Iterator;
  */
 public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
 
-  private static final Logger logger = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
 
   // input iterator for producing items in the buffer.
   private final Iterator<I> inputIterator;
@@ -41,10 +41,10 @@ public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProduc
 
   @Override
   public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
-    logger.info("starting to buffer records");
+    LOG.info("starting to buffer records");
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
-    logger.info("finished buffering records");
+    LOG.info("finished buffering records");
   }
 }

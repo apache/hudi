@@ -38,7 +38,7 @@ import java.io.IOException;
  */
 public class HdfsTestService {
 
-  private static final Logger logger = LogManager.getLogger(HdfsTestService.class);
+  private static final Logger LOG = LogManager.getLogger(HdfsTestService.class);
 
   /**
    * Configuration settings.
@@ -72,7 +72,7 @@ public class HdfsTestService {
     // If clean, then remove the work dir so we can start fresh.
     String localDFSLocation = getDFSLocation(workDir);
     if (format) {
-      logger.info("Cleaning HDFS cluster data at: " + localDFSLocation + " and starting fresh.");
+      LOG.info("Cleaning HDFS cluster data at: " + localDFSLocation + " and starting fresh.");
       File file = new File(localDFSLocation);
       FileIOUtils.deleteDirectory(file);
     }
@@ -83,12 +83,12 @@ public class HdfsTestService {
         datanodePort, datanodeIpcPort, datanodeHttpPort);
     miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
         .checkDataNodeHostConfig(true).build();
-    logger.info("HDFS Minicluster service started.");
+    LOG.info("HDFS Minicluster service started.");
     return miniDfsCluster;
   }
 
   public void stop() throws IOException {
-    logger.info("HDFS Minicluster service being shut down.");
+    LOG.info("HDFS Minicluster service being shut down.");
     miniDfsCluster.shutdown();
     miniDfsCluster = null;
     hadoopConf = null;
@@ -132,7 +132,7 @@ public class HdfsTestService {
   private static Configuration configureDFSCluster(Configuration config, String localDFSLocation, String bindIP,
       int namenodeRpcPort, int namenodeHttpPort, int datanodePort, int datanodeIpcPort, int datanodeHttpPort) {
 
-    logger.info("HDFS force binding to ip: " + bindIP);
+    LOG.info("HDFS force binding to ip: " + bindIP);
     config.set(DFSConfigKeys.FS_DEFAULT_NAME_KEY, "hdfs://" + bindIP + ":" + namenodeRpcPort);
     config.set(DFSConfigKeys.DFS_DATANODE_ADDRESS_KEY, bindIP + ":" + datanodePort);
     config.set(DFSConfigKeys.DFS_DATANODE_IPC_ADDRESS_KEY, bindIP + ":" + datanodeIpcPort);

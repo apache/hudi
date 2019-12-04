@@ -46,7 +46,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final boolean reverseLogReader;
   private int bufferSize;
 
-  private static final Logger log = LogManager.getLogger(HoodieLogFormatReader.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
       boolean reverseLogReader, int bufferSize) throws IOException {
@@ -103,7 +103,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
-      log.info("Moving to the next reader for logfile " + currentReader.getLogFile());
+      LOG.info("Moving to the next reader for logfile " + currentReader.getLogFile());
       return this.currentReader.hasNext();
     }
     return false;

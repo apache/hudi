@@ -53,7 +53,7 @@ import java.net.Socket;
  */
 public class ZookeeperTestService {
 
-  private static final Logger logger = LogManager.getLogger(ZookeeperTestService.class);
+  private static final Logger LOG = LogManager.getLogger(ZookeeperTestService.class);
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;
@@ -103,7 +103,7 @@ public class ZookeeperTestService {
 
     // NOTE: Changed from the original, where InetSocketAddress was
     // originally created to bind to the wildcard IP, we now configure it.
-    logger.info("Zookeeper force binding to: " + this.bindIP);
+    LOG.info("Zookeeper force binding to: " + this.bindIP);
     standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
 
     // Start up this ZK server
@@ -120,7 +120,7 @@ public class ZookeeperTestService {
     }
 
     started = true;
-    logger.info("Zookeeper Minicluster service started on client port: " + clientPort);
+    LOG.info("Zookeeper Minicluster service started on client port: " + clientPort);
     return zooKeeperServer;
   }
 
@@ -139,7 +139,7 @@ public class ZookeeperTestService {
     standaloneServerFactory = null;
     zooKeeperServer = null;
 
-    logger.info("Zookeeper Minicluster service shut down.");
+    LOG.info("Zookeeper Minicluster service shut down.");
   }
 
   private void recreateDir(File dir, boolean clean) throws IOException {
@@ -221,7 +221,7 @@ public class ZookeeperTestService {
         }
       } catch (IOException e) {
         // ignore as this is expected
-        logger.info("server " + hostname + ":" + port + " not up " + e);
+        LOG.info("server " + hostname + ":" + port + " not up " + e);
       }
 
       if (System.currentTimeMillis() > start + timeout) {

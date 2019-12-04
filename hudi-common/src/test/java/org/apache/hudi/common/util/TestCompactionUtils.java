@@ -59,9 +59,9 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  private static final Map<String, Double> metrics =
+  private static final Map<String, Double> METRICS =
       new ImmutableMap.Builder<String, Double>().put("key1", 1.0).put("key2", 3.0).build();
-  private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> metrics;
+  private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> METRICS;
 
   @Before
   public void init() throws IOException {
@@ -252,7 +252,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
           version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
           op.getDeltaFilePaths().get(idx));
     });
-    Assert.assertEquals("Metrics set", metrics, op.getMetrics());
+    Assert.assertEquals("Metrics set", METRICS, op.getMetrics());
   }
 
   @Override

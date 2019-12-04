@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieTableMetaClient implements Serializable {
 
-  private static final transient Logger log = LogManager.getLogger(HoodieTableMetaClient.class);
+  private static final transient Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
   public static String METAFOLDER_NAME = ".hoodie";
   public static String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
   public static String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
@@ -92,7 +92,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
       ConsistencyGuardConfig consistencyGuardConfig) throws DatasetNotFoundException {
-    log.info("Loading HoodieTableMetaClient from " + basePath);
+    LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
@@ -103,10 +103,10 @@ public class HoodieTableMetaClient implements Serializable {
     DatasetNotFoundException.checkValidDataset(fs, basePathDir, metaPathDir);
     this.tableConfig = new HoodieTableConfig(fs, metaPath);
     this.tableType = tableConfig.getTableType();
-    log.info("Finished Loading Table of type " + tableType + " from " + basePath);
+    LOG.info("Finished Loading Table of type " + tableType + " from " + basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
     if (loadActiveTimelineOnLoad) {
-      log.info("Loading Active commit timeline for " + basePath);
+      LOG.info("Loading Active commit timeline for " + basePath);
       getActiveTimeline();
     }
   }
@@ -303,7 +303,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initDatasetAndGetMetaClient(Configuration hadoopConf, String basePath,
       Properties props) throws IOException {
-    log.info("Initializing " + basePath + " as hoodie dataset " + basePath);
+    LOG.info("Initializing " + basePath + " as hoodie dataset " + basePath);
     Path basePathDir = new Path(basePath);
     final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
     if (!fs.exists(basePathDir)) {
@@ -340,7 +340,7 @@ public class HoodieTableMetaClient implements Serializable {
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
-    log.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
+    LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
   }
 
