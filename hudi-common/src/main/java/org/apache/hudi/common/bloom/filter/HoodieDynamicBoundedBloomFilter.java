@@ -29,9 +29,11 @@ import org.apache.hadoop.util.bloom.Key;
 import org.apache.hudi.exception.HoodieIndexException;
 
 /**
- * Hoodie's dynamic bloom bounded bloom filter
+ * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
+ * on amount of entries to dynamically expand to. Once the entries added reach the bound, false positive ratio may not
+ * be guaranteed.
  */
-public class HoodieDynamicBoundedBloomFilter extends LocalDynamicBloomFilter implements BloomFilter {
+public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   public static final String TYPE_CODE_PREFIX = "DYNAMIC";
   public static final String TYPE_CODE = TYPE_CODE_PREFIX + "_V0";

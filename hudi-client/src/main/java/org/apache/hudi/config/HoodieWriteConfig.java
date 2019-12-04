@@ -364,16 +364,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.valueOf(props.getProperty(HoodieHBaseIndexConfig.HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS));
   }
 
-  public boolean enableAutoTuneBloomFilter() {
-    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE_PROP));
-  }
-
   public String getBloomFilterType() {
-    return props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE_PROP);
+    return props.getProperty(HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE);
   }
 
   public int getDynamicBloomFilterMaxNumEntries() {
-    return Integer.parseInt(props.getProperty(HoodieIndexConfig.DYNAMIC_BLOOM_FILTER_MAX_ENTRIES));
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES));
   }
 
   /**

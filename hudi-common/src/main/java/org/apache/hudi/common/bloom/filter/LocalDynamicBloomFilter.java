@@ -232,12 +232,7 @@ class LocalDynamicBloomFilter extends LocalFilter {
    */
   private BloomFilter getActiveStandardBF() {
     if (reachedMax) {
-      if (curMatrixIndex == matrix.length) {
-        curMatrixIndex = 0;
-        return matrix[curMatrixIndex++];
-      } else {
-        return matrix[curMatrixIndex++];
-      }
+      return matrix[curMatrixIndex++ % matrix.length];
     }
 
     if (currentNbRecord >= nr && (matrix.length * nr) < maxNr) {
