@@ -282,7 +282,6 @@
 
         <!-- Checks for out of order import statements. -->
         <module name="ImportOrder">
-            <property name="severity" value="info"/>
             <property name="groups" value="org.apache.hudi,*,javax,java,scala"/>
             <property name="separated" value="true"/>
             <property name="sortStaticImportsAlphabetically" value="true"/>

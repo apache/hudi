@@ -25,10 +25,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.versioning.AbstractMigratorBase;
 
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.Path;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.Path;
 
 public class CleanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 
