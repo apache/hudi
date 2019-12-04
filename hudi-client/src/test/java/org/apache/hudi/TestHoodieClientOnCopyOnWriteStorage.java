@@ -27,9 +27,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStat;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
@@ -259,13 +261,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   /**
    * Test one of HoodieWriteClient upsert(Prepped) APIs.
    *
-   * @param hoodieWriteConfig Write Config
+   * @param config Write Config
    * @param writeFn One of Hoodie Write Function API
    * @throws Exception in case of error
    */
-  private void testUpsertsInternal(HoodieWriteConfig hoodieWriteConfig,
+  private void testUpsertsInternal(HoodieWriteConfig config,
       Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPrepped)
       throws Exception {
+    // Force using older timeline layout
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
+        TimelineLayoutVersion.VERSION_0).build();
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Write 1 (only inserts)
@@ -292,6 +297,44 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         initCommitTime, numRecords, HoodieWriteClient::delete, isPrepped, true,
         0, 150);
+
+    // Now simulate an upgrade and perform a restore operation
+    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
+        TimelineLayoutVersion.CURR_VERSION).build();
+    client = getHoodieWriteClient(newConfig, false);
+    client.restoreToInstant("004");
+
+    // Check the entire dataset has all records still
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+    }
+    assertEquals("Must contain " + 200 + " records", 200,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
+
+    // Perform Delete again on upgraded dataset.
+    prevCommitTime = newCommitTime;
+    newCommitTime = "006";
+    numRecords = 50;
+
+    deleteBatch(newConfig, client, newCommitTime, prevCommitTime,
+        initCommitTime, numRecords, HoodieWriteClient::delete, isPrepped, true,
+        0, 150);
+
+    HoodieActiveTimeline activeTimeline = new HoodieActiveTimeline(metaClient, false);
+    List<HoodieInstant> instants = activeTimeline.getCommitTimeline().getInstants().collect(Collectors.toList());
+    Assert.assertEquals(5, instants.size());
+    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001"),
+        instants.get(0));
+    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "004"),
+        instants.get(1));
+    // New Format should have all states of instants
+    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "006"),
+        instants.get(2));
+    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "006"),
+        instants.get(3));
+    Assert.assertEquals(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "006"),
+        instants.get(4));
   }
 
   /**

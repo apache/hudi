@@ -182,8 +182,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   /**
    * Get only the inflights (no-completed) commit timeline.
    */
-  public HoodieTimeline getInflightCommitTimeline() {
-    return metaClient.getCommitsTimeline().filterInflightsExcludingCompaction();
+  public HoodieTimeline getPendingCommitTimeline() {
+    return metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
   }
 
   /**
@@ -287,16 +287,18 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * 
    * @param jsc Java Spark Context
    * @param cleanInstant Clean Instant
+   * @param cleanerPlan Cleaner Plan
    * @return list of Clean Stats
    */
-  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant);
+  public abstract List<HoodieCleanStat> clean(JavaSparkContext jsc, HoodieInstant cleanInstant,
+      HoodieCleanerPlan cleanerPlan);
 
   /**
    * Rollback the (inflight/committed) record changes with the given commit time. Four steps: (1) Atomically unpublish
    * this commit (2) clean indexing data (3) clean new generated parquet files / log blocks (4) Finally, delete
    * .<action>.commit or .<action>.inflight file if deleteInstants = true
    */
-  public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, String commit, boolean deleteInstants)
+  public abstract List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant, boolean deleteInstants)
       throws IOException;
 
   /**

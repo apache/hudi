@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -62,6 +63,8 @@ public interface HoodieTimeline extends Serializable {
   String SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION;
   // this is to preserve backwards compatibility on commit in-flight filenames
   String INFLIGHT_COMMIT_EXTENSION = INFLIGHT_EXTENSION;
+  String REQUESTED_COMMIT_EXTENSION = "." + COMMIT_ACTION + REQUESTED_EXTENSION;
+  String REQUESTED_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String INFLIGHT_CLEAN_EXTENSION = "." + CLEAN_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_CLEAN_EXTENSION = "." + CLEAN_ACTION + REQUESTED_EXTENSION;
@@ -94,7 +97,7 @@ public interface HoodieTimeline extends Serializable {
    *
    * @return New instance of HoodieTimeline with just in-flights excluding compaction inflights
    */
-  HoodieTimeline filterInflightsExcludingCompaction();
+  HoodieTimeline filterPendingExcludingCompaction();
 
   /**
    * Filter this timeline to just include the completed instants.
@@ -251,7 +254,17 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
   }
 
-  static HoodieInstant getInflightInstant(final HoodieInstant instant) {
+  /**
+   * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
+   * between inflight and completed instants (compaction <=> commit).
+   * @param instant Hoodie Instant
+   * @param tableType Hoodie Table Type
+   * @return Inflight Hoodie Instant
+   */
+  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableType tableType) {
+    if ((tableType == HoodieTableType.MERGE_ON_READ) && instant.getAction().equals(COMMIT_ACTION)) {
+      return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
+    }
     return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
   }
 
@@ -261,6 +274,10 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeInflightCommitFileName(String commitTime) {
     return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedCommitFileName(String commitTime) {
+    return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
   }
 
   static String makeCleanerFileName(String instant) {
@@ -293,6 +310,10 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeInflightDeltaFileName(String commitTime) {
     return StringUtils.join(commitTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedDeltaFileName(String commitTime) {
+    return StringUtils.join(commitTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
   }
 
   static String makeInflightCompactionFileName(String commitTime) {

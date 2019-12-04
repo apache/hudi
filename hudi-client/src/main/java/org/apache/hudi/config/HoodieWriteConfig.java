@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -48,6 +49,7 @@ import java.util.Properties;
 public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String TABLE_NAME = "hoodie.table.name";
+  private static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
   private static final String DEFAULT_PARALLELISM = "1500";
@@ -139,6 +141,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldAssumeDatePartitioning() {
     return Boolean.parseBoolean(props.getProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP));
+  }
+
+  public Integer getTimelineLayoutVersion() {
+    return Integer.parseInt(props.getProperty(TIMELINE_LAYOUT_VERSION));
   }
 
   public int getBulkInsertShuffleParallelism() {
@@ -587,6 +593,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withTimelineLayoutVersion(int version) {
+      props.setProperty(TIMELINE_LAYOUT_VERSION, String.valueOf(version));
+      return this;
+    }
+
     public Builder withBulkInsertParallelism(int bulkInsertParallelism) {
       props.setProperty(BULKINSERT_PARALLELISM, String.valueOf(bulkInsertParallelism));
       return this;
@@ -693,7 +704,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(UPSERT_PARALLELISM), UPSERT_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(DELETE_PARALLELISM), DELETE_PARALLELISM, DEFAULT_PARALLELISM);
-      setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM, DEFAULT_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM,
+          DEFAULT_ROLLBACK_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,
           DEFAULT_COMBINE_BEFORE_INSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_UPSERT_PROP), COMBINE_BEFORE_UPSERT_PROP,
@@ -732,6 +744,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           FileSystemViewStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isConsistencyGuardSet,
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
+
+      setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
+          String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+      String layoutVersion = props.getProperty(TIMELINE_LAYOUT_VERSION);
+      // Ensure Layout Version is good
+      new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
 
       // Build WriteConfig at the end
       HoodieWriteConfig config = new HoodieWriteConfig(props);

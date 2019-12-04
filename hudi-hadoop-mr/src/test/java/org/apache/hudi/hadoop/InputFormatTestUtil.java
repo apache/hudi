@@ -159,7 +159,7 @@ public class InputFormatTestUtil {
       parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema);
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
-        String commitTime = HoodieActiveTimeline.createNewCommitTime();
+        String commitTime = HoodieActiveTimeline.createNewInstantTime();
         Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(schema);
         for (IndexedRecord record : records) {
           GenericRecord p = HoodieAvroUtils.rewriteRecord((GenericRecord) record, hoodieFieldsSchema);

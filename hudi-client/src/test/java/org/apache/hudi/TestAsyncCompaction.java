@@ -116,6 +116,8 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       // Reload and rollback inflight compaction
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
       HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, cfg, jsc);
+      // hoodieTable.rollback(jsc,
+      //    new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), false);
 
       client.rollbackInflightCompaction(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
@@ -166,7 +168,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
       assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
           compactionInstantTime);
       HoodieInstant inflightInstant =
-          metaClient.getActiveTimeline().filterInflightsExcludingCompaction().firstInstant().get();
+          metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
       assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), inflightInstantTime);
 
       // This should rollback
@@ -174,10 +176,10 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
       // Validate
       metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
-      inflightInstant = metaClient.getActiveTimeline().filterInflightsExcludingCompaction().firstInstant().get();
+      inflightInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
       assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), nextInflightInstantTime);
       assertEquals("Expect only one inflight instant", 1, metaClient.getActiveTimeline()
-          .filterInflightsExcludingCompaction().getInstants().count());
+          .filterPendingExcludingCompaction().getInstants().count());
       // Expect pending Compaction to be present
       pendingCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
       assertEquals("Pending Compaction instant has expected instant time", pendingCompactionInstant.getTimestamp(),
@@ -274,7 +276,7 @@ public class TestAsyncCompaction extends TestHoodieClientBase {
 
     metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.getBasePath());
     HoodieInstant inflightInstant =
-        metaClient.getActiveTimeline().filterInflightsExcludingCompaction().firstInstant().get();
+        metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
     assertEquals("inflight instant has expected instant time", inflightInstant.getTimestamp(), inflightInstantTime);
 
     boolean gotException = false;

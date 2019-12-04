@@ -37,6 +37,7 @@ import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
@@ -131,7 +132,6 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     try (HoodieWriteClient writeClient = getWriteClient(config);) {
-      writeClient.startCommit();
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
@@ -140,6 +140,7 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
       assert (javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().size() == 0);
 
       // Insert 200 records
+      writeClient.startCommitWithTime(newCommitTime);
       JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
       assertNoWriteErrors(writeStatues.collect());
 
@@ -171,13 +172,19 @@ public class TestHbaseIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = getConfig();
     HBaseIndex index = new HBaseIndex(config);
     HoodieWriteClient writeClient = new HoodieWriteClient(jsc, config);
-    writeClient.startCommit();
+    writeClient.startCommitWithTime(newCommitTime);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable hoodieTable = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     JavaRDD<HoodieRecord> javaRDD1 = index.tagLocation(writeRecords, jsc, hoodieTable);
+
     // Duplicate upsert and ensure correctness is maintained
+    // We are trying to approximately imitate the case when the RDD is recomputed. For RDD creating, driver code is not
+    // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
+    // upsert will not run into conflicts.
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
+
     writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
 

@@ -45,8 +45,8 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
@@ -142,13 +142,12 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "100", dfs.getConf());
-    HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "101");
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "101", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "102", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", dfs.getConf());
     HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", dfs.getConf());
-    HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "106", "107");
+    HoodieTestUtils.createPendingCleanFiles(metaClient, dfs.getConf(), "106", "107");
 
     // reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
@@ -157,7 +156,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     assertEquals("Loaded 6 commits and the count should match", 12, timeline.countInstants());
 
     // verify in-flight instants before archive
-    verifyInflightInstants(metaClient, 3);
+    verifyInflightInstants(metaClient, 2);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieCommitArchiveLog archiveLog = new HoodieCommitArchiveLog(cfg, metaClient);
@@ -169,8 +168,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     originalCommits.removeAll(timeline.getInstants().collect(Collectors.toList()));
 
     // Check compaction instants
-    List<HoodieInstant> instants = HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
-        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+    List<HoodieInstant> instants = metaClient.scanHoodieInstantsFromFileSystem(
+        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     assertEquals("Should delete all compaction instants < 104", 4, instants.size());
     assertFalse("Requested Compaction must be absent for 100",
         instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));
@@ -201,30 +200,31 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     Reader reader =
         HoodieLogFormat.newReader(dfs, new HoodieLogFile(new Path(basePath + "/.hoodie/.commits_.archive.1_1-0-1")),
             HoodieArchivedMetaEntry.getClassSchema());
-
     int archivedRecordsCount = 0;
     List<IndexedRecord> readRecords = new ArrayList<>();
     // read the avro blocks and validate the number of records written in each avro block
+    int numBlocks = 0;
     while (reader.hasNext()) {
       HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
       List<IndexedRecord> records = blk.getRecords();
       readRecords.addAll(records);
-      assertEquals("Archived and read records for each block are same", 8, records.size());
       archivedRecordsCount += records.size();
+      numBlocks++;
     }
-    assertEquals("Total archived records and total read records are the same count", 8, archivedRecordsCount);
-
+    System.out.println("Read Records :" + readRecords.stream().map(r -> (GenericRecord) r)
+        .map(r -> r.get("actionType") + "_" + r.get("actionState") + "_" + r.get("commitTime")).collect(Collectors.toList()));
+    assertEquals("Total archived records and total read records are the same count", 24, archivedRecordsCount);
+    assertTrue("Average Archived records per block is greater than 1", archivedRecordsCount / numBlocks > 1);
     // make sure the archived commits are the same as the (originalcommits - commitsleft)
-    List<String> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> {
+    Set<String> readCommits = readRecords.stream().map(r -> (GenericRecord) r).map(r -> {
       return r.get("commitTime").toString();
-    }).collect(Collectors.toList());
-    Collections.sort(readCommits);
+    }).collect(Collectors.toSet());
 
     assertEquals("Read commits map should match the originalCommits - commitsLoadedFromArchival",
-        originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()), readCommits);
+        originalCommits.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()), readCommits);
 
     // verify in-flight instants after archive
-    verifyInflightInstants(metaClient, 3);
+    verifyInflightInstants(metaClient, 2);
     reader.close();
   }
 
@@ -272,8 +272,8 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals("Should not archive commits when maxCommitsToKeep is 5", 4, timeline.countInstants());
 
-    List<HoodieInstant> instants = HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
-        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE);
+    List<HoodieInstant> instants = metaClient.scanHoodieInstantsFromFileSystem(
+        new Path(metaClient.getMetaAuxiliaryPath()), HoodieActiveTimeline.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     assertEquals("Should not delete any aux compaction files when maxCommitsToKeep is 5", 8, instants.size());
     assertTrue("Requested Compaction must be present for 100",
         instants.contains(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "100")));

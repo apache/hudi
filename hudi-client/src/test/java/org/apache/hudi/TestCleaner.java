@@ -434,7 +434,8 @@ public class TestCleaner extends TestHoodieClientBase {
       metaClient.reloadActiveTimeline()
           .revertToInflight(new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs));
       final HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-      HoodieCleanMetadata cleanMetadata2 = writeClient.runClean(table, cleanInstantTs);
+      HoodieCleanMetadata cleanMetadata2 = writeClient.runClean(table,
+          HoodieTimeline.getCleanInflightInstant(cleanInstantTs));
       Assert.assertTrue(
           Objects.equals(cleanMetadata1.getEarliestCommitToRetain(), cleanMetadata2.getEarliestCommitToRetain()));
       Assert.assertEquals(new Integer(0), cleanMetadata2.getTotalFilesDeleted());
@@ -646,8 +647,11 @@ public class TestCleaner extends TestHoodieClientBase {
 
     HoodieCleanMetadata metadata =
         CleanerUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
+    metadata.setVersion(CleanerUtils.CLEAN_METADATA_VERSION_1);
 
-    Assert.assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, metadata.getVersion());
+    // NOw upgrade and check
+    CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
+    metadata = metadataMigrator.upgradeToLatest(metadata, metadata.getVersion());
     testCleanMetadataPathEquality(metadata, newExpected);
 
     CleanMetadataMigrator migrator = new CleanMetadataMigrator(metaClient);
@@ -736,7 +740,7 @@ public class TestCleaner extends TestHoodieClientBase {
         .build();
 
     // make 1 commit, with 1 file per partition
-    HoodieTestUtils.createCommitFiles(basePath, "000");
+    HoodieTestUtils.createInflightCommitFiles(basePath, "000");
 
     String file1P0C0 =
         HoodieTestUtils.createNewDataFile(basePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "000");
@@ -769,7 +773,7 @@ public class TestCleaner extends TestHoodieClientBase {
         file1P1C0));
 
     // make next commit, with 1 insert & 1 update per partition
-    HoodieTestUtils.createCommitFiles(basePath, "001");
+    HoodieTestUtils.createInflightCommitFiles(basePath, "001");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
@@ -809,7 +813,7 @@ public class TestCleaner extends TestHoodieClientBase {
         file1P1C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
-    HoodieTestUtils.createCommitFiles(basePath, "002");
+    HoodieTestUtils.createInflightCommitFiles(basePath, "002");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
@@ -837,7 +841,7 @@ public class TestCleaner extends TestHoodieClientBase {
         file1P0C0));
 
     // make next commit, with 2 updates to existing files, and 1 insert
-    HoodieTestUtils.createCommitFiles(basePath, "003");
+    HoodieTestUtils.createInflightCommitFiles(basePath, "003");
     metaClient = HoodieTableMetaClient.reload(metaClient);
     table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
@@ -882,8 +886,10 @@ public class TestCleaner extends TestHoodieClientBase {
         .put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
             new ImmutableList.Builder<>().add(file3P0C2).build())
         .build());
-    metaClient.getActiveTimeline().saveToInflight(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "004"),
+    metaClient.getActiveTimeline().createNewInstant(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "004"));
+    metaClient.getActiveTimeline().transitionRequestedToInflight(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "004"),
         Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, simulateFailureRetry);
     HoodieCleanStat cleanStat = getCleanStat(hoodieCleanStatsFive, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
@@ -900,7 +906,6 @@ public class TestCleaner extends TestHoodieClientBase {
    */
   @Test
   public void testCleanMarkerDataFilesOnRollback() throws IOException {
-    HoodieTestUtils.createCommitFiles(basePath, "000");
     List<String> markerFiles = createMarkerFiles("000", 10);
     assertEquals("Some marker files are created.", 10, markerFiles.size());
     assertEquals("Some marker files are created.", markerFiles.size(), getTotalTempFiles());
@@ -908,8 +913,12 @@ public class TestCleaner extends TestHoodieClientBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
-
-    table.rollback(jsc, "000", true);
+    table.getActiveTimeline().createNewInstant(new HoodieInstant(State.REQUESTED,
+        HoodieTimeline.COMMIT_ACTION, "000"));
+    table.getActiveTimeline().transitionRequestedToInflight(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "000"), Option.empty());
+    metaClient.reloadActiveTimeline();
+    table.rollback(jsc, new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000"), true);
     assertEquals("All temp files are deleted.", 0, getTotalTempFiles());
   }
 

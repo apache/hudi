@@ -100,7 +100,7 @@ public class SchemaTestUtil {
   public static List<IndexedRecord> generateHoodieTestRecords(int from, int limit)
       throws IOException, URISyntaxException {
     List<IndexedRecord> records = generateTestRecords(from, limit);
-    String commitTime = HoodieActiveTimeline.createNewCommitTime();
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
     Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     return records.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).map(p -> {
       p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());

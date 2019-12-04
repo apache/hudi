@@ -263,6 +263,8 @@ public class TestClientRollback extends TestHoodieClientBase {
     String commitTime1 = "20160501010101";
     String commitTime2 = "20160502020601";
     String commitTime3 = "20160506030611";
+    String commitTime4 = "20160506030621";
+    String commitTime5 = "20160506030631";
     new File(basePath + "/.hoodie").mkdirs();
     HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
         basePath);
@@ -292,7 +294,7 @@ public class TestClientRollback extends TestHoodieClientBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
-
+      client.startCommitWithTime(commitTime4);
       // Check results, nothing changed
       assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
       assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
@@ -310,7 +312,7 @@ public class TestClientRollback extends TestHoodieClientBase {
 
     // Turn auto rollback on
     try (HoodieWriteClient client = getHoodieWriteClient(config, true)) {
-      client.startCommit();
+      client.startCommitWithTime(commitTime5);
       assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
       assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
       assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));

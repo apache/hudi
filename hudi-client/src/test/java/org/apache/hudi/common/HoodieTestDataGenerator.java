@@ -145,19 +145,30 @@ public class HoodieTestDataGenerator {
     createCommitFile(basePath, commitTime, HoodieTestUtils.getDefaultHadoopConf());
   }
 
-  public static void createCommitFile(String basePath, String commitTime, Configuration configuration)
-      throws IOException {
-    Path commitFile = new Path(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime));
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
-    FSDataOutputStream os = fs.create(commitFile, true);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    try {
-      // Write empty commit metadata
-      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-    } finally {
-      os.close();
-    }
+  public static void createCommitFile(String basePath, String commitTime, Configuration configuration) {
+    Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
+        HoodieTimeline.makeRequestedCommitFileName(commitTime)).forEach(f -> {
+          Path commitFile = new Path(
+              basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+          FSDataOutputStream os = null;
+          try {
+            FileSystem fs = FSUtils.getFs(basePath, configuration);
+            os = fs.create(commitFile, true);
+            HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+            // Write empty commit metadata
+            os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+          } catch (IOException ioe) {
+            throw new HoodieIOException(ioe.getMessage(), ioe);
+          } finally {
+            if (null != os) {
+              try {
+                os.close();
+              } catch (IOException e) {
+                throw new HoodieIOException(e.getMessage(), e);
+              }
+            }
+          }
+        });
   }
 
   public static void createCompactionRequestedFile(String basePath, String commitTime, Configuration configuration)

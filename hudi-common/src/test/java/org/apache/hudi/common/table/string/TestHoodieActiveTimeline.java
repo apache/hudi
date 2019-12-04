@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.Before;
@@ -53,10 +54,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testLoadingInstantsFromFiles() throws IOException {
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "1");
-    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "3");
-    HoodieInstant instant3 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "5");
-    HoodieInstant instant4 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "8");
+    HoodieInstant instant1 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "3");
+    HoodieInstant instant3 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "5");
+    HoodieInstant instant4 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "8");
     HoodieInstant instant1Complete = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "1");
     HoodieInstant instant2Complete = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
     HoodieInstant instant3Complete = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "5");
@@ -65,11 +66,23 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant instant5 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, "9");
 
     timeline = new HoodieActiveTimeline(metaClient);
-    timeline.saveAsComplete(instant1, Option.empty());
-    timeline.saveAsComplete(instant2, Option.empty());
-    timeline.saveAsComplete(instant3, Option.empty());
-    timeline.saveAsComplete(instant4, Option.empty());
-    timeline.createInflight(instant5);
+    timeline.createNewInstant(instant1);
+    timeline.transitionRequestedToInflight(instant1, Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant1.getAction(), instant1.getTimestamp()),
+        Option.empty());
+    timeline.createNewInstant(instant2);
+    timeline.transitionRequestedToInflight(instant2, Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant2.getAction(), instant2.getTimestamp()),
+        Option.empty());
+    timeline.createNewInstant(instant3);
+    timeline.transitionRequestedToInflight(instant3, Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant3.getAction(), instant3.getTimestamp()),
+        Option.empty());
+    timeline.createNewInstant(instant4);
+    timeline.transitionRequestedToInflight(instant4, Option.empty());
+    timeline.saveAsComplete(new HoodieInstant(true, instant4.getAction(), instant4.getTimestamp()),
+        Option.empty());
+    timeline.createNewInstant(instant5);
     timeline = timeline.reload();
 
     assertEquals("Total instants should be 5", 5, timeline.countInstants());
@@ -83,7 +96,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         Stream.of(instant1Complete, instant2Complete, instant3Complete, instant4Complete),
         timeline.getCommitTimeline().filterCompletedInstants().getInstants());
     HoodieTestUtils.assertStreamEquals("Check the instants stream", Stream.of(instant5),
-        timeline.getCommitTimeline().filterInflightsExcludingCompaction().getInstants());
+        timeline.getCommitTimeline().filterPendingExcludingCompaction().getInstants());
   }
 
   @Test
@@ -107,7 +120,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieTestUtils.assertStreamEquals("", Stream.of("09", "11"), timeline.getCommitTimeline().filterCompletedInstants()
         .findInstantsAfter("07", 2).getInstants().map(HoodieInstant::getTimestamp));
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitTimeline().filterInflightsExcludingCompaction().empty());
+    assertFalse(timeline.getCommitTimeline().filterPendingExcludingCompaction().empty());
     assertEquals("", 12, timeline.countInstants());
     HoodieTimeline activeCommitTimeline = timeline.getCommitTimeline().filterCompletedInstants();
     assertEquals("", 10, activeCommitTimeline.countInstants());

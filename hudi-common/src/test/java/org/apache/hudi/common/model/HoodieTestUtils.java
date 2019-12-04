@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
@@ -39,6 +41,7 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
@@ -68,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +128,12 @@ public class HoodieTestUtils {
   public static final void createCommitFiles(String basePath, String... commitTimes) throws IOException {
     for (String commitTime : commitTimes) {
       new File(
+          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + HoodieTimeline.makeRequestedCommitFileName(commitTime)).createNewFile();
+      new File(
+          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+              + HoodieTimeline.makeInflightCommitFileName(commitTime)).createNewFile();
+      new File(
           basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(commitTime))
               .createNewFile();
     }
@@ -142,24 +152,41 @@ public class HoodieTestUtils {
   }
 
   public static final void createInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
+
     for (String commitTime : commitTimes) {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + HoodieTimeline.makeInflightCommitFileName(commitTime)).createNewFile();
+          + HoodieTimeline.makeRequestedCommitFileName(commitTime)).createNewFile();
+      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
+          commitTime)).createNewFile();
     }
   }
 
-  public static final void createInflightCleanFiles(String basePath, Configuration configuration, String... commitTimes)
-      throws IOException {
+  public static final void createPendingCleanFiles(HoodieTableMetaClient metaClient, Configuration configuration,
+      String... commitTimes) throws IOException {
     for (String commitTime : commitTimes) {
-      Path commitFile = new Path((basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + HoodieTimeline.makeInflightCleanerFileName(commitTime)));
-      FileSystem fs = FSUtils.getFs(basePath, configuration);
-      FSDataOutputStream os = fs.create(commitFile, true);
+      Arrays.asList(HoodieTimeline.makeRequestedCleanerFileName(commitTime),
+          HoodieTimeline.makeInflightCleanerFileName(commitTime)).forEach(f -> {
+            FSDataOutputStream os = null;
+            try {
+              Path commitFile = new Path(
+                  metaClient.getBasePath() + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+              os = metaClient.getFs().create(commitFile, true);
+              // Write empty clean metadata
+              os.write(AvroUtils.serializeCleanerPlan(
+                  new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(), 1)).get());
+            } catch (IOException ioe) {
+              throw new HoodieIOException(ioe.getMessage(), ioe);
+            } finally {
+              if (null != os) {
+                try {
+                  os.close();
+                } catch (IOException e) {
+                  throw new HoodieIOException(e.getMessage(), e);
+                }
+              }
+            }
+          });
     }
-  }
-
-  public static final void createInflightCleanFiles(String basePath, String... commitTimes) throws IOException {
-    createInflightCleanFiles(basePath, HoodieTestUtils.getDefaultHadoopConf(), commitTimes);
   }
 
   public static final String createNewDataFile(String basePath, String partitionPath, String commitTime)
@@ -276,6 +303,7 @@ public class HoodieTestUtils {
   public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
       String commitTime, Configuration configuration)
       throws IOException {
+    createPendingCleanFiles(metaClient, configuration, commitTime);
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(commitTime));
     FileSystem fs = FSUtils.getFs(basePath, configuration);

@@ -21,9 +21,12 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.FSUtils;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
+import java.util.Comparator;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -32,7 +35,24 @@ import java.util.Objects;
  *
  * @see HoodieTimeline
  */
-public class HoodieInstant implements Serializable {
+public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
+
+  /**
+   * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
+   * for state transitions, this needs to be taken into account
+   */
+  private static final Map<String, String> COMPARABLE_ACTIONS = new ImmutableMap.Builder<String, String>()
+      .put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION).build();
+
+  public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
+      Comparator.<HoodieInstant, String>comparing(instant -> getComparableAction(instant.getAction()));
+
+  public static final Comparator<HoodieInstant> COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
+      .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
+
+  public static final String getComparableAction(String action) {
+    return COMPARABLE_ACTIONS.containsKey(action) ? COMPARABLE_ACTIONS.get(action) : action;
+  }
 
   /**
    * Instant State.
@@ -116,7 +136,8 @@ public class HoodieInstant implements Serializable {
   public String getFileName() {
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightCommitFileName(timestamp)
-          : HoodieTimeline.makeCommitFileName(timestamp);
+          : isRequested() ? HoodieTimeline.makeRequestedCommitFileName(timestamp)
+              : HoodieTimeline.makeCommitFileName(timestamp);
     } else if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
           : isRequested() ? HoodieTimeline.makeRequestedCleanerFileName(timestamp)
@@ -129,7 +150,8 @@ public class HoodieInstant implements Serializable {
           : HoodieTimeline.makeSavePointFileName(timestamp);
     } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightDeltaFileName(timestamp)
-          : HoodieTimeline.makeDeltaFileName(timestamp);
+          : isRequested() ? HoodieTimeline.makeRequestedDeltaFileName(timestamp)
+              : HoodieTimeline.makeDeltaFileName(timestamp);
     } else if (HoodieTimeline.COMPACTION_ACTION.equals(action)) {
       if (isInflight()) {
         return HoodieTimeline.makeInflightCompactionFileName(timestamp);
@@ -164,6 +186,11 @@ public class HoodieInstant implements Serializable {
   @Override
   public int hashCode() {
     return Objects.hash(state, action, timestamp);
+  }
+
+  @Override
+  public int compareTo(HoodieInstant o) {
+    return COMPARATOR.compare(this, o);
   }
 
   @Override
