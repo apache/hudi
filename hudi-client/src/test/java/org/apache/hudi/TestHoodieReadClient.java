@@ -35,7 +35,7 @@ import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
 /**
- * Test-cases for covering HoodieReadClient APIs
+ * Test-cases for covering HoodieReadClient APIs.
  */
 public class TestHoodieReadClient extends TestHoodieClientBase {
 

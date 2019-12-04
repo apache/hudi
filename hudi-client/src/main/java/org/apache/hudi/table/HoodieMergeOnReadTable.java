@@ -73,7 +73,7 @@ import java.util.stream.Collectors;
  * </p>
  * <p>
  * WARNING - MOR table type does not support nested rollbacks, every rollback must be followed by an attempted commit
- * action
+ * action.
  * </p>
  */
 public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieCopyOnWriteTable<T> {

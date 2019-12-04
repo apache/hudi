@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
 
 /**
- * Client to perform admin operations related to compaction
+ * Client to perform admin operations related to compaction.
  */
 public class CompactionAdminClient extends AbstractHoodieClient {
 

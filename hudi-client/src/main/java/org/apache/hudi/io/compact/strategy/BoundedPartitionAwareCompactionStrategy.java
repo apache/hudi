@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
  * dataset. lastNPartitions is defined as the N partitions before the currentDate. currentDay = 2018/01/01 The dataset
  * has partitions for 2018/02/02 and 2018/03/03 beyond the currentDay This strategy will pick up the following
  * partitions for compaction : (2018/01/01, allPartitionsInRange[(2018/01/01 - lastNPartitions) to 2018/01/01),
- * 2018/02/02, 2018/03/03)
+ * 2018/02/02, 2018/03/03).
  */
 public class BoundedPartitionAwareCompactionStrategy extends DayBasedCompactionStrategy {
 

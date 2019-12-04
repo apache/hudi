@@ -33,7 +33,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * Compaction related config
+ * Compaction related config.
  */
 @Immutable
 public class HoodieCompactionConfig extends DefaultHoodieConfig {

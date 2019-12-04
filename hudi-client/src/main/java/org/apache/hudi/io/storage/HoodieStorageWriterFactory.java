@@ -35,6 +35,9 @@ import java.io.IOException;
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
+/**
+ * The Factory for HoodieStorageWriter.
+ */
 public class HoodieStorageWriterFactory {
 
   public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieStorageWriter<R> getStorageWriter(

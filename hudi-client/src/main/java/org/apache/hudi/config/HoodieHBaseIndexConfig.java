@@ -25,6 +25,9 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+/**
+ * HBaseIndex related Config.
+ */
 public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
 
   public static final String HBASE_ZKQUORUM_PROP = "hoodie.index.hbase.zkquorum";

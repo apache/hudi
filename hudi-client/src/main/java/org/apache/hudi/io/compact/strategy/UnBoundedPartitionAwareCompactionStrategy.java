@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  * are eligible to be compacted by a {@link BoundedPartitionAwareCompactionStrategy} and return the result. This is done
  * so that a long running UnBoundedPartitionAwareCompactionStrategy does not step over partitions in a shorter running
  * BoundedPartitionAwareCompactionStrategy. Essentially, this is an inverse of the partitions chosen in
- * BoundedPartitionAwareCompactionStrategy
+ * BoundedPartitionAwareCompactionStrategy.
  *
  * @see CompactionStrategy
  */

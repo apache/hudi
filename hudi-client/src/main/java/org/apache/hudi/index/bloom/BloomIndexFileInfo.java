@@ -23,7 +23,7 @@ import com.google.common.base.Objects;
 import java.io.Serializable;
 
 /**
- * Metadata about a given file group, useful for index lookup
+ * Metadata about a given file group, useful for index lookup.
  */
 public class BloomIndexFileInfo implements Serializable {
 

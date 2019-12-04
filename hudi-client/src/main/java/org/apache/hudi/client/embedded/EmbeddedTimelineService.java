@@ -33,7 +33,7 @@ import org.apache.spark.SparkConf;
 import java.io.IOException;
 
 /**
- * Timeline Service that runs as part of write client
+ * Timeline Service that runs as part of write client.
  */
 public class EmbeddedTimelineService {
 

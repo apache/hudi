@@ -38,7 +38,7 @@ import java.util.Map;
  * Strategy for compaction. Pluggable implementation to define how compaction should be done. The over-ridden
  * implementations of this abstract class can capture the relevant metrics to order and filter the final list of
  * compaction operation to run in a single compaction. Implementation of CompactionStrategy cannot hold any state.
- * Difference instantiations can be passed in every time
+ * Difference instantiations can be passed in every time.
  *
  * @see HoodieRealtimeTableCompactor
  */

@@ -30,7 +30,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Map function that handles a sorted stream of HoodieRecords
+ * Map function that handles a sorted stream of HoodieRecords.
  */
 public class BulkInsertMapFunction<T extends HoodieRecordPayload>
     implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<List<WriteStatus>>> {

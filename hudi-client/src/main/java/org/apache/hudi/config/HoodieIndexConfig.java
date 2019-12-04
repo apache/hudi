@@ -29,7 +29,7 @@ import java.util.Properties;
 
 
 /**
- * Indexing related config
+ * Indexing related config.
  */
 @Immutable
 public class HoodieIndexConfig extends DefaultHoodieConfig {

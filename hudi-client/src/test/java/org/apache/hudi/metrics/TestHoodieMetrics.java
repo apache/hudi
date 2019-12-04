@@ -28,6 +28,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Test for the Universal metrics report.
+ */
 public class TestHoodieMetrics {
 
   @Before

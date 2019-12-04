@@ -68,7 +68,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage. Computes all possible compactions,
  * passes it through a CompactionFilter and executes all the compactions and writes a new version of base files and make
- * a normal commit
+ * a normal commit.
  *
  * @see HoodieCompactor
  */

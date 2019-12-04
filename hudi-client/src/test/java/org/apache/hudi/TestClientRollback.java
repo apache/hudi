@@ -47,7 +47,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * Test Cases for rollback of snapshots and commits
+ * Test Cases for rollback of snapshots and commits.
  */
 public class TestClientRollback extends TestHoodieClientBase {
 

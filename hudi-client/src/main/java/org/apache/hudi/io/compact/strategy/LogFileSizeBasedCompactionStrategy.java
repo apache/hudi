@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 
 /**
  * LogFileSizeBasedCompactionStrategy orders the compactions based on the total log files size and limits the
- * compactions within a configured IO bound
+ * compactions within a configured IO bound.
  *
  * @see BoundedIOCompactionStrategy
  * @see CompactionStrategy

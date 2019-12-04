@@ -18,6 +18,9 @@
 
 package org.apache.hudi.exception;
 
+/**
+ * Savepoint for Exception.
+ */
 public class HoodieSavepointException extends HoodieException {
 
   public HoodieSavepointException(String msg, Throwable e) {

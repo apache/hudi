@@ -51,7 +51,7 @@ import java.util.Map;
 import scala.Tuple2;
 
 /**
- * Performs Rollback of Hoodie Tables
+ * Performs Rollback of Hoodie Tables.
  */
 public class RollbackExecutor implements Serializable {
 

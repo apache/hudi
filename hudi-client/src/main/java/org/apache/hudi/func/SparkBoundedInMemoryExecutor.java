@@ -31,6 +31,9 @@ import org.apache.spark.TaskContext$;
 import java.util.Iterator;
 import java.util.function.Function;
 
+/**
+ * This class to set current spark thread's TaskContext into newly launched thread.
+ */
 public class SparkBoundedInMemoryExecutor<I, O, E> extends BoundedInMemoryExecutor<I, O, E> {
 
   // Need to set current spark thread's TaskContext into newly launched thread so that new thread can access

@@ -32,7 +32,7 @@ import java.io.Serializable;
 import java.util.Set;
 
 /**
- * A HoodieCompactor runs compaction on a hoodie table
+ * A HoodieCompactor runs compaction on a hoodie table.
  */
 public interface HoodieCompactor extends Serializable {
 

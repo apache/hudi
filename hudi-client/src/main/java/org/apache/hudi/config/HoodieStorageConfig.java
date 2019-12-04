@@ -25,7 +25,7 @@ import java.util.Properties;
 import javax.annotation.concurrent.Immutable;
 
 /**
- * Storage related config
+ * Storage related config.
  */
 @Immutable
 public class HoodieStorageConfig extends DefaultHoodieConfig {

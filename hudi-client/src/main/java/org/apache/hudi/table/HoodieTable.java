@@ -69,7 +69,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Abstract implementation of a HoodieTable
+ * Abstract implementation of a HoodieTable.
  */
 public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
 

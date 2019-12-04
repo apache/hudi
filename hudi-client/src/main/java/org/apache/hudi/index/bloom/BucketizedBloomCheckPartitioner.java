@@ -53,7 +53,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 
  * <pre>
  *   1) Pack as many buckets from same file group into same partition, to amortize cost of (1) and (2) further
- *   2) Spread buckets across partitions evenly to achieve skew reduction
+ *   2) Spread buckets across partitions evenly to achieve skew reduction.
  * </pre>
  */
 public class BucketizedBloomCheckPartitioner extends Partitioner {

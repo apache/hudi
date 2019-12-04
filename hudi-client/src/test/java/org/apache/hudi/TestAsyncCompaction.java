@@ -65,7 +65,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Test Cases for Async Compaction and Ingestion interaction
+ * Test Cases for Async Compaction and Ingestion interaction.
  */
 public class TestAsyncCompaction extends TestHoodieClientBase {
 

@@ -56,7 +56,7 @@ import java.util.stream.Collectors;
  * 1) It provides sufficient time for existing queries running on older versions, to close
  * <p>
  * 2) It bounds the growth of the files in the file system
- * <p>
+ * <p>.
  * TODO: Should all cleaning be done based on {@link HoodieCommitMetadata}
  */
 public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {

@@ -24,6 +24,10 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 
+/**
+ * HoodieStorageWriter extends the StorageWriter to help limit the size of underlying file. Provides a way to check if
+ * the current file can take more records with the <code>canWrite()</code>.
+ */
 public interface HoodieStorageWriter<R extends IndexedRecord> {
 
   void writeAvroWithMetadata(R newRecord, HoodieRecord record) throws IOException;

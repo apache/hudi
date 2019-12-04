@@ -42,7 +42,7 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Class storing configs for the {@link HoodieWriteClient}
+ * Class storing configs for the {@link HoodieWriteClient}.
  */
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {

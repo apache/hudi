@@ -23,6 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Simple implementation of {@link ListBasedIndexFileFilter}. Sequentially goes through every index file in a given partition to
+ * search for potential Global index files to be searched for a given record key.
+ */
 class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
 
   /**

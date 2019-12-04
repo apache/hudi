@@ -23,6 +23,9 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+/**
+ * Set Hoodie Parquet Config.
+ */
 public class HoodieParquetConfig {
 
   private HoodieAvroWriteSupport writeSupport;

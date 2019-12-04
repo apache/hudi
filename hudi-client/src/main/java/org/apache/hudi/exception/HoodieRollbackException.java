@@ -18,6 +18,9 @@
 
 package org.apache.hudi.exception;
 
+/**
+ * Rollback for Exception.
+ */
 public class HoodieRollbackException extends HoodieException {
 
   public HoodieRollbackException(String msg, Throwable e) {

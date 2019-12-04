@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Archiver to bound the growth of <action>.commit files
+ * Archiver to bound the growth of <action>.commit files.
  */
 public class HoodieCommitArchiveLog {
 

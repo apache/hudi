@@ -37,7 +37,7 @@ import java.util.List;
 import scala.Tuple2;
 
 /**
- * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files
+ * Function performing actual checking of RDD partition containing (fileId, hoodieKeys) against the actual files.
  */
 public class HoodieBloomIndexCheckFunction
     implements Function2<Integer, Iterator<Tuple2<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {

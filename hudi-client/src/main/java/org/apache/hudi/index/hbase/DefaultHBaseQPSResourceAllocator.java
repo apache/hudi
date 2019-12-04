@@ -23,6 +23,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+/**
+ * Default HBase's QPS Resource Allocator.
+ */
 public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAllocator {
   private HoodieWriteConfig hoodieWriteConfig;
   private static Logger logger = LogManager.getLogger(DefaultHBaseQPSResourceAllocator.class);

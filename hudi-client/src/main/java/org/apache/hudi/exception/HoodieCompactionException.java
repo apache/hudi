@@ -18,6 +18,9 @@
 
 package org.apache.hudi.exception;
 
+/**
+ * Compaction for Exception.
+ */
 public class HoodieCompactionException extends HoodieException {
 
   public HoodieCompactionException(String msg) {

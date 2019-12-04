@@ -28,7 +28,7 @@ import java.util.Iterator;
 
 /**
  * This class wraps a parquet reader and provides an iterator based api to read from a parquet file. This is used in
- * {@link BoundedInMemoryQueue}
+ * {@link BoundedInMemoryQueue}.
  */
 public class ParquetReaderIterator<T> implements Iterator<T> {
 

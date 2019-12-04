@@ -88,7 +88,7 @@ import scala.Tuple2;
  * <p>
  * INSERTS - Produce new files, block aligned to desired size (or) Merge with the smallest existing file, to expand it
  * <p>
- * UPDATES - Produce a new version of the file, just replacing the updated records with new values
+ * UPDATES - Produce a new version of the file, just replacing the updated records with new values.
  */
 public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieTable<T> {
 

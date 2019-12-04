@@ -21,7 +21,7 @@ package org.apache.hudi.index.bloom;
 import java.util.List;
 
 /**
- * Encapsulates the result from a key lookup
+ * Encapsulates the result from a key lookup.
  */
 public class KeyLookupResult {
 

@@ -67,7 +67,7 @@ import java.util.List;
 import scala.Tuple2;
 
 /**
- * Hoodie Index implementation backed by HBase
+ * Hoodie Index implementation backed by HBase.
  */
 public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 

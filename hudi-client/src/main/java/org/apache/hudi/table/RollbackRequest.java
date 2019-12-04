@@ -22,7 +22,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Request for performing one rollback action
+ * Request for performing one rollback action.
  */
 public class RollbackRequest {
 

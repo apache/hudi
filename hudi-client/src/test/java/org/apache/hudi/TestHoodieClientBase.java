@@ -66,7 +66,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests
+ * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
  */
 public class TestHoodieClientBase extends HoodieClientTestHarness {
 
