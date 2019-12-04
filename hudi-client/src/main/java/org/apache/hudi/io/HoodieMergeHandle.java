@@ -77,7 +77,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Called by compactor code path
+   * Called by compactor code path.
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieDataFile dataFileToBeMerged) {
@@ -108,7 +108,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Determines whether we can accept the incoming records, into the current file, depending on
+   * Determines whether we can accept the incoming records, into the current file. Depending on
    * <p>
    * - Whether it belongs to the same partitionPath as existing records - Whether the current file written bytes lt max
    * file size
@@ -139,14 +139,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields
+   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
     return HoodieAvroUtils.rewriteRecord(record, writerSchema);
   }
 
   /**
-   * Extract old file path, initialize StorageWriter and WriteStatus
+   * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieDataFile dataFileToBeMerged) {
     logger.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
@@ -189,7 +189,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Load the new incoming records in a map and return partitionPath
+   * Load the new incoming records in a map and return partitionPath.
    */
   private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
     try {

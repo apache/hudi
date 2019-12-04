@@ -36,7 +36,7 @@ import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.apache.spark.streaming.kafka.OffsetRange;
 
 /**
- * Reads avro serialized Kafka data, based on the confluent schema-registry
+ * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
 public class AvroKafkaSource extends AvroSource {
 

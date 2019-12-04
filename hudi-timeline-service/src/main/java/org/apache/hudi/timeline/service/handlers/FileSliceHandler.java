@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * REST Handler servicing file-slice requests
+ * REST Handler servicing file-slice requests.
  */
 public class FileSliceHandler extends Handler {
 

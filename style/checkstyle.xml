@@ -271,9 +271,8 @@
         <module name="EmptyStatement" />
 
         <!-- Checks for Java Docs. -->
-        <module name="JavadocStyle">
-            <property name="severity" value="info"/>
-        </module>
+        <module name="JavadocStyle"/>
+
         <module name="JavadocType">
             <property name="severity" value="info"/>
             <property name="scope" value="protected"/>

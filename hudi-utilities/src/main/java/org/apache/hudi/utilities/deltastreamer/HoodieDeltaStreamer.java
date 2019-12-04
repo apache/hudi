@@ -107,7 +107,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   /**
-   * Main method to start syncing
+   * Main method to start syncing.
    * 
    * @throws Exception
    */
@@ -306,7 +306,7 @@ public class HoodieDeltaStreamer implements Serializable {
   public static class DeltaSyncService extends AbstractDeltaStreamerService {
 
     /**
-     * Delta Sync Config
+     * Delta Sync Config.
      */
     private final HoodieDeltaStreamer.Config cfg;
 
@@ -316,12 +316,12 @@ public class HoodieDeltaStreamer implements Serializable {
     private transient SchemaProvider schemaProvider;
 
     /**
-     * Spark Session
+     * Spark Session.
      */
     private transient SparkSession sparkSession;
 
     /**
-     * Spark context
+     * Spark context.
      */
     private transient JavaSparkContext jssc;
 
@@ -331,17 +331,17 @@ public class HoodieDeltaStreamer implements Serializable {
     TypedProperties props;
 
     /**
-     * Async Compactor Service
+     * Async Compactor Service.
      */
     private AsyncCompactService asyncCompactService;
 
     /**
-     * Table Type
+     * Table Type.
      */
     private final HoodieTableType tableType;
 
     /**
-     * Delta Sync
+     * Delta Sync.
      */
     private transient DeltaSync deltaSync;
 
@@ -419,7 +419,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Shutdown compactor as DeltaSync is shutdown
+     * Shutdown compactor as DeltaSync is shutdown.
      */
     private void shutdownCompactor(boolean error) {
       log.info("Delta Sync shutdown. Error ?" + error);
@@ -430,7 +430,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Callback to initialize write client and start compaction service if required
+     * Callback to initialize write client and start compaction service if required.
      * 
      * @param writeClient HoodieWriteClient
      * @return
@@ -458,7 +458,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Close all resources
+     * Close all resources.
      */
     public void close() {
       if (null != deltaSync) {
@@ -507,14 +507,14 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Enqueues new Pending compaction
+     * Enqueues new Pending compaction.
      */
     public void enqueuePendingCompaction(HoodieInstant instant) {
       pendingCompactions.add(instant);
     }
 
     /**
-     * Wait till outstanding pending compactions reduces to the passed in value
+     * Wait till outstanding pending compactions reduces to the passed in value.
      * 
      * @param numPendingCompactions Maximum pending compactions allowed
      * @throws InterruptedException
@@ -531,7 +531,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Fetch Next pending compaction if available
+     * Fetch Next pending compaction if available.
      * 
      * @return
      * @throws InterruptedException
@@ -552,7 +552,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Start Compaction Service
+     * Start Compaction Service.
      */
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);

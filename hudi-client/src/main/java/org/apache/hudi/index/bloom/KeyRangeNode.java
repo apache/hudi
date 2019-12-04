@@ -39,7 +39,7 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
   private KeyRangeNode right = null;
 
   /**
-   * Instantiates a new {@link KeyRangeNode}
+   * Instantiates a new {@link KeyRangeNode}.
    *
    * @param minRecordKey min record key of the index file
    * @param maxRecordKey max record key of the index file

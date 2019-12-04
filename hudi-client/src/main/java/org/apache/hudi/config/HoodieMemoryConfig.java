@@ -29,7 +29,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * Memory related config
+ * Memory related config.
  */
 @Immutable
 public class HoodieMemoryConfig extends DefaultHoodieConfig {

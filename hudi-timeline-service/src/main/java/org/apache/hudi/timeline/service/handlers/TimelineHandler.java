@@ -30,7 +30,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * REST Handler servicing timeline requests
+ * REST Handler servicing timeline requests.
  */
 public class TimelineHandler extends Handler {
 

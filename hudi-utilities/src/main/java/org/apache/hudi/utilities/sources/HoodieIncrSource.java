@@ -40,25 +40,25 @@ public class HoodieIncrSource extends RowSource {
   protected static class Config {
 
     /**
-     * {@value #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table
+     * {@value #HOODIE_SRC_BASE_PATH} is the base-path for the source Hoodie table.
      */
     private static final String HOODIE_SRC_BASE_PATH = "hoodie.deltastreamer.source.hoodieincr.path";
 
     /**
-     * {@value #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be incrementally fetched
+     * {@value #NUM_INSTANTS_PER_FETCH} allows the max number of instants whose changes can be incrementally fetched.
      */
     private static final String NUM_INSTANTS_PER_FETCH = "hoodie.deltastreamer.source.hoodieincr.num_instants";
     private static final Integer DEFAULT_NUM_INSTANTS_PER_FETCH = 1;
 
     /**
      * {@value #HOODIE_SRC_PARTITION_FIELDS} specifies partition fields that needs to be added to source table after
-     * parsing _hoodie_partition_path
+     * parsing _hoodie_partition_path.
      */
     private static final String HOODIE_SRC_PARTITION_FIELDS = "hoodie.deltastreamer.source.hoodieincr.partition.fields";
 
     /**
      * {@value #HOODIE_SRC_PARTITION_EXTRACTORCLASS} PartitionValueExtractor class to extract partition fields from
-     * _hoodie_partition_path
+     * _hoodie_partition_path.
      */
     private static final String HOODIE_SRC_PARTITION_EXTRACTORCLASS =
         "hoodie.deltastreamer.source.hoodieincr.partition.extractor.class";
@@ -90,7 +90,7 @@ public class HoodieIncrSource extends RowSource {
      * props.getStringList(Config.HOODIE_SRC_PARTITION_FIELDS, ",", new ArrayList<>()); PartitionValueExtractor
      * extractor = DataSourceUtils.createPartitionExtractor(props.getString( Config.HOODIE_SRC_PARTITION_EXTRACTORCLASS,
      * Config.DEFAULT_HOODIE_SRC_PARTITION_EXTRACTORCLASS));
-     **/
+     */
     String srcPath = props.getString(Config.HOODIE_SRC_BASE_PATH);
     int numInstantsPerFetch = props.getInteger(Config.NUM_INSTANTS_PER_FETCH, Config.DEFAULT_NUM_INSTANTS_PER_FETCH);
     boolean readLatestOnMissingCkpt = props.getBoolean(Config.READ_LATEST_INSTANT_ON_MISSING_CKPT,
@@ -136,7 +136,7 @@ public class HoodieIncrSource extends RowSource {
      * RowFactory.create(rowObjs.toArray()); } return row; }, RowEncoder.apply(newSchema));
      * 
      * log.info("Validated Source Schema :" + validated.schema());
-     **/
+     */
 
     // Remove Hoodie meta columns except partition path from input source
     final Dataset<Row> src = source.drop(HoodieRecord.HOODIE_META_COLUMNS.stream()

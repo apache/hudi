@@ -122,7 +122,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
   }
 
   /**
-   * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles
+   * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
    */
   protected class CopyOnWriteInsertHandler
       extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {

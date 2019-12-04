@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.sources.config;
 
 /**
- * Configurations for Test Data Sources
+ * Configurations for Test Data Sources.
  */
 public class TestSourceConfig {
 

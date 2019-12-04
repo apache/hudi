@@ -45,7 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource streaming
+ * Sample program that writes & reads hoodie datasets via the Spark datasource streaming.
  */
 public class HoodieJavaStreamingApp {
 
@@ -165,7 +165,7 @@ public class HoodieJavaStreamingApp {
   }
 
   /**
-   * Adding data to the streaming source and showing results over time
+   * Adding data to the streaming source and showing results over time.
    * 
    * @param spark
    * @param fs
@@ -215,7 +215,7 @@ public class HoodieJavaStreamingApp {
   }
 
   /**
-   * Hoodie spark streaming job
+   * Hoodie spark streaming job.
    * 
    * @param streamingInput
    * @throws Exception
@@ -236,7 +236,7 @@ public class HoodieJavaStreamingApp {
   }
 
   /**
-   * Setup configs for syncing to hive
+   * Setup configs for syncing to hive.
    * 
    * @param writer
    * @return

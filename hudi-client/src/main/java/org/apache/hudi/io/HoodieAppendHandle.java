@@ -301,7 +301,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   /**
-   * Checks if the number of records have reached the set threshold and then flushes the records to disk
+   * Checks if the number of records have reached the set threshold and then flushes the records to disk.
    */
   private void flushToDiskIfRequired(HoodieRecord record) {
     // Append if max number of records reached to achieve block size

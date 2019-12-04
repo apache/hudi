@@ -310,7 +310,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    *       writer.getCurrentSize(); assertTrue("We just wrote a new block - size2 should be > size1", size2 > size1);
    *       assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match",
    *       size2, fs.getFileStatus(writer.getLogFile().getPath()).getLen()); writer.close(); }
-   **/
+   */
 
   @Test
   public void testAppendNotSupported() throws IOException, URISyntaxException, InterruptedException {

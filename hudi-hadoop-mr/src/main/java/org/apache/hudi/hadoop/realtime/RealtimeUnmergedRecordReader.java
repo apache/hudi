@@ -60,7 +60,7 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
 
   /**
    * Construct a Unmerged record reader that parallely consumes both parquet and log records and buffers for upstream
-   * clients to consume
+   * clients to consume.
    *
    * @param split File split
    * @param job Job Configuration

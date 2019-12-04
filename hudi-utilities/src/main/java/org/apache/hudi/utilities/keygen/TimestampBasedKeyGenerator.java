@@ -52,7 +52,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final String outputDateFormat;
 
   /**
-   * Supported configs
+   * Supported configs.
    */
   static class Config {
 

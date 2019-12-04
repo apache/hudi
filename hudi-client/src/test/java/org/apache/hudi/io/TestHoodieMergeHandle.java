@@ -318,7 +318,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   }
 
   /**
-   * Assert no failures in writing hoodie files
+   * Assert no failures in writing hoodie files.
    *
    * @param statuses List of Write Status
    */
@@ -340,7 +340,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   }
 
   /**
-   * Overridden so that we can capture and inspect all success records
+   * Overridden so that we can capture and inspect all success records.
    */
   public static class TestWriteStatus extends WriteStatus {
 

@@ -35,20 +35,20 @@ import java.io.Serializable;
 public class AvroConvertor implements Serializable {
 
   /**
-   * To be lazily inited on executors
+   * To be lazily inited on executors.
    */
   private transient Schema schema;
 
   private final String schemaStr;
 
   /**
-   * To be lazily inited on executors
+   * To be lazily inited on executors.
    */
   private transient MercifulJsonConverter jsonConverter;
 
 
   /**
-   * To be lazily inited on executors
+   * To be lazily inited on executors.
    */
   private transient Injection<GenericRecord, byte[]> recordInjection;
 

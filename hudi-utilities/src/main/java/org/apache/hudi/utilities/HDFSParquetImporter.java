@@ -62,7 +62,7 @@ import java.util.Properties;
 import scala.Tuple2;
 
 /**
- * Loads data from Parquet Sources
+ * Loads data from Parquet Sources.
  */
 public class HDFSParquetImporter implements Serializable {
 
@@ -190,7 +190,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   /**
-   * Imports records to Hoodie dataset
+   * Imports records to Hoodie dataset.
    *
    * @param client Hoodie Client
    * @param instantTime Instant Time

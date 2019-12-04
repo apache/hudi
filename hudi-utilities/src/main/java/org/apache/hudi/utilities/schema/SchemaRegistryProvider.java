@@ -32,14 +32,14 @@ import java.net.URL;
 import java.util.Collections;
 
 /**
- * Obtains latest schema from the Confluent/Kafka schema-registry
+ * Obtains latest schema from the Confluent/Kafka schema-registry.
  *
  * https://github.com/confluentinc/schema-registry
  */
 public class SchemaRegistryProvider extends SchemaProvider {
 
   /**
-   * Configs supported
+   * Configs supported.
    */
   public static class Config {
 

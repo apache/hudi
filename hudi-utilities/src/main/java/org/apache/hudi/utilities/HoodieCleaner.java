@@ -41,17 +41,17 @@ public class HoodieCleaner {
   private static volatile Logger log = LogManager.getLogger(HoodieCleaner.class);
 
   /**
-   * Config for Cleaner
+   * Config for Cleaner.
    */
   private final Config cfg;
 
   /**
-   * Filesystem used
+   * Filesystem used.
    */
   private transient FileSystem fs;
 
   /**
-   * Spark context
+   * Spark context.
    */
   private transient JavaSparkContext jssc;
 

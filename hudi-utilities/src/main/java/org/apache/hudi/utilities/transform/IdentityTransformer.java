@@ -26,7 +26,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * Identity transformer
+ * Identity transformer.
  */
 public class IdentityTransformer implements Transformer {
 

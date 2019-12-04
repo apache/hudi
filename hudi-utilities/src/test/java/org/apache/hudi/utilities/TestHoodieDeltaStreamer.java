@@ -560,12 +560,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   /**
-   * UDF to calculate Haversine distance
+   * UDF to calculate Haversine distance.
    */
   public static class DistanceUDF implements UDF4<Double, Double, Double, Double, Double> {
 
     /**
-     * Returns some random number as distance between the points
+     * Returns some random number as distance between the points.
      * 
      * @param lat1 Latitiude of source
      * @param lat2 Latitude of destination
@@ -580,7 +580,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   /**
-   * Adds a new field "haversine_distance" to the row
+   * Adds a new field "haversine_distance" to the row.
    */
   public static class TripsWithDistanceTransformer implements Transformer {
 
@@ -601,7 +601,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   /**
-   * Return empty dataset
+   * Return empty dataset.
    */
   public static class DropAllTransformer implements Transformer {
 

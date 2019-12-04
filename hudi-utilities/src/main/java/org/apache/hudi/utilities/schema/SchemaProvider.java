@@ -26,7 +26,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 
 /**
- * Class to provide schema for reading data and also writing into a Hoodie table
+ * Class to provide schema for reading data and also writing into a Hoodie table.
  */
 public abstract class SchemaProvider implements Serializable {
 

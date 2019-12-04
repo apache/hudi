@@ -124,7 +124,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
   }
 
   /**
-   * Encapsulates the result from a key lookup
+   * Encapsulates the result from a key lookup.
    */
   public static class KeyLookupResult {
 

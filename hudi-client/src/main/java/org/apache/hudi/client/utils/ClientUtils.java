@@ -26,7 +26,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class ClientUtils {
 
   /**
-   * Create Consistency Aware MetaClient
+   * Create Consistency Aware MetaClient.
    *
    * @param jsc JavaSparkContext
    * @param config HoodieWriteConfig

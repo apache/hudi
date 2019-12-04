@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 public class DFSPathSelector {
 
   /**
-   * Configs supported
+   * Configs supported.
    */
   static class Config {
 

@@ -116,7 +116,7 @@ public abstract class CompactionStrategy implements Serializable {
   }
 
   /**
-   * Filter the partition paths based on compaction strategy
+   * Filter the partition paths based on compaction strategy.
    * 
    * @param writeConfig
    * @param allPartitionPaths

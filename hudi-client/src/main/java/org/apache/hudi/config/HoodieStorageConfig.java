@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * Storage related config
+ * Storage related config.
  */
 @Immutable
 public class HoodieStorageConfig extends DefaultHoodieConfig {

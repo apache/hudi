@@ -47,12 +47,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * Test Cases for rollback of snapshots and commits
+ * Test Cases for rollback of snapshots and commits.
  */
 public class TestClientRollback extends TestHoodieClientBase {
 
   /**
-   * Test case for rollback-savepoint interaction
+   * Test case for rollback-savepoint interaction.
    */
   @Test
   public void testSavepointAndRollback() throws Exception {
@@ -165,7 +165,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   }
 
   /**
-   * Test Cases for effects of rollbacking completed/inflight commits
+   * Test Cases for effects of rollbacking completed/inflight commits.
    */
   @Test
   public void testRollbackCommit() throws Exception {
@@ -255,7 +255,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   }
 
   /**
-   * Test auto-rollback of commits which are in flight
+   * Test auto-rollback of commits which are in flight.
    */
   @Test
   public void testAutoRollbackInflightCommit() throws Exception {

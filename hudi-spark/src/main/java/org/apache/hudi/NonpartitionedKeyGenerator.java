@@ -25,7 +25,7 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.avro.generic.GenericRecord;
 
 /**
- * Simple Key generator for unpartitioned Hive Tables
+ * Simple Key generator for unpartitioned Hive Tables.
  */
 public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 

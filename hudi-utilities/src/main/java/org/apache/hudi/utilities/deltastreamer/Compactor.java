@@ -33,7 +33,7 @@ import java.io.IOException;
 import java.io.Serializable;
 
 /**
- * Run one round of compaction
+ * Run one round of compaction.
  */
 public class Compactor implements Serializable {
 

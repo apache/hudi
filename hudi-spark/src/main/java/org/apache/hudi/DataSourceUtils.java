@@ -49,7 +49,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Utilities used throughout the data source
+ * Utilities used throughout the data source.
  */
 public class DataSourceUtils {
 
@@ -120,7 +120,7 @@ public class DataSourceUtils {
   }
 
   /**
-   * Create a partition value extractor class via reflection, passing in any configs needed
+   * Create a partition value extractor class via reflection, passing in any configs needed.
    */
   public static PartitionValueExtractor createPartitionExtractor(String partitionExtractorClass) {
     try {

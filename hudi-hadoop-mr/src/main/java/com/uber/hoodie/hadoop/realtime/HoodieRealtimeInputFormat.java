@@ -21,7 +21,7 @@ package com.uber.hoodie.hadoop.realtime;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 
 /**
- * Temporary class to allow seamless migration of com.uber.hoodie to org.apache.hudi
+ * Temporary class to allow seamless migration of com.uber.hoodie to org.apache.hudi .
  */
 public class HoodieRealtimeInputFormat extends HoodieParquetRealtimeInputFormat {
 

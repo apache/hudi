@@ -39,7 +39,9 @@ public class FlatteningTransformer implements Transformer {
   private static final String TMP_TABLE = "HUDI_SRC_TMP_TABLE_";
   private static volatile Logger log = LogManager.getLogger(SqlQueryBasedTransformer.class);
 
-  /** Configs supported */
+  /**
+   * Configs supported.
+   */
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {

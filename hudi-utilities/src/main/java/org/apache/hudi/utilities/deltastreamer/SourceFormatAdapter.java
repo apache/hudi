@@ -39,7 +39,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
- * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer)
+ * Adapts data-format provided by the source to the data-format required by the client (DeltaStreamer).
  */
 public final class SourceFormatAdapter {
 

@@ -130,7 +130,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Prints a JSON representation of the ArrayWritable for easier debuggability
+   * Prints a JSON representation of the ArrayWritable for easier debuggability.
    */
   protected static String arrayWritableToString(ArrayWritable writable) {
     if (writable == null) {
@@ -197,7 +197,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Generate a reader schema off the provided writeSchema, to just project out the provided columns
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
    */
   public static Schema generateProjectionSchema(Schema writeSchema, Map<String, Field> schemaFieldsMap,
       List<String> fieldNames) {
@@ -234,7 +234,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   /**
-   * Convert the projected read from delta record into an array writable
+   * Convert the projected read from delta record into an array writable.
    */
   public static Writable avroToArrayWritable(Object value, Schema schema) {
 

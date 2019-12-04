@@ -26,7 +26,7 @@ import org.apache.avro.generic.GenericRecord;
 import java.io.Serializable;
 
 /**
- * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record
+ * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
  */
 public abstract class KeyGenerator implements Serializable {
 

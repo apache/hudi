@@ -110,7 +110,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure that we are reading all records from queue iterator when we have multiple producers
+   * Test to ensure that we are reading all records from queue iterator when we have multiple producers.
    */
   @SuppressWarnings("unchecked")
   @Test(timeout = 60000)

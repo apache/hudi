@@ -39,7 +39,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.Serializable;
 
 /**
- * Base class for different types of indexes to determine the mapping from uuid
+ * Base class for different types of indexes to determine the mapping from uuid.
  */
 public abstract class HoodieIndex<T extends HoodieRecordPayload> implements Serializable {
 

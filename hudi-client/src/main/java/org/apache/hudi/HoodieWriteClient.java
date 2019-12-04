@@ -159,7 +159,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime
+   * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime.
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
     HoodieTable<T> table = getTableAndInitCtx(OperationType.UPSERT);
@@ -505,14 +505,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Commit changes performed at the given commitTime marker
+   * Commit changes performed at the given commitTime marker.
    */
   public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
     return commit(commitTime, writeStatuses, Option.empty());
   }
 
   /**
-   * Commit changes performed at the given commitTime marker
+   * Commit changes performed at the given commitTime marker.
    */
   public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) {
@@ -988,7 +988,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Provides a new commit time for a write operation (insert/update)
+   * Provides a new commit time for a write operation (insert/update).
    */
   public String startCommit() {
     // NOTE : Need to ensure that rollback is done before a new commit is started
@@ -1027,7 +1027,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Schedules a new compaction instant
+   * Schedules a new compaction instant.
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws IOException {
     String instantTime = HoodieActiveTimeline.createNewCommitTime();
@@ -1037,7 +1037,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Schedules a new compaction instant with passed-in instant time
+   * Schedules a new compaction instant with passed-in instant time.
    *
    * @param instantTime Compaction Instant Time
    * @param extraMetadata Extra Metadata to be stored
@@ -1074,7 +1074,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Performs Compaction for the workload stored in instant-time
+   * Performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
    */
@@ -1141,7 +1141,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Cleanup all inflight commits
+   * Cleanup all inflight commits.
    */
   private void rollbackInflightCommits() {
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
@@ -1197,7 +1197,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
 
   /**
-   * Ensures compaction instant is in expected state and performs Compaction for the workload stored in instant-time
+   * Ensures compaction instant is in expected state and performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
    */
@@ -1226,7 +1226,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Perform compaction operations as specified in the compaction commit file
+   * Perform compaction operations as specified in the compaction commit file.
    *
    * @param compactionInstant Compacton Instant time
    * @param activeTimeline Active Timeline
@@ -1254,7 +1254,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Commit Compaction and track metrics
+   * Commit Compaction and track metrics.
    *
    * @param compactedStatuses Compaction Write status
    * @param table Hoodie Table
@@ -1404,7 +1404,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Refers to different operation types
+   * Refers to different operation types.
    */
   enum OperationType {
     INSERT,

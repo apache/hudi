@@ -66,7 +66,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests
+ * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
  */
 public class TestHoodieClientBase extends HoodieClientTestHarness {
 
@@ -104,7 +104,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Get Default HoodieWriteConfig for tests
+   * Get Default HoodieWriteConfig for tests.
    *
    * @return Default Hoodie Write Config for tests
    */
@@ -114,7 +114,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
 
 
   /**
-   * Get Config builder with default configs set
+   * Get Config builder with default configs set.
    *
    * @return Config Builder
    */
@@ -123,7 +123,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Get Config builder with default configs set
+   * Get Config builder with default configs set.
    *
    * @return Config Builder
    */
@@ -147,7 +147,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Assert no failures in writing hoodie files
+   * Assert no failures in writing hoodie files.
    *
    * @param statuses List of Write Status
    */
@@ -159,7 +159,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Ensure presence of partition meta-data at known depth
+   * Ensure presence of partition meta-data at known depth.
    *
    * @param partitionPaths Partition paths to check
    * @param fs File System
@@ -175,7 +175,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Ensure records have location field set
+   * Ensure records have location field set.
    *
    * @param taggedRecords Tagged Records
    * @param commitTime Commit Timestamp
@@ -189,7 +189,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Assert that there is no duplicate key at the partition level
+   * Assert that there is no duplicate key at the partition level.
    *
    * @param records List of Hoodie records
    */
@@ -252,7 +252,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Generate wrapper for record generation function for testing Prepped APIs
+   * Generate wrapper for record generation function for testing Prepped APIs.
    *
    * @param isPreppedAPI Flag to indicate if this is for testing prepped-version of APIs
    * @param writeConfig Hoodie Write Config
@@ -269,7 +269,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Generate wrapper for delete key generation function for testing Prepped APIs
+   * Generate wrapper for delete key generation function for testing Prepped APIs.
    *
    * @param isPreppedAPI Flag to indicate if this is for testing prepped-version of APIs
    * @param writeConfig Hoodie Write Config
@@ -286,7 +286,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Helper to insert first batch of records and do regular assertions on the state after successful completion
+   * Helper to insert first batch of records and do regular assertions on the state after successful completion.
    *
    * @param writeConfig Hoodie Write Config
    * @param client Hoodie Write Client
@@ -312,7 +312,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Helper to upsert batch of records and do regular assertions on the state after successful completion
+   * Helper to upsert batch of records and do regular assertions on the state after successful completion.
    *
    * @param writeConfig Hoodie Write Config
    * @param client Hoodie Write Client
@@ -344,7 +344,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Helper to delete batch of keys and do regular assertions on the state after successful completion
+   * Helper to delete batch of keys and do regular assertions on the state after successful completion.
    *
    * @param writeConfig Hoodie Write Config
    * @param client Hoodie Write Client
@@ -374,7 +374,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Helper to insert/upsert batch of records and do regular assertions on the state after successful completion
+   * Helper to insert/upsert batch of records and do regular assertions on the state after successful completion.
    *
    * @param client Hoodie Write Client
    * @param newCommitTime New Commit Timestamp to be used
@@ -445,7 +445,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Helper to delete batch of hoodie keys and do regular assertions on the state after successful completion
+   * Helper to delete batch of hoodie keys and do regular assertions on the state after successful completion.
    *
    * @param client Hoodie Write Client
    * @param newCommitTime New Commit Timestamp to be used
@@ -507,7 +507,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Get Cleaner state corresponding to a partition path
+   * Get Cleaner state corresponding to a partition path.
    *
    * @param hoodieCleanStatsTwo List of Clean Stats
    * @param partitionPath Partition path for filtering
@@ -518,7 +518,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Utility to simulate commit touching files in a partition
+   * Utility to simulate commit touching files in a partition.
    *
    * @param files List of file-Ids to be touched
    * @param partitionPath Partition
@@ -532,7 +532,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   /**
-   * Helper methods to create new data files in a partition
+   * Helper methods to create new data files in a partition.
    *
    * @param partitionPath Partition
    * @param commitTime Commit Timestamp

@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource
+ * Sample program that writes & reads hoodie datasets via the Spark datasource.
  */
 public class HoodieJavaApp {
 
@@ -232,7 +232,7 @@ public class HoodieJavaApp {
   }
 
   /**
-   * Setup configs for syncing to hive
+   * Setup configs for syncing to hive.
    */
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {

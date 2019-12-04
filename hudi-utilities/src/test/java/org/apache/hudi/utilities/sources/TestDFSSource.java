@@ -48,7 +48,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Basic tests against all subclasses of {@link JsonDFSSource} and {@link ParquetDFSSource}
+ * Basic tests against all subclasses of {@link JsonDFSSource} and {@link ParquetDFSSource}.
  */
 public class TestDFSSource extends UtilitiesTestBase {
 

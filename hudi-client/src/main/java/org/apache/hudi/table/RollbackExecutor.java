@@ -51,7 +51,7 @@ import java.util.Map;
 import scala.Tuple2;
 
 /**
- * Performs Rollback of Hoodie Tables
+ * Performs Rollback of Hoodie Tables.
  */
 public class RollbackExecutor implements Serializable {
 
@@ -143,7 +143,7 @@ public class RollbackExecutor implements Serializable {
   }
 
   /**
-   * Helper to merge 2 rollback-stats for a given partition
+   * Helper to merge 2 rollback-stats for a given partition.
    *
    * @param stat1 HoodieRollbackStat
    * @param stat2 HoodieRollbackStat
@@ -177,7 +177,7 @@ public class RollbackExecutor implements Serializable {
   }
 
   /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
+   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
       Map<FileStatus, Boolean> results, String partitionPath, PathFilter filter) throws IOException {
@@ -193,7 +193,7 @@ public class RollbackExecutor implements Serializable {
   }
 
   /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
+   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
       Map<FileStatus, Boolean> results, String commit, String partitionPath) throws IOException {

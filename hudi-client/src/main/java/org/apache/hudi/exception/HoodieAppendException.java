@@ -20,7 +20,7 @@ package org.apache.hudi.exception;
 
 /**
  * <p>
- * Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a delta commit
+ * Exception thrown for any higher level errors when <code>HoodieClient</code> is doing a delta commit.
  * </p>
  */
 public class HoodieAppendException extends HoodieException {

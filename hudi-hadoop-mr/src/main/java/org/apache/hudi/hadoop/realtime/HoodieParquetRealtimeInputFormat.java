@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Input Format, that provides a real-time view of data in a Hoodie dataset
+ * Input Format, that provides a real-time view of data in a Hoodie dataset.
  */
 @UseFileSplitsFromInputFormat
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
@@ -160,7 +160,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   /**
-   * Add a field to the existing fields projected
+   * Add a field to the existing fields projected.
    */
   private static Configuration addProjectionField(Configuration conf, String fieldName, int fieldIndex) {
     String readColNames = conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
