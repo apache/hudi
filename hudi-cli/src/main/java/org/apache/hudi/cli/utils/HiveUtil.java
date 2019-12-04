@@ -18,13 +18,15 @@
 
 package org.apache.hudi.cli.utils;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import org.joda.time.DateTime;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.joda.time.DateTime;
 
 /**
  * Hive connection related utilities.

@@ -18,11 +18,14 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.common.util.Option;
+
 import com.jakewharton.fliptables.FlipTable;
+
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.apache.hudi.common.util.Option;
+
 
 /**
  * Helper class to render table for hoodie-cli.
