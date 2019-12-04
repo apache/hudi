@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -115,7 +115,7 @@
                 
                 
                 
-                <li><a href="news">新闻</a></li>
+                <li><a href="releases.html">发布</a></li>
                 
                 
                 
@@ -178,7 +178,11 @@
                 <li>
                     <!--start search-->
                     <div id="search-demo-container">
-                        <input type="text" id="search-input" placeholder="search...">
+
+                        
+                        <input type="text" id="search-input" placeholder="搜索...">
+                        
+
                         <ul id="results-container"></ul>
                     </div>
                     <script src="/js/jekyll-search.js" type="text/javascript"></script>
@@ -223,12 +227,12 @@
     
     
     <li>
-        <a href="#">Getting Started</a>
+        <a href="#">入门指南</a>
         <ul>
             
             
             
-            <li><a href="quickstart.html">快速入门</a></li>
+            <li><a href="quickstart.html">快速开始</a></li>
             
             
             
@@ -242,7 +246,7 @@
             
             
             
-            <li><a href="powered_by.html">演讲 & Powered By</a></li>
+            <li><a href="powered_by.html">演讲 & Hudi 用户</a></li>
             
             
             
@@ -351,7 +355,7 @@ Software Foundation (ASF).</li>
 
 <h2 id="ide-setup">IDE Setup</h2>
 
-<p>To contribute, you would need to fork the Hudi code on Github &amp; then clone your own fork locally. Once cloned, we recommend building as per instructions on <a href="quickstart.html">快速入门</a></p>
+<p>To contribute, you would need to fork the Hudi code on Github &amp; then clone your own fork locally. Once cloned, we recommend building as per instructions on <a href="quickstart.html">quickstart</a></p>
 
 <p>We have embraced the code style largely based on <a href="https://google.github.io/styleguide/javaguide.html">google format</a>. Please setup your IDE with style files from <a href="https://github.com/apache/incubator-hudi/tree/master/style">here</a>.
 These instructions have been tested on IntelliJ. We also recommend setting up the <a href="https://plugins.jetbrains.com/plugin/7642-save-actions">Save Action Plugin</a> to auto format &amp; organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.</p>

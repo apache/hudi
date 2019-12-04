@@ -46,7 +46,7 @@
 <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
 <![endif]-->
 
-<link rel="alternate" type="application/rss+xml" title="" href="http://0.0.0.0:4000feed.xml">
+<link rel="alternate" type="application/rss+xml" title="" href="http://localhost:4000feed.xml">
 
     <script>
         $(document).ready(function() {
@@ -115,7 +115,7 @@
                 
                 
                 
-                <li><a href="news">新闻</a></li>
+                <li><a href="releases.html">发布</a></li>
                 
                 
                 
@@ -164,7 +164,7 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the Use Cases page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the 使用案例 page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
@@ -178,7 +178,11 @@
                 <li>
                     <!--start search-->
                     <div id="search-demo-container">
-                        <input type="text" id="search-input" placeholder="search...">
+
+                        
+                        <input type="text" id="search-input" placeholder="搜索...">
+                        
+
                         <ul id="results-container"></ul>
                     </div>
                     <script src="/js/jekyll-search.js" type="text/javascript"></script>
@@ -187,7 +191,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: '/search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="Use Cases">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="使用案例">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -223,12 +227,12 @@
     
     
     <li>
-        <a href="#">Getting Started</a>
+        <a href="#">入门指南</a>
         <ul>
             
             
             
-            <li><a href="quickstart.html">快速入门</a></li>
+            <li><a href="quickstart.html">快速开始</a></li>
             
             
             
@@ -242,7 +246,7 @@
             
             
             
-            <li><a href="powered_by.html">演讲 & Powered By</a></li>
+            <li><a href="powered_by.html">演讲 & Hudi 用户</a></li>
             
             
             
@@ -341,7 +345,7 @@
 <p>将外部源(如事件日志、数据库、外部源)的数据摄取到<a href="http://martinfowler.com/bliki/DataLake.html">Hadoop数据湖</a>是一个众所周知的问题。
 尽管这些数据对整个组织来说是最有价值的，但不幸的是，在大多数(如果不是全部)Hadoop部署中都使用零散的方式解决，即使用多个不同的摄取工具。</p>
 
-<p>对于RDBMS摄取，Hudi提供<strong>通过Upserts提供了更快加载</strong>，而不是昂贵且低效的批量加载。例如，您可以读取MySQL Binlog或<a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop增量导入</a>并将其应用于
+<p>对于RDBMS摄取，Hudi提供 <strong>通过更新插入达到更快加载</strong>，而不是昂贵且低效的批量加载。例如，您可以读取MySQL BIN日志或<a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop增量导入</a>并将其应用于
 DFS上的等效Hudi表。这比<a href="https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457">批量合并任务</a>及<a href="http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/">复杂的手工合并工作流</a>更快/更有效率。</p>
 
 <p>对于NoSQL数据存储，如<a href="http://cassandra.apache.org/">Cassandra</a> / <a href="http://www.project-voldemort.com/voldemort/">Voldemort</a> / <a href="https://hbase.apache.org/">HBase</a>，即使是中等规模大小也会存储数十亿行。
@@ -357,8 +361,8 @@ DFS上的等效Hudi表。这比<a href="https://sqoop.apache.org/docs/1.4.0-incu
 这对于较小规模的数据量来说绝对是完美的(<a href="https://blog.twitter.com/2015/hadoop-filesystem-at-twitter">相比于这样安装Hadoop</a>)，这种情况需要在亚秒级响应查询，例如系统监控或交互式实时分析。
 但是，由于Hadoop上的数据太陈旧了，通常这些系统会被滥用于非交互式查询，这导致利用率不足和硬件/许可证成本的浪费。</p>
 
-<p>另一方面，Hadoop上的交互式SQL解决方案(如Presto和SparkSQL)表现出色，在<strong>几秒钟内完成查询</strong>。
-通过将<strong>数据新鲜度提高到几分钟</strong>，Hudi可以提供一个更有效的替代方案，并支持存储在DFS中的<strong>数量级更大的数据集</strong>的实时分析。
+<p>另一方面，Hadoop上的交互式SQL解决方案(如Presto和SparkSQL)表现出色，在 <strong>几秒钟内完成查询</strong>。
+通过将 <strong>数据新鲜度提高到几分钟</strong>，Hudi可以提供一个更有效的替代方案，并支持存储在DFS中的 <strong>数量级更大的数据集</strong> 的实时分析。
 此外，Hudi没有外部依赖(如专用于实时分析的HBase集群)，因此可以在更新的分析上实现更快的分析，而不会增加操作开销。</p>
 
 <h2 id="增量处理管道">增量处理管道</h2>
@@ -385,7 +389,7 @@ DFS上的等效Hudi表。这比<a href="https://sqoop.apache.org/docs/1.4.0-incu
 
 <p>一个常用场景是先在Hadoop上处理数据，然后将其分发回在线服务存储层，以供应用程序使用。
 例如，一个Spark管道可以<a href="https://eng.uber.com/telematics/">确定Hadoop上的紧急制动事件</a>并将它们加载到服务存储层(如ElasticSearch)中，供Uber应用程序使用以增加安全驾驶。这种用例中，通常架构会在Hadoop和服务存储之间引入<code class="highlighter-rouge">队列</code>，以防止目标服务存储被压垮。
-对于队列的选择，一种流行的选择是Kafka，这个模型经常导致<strong>在DFS上存储相同数据的冗余(用于计算结果的离线分析)和Kafka(用于分发)</strong></p>
+对于队列的选择，一种流行的选择是Kafka，这个模型经常导致 <strong>在DFS上存储相同数据的冗余(用于计算结果的离线分析)和Kafka(用于分发)</strong></p>
 
 <p>通过将每次运行的Spark管道更新插入的输出转换为Hudi数据集，Hudi可以再次有效地解决这个问题，然后可以以增量方式获取尾部数据(就像Kafka topic一样)然后写入服务存储层。</p>
 

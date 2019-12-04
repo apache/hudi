@@ -18,6 +18,6 @@ Hudi（发音为“hoodie”）摄取与管理处于DFS([HDFS](http://hadoop.apa
     <img class="docimage" src="/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于[presto](https://prestodb.io)和[spark](https://spark.apache.org/sql/)等交互式SQL引擎，同时能够从处理/ETL框架（如[hive](https://hive.apache.org/)& [spark](https://spark.apache.org/docs/latest/)中进行增量消费以构建派生（Hudi）数据集。
+通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于[presto](https://prestodb.io)和[spark](https://spark.apache.org/sql/)等交互式SQL引擎，同时能够从处理/ETL框架（如[hive](https://hive.apache.org/)和 [spark](https://spark.apache.org/docs/latest/)中进行增量消费以构建派生（Hudi）数据集。
 
-Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见[快速启动](quickstart.html)。
+Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见[快速开始](quickstart.html)。

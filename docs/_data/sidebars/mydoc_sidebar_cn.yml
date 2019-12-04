@@ -6,11 +6,11 @@ entries:
   version: (0.5.0-incubating)
   folders:
 
-  - title: Getting Started
+  - title: 入门指南
     output: web
     folderitems:
 
-    - title: 快速入门
+    - title: 快速开始
       url: /quickstart.html
       output: web
 
@@ -18,7 +18,7 @@ entries:
       url: /use_cases.html
       output: web
 
-    - title: 演讲 & Powered By
+    - title: 演讲 & Hudi 用户
       url: /powered_by.html
       output: web
 

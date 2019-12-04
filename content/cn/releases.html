@@ -3,9 +3,9 @@
     <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。">
-<meta name="keywords" content="big data, stream processing, cloud, hdfs, storage, upserts, change capture">
-<title>什么是Hudi? | Hudi</title>
+<meta name="description" content="">
+<meta name="keywords" content="apache, hudi, release, data lake, upsert">
+<title>发布 | Hudi</title>
 <link rel="stylesheet" href="/css/syntax.css">
 
 
@@ -115,7 +115,7 @@
                 
                 
                 
-                <li><a href="releases.html">发布</a></li>
+                <li class="active"><a href="releases.html">发布</a></li>
                 
                 
                 
@@ -164,14 +164,14 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the 什么是Hudi? page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the 发布 page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
 		
                 <li>
                     
-                    <a href="/index.html">English</a>
+                    <a href="/releases.html">English</a>
                     
                 </li>
                 <!--comment out this block if you want to hide search-->
@@ -191,7 +191,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: '/search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="什么是Hudi?">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="发布">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -222,96 +222,8 @@
 
 
 <ul id="mysidebar" class="nav">
-    <li class="sidebarTitle">Version (0.5.0-incubating)</li>
+    <li class="sidebarTitle"> </li>
     
-    
-    
-    <li>
-        <a href="#">入门指南</a>
-        <ul>
-            
-            
-            
-            <li><a href="quickstart.html">快速开始</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="use_cases.html">使用案例</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="powered_by.html">演讲 & Hudi 用户</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="comparison.html">对比</a></li>
-            
-            
-            
-            
-        </ul>
-        
-        
-    
-    <li>
-        <a href="#">文档</a>
-        <ul>
-            
-            
-            
-            <li><a href="concepts.html">概念</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="writing_data.html">写入数据</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="querying_data.html">查询数据</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="configurations.html">配置</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="performance.html">性能</a></li>
-            
-            
-            
-            
-            
-            
-            <li><a href="admin_guide.html">管理</a></li>
-            
-            
-            
-            
-        </ul>
-        
-        
-        
         <!-- if you aren't using the accordion, uncomment this block:
            <p class="external">
                <a href="#" id="collapseAll">Collapse All</a> | <a href="#" id="expandAll">Expand All</a>
@@ -327,7 +239,7 @@
         <!-- Content Column -->
         <div class="col-md-8">
             <div class="post-header">
-   <h1 class="post-title-main">什么是Hudi?</h1>
+   <h1 class="post-title-main">发布</h1>
 </div>
 
 
@@ -335,26 +247,38 @@
 <div class="post-content">
 
    
-    <div class="summary">Hudi为大数据带来流处理，在提供新数据的同时，比传统的批处理效率高出一个数量级。</div>
-   
 
     
 
-  <p>Hudi（发音为“hoodie”）摄取与管理处于DFS(<a href="http://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html">HDFS</a> 或云存储)之上的大型分析数据集并为查询访问提供三个逻辑视图。</p>
-
+  <h2 id="最新稳定版本">最新稳定版本</h2>
 <ul>
-  <li><strong>读优化视图</strong> - 在纯列式存储上提供出色的查询性能，非常像<a href="https://parquet.apache.org/">parquet</a>表。</li>
-  <li><strong>增量视图</strong> - 在数据集之上提供一个变更流并提供给下游的作业或ETL任务。</li>
-  <li><strong>准实时的表</strong> - 使用基于列存储和行存储(例如 Parquet + <a href="http://avro.apache.org/docs/current/mr.html">Avro</a>)以提供对实时数据的查询</li>
+  <li>稳定版本 : <code class="highlighter-rouge">0.5.0-incubating</code></li>
 </ul>
 
-<figure>
-    <img class="docimage" src="/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
-</figure>
+<h2 id="050-incubating-版本">0.5.0-incubating 版本</h2>
 
-<p>通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于<a href="https://prestodb.io">presto</a>和<a href="https://spark.apache.org/sql/">spark</a>等交互式SQL引擎，同时能够从处理/ETL框架（如<a href="https://hive.apache.org/">hive</a>和 <a href="https://spark.apache.org/docs/latest/">spark</a>中进行增量消费以构建派生（Hudi）数据集。</p>
+<h3 id="下载">下载</h3>
+<ul>
+  <li>源码包 : <a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi(incubating) 0.5.0-incubating Source Release</a> (<a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://www.apache.org/dist/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li><a href="https://repository.apache.org/#nexus-search;quick~hudi">这里</a>提供与此版本对应的 Apache Hudi (incubating) JAR 包。</li>
+</ul>
 
-<p>Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见<a href="quickstart.html">快速开始</a>。</p>
+<h3 id="发布要点">发布要点</h3>
+<ul>
+  <li>Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)</li>
+  <li>Major redo of Hudi bundles to address class and jar version mismatches in different environments</li>
+  <li>Upgrade from Hive 1.x to Hive 2.x for compile time dependencies - Hive 1.x runtime integration still works with a patch : See <a href="https://lists.apache.org/thread.html/48b3f0553f47c576fd7072f56bb0d8a24fb47d4003880d179c7f88a3@%3Cdev.hudi.apache.org%3E">the discussion thread</a></li>
+  <li>DeltaStreamer now supports continuous running mode with managed concurrent compaction</li>
+  <li>Support for Composite Keys as record key</li>
+  <li>HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables</li>
+</ul>
+
+<h3 id="此版本的迁移指南">此版本的迁移指南</h3>
+<p>这是 Apache Hudi (incubating) 的第一次发布。 在此版本之前，Hudi Jars 使用 “com.uber.hoodie” maven co-ordinates 来发布。这里有<a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">迁移指南</a>。</p>
+
+<h3 id="原始发布记录">原始发布记录</h3>
+<p>获取原始<a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">发布记录</a></p>
+
 
 
     <div class="tags">
