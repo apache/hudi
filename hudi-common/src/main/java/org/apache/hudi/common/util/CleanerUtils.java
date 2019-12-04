@@ -20,14 +20,17 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
 import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
 
 import com.google.common.collect.ImmutableMap;
 
+import java.io.IOException;
 import java.util.List;
 
 public class CleanerUtils {
@@ -54,9 +57,35 @@ public class CleanerUtils {
 
     HoodieCleanMetadata metadata = new HoodieCleanMetadata(startCleanTime,
         durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_1);
+        partitionMetadataBuilder.build(), CLEAN_METADATA_VERSION_2);
+    return metadata;
+  }
 
+  /**
+   * Get Latest Version of Hoodie Cleaner Metadata - Output of cleaner operation.
+   * @param metaClient Hoodie Table Meta Client
+   * @param cleanInstant Instant referring to clean action
+   * @return Latest version of Clean metadata corresponding to clean instant
+   * @throws IOException
+   */
+  public static HoodieCleanMetadata getCleanerMetadata(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
+      throws IOException {
     CleanMetadataMigrator metadataMigrator = new CleanMetadataMigrator(metaClient);
-    return metadataMigrator.upgradeToLatest(metadata, metadata.getVersion());
+    HoodieCleanMetadata cleanMetadata = AvroUtils.deserializeHoodieCleanMetadata(
+        metaClient.getActiveTimeline().readPlanAsBytes(cleanInstant).get());
+    return metadataMigrator.upgradeToLatest(cleanMetadata, cleanMetadata.getVersion());
+  }
+
+  /**
+   * Get Cleaner Plan corresponding to a clean instant.
+   * @param metaClient  Hoodie Table Meta Client
+   * @param cleanInstant Instant referring to clean action
+   * @return Cleaner plan corresponding to clean instant
+   * @throws IOException
+   */
+  public static HoodieCleanerPlan getCleanerPlan(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant)
+      throws IOException {
+    return AvroUtils.deserializeAvroMetadata(metaClient.getActiveTimeline().readPlanAsBytes(cleanInstant).get(),
+        HoodieCleanerPlan.class);
   }
 }

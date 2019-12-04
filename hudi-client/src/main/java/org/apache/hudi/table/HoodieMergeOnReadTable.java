@@ -44,7 +44,6 @@ import org.apache.hudi.io.compact.HoodieRealtimeTableCompactor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Sets;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -167,32 +166,39 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, String commit, boolean deleteInstants)
-      throws IOException {
+  public List<HoodieRollbackStat> rollback(JavaSparkContext jsc, HoodieInstant instant,
+      boolean deleteInstants) throws IOException {
+    Long startTime = System.currentTimeMillis();
+
+    String commit = instant.getTimestamp();
+    LOG.error("Rolling back instant " + instant);
+
+    // Atomically un-publish all non-inflight commits
+    if (instant.isCompleted()) {
+      LOG.error("Un-publishing instant " + instant + ", deleteInstants=" + deleteInstants);
+      instant = this.getActiveTimeline().revertToInflight(instant);
+    }
+
+    List<HoodieRollbackStat> allRollbackStats = new ArrayList<>();
+
     // At the moment, MOR table type does not support bulk nested rollbacks. Nested rollbacks is an experimental
     // feature that is expensive. To perform nested rollbacks, initiate multiple requests of client.rollback
     // (commitToRollback).
     // NOTE {@link HoodieCompactionConfig#withCompactionLazyBlockReadEnabled} needs to be set to TRUE. This is
     // required to avoid OOM when merging multiple LogBlocks performed during nested rollbacks.
     // Atomically un-publish all non-inflight commits
-    Option<HoodieInstant> commitOrCompactionOption = Option.fromJavaOptional(this.getActiveTimeline()
-        .getTimelineOfActions(Sets.newHashSet(HoodieActiveTimeline.COMMIT_ACTION,
-            HoodieActiveTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.COMPACTION_ACTION))
-        .getInstants().filter(i -> commit.equals(i.getTimestamp())).findFirst());
-    HoodieInstant instantToRollback = commitOrCompactionOption.get();
     // Atomically un-publish all non-inflight commits
-    if (!instantToRollback.isInflight()) {
-      this.getActiveTimeline().revertToInflight(instantToRollback);
+    // For Requested State (like failure during index lookup), there is nothing to do rollback other than
+    // deleting the timeline file
+    if (!instant.isRequested()) {
+      LOG.info("Unpublished " + commit);
+      List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, instant);
+      // TODO: We need to persist this as rollback workload and use it in case of partial failures
+      allRollbackStats = new RollbackExecutor(metaClient, config).performRollback(jsc, instant, rollbackRequests);
     }
-    LOG.info("Unpublished " + commit);
-    Long startTime = System.currentTimeMillis();
-    List<RollbackRequest> rollbackRequests = generateRollbackRequests(jsc, instantToRollback);
-    // TODO: We need to persist this as rollback workload and use it in case of partial failures
-    List<HoodieRollbackStat> allRollbackStats =
-        new RollbackExecutor(metaClient, config).performRollback(jsc, instantToRollback, rollbackRequests);
+
     // Delete Inflight instants if enabled
-    deleteInflightInstant(deleteInstants, this.getActiveTimeline(),
-        new HoodieInstant(true, instantToRollback.getAction(), instantToRollback.getTimestamp()));
+    deleteInflightAndRequestedInstant(deleteInstants, this.getActiveTimeline(), instant);
 
     LOG.info("Time(in ms) taken to finish rollback " + (System.currentTimeMillis() - startTime));
 

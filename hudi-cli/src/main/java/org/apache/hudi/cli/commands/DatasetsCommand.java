@@ -50,6 +50,7 @@ public class DatasetsCommand implements CommandMarker {
   @CliCommand(value = "connect", help = "Connect to a hoodie dataset")
   public String connect(
       @CliOption(key = {"path"}, mandatory = true, help = "Base Path of the dataset") final String path,
+      @CliOption(key = {"layoutVersion"}, mandatory = false, help = "Timeline Layout version") Integer layoutVersion,
       @CliOption(key = {"eventuallyConsistent"}, mandatory = false, unspecifiedDefaultValue = "false",
           help = "Enable eventual consistency") final boolean eventuallyConsistent,
       @CliOption(key = {"initialCheckIntervalMs"}, mandatory = false, unspecifiedDefaultValue = "2000",
@@ -65,7 +66,7 @@ public class DatasetsCommand implements CommandMarker {
             .withMaxConsistencyCheckIntervalMs(maxConsistencyIntervalMs).withMaxConsistencyChecks(maxConsistencyChecks)
             .build());
     HoodieCLI.initConf();
-    HoodieCLI.connectTo(path);
+    HoodieCLI.connectTo(path, layoutVersion);
     HoodieCLI.initFS(true);
     HoodieCLI.state = HoodieCLI.CLIState.DATASET;
     return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " loaded";
@@ -85,6 +86,8 @@ public class DatasetsCommand implements CommandMarker {
       @CliOption(key = {"tableName"}, mandatory = true, help = "Hoodie Table Name") final String name,
       @CliOption(key = {"tableType"}, unspecifiedDefaultValue = "COPY_ON_WRITE",
           help = "Hoodie Table Type. Must be one of : COPY_ON_WRITE or MERGE_ON_READ") final String tableTypeStr,
+      @CliOption(key = {"archiveLogFolder"}, help = "Folder Name for storing archived timeline") String archiveFolder,
+      @CliOption(key = {"layoutVersion"}, help = "Specific Layout Version to use") Integer layoutVersion,
       @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
           help = "Payload Class") final String payloadClass)
       throws IOException {
@@ -106,10 +109,11 @@ public class DatasetsCommand implements CommandMarker {
     }
 
     final HoodieTableType tableType = HoodieTableType.valueOf(tableTypeStr);
-    HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, payloadClass);
+    HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, archiveFolder,
+        payloadClass, layoutVersion);
 
     // Now connect to ensure loading works
-    return connect(path, false, 0, 0, 0);
+    return connect(path, layoutVersion, false, 0, 0, 0);
   }
 
   @CliAvailabilityIndicator({"desc"})

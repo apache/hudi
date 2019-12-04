@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
 
 public class TestBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
-  private final String commitTime = HoodieActiveTimeline.createNewCommitTime();
+  private final String commitTime = HoodieActiveTimeline.createNewInstantTime();
 
   @Before
   public void setUp() throws Exception {

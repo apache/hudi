@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -259,8 +260,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    */
   private void addCleanInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
     LOG.info("Syncing cleaner instant (" + instant + ")");
-    HoodieCleanMetadata cleanMetadata =
-        AvroUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get());
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, instant);
     cleanMetadata.getPartitionMetadata().entrySet().stream().forEach(entry -> {
       final String basePath = metaClient.getBasePath();
       final String partitionPath = entry.getValue().getPartitionPath();

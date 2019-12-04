@@ -80,8 +80,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +99,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private static final Logger LOG = LogManager.getLogger(HoodieWriteClient.class);
   private static final String UPDATE_STR = "update";
   private static final String LOOKUP_STR = "lookup";
-  private final boolean rollbackInFlight;
+  private final boolean rollbackPending;
   private final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T> index;
   private final transient HoodieCleanClient<T> cleanClient;
@@ -119,21 +117,21 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    *
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackInFlight) {
-    this(jsc, clientConfig, rollbackInFlight, HoodieIndex.createIndex(clientConfig, jsc));
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending) {
+    this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig, jsc));
   }
 
   @VisibleForTesting
-  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackInFlight, HoodieIndex index) {
-    this(jsc, clientConfig, rollbackInFlight, index, Option.empty());
+  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
+    this(jsc, clientConfig, rollbackPending, index, Option.empty());
   }
 
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackInFlight,
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending,
       HoodieIndex index, Option<EmbeddedTimelineService> timelineService) {
     super(jsc, clientConfig, timelineService);
     this.index = index;
     this.metrics = new HoodieMetrics(config, config.getTableName());
-    this.rollbackInFlight = rollbackInFlight;
+    this.rollbackPending = rollbackPending;
     this.cleanClient = new HoodieCleanClient<>(jsc, config, metrics, timelineService);
   }
 
@@ -356,7 +354,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         return upsertRecordsInternal(taggedValidRecords, commitTime, table, true);
       } else {
         // if entire set of keys are non existent
-        JavaRDD<WriteStatus> writeStatusRDD = jsc.parallelize(Collections.EMPTY_LIST, 1);
+        saveWorkloadProfileMetadataToInflight(new WorkloadProfile(jsc.emptyRDD()), table, commitTime);
+        JavaRDD<WriteStatus> writeStatusRDD = jsc.emptyRDD();
         commitOnAutoCommit(commitTime, writeStatusRDD, table.getMetaClient().getCommitActionType());
         return writeStatusRDD;
       }
@@ -387,6 +386,9 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     // generate new file ID prefixes for each output partition
     final List<String> fileIDPrefixes =
         IntStream.range(0, parallelism).mapToObj(i -> FSUtils.createNewFileIdPfx()).collect(Collectors.toList());
+
+    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+        table.getMetaClient().getCommitActionType(), commitTime), Option.empty());
 
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
         .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(commitTime, config, table, fileIDPrefixes), true)
@@ -435,9 +437,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       });
 
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-      Option<HoodieInstant> instant =
-          activeTimeline.getCommitsTimeline().filterInflightsExcludingCompaction().lastInstant();
-      activeTimeline.saveToInflight(instant.get(), Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      String commitActionType = table.getMetaClient().getCommitActionType();
+      HoodieInstant requested = new HoodieInstant(State.REQUESTED, commitActionType, commitTime);
+      activeTimeline.transitionRequestedToInflight(requested,
+          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
     } catch (IOException io) {
       throw new HoodieCommitException("Failed to commit " + commitTime + " unable to save inflight metadata ", io);
     }
@@ -664,8 +667,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
       HoodieSavepointMetadata metadata = AvroUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
-      table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime),
-          AvroUtils.serializeSavepointMetadata(metadata));
+      table.getActiveTimeline().createNewInstant(
+          new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime));
+      table.getActiveTimeline()
+          .saveAsComplete(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, commitTime),
+              AvroUtils.serializeSavepointMetadata(metadata));
       LOG.info("Savepoint " + commitTime + " created");
       return true;
     } catch (IOException e) {
@@ -792,23 +798,25 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
         .filter(instant -> HoodieActiveTimeline.GREATER.test(instant.getTimestamp(), instantTime))
         .collect(Collectors.toList());
     // Start a rollback instant for all commits to be rolled back
-    String startRollbackInstant = startInstant();
+    String startRollbackInstant = HoodieActiveTimeline.createNewInstantTime();
     // Start the timer
     final Timer.Context context = startContext();
     ImmutableMap.Builder<String, List<HoodieRollbackStat>> instantsToStats = ImmutableMap.builder();
+    table.getActiveTimeline().createNewInstant(
+        new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, startRollbackInstant));
     instantsToRollback.stream().forEach(instant -> {
       try {
         switch (instant.getAction()) {
           case HoodieTimeline.COMMIT_ACTION:
           case HoodieTimeline.DELTA_COMMIT_ACTION:
-            List<HoodieRollbackStat> statsForInstant = doRollbackAndGetStats(instant.getTimestamp());
+            List<HoodieRollbackStat> statsForInstant = doRollbackAndGetStats(instant);
             instantsToStats.put(instant.getTimestamp(), statsForInstant);
             break;
           case HoodieTimeline.COMPACTION_ACTION:
             // TODO : Get file status and create a rollback stat and file
             // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
             // delete these files when it does not see a corresponding instant file under .hoodie
-            List<HoodieRollbackStat> statsForCompaction = doRollbackAndGetStats(instant.getTimestamp());
+            List<HoodieRollbackStat> statsForCompaction = doRollbackAndGetStats(instant);
             instantsToStats.put(instant.getTimestamp(), statsForCompaction);
             LOG.info("Deleted compaction instant " + instant);
             break;
@@ -828,17 +836,16 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     }
   }
 
-  private String startInstant() {
-    return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
-  }
-
   private Timer.Context startContext() {
     return metrics.getRollbackCtx();
   }
 
-  private List<HoodieRollbackStat> doRollbackAndGetStats(final String commitToRollback) throws IOException {
-    HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
-    HoodieTimeline inflightCommitTimeline = table.getInflightCommitTimeline();
+  private List<HoodieRollbackStat> doRollbackAndGetStats(final HoodieInstant instantToRollback) throws
+      IOException {
+    final String commitToRollback = instantToRollback.getTimestamp();
+    HoodieTable<T> table = HoodieTable.getHoodieTable(
+        createMetaClient(true), config, jsc);
+    HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     // Check if any of the commits is a savepoint - do not allow rollback on those commits
     List<String> savepoints = table.getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp)
@@ -850,7 +857,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       }
     });
 
-    if (commitTimeline.empty() && inflightCommitTimeline.empty()) {
+    if (commitTimeline.empty() && inflightAndRequestedCommitTimeline.empty()) {
       // nothing to rollback
       LOG.info("No commits to rollback " + commitToRollback);
     }
@@ -865,14 +872,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
           "Found commits after time :" + lastCommit + ", please rollback greater commits first");
     }
 
-    List<String> inflights =
-        inflightCommitTimeline.getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+    List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toList());
     if ((lastCommit != null) && !inflights.isEmpty() && (inflights.indexOf(lastCommit) != inflights.size() - 1)) {
       throw new HoodieRollbackException(
           "Found in-flight commits after time :" + lastCommit + ", please rollback greater commits first");
     }
 
-    List<HoodieRollbackStat> stats = table.rollback(jsc, commitToRollback, true);
+    List<HoodieRollbackStat> stats = table.rollback(jsc, instantToRollback, true);
 
     LOG.info("Deleted inflight commits " + commitToRollback);
 
@@ -893,9 +900,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
       metrics.updateRollbackMetrics(durationInMs.get(), numFilesDeleted);
     }
-    HoodieRollbackMetadata rollbackMetadata =
-        AvroUtils.convertRollbackMetadata(startRollbackTime, durationInMs, commitsToRollback, rollbackStats);
-    table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
+    HoodieRollbackMetadata rollbackMetadata = AvroUtils
+        .convertRollbackMetadata(startRollbackTime, durationInMs, commitsToRollback, rollbackStats);
+    //TODO: varadarb - This will be fixed in subsequent PR when Rollback and Clean transition mimics that of commit
+    table.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION,
+        startRollbackTime));
+    table.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, startRollbackTime),
         AvroUtils.serializeRollbackMetadata(rollbackMetadata));
     LOG.info("Commits " + commitsToRollback + " rollback is complete");
 
@@ -937,17 +948,22 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   private void rollbackInternal(String commitToRollback) {
-    if (commitToRollback.isEmpty()) {
-      LOG.info("List of commits to rollback is empty");
-      return;
-    }
-    final String startRollbackTime = startInstant();
+    final String startRollbackTime = HoodieActiveTimeline.createNewInstantTime();
     final Timer.Context context = startContext();
     // Create a Hoodie table which encapsulated the commits and files visible
     try {
-      List<HoodieRollbackStat> stats = doRollbackAndGetStats(commitToRollback);
-      Map<String, List<HoodieRollbackStat>> statToCommit = new HashMap<>();
-      finishRollback(context, stats, Arrays.asList(commitToRollback), startRollbackTime);
+      // Create a Hoodie table which encapsulated the commits and files visible
+      HoodieTable<T> table = HoodieTable.getHoodieTable(
+          createMetaClient(true), config, jsc);
+      Option<HoodieInstant> rollbackInstantOpt =
+          Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstants()
+          .filter(instant -> HoodieActiveTimeline.EQUAL.test(instant.getTimestamp(), commitToRollback))
+          .findFirst());
+
+      if (rollbackInstantOpt.isPresent()) {
+        List<HoodieRollbackStat> stats = doRollbackAndGetStats(rollbackInstantOpt.get());
+        finishRollback(context, stats, Arrays.asList(commitToRollback), startRollbackTime);
+      }
     } catch (IOException e) {
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitToRollback,
           e);
@@ -992,20 +1008,20 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   public String startCommit() {
     // NOTE : Need to ensure that rollback is done before a new commit is started
-    if (rollbackInFlight) {
-      // Only rollback inflight commit/delta-commits. Do not touch compaction commits
-      rollbackInflightCommits();
+    if (rollbackPending) {
+      // Only rollback pending commit/delta-commits. Do not touch compaction commits
+      rollbackPendingCommits();
     }
-    String commitTime = HoodieActiveTimeline.createNewCommitTime();
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
     startCommit(commitTime);
     return commitTime;
   }
 
   public void startCommitWithTime(String instantTime) {
     // NOTE : Need to ensure that rollback is done before a new commit is started
-    if (rollbackInFlight) {
+    if (rollbackPending) {
       // Only rollback inflight commit/delta-commits. Do not touch compaction commits
-      rollbackInflightCommits();
+      rollbackPendingCommits();
     }
     startCommit(instantTime);
   }
@@ -1023,14 +1039,14 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     String commitActionType = table.getMetaClient().getCommitActionType();
-    activeTimeline.createInflight(new HoodieInstant(true, commitActionType, instantTime));
+    activeTimeline.createNewInstant(new HoodieInstant(State.REQUESTED, commitActionType, instantTime));
   }
 
   /**
    * Schedules a new compaction instant.
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws IOException {
-    String instantTime = HoodieActiveTimeline.createNewCommitTime();
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
     LOG.info("Generate a new instant time " + instantTime);
     boolean notEmpty = scheduleCompactionAtInstant(instantTime, extraMetadata);
     return notEmpty ? Option.of(instantTime) : Option.empty();
@@ -1046,7 +1062,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       throws IOException {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-    metaClient.getCommitsTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
+    metaClient.getCommitsTimeline().filterPendingExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
       Preconditions.checkArgument(
           HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
           "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
@@ -1091,7 +1107,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
-        timeline.getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
+        timeline.readPlanAsBytes(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
     // Merge extra meta-data passed by user with the one already in inflight compaction
     Option<Map<String, String>> mergedMetaData = extraMetadata.map(m -> {
       Map<String, String> merged = new HashMap<>();
@@ -1141,11 +1157,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Cleanup all inflight commits.
+   * Cleanup all pending commits.
    */
-  private void rollbackInflightCommits() {
+  private void rollbackPendingCommits() {
     HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterInflightsExcludingCompaction();
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     for (String commit : commits) {
@@ -1238,7 +1254,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     HoodieTableMetaClient metaClient = createMetaClient(true);
     HoodieCompactionPlan compactionPlan =
         CompactionUtils.getCompactionPlan(metaClient, compactionInstant.getTimestamp());
-
     // Mark instant as compaction inflight
     activeTimeline.transitionCompactionRequestedToInflight(compactionInstant);
     compactionTimer = metrics.getCompactionCtx();
@@ -1306,7 +1321,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   @VisibleForTesting
   void rollbackInflightCompaction(HoodieInstant inflightInstant, HoodieTable table) throws IOException {
-    table.rollback(jsc, inflightInstant.getTimestamp(), false);
+    table.rollback(jsc, inflightInstant, false);
     // Revert instant state file
     table.getActiveTimeline().revertCompactionInflightToRequested(inflightInstant);
   }

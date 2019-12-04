@@ -18,14 +18,17 @@
 
 package org.apache.hudi.cli;
 
+import org.apache.hudi.common.model.TimelineLayoutVersion;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
+
 
 /**
  * This class is responsible to load table metadata and hoodie related configs.
@@ -39,6 +42,7 @@ public class HoodieCLI {
   public static String basePath;
   public static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
+  public static TimelineLayoutVersion layoutVersion;
 
   /**
    * Enum for CLI state.
@@ -59,6 +63,11 @@ public class HoodieCLI {
     HoodieCLI.basePath = basePath;
   }
 
+  private static void setLayoutVersion(Integer layoutVersion) {
+    HoodieCLI.layoutVersion = new TimelineLayoutVersion(
+        (layoutVersion == null) ? TimelineLayoutVersion.CURR_VERSION : layoutVersion);
+  }
+
   public static boolean initConf() {
     if (HoodieCLI.conf == null) {
       HoodieCLI.conf = FSUtils.prepareHadoopConf(new Configuration());
@@ -74,11 +83,13 @@ public class HoodieCLI {
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(new HoodieTableMetaClient(HoodieCLI.conf, basePath, false, HoodieCLI.consistencyGuardConfig));
+    setTableMetaClient(new HoodieTableMetaClient(HoodieCLI.conf, basePath, false, HoodieCLI.consistencyGuardConfig,
+        Option.of(layoutVersion)));
   }
 
-  public static void connectTo(String basePath) {
+  public static void connectTo(String basePath, Integer layoutVersion) {
     setBasePath(basePath);
+    setLayoutVersion(layoutVersion);
     refreshTableMetadata();
   }
 }

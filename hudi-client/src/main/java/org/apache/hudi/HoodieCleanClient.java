@@ -67,7 +67,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
    * cleaned)
    */
   public void clean() throws HoodieIOException {
-    String startCleanTime = HoodieActiveTimeline.createNewCommitTime();
+    String startCleanTime = HoodieActiveTimeline.createNewInstantTime();
     clean(startCleanTime);
   }
 
@@ -86,7 +86,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
     // If there are inflight(failed) or previously requested clean operation, first perform them
     table.getCleanTimeline().filterInflightsAndRequested().getInstants().forEach(hoodieInstant -> {
       LOG.info("There were previously unfinished cleaner operations. Finishing Instant=" + hoodieInstant);
-      runClean(table, hoodieInstant.getTimestamp());
+      runClean(table, hoodieInstant);
     });
 
     Option<HoodieCleanerPlan> cleanerPlanOpt = scheduleClean(startCleanTime);
@@ -96,7 +96,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
       if ((cleanerPlan.getFilesToBeDeletedPerPartition() != null)
           && !cleanerPlan.getFilesToBeDeletedPerPartition().isEmpty()) {
         final HoodieTable<T> hoodieTable = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
-        return runClean(hoodieTable, startCleanTime);
+        return runClean(hoodieTable, HoodieTimeline.getCleanRequestedInstant(startCleanTime), cleanerPlan);
       }
     }
     return null;
@@ -136,13 +136,20 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
    * Executes the Cleaner plan stored in the instant metadata.
    *
    * @param table Hoodie Table
-   * @param cleanInstantTs Cleaner Instant Timestamp
+   * @param cleanInstant Cleaner Instant
    */
   @VisibleForTesting
-  protected HoodieCleanMetadata runClean(HoodieTable<T> table, String cleanInstantTs) {
-    HoodieInstant cleanInstant =
-        table.getCleanTimeline().getInstants().filter(x -> x.getTimestamp().equals(cleanInstantTs)).findFirst().get();
+  protected HoodieCleanMetadata runClean(HoodieTable<T> table, HoodieInstant cleanInstant) {
+    try {
+      HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(table.getMetaClient(), cleanInstant);
+      return runClean(table, cleanInstant, cleanerPlan);
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
 
+  private HoodieCleanMetadata runClean(HoodieTable<T> table, HoodieInstant cleanInstant,
+      HoodieCleanerPlan cleanerPlan) {
     Preconditions.checkArgument(
         cleanInstant.getState().equals(State.REQUESTED) || cleanInstant.getState().equals(State.INFLIGHT));
 
@@ -152,10 +159,11 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
 
       if (!cleanInstant.isInflight()) {
         // Mark as inflight first
-        cleanInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant);
+        cleanInstant = table.getActiveTimeline().transitionCleanRequestedToInflight(cleanInstant,
+            AvroUtils.serializeCleanerPlan(cleanerPlan));
       }
 
-      List<HoodieCleanStat> cleanStats = table.clean(jsc, cleanInstant);
+      List<HoodieCleanStat> cleanStats = table.clean(jsc, cleanInstant, cleanerPlan);
 
       if (cleanStats.isEmpty()) {
         return HoodieCleanMetadata.newBuilder().build();

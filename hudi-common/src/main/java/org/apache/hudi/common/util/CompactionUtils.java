@@ -139,8 +139,9 @@ public class CompactionUtils {
   public static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
     CompactionPlanMigrator migrator = new CompactionPlanMigrator(metaClient);
-    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(metaClient.getActiveTimeline()
-        .getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
+    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+        metaClient.getActiveTimeline().readPlanAsBytes(
+            HoodieTimeline.getCompactionRequestedInstant(compactionInstant)).get());
     return migrator.upgradeToLatest(compactionPlan, compactionPlan.getVersion());
   }
 

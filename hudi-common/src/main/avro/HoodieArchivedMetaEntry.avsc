@@ -37,6 +37,7 @@
          "default": null
       },
       {
+         /** DEPRECATED **/
          "name":"hoodieCompactionMetadata",
          "type":[
             "null",
@@ -74,6 +75,27 @@
          "name":"version",
          "type":["int", "null"],
          "default": 1
+      },
+      {
+         "name":"hoodieCompactionPlan",
+         "type":[
+            "null",
+            "HoodieCompactionPlan"
+         ],
+         "default": null
+      },
+      {
+         "name":"hoodieCleanerPlan",
+         "type":[
+            "null",
+            "HoodieCleanerPlan"
+         ],
+         "default": null
+      },
+      {
+         "name":"actionState",
+         "type":["null","string"],
+         "default": null
       }
    ]
 }

@@ -129,8 +129,11 @@ public class CompactionTestUtils {
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) throws IOException {
-    metaClient.getActiveTimeline().saveAsComplete(new HoodieInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime),
-        Option.empty());
+    HoodieInstant requested = new HoodieInstant(State.REQUESTED, DELTA_COMMIT_ACTION, instantTime);
+    metaClient.getActiveTimeline().createNewInstant(requested);
+    metaClient.getActiveTimeline().transitionRequestedToInflight(requested, Option.empty());
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
   }
 
   public static void scheduleInflightCompaction(HoodieTableMetaClient metaClient, String instantTime,

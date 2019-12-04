@@ -97,32 +97,33 @@ public class CompactionCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     for (int i = 0; i < instants.size(); i++) {
       HoodieInstant instant = instants.get(i);
-      HoodieCompactionPlan workload = null;
+      HoodieCompactionPlan compactionPlan = null;
       if (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
-          workload = AvroUtils.deserializeCompactionPlan(activeTimeline
-              .getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+          compactionPlan = AvroUtils.deserializeCompactionPlan(
+              activeTimeline.readPlanAsBytes(
+                  HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
         } catch (HoodieIOException ioe) {
           // SKIP
         }
       } else {
-        workload = AvroUtils.deserializeCompactionPlan(activeTimeline
-            .getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
+        compactionPlan = AvroUtils.deserializeCompactionPlan(activeTimeline.readPlanAsBytes(
+            HoodieTimeline.getCompactionRequestedInstant(instant.getTimestamp())).get());
       }
 
-      if (null != workload) {
+      if (null != compactionPlan) {
         HoodieInstant.State state = instant.getState();
         if (committed.contains(instant.getTimestamp())) {
           state = State.COMPLETED;
         }
         if (includeExtraMetadata) {
           rows.add(new Comparable[] {instant.getTimestamp(), state.toString(),
-              workload.getOperations() == null ? 0 : workload.getOperations().size(),
-              workload.getExtraMetadata().toString()});
+              compactionPlan.getOperations() == null ? 0 : compactionPlan.getOperations().size(),
+              compactionPlan.getExtraMetadata().toString()});
         } else {
           rows.add(new Comparable[] {instant.getTimestamp(), state.toString(),
-              workload.getOperations() == null ? 0 : workload.getOperations().size()});
+              compactionPlan.getOperations() == null ? 0 : compactionPlan.getOperations().size()});
         }
       }
     }
@@ -148,12 +149,13 @@ public class CompactionCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
-    HoodieCompactionPlan workload = AvroUtils.deserializeCompactionPlan(activeTimeline
-        .getInstantAuxiliaryDetails(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
+    HoodieCompactionPlan compactionPlan = AvroUtils.deserializeCompactionPlan(
+        activeTimeline.readPlanAsBytes(
+            HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)).get());
 
     List<Comparable[]> rows = new ArrayList<>();
-    if ((null != workload) && (null != workload.getOperations())) {
-      for (HoodieCompactionOperation op : workload.getOperations()) {
+    if ((null != compactionPlan) && (null != compactionPlan.getOperations())) {
+      for (HoodieCompactionOperation op : compactionPlan.getOperations()) {
         rows.add(new Comparable[] {op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
             op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
       }
@@ -173,7 +175,7 @@ public class CompactionCommand implements CommandMarker {
     HoodieCLI.initFS(initialized);
 
     // First get a compaction instant time and pass it to spark launcher for scheduling compaction
-    String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+    String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
 
     if (HoodieCLI.tableMetadata.getTableType() == HoodieTableType.MERGE_ON_READ) {
       String sparkPropertiesPath =

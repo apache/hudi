@@ -196,7 +196,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
-      client.startCommit();
+      client.startCommitWithTime(newCommitTime);
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
@@ -821,6 +821,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
         }
 
         // Mark 2nd delta-instant as completed
+        metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(State.INFLIGHT,
+            HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime));
         metaClient.getActiveTimeline().saveAsComplete(
             new HoodieInstant(State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
@@ -1009,6 +1011,8 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       table = HoodieTable.getHoodieTable(new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath), config, jsc);
       tableRTFileSystemView = table.getRTFileSystemView();
       ((SyncableFileSystemView) tableRTFileSystemView).reset();
+      Option<HoodieInstant> lastInstant = ((SyncableFileSystemView) tableRTFileSystemView).getLastInstant();
+      System.out.println("Last Instant =" + lastInstant);
       for (String partitionPath : dataGen.getPartitionPaths()) {
         Assert.assertTrue(tableRTFileSystemView.getLatestFileSlices(partitionPath)
             .filter(fileSlice -> fileSlice.getDataFile().isPresent()).count() == 0);
@@ -1032,8 +1036,10 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
       // Create a commit without rolling stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
-      HoodieInstant instant = new HoodieInstant(true, commitActionType, "000");
-      activeTimeline.createInflight(instant);
+      HoodieInstant instant = new HoodieInstant(State.REQUESTED, commitActionType, "000");
+      activeTimeline.createNewInstant(instant);
+      activeTimeline.transitionRequestedToInflight(instant, Option.empty());
+      instant = new HoodieInstant(State.INFLIGHT, commitActionType, "000");
       activeTimeline.saveAsComplete(instant, Option.empty());
 
       String commitTime = "001";

@@ -101,7 +101,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   public void testCompactionOnCopyOnWriteFail() throws Exception {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, getConfig(), jsc);
-    String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+    String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
     table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
   }
 
@@ -117,7 +117,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.insert(recordsRDD, newCommitTime).collect();
 
-      String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+      String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
       JavaRDD<WriteStatus> result =
           table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
       assertTrue("If there is nothing to compact, result will be empty", result.isEmpty());
@@ -167,7 +167,7 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
-      String compactionInstantTime = HoodieActiveTimeline.createNewCommitTime();
+      String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
       JavaRDD<WriteStatus> result =
           table.compact(jsc, compactionInstantTime, table.scheduleCompaction(jsc, compactionInstantTime));
 
