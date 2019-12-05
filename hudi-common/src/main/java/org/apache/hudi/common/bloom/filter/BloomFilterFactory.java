@@ -30,17 +30,23 @@ public class BloomFilterFactory {
    *
    * @param numEntries total number of entries
    * @param errorRate max allowed error rate
-   * @param bloomFilterTypeCode bloom filter type code
+   * @param bloomFilterTypeCodeOrdinal bloom filter type code ordinal as string
    * @return the {@link BloomFilter} thus created
    */
   public static BloomFilter createBloomFilter(int numEntries, double errorRate, int maxNumberOfEntries,
-      String bloomFilterTypeCode) {
-    if (bloomFilterTypeCode.equalsIgnoreCase(SimpleBloomFilter.TYPE_CODE)) {
-      return new SimpleBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH);
-    } else if (bloomFilterTypeCode.contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
-      return new HoodieDynamicBoundedBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH, maxNumberOfEntries);
+      String bloomFilterTypeCodeOrdinal) {
+    int ordinal = Integer.parseInt(bloomFilterTypeCodeOrdinal);
+    if (ordinal < BloomFilterTypeCode.values().length) {
+      BloomFilterTypeCode typeCode = BloomFilterTypeCode.values()[ordinal];
+      if (typeCode == BloomFilterTypeCode.SIMPLE) {
+        return new SimpleBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH);
+      } else if (typeCode == BloomFilterTypeCode.DYNAMIC_V0) {
+        return new HoodieDynamicBoundedBloomFilter(numEntries, errorRate, Hash.MURMUR_HASH, maxNumberOfEntries);
+      } else {
+        throw new IllegalArgumentException("Bloom Filter type code not recognizable " + typeCode);
+      }
     } else {
-      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
+      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCodeOrdinal);
     }
   }
 
@@ -48,16 +54,22 @@ public class BloomFilterFactory {
    * Generate {@link BloomFilter} from serialized String
    *
    * @param serString the serialized string of the {@link BloomFilter}
-   * @param bloomFilterTypeCode bloom filter type code
+   * @param bloomFilterTypeCodeOrdinal bloom filter type code ordinal as string
    * @return the {@link BloomFilter} thus generated from the passed in serialized string
    */
-  public static BloomFilter fromString(String serString, String bloomFilterTypeCode) {
-    if (bloomFilterTypeCode.equals(SimpleBloomFilter.TYPE_CODE)) {
-      return new SimpleBloomFilter(serString);
-    } else if (bloomFilterTypeCode.contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
-      return new HoodieDynamicBoundedBloomFilter(serString, bloomFilterTypeCode);
+  public static BloomFilter fromString(String serString, String bloomFilterTypeCodeOrdinal) {
+    int ordinal = Integer.parseInt(bloomFilterTypeCodeOrdinal);
+    if (ordinal < BloomFilterTypeCode.values().length) {
+      BloomFilterTypeCode typeCode = BloomFilterTypeCode.values()[ordinal];
+      if (typeCode == BloomFilterTypeCode.SIMPLE) {
+        return new SimpleBloomFilter(serString);
+      } else if (typeCode == BloomFilterTypeCode.DYNAMIC_V0) {
+        return new HoodieDynamicBoundedBloomFilter(serString, typeCode);
+      } else {
+        throw new IllegalArgumentException("Bloom Filter type code not recognizable " + typeCode);
+      }
     } else {
-      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCode);
+      throw new IllegalArgumentException("Bloom Filter type code not recognizable " + bloomFilterTypeCodeOrdinal);
     }
   }
 }

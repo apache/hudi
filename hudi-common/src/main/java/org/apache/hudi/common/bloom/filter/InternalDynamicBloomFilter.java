@@ -25,9 +25,11 @@ import org.apache.hadoop.util.bloom.BloomFilter;
 import org.apache.hadoop.util.bloom.Key;
 
 /**
- * Hoodie's Local dynamic Bloom Filter
+ * Hoodie's internal dynamic Bloom Filter. This is largely based of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}
+ * with bounds on maximum number of entries. Once the max entries is reached, false positive gaurantees are not
+ * honored.
  */
-class LocalDynamicBloomFilter extends LocalFilter {
+class InternalDynamicBloomFilter extends InternalFilter {
 
   /**
    * Threshold for the maximum number of key to record in a dynamic Bloom filter row.
@@ -50,7 +52,7 @@ class LocalDynamicBloomFilter extends LocalFilter {
   /**
    * Zero-args constructor for the serialization.
    */
-  public LocalDynamicBloomFilter() {
+  public InternalDynamicBloomFilter() {
   }
 
   /**
@@ -63,7 +65,7 @@ class LocalDynamicBloomFilter extends LocalFilter {
    * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
    * @param nr The threshold for the maximum number of keys to record in a dynamic Bloom filter row.
    */
-  public LocalDynamicBloomFilter(int vectorSize, int nbHash, int hashType, int nr, int maxNr) {
+  public InternalDynamicBloomFilter(int vectorSize, int nbHash, int hashType, int nr, int maxNr) {
     super(vectorSize, nbHash, hashType);
 
     this.nr = nr;
@@ -94,15 +96,15 @@ class LocalDynamicBloomFilter extends LocalFilter {
   }
 
   @Override
-  public void and(LocalFilter filter) {
+  public void and(InternalFilter filter) {
     if (filter == null
-        || !(filter instanceof LocalDynamicBloomFilter)
+        || !(filter instanceof InternalDynamicBloomFilter)
         || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be and-ed");
     }
 
-    LocalDynamicBloomFilter dbf = (LocalDynamicBloomFilter) filter;
+    InternalDynamicBloomFilter dbf = (InternalDynamicBloomFilter) filter;
 
     if (dbf.matrix.length != this.matrix.length || dbf.nr != this.nr) {
       throw new IllegalArgumentException("filters cannot be and-ed");
@@ -136,15 +138,15 @@ class LocalDynamicBloomFilter extends LocalFilter {
   }
 
   @Override
-  public void or(LocalFilter filter) {
+  public void or(InternalFilter filter) {
     if (filter == null
-        || !(filter instanceof LocalDynamicBloomFilter)
+        || !(filter instanceof InternalDynamicBloomFilter)
         || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be or-ed");
     }
 
-    LocalDynamicBloomFilter dbf = (LocalDynamicBloomFilter) filter;
+    InternalDynamicBloomFilter dbf = (InternalDynamicBloomFilter) filter;
 
     if (dbf.matrix.length != this.matrix.length || dbf.nr != this.nr) {
       throw new IllegalArgumentException("filters cannot be or-ed");
@@ -155,14 +157,14 @@ class LocalDynamicBloomFilter extends LocalFilter {
   }
 
   @Override
-  public void xor(LocalFilter filter) {
+  public void xor(InternalFilter filter) {
     if (filter == null
-        || !(filter instanceof LocalDynamicBloomFilter)
+        || !(filter instanceof InternalDynamicBloomFilter)
         || filter.vectorSize != this.vectorSize
         || filter.nbHash != this.nbHash) {
       throw new IllegalArgumentException("filters cannot be xor-ed");
     }
-    LocalDynamicBloomFilter dbf = (LocalDynamicBloomFilter) filter;
+    InternalDynamicBloomFilter dbf = (InternalDynamicBloomFilter) filter;
 
     if (dbf.matrix.length != this.matrix.length || dbf.nr != this.nr) {
       throw new IllegalArgumentException("filters cannot be xor-ed");

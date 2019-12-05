@@ -19,32 +19,9 @@
 package org.apache.hudi.common.bloom.filter;
 
 /**
- * A Bloom filter interface
+ * Bloom filter type codes
  */
-public interface BloomFilter {
-
-  /**
-   * Add a key to the {@link BloomFilter}
-   *
-   * @param key the key to the added to the {@link BloomFilter}
-   */
-  void add(String key);
-
-  /**
-   * Tests for key membership
-   *
-   * @param key the key to be checked for membership
-   * @return {@code true} if key may be found, {@code false} if key is not found for sure.
-   */
-  boolean mightContain(String key);
-
-  /**
-   * Serialize the bloom filter as a string.
-   */
-  String serializeToString();
-
-  /**
-   * @return the bloom index type code
-   **/
-  BloomFilterTypeCode getBloomFilterTypeCode();
+public enum BloomFilterTypeCode {
+  SIMPLE,
+  DYNAMIC_V0
 }

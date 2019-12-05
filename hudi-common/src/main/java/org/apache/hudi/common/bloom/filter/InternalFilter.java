@@ -28,7 +28,11 @@ import org.apache.hadoop.util.bloom.HashFunction;
 import org.apache.hadoop.util.bloom.Key;
 import org.apache.hadoop.util.hash.Hash;
 
-abstract class LocalFilter implements Writable {
+/**
+ * Copied from {@link org.apache.hadoop.util.bloom.Filter}. {@link InternalDynamicBloomFilter} needs access to some of
+ * protected members of {@link org.apache.hadoop.util.bloom.Filter} and hence had to copy it locally.
+ */
+abstract class InternalFilter implements Writable {
 
   private static final int VERSION = -1; // negative to accommodate for old format
   protected int vectorSize;
@@ -36,7 +40,7 @@ abstract class LocalFilter implements Writable {
   protected int nbHash;
   protected int hashType;
 
-  protected LocalFilter() {
+  protected InternalFilter() {
   }
 
   /**
@@ -46,7 +50,7 @@ abstract class LocalFilter implements Writable {
    * @param nbHash The number of hash functions to consider.
    * @param hashType type of the hashing function (see {@link Hash}).
    */
-  protected LocalFilter(int vectorSize, int nbHash, int hashType) {
+  protected InternalFilter(int vectorSize, int nbHash, int hashType) {
     this.vectorSize = vectorSize;
     this.nbHash = nbHash;
     this.hashType = hashType;
@@ -75,7 +79,7 @@ abstract class LocalFilter implements Writable {
    *
    * @param filter The filter to AND with.
    */
-  public abstract void and(LocalFilter filter);
+  public abstract void and(InternalFilter filter);
 
   /**
    * Peforms a logical OR between <i>this</i> filter and a specified filter.
@@ -84,7 +88,7 @@ abstract class LocalFilter implements Writable {
    *
    * @param filter The filter to OR with.
    */
-  public abstract void or(LocalFilter filter);
+  public abstract void or(InternalFilter filter);
 
   /**
    * Peforms a logical XOR between <i>this</i> filter and a specified filter.
@@ -93,7 +97,7 @@ abstract class LocalFilter implements Writable {
    *
    * @param filter The filter to XOR with.
    */
-  public abstract void xor(LocalFilter filter);
+  public abstract void xor(InternalFilter filter);
 
   /**
    * Performs a logical NOT on <i>this</i> filter.

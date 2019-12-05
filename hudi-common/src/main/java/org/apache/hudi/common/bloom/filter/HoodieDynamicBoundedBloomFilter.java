@@ -36,8 +36,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   public static final String TYPE_CODE_PREFIX = "DYNAMIC";
-  public static final String TYPE_CODE = TYPE_CODE_PREFIX + "_V0";
-  private LocalDynamicBloomFilter localDynamicBloomFilter;
+  private InternalDynamicBloomFilter internalDynamicBloomFilter;
 
   /**
    * Instantiates {@link HoodieDynamicBoundedBloomFilter} with the given args
@@ -52,7 +51,8 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
     int bitSize = BloomFilterUtils.getBitSize(numEntries, errorRate);
     // Number of the hash functions
     int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
-    this.localDynamicBloomFilter = new LocalDynamicBloomFilter(bitSize, numHashs, hashType, numEntries, maxNoOfEntries);
+    this.internalDynamicBloomFilter = new InternalDynamicBloomFilter(bitSize, numHashs, hashType, numEntries,
+        maxNoOfEntries);
   }
 
   /**
@@ -61,13 +61,13 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
    * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
    * @param typeCode type code of the bloom filter
    */
-  HoodieDynamicBoundedBloomFilter(String serString, String typeCode) {
+  HoodieDynamicBoundedBloomFilter(String serString, BloomFilterTypeCode typeCode) {
     // ignoring the type code for now, since we have just one version
     byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
-      localDynamicBloomFilter = new LocalDynamicBloomFilter();
-      localDynamicBloomFilter.readFields(dis);
+      internalDynamicBloomFilter = new InternalDynamicBloomFilter();
+      internalDynamicBloomFilter.readFields(dis);
       dis.close();
     } catch (IOException e) {
       throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
@@ -76,12 +76,12 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
 
   @Override
   public void add(String key) {
-    localDynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    internalDynamicBloomFilter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
   @Override
   public boolean mightContain(String key) {
-    return localDynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
+    return internalDynamicBloomFilter.membershipTest(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
   @Override
@@ -89,7 +89,7 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
     try {
-      localDynamicBloomFilter.write(dos);
+      internalDynamicBloomFilter.write(dos);
       byte[] bytes = baos.toByteArray();
       dos.close();
       return DatatypeConverter.printBase64Binary(bytes);
@@ -99,8 +99,8 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   }
 
   @Override
-  public String getBloomFilterTypeCode() {
-    return HoodieDynamicBoundedBloomFilter.TYPE_CODE;
+  public BloomFilterTypeCode getBloomFilterTypeCode() {
+    return BloomFilterTypeCode.DYNAMIC_V0;
   }
 }
 

@@ -29,25 +29,25 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
 /**
- * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBloomFilter}
+ * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBoundedBloomFilter}
  */
 @RunWith(Parameterized.class)
 public class TestBloomFilter {
 
   private final int keySize = 50;
-  private final String versionToTest;
+  private final int versionToTest;
 
   // name attribute is optional, provide an unique name for test
   // multiple parameters, uses Collection<Object[]>
   @Parameters()
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][]{
-        {SimpleBloomFilter.TYPE_CODE},
-        {HoodieDynamicBoundedBloomFilter.TYPE_CODE}
+        {BloomFilterTypeCode.SIMPLE.ordinal()},
+        {BloomFilterTypeCode.DYNAMIC_V0.ordinal()}
     });
   }
 
-  public TestBloomFilter(String versionToTest) {
+  public TestBloomFilter(int versionToTest) {
     this.versionToTest = versionToTest;
   }
 
@@ -91,18 +91,18 @@ public class TestBloomFilter {
 
       String serString = filter.serializeToString();
       BloomFilter recreatedBloomFilter = BloomFilterFactory
-          .fromString(serString, versionToTest);
+          .fromString(serString, Integer.toString(versionToTest));
       for (String key : inputs) {
         assert (recreatedBloomFilter.mightContain(key));
       }
     }
   }
 
-  BloomFilter getBloomFilter(String typeCode, int numEntries, double errorRate, int maxEntries) {
-    if (typeCode.equalsIgnoreCase(SimpleBloomFilter.TYPE_CODE)) {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, typeCode);
+  BloomFilter getBloomFilter(int typeCodeOrdinal, int numEntries, double errorRate, int maxEntries) {
+    if (typeCodeOrdinal == BloomFilterTypeCode.SIMPLE.ordinal()) {
+      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, Integer.toString(typeCodeOrdinal));
     } else {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
+      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, Integer.toString(typeCodeOrdinal));
     }
   }
 }
