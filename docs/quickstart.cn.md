@@ -1,5 +1,5 @@
 ---
-title: Quickstart
+title: 快速开始
 keywords: hudi, quickstart
 sidebar: mydoc_sidebar
 toc: true
@@ -55,7 +55,7 @@ df.write.format("org.apache.hudi").
 
 `mode(Overwrite)`覆盖并重新创建数据集(如果已经存在)。
 您可以检查在`/tmp/hudi_cow_table/<region>/<country>/<city>/`下生成的数据。我们提供了一个记录键
-([schema](#sample-schema)中的`uuid`)，分区字段(`region/county/city`）和组合逻辑(`ts`[schema](#sample-schema))
+([schema](#sample-schema)中的`uuid`)，分区字段(`region/county/city`）和组合逻辑([schema](#sample-schema)中的`ts`)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 [对Hudi中的数据进行建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?)，
 有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](https://hudi.apache.org/writing_data.html)。
@@ -64,7 +64,7 @@ df.write.format("org.apache.hudi").
 
 ## 查询数据 {#query}
 
-将数据文件加载到数据帧中。
+将数据文件加载到DataFrame中。
 
 ```Scala
 val roViewDF = spark.
@@ -82,7 +82,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 ## 更新数据 {#updates}
 
-这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到数据帧并将数据帧写入hudi数据集。
+这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并将DataFrame写入hudi数据集。
 
 ```Scala
 val updates = convertToStringList(dataGen.generateUpdates(10))
@@ -151,7 +151,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 ## 从这开始下一步？
 
-您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source)来快速入门，
+您也可以通过[自己构建hudi](https://github.com/apache/incubator-hudi#building-apache-hudi-from-source)来快速开始，
 并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar`，
 而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
 

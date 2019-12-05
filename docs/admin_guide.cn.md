@@ -1,5 +1,5 @@
 ---
-title: Administering Hudi Pipelines
+title: 管理 Hudi Pipelines
 keywords: hudi, administration, operation, devops
 sidebar: mydoc_sidebar
 permalink: admin_guide.html

@@ -10,7 +10,7 @@ Hudi（发音为“hoodie”）摄取与管理处于DFS([HDFS](http://hadoop.apa
 
  * **读优化视图** - 在纯列式存储上提供出色的查询性能，非常像[parquet](https://parquet.apache.org/)表。
  * **增量视图** - 在数据集之上提供一个变更流并提供给下游的作业或ETL任务。
- * **准实时的表** - 使用基于列存储(例如 Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))和行存储以提供对实时数据的查询
+ * **准实时的表** - 使用基于列存储和行存储(例如 Parquet + [Avro](http://avro.apache.org/docs/current/mr.html))以提供对实时数据的查询
 
 
 
@@ -18,6 +18,6 @@ Hudi（发音为“hoodie”）摄取与管理处于DFS([HDFS](http://hadoop.apa
     <img class="docimage" src="/images/hudi_intro_1.png" alt="hudi_intro_1.png" />
 </figure>
 
-通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于[presto](https://prestodb.io)和[spark](https://spark.apache.org/sql/)等交互式SQL引擎，同时能够从处理/ETL框架（如[hive](https://hive.apache.org/)& [spark](https://spark.apache.org/docs/latest/)中进行增量消费以构建派生（Hudi）数据集。
+通过仔细地管理数据在存储中的布局和如何将数据暴露给查询，Hudi支持丰富的数据生态系统，在该系统中，外部数据源可被近实时摄取并被用于[presto](https://prestodb.io)和[spark](https://spark.apache.org/sql/)等交互式SQL引擎，同时能够从处理/ETL框架（如[hive](https://hive.apache.org/)和 [spark](https://spark.apache.org/docs/latest/)中进行增量消费以构建派生（Hudi）数据集。
 
-Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见[快速启动](quickstart.html)。
+Hudi 大体上由一个自包含的Spark库组成，它用于构建数据集并与现有的数据访问查询引擎集成。有关演示，请参见[快速开始](quickstart.html)。

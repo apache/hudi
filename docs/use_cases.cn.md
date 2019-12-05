@@ -1,5 +1,5 @@
 ---
-title: Use Cases
+title: 使用案例
 keywords: hudi, data ingestion, etl, real time, use cases
 sidebar: mydoc_sidebar
 permalink: use_cases.html
@@ -16,7 +16,7 @@ summary: "以下是一些使用Hudi的示例，说明了加快处理速度和提
 尽管这些数据对整个组织来说是最有价值的，但不幸的是，在大多数(如果不是全部)Hadoop部署中都使用零散的方式解决，即使用多个不同的摄取工具。
 
 
-对于RDBMS摄取，Hudi提供__通过更新插入达到更快加载__，而不是昂贵且低效的批量加载。例如，您可以读取MySQL BIN日志或[Sqoop增量导入](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports)并将其应用于
+对于RDBMS摄取，Hudi提供 __通过更新插入达到更快加载__，而不是昂贵且低效的批量加载。例如，您可以读取MySQL BIN日志或[Sqoop增量导入](https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports)并将其应用于
 DFS上的等效Hudi表。这比[批量合并任务](https://sqoop.apache.org/docs/1.4.0-incubating/SqoopUserGuide.html#id1770457)及[复杂的手工合并工作流](http://hortonworks.com/blog/four-step-strategy-incremental-updates-hive/)更快/更有效率。
 
 
@@ -24,9 +24,9 @@ DFS上的等效Hudi表。这比[批量合并任务](https://sqoop.apache.org/doc
 毫无疑问， __全量加载不可行__，如果摄取需要跟上较高的更新量，那么则需要更有效的方法。
 
 
-即使对于像[Kafka](kafka.apache.org)这样的不可变数据源，Hudi也可以 __强制在HDFS上使用最小文件大小__, 这采取了综合方式解决[Hadoop中的一个老问题](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/)来改善NameNode的健康状况。这对事件流来说更为重要，因为它通常具有较高容量(例如：点击流)，如果管理不当，可能会对Hadoop群集造成严重损害。
+即使对于像[Kafka](kafka.apache.org)这样的不可变数据源，Hudi也可以 __强制在HDFS上使用最小文件大小__, 这采取了综合方式解决[HDFS小文件问题](https://blog.cloudera.com/blog/2009/02/the-small-files-problem/)来改善NameNode的健康状况。这对事件流来说更为重要，因为它通常具有较高容量(例如：点击流)，如果管理不当，可能会对Hadoop集群造成严重损害。
 
-在所有源中，通过`提交`这一概念，Hudi增加了以原子方式向消费者发布新数据的功能，这种功能十分必要。
+在所有源中，通过`commits`这一概念，Hudi增加了以原子方式向消费者发布新数据的功能，这种功能十分必要。
 
 ## 近实时分析
 
@@ -34,8 +34,8 @@ DFS上的等效Hudi表。这比[批量合并任务](https://sqoop.apache.org/doc
 这对于较小规模的数据量来说绝对是完美的([相比于这样安装Hadoop](https://blog.twitter.com/2015/hadoop-filesystem-at-twitter))，这种情况需要在亚秒级响应查询，例如系统监控或交互式实时分析。
 但是，由于Hadoop上的数据太陈旧了，通常这些系统会被滥用于非交互式查询，这导致利用率不足和硬件/许可证成本的浪费。
 
-另一方面，Hadoop上的交互式SQL解决方案(如Presto和SparkSQL)表现出色，在__几秒钟内完成查询__。
-通过将__数据新鲜度提高到几分钟__，Hudi可以提供一个更有效的替代方案，并支持存储在DFS中的__数量级更大的数据集__的实时分析。
+另一方面，Hadoop上的交互式SQL解决方案(如Presto和SparkSQL)表现出色，在 __几秒钟内完成查询__。
+通过将 __数据新鲜度提高到几分钟__，Hudi可以提供一个更有效的替代方案，并支持存储在DFS中的 __数量级更大的数据集__ 的实时分析。
 此外，Hudi没有外部依赖(如专用于实时分析的HBase集群)，因此可以在更新的分析上实现更快的分析，而不会增加操作开销。
 
 
@@ -61,8 +61,8 @@ Hudi通过以单个记录为粒度的方式(而不是文件夹/分区)从上游 
 
 ## DFS的数据分发
 
-Hadoop的一个流行用例是压缩数据，然后将其分发回在线服务存储层，以供应用程序使用。
+一个常用场景是先在Hadoop上处理数据，然后将其分发回在线服务存储层，以供应用程序使用。
 例如，一个Spark管道可以[确定Hadoop上的紧急制动事件](https://eng.uber.com/telematics/)并将它们加载到服务存储层(如ElasticSearch)中，供Uber应用程序使用以增加安全驾驶。这种用例中，通常架构会在Hadoop和服务存储之间引入`队列`，以防止目标服务存储被压垮。
-对于队列的选择，一种流行的选择是Kafka，这个模型经常导致__在DFS上存储相同数据的冗余(用于计算结果的离线分析)和Kafka(用于分发)__
+对于队列的选择，一种流行的选择是Kafka，这个模型经常导致 __在DFS上存储相同数据的冗余(用于计算结果的离线分析)和Kafka(用于分发)__
 
-通过将每次运行的Spark管道更新插入的输出转换为Hudi数据集，Hudi可以再次有效地解决这个问题，然后可以以增量方式获取尾部数据(就像Kafka主题一样)然后写入服务存储层。
+通过将每次运行的Spark管道更新插入的输出转换为Hudi数据集，Hudi可以再次有效地解决这个问题，然后可以以增量方式获取尾部数据(就像Kafka topic一样)然后写入服务存储层。

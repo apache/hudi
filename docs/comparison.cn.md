@@ -1,5 +1,5 @@
 ---
-title: Comparison
+title: 对比
 keywords: apache, hudi, kafka, kudu, hive, hbase, stream processing
 sidebar: mydoc_sidebar
 permalink: comparison.html

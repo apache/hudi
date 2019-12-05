@@ -138,8 +138,8 @@ Usage: <main class> [options]
 
 ## Datasource Writer
 
-`hudi-spark`模块提供了DataSource API，可以将任何数据帧写入（也可以读取）到Hudi数据集中。
-以下是在指定需要使用的字段名称的之后，如何插入更新数据帧的方法，这些字段包括
+`hudi-spark`模块提供了DataSource API，可以将任何DataFrame写入（也可以读取）到Hudi数据集中。
+以下是在指定需要使用的字段名称的之后，如何插入更新DataFrame的方法，这些字段包括
 `recordKey => _row_key`、`partitionPath => partition`和`precombineKey => timestamp`
 
 ```Java
@@ -193,7 +193,7 @@ Usage: <main class> [options]
  Hudi附带了一个内置的`org.apache.hudi.EmptyHoodieRecordPayload`类，它就是实现了这一功能。
  
 ```Java
- deleteDF // 仅包含要删除的记录的数据帧
+ deleteDF // 仅包含要删除的记录的DataFrame
    .write().format("org.apache.hudi")
    .option(...) // 根据设置需要添加HUDI参数，例如记录键、分区路径和其他参数
    // 指定record_key，partition_key，precombine_fieldkey和常规参数

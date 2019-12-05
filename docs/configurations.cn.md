@@ -95,7 +95,7 @@ inputDF.write()
 
 ##### INSERT_DROP_DUPS_OPT_KEY {#INSERT_DROP_DUPS_OPT_KEY}
   属性：`hoodie.datasource.write.insert.drop.duplicates`, 默认值：`false` <br/>
-  <span style="color:grey">如果设置为true，则在插入操作期间从传入数据帧中过滤掉所有重复记录。</span>
+  <span style="color:grey">如果设置为true，则在插入操作期间从传入DataFrame中过滤掉所有重复记录。</span>
   
 ##### HIVE_SYNC_ENABLED_OPT_KEY {#HIVE_SYNC_ENABLED_OPT_KEY}
   属性：`hoodie.datasource.hive_sync.enable`, 默认值：`false` <br/>
