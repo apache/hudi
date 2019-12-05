@@ -18,18 +18,20 @@
 
 package org.apache.hudi.metrics;
 
-import com.google.common.base.Preconditions;
-import java.io.Closeable;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 
-import java.lang.management.ManagementFactory;
-import java.rmi.registry.LocateRegistry;
+import com.google.common.base.Preconditions;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXConnectorServerFactory;
 import javax.management.remote.JMXServiceURL;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
+import java.io.Closeable;
+import java.lang.management.ManagementFactory;
+import java.rmi.registry.LocateRegistry;
 
 /**
  * Implementation of Jmx reporter, which used to report jmx metric.

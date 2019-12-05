@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.versioning.clean;
 
-import java.util.Arrays;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.versioning.MetadataMigrator;
+
+import java.util.Arrays;
 
 public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata> {
 

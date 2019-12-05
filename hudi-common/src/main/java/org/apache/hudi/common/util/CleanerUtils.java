@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import com.google.common.collect.ImmutableMap;
-import java.util.List;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -27,6 +25,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.versioning.clean.CleanV1MigrationHandler;
 import org.apache.hudi.common.versioning.clean.CleanV2MigrationHandler;
+
+import com.google.common.collect.ImmutableMap;
+
+import java.util.List;
 
 public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanV1MigrationHandler.VERSION;
