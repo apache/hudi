@@ -31,7 +31,7 @@ import org.apache.spark.sql.Row;
 public class IncrSourceHelper {
 
   /**
-   * Get a timestamp which is the next value in a descending sequence
+   * Get a timestamp which is the next value in a descending sequence.
    *
    * @param timestamp Timestamp
    */
@@ -43,7 +43,7 @@ public class IncrSourceHelper {
   }
 
   /**
-   * Find begin and end instants to be set for the next fetch
+   * Find begin and end instants to be set for the next fetch.
    *
    * @param jssc Java Spark Context
    * @param srcBasePath Base path of Hudi source table
@@ -77,7 +77,7 @@ public class IncrSourceHelper {
   }
 
   /**
-   * Validate instant time seen in the incoming row
+   * Validate instant time seen in the incoming row.
    *
    * @param row Input Row
    * @param instantTime Hoodie Instant time of the row

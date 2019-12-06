@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Archiver to bound the growth of <action>.commit files
+ * Archiver to bound the growth of <action>.commit files.
  */
 public class HoodieCommitArchiveLog {
 
@@ -201,7 +201,7 @@ public class HoodieCommitArchiveLog {
   }
 
   /**
-   * Remove older instants from auxiliary meta folder
+   * Remove older instants from auxiliary meta folder.
    *
    * @param thresholdInstant Hoodie Instant
    * @return success if all eligible file deleted successfully

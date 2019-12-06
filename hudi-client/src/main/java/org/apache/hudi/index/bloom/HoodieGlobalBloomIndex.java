@@ -106,7 +106,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
 
 
   /**
-   * Tagging for global index should only consider the record key
+   * Tagging for global index should only consider the record key.
    */
   @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(

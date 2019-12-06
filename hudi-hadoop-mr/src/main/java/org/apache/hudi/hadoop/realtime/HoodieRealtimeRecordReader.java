@@ -52,7 +52,7 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
   }
 
   /**
-   * Construct record reader based on job configuration
+   * Construct record reader based on job configuration.
    *
    * @param split File Split
    * @param jobConf Job Configuration

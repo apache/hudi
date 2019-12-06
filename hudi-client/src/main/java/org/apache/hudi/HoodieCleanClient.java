@@ -103,7 +103,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file
+   * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file.
    *
    * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
@@ -133,7 +133,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Executes the Cleaner plan stored in the instant metadata
+   * Executes the Cleaner plan stored in the instant metadata.
    *
    * @param table Hoodie Table
    * @param cleanInstantTs Cleaner Instant Timestamp

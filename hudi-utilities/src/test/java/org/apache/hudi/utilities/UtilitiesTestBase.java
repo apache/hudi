@@ -119,7 +119,7 @@ public class UtilitiesTestBase {
   }
 
   /**
-   * Helper to get hive sync config
+   * Helper to get hive sync config.
    * 
    * @param basePath
    * @param tableName
@@ -140,7 +140,7 @@ public class UtilitiesTestBase {
   }
 
   /**
-   * Initialize Hive DB
+   * Initialize Hive DB.
    * 
    * @throws IOException
    */

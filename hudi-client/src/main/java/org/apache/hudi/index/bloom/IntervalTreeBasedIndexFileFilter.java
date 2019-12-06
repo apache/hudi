@@ -35,7 +35,7 @@ class IntervalTreeBasedIndexFileFilter implements IndexFileFilter {
   private final Map<String, Set<String>> partitionToFilesWithNoRanges = new HashMap<>();
 
   /**
-   * Instantiates {@link IntervalTreeBasedIndexFileFilter}
+   * Instantiates {@link IntervalTreeBasedIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */

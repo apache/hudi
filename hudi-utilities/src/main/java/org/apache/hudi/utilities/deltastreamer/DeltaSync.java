@@ -78,9 +78,8 @@ import scala.collection.JavaConversions;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
-
 /**
- * Sync's one batch of data to hoodie dataset
+ * Sync's one batch of data to hoodie dataset.
  */
 public class DeltaSync implements Serializable {
 
@@ -89,12 +88,12 @@ public class DeltaSync implements Serializable {
   public static String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
   /**
-   * Delta Sync Config
+   * Delta Sync Config.
    */
   private final HoodieDeltaStreamer.Config cfg;
 
   /**
-   * Source to pull deltas from
+   * Source to pull deltas from.
    */
   private transient SourceFormatAdapter formatAdapter;
 
@@ -104,32 +103,32 @@ public class DeltaSync implements Serializable {
   private transient SchemaProvider schemaProvider;
 
   /**
-   * Allows transforming source to target dataset before writing
+   * Allows transforming source to target dataset before writing.
    */
   private transient Transformer transformer;
 
   /**
-   * Extract the key for the target dataset
+   * Extract the key for the target dataset.
    */
   private KeyGenerator keyGenerator;
 
   /**
-   * Filesystem used
+   * Filesystem used.
    */
   private transient FileSystem fs;
 
   /**
-   * Spark context
+   * Spark context.
    */
   private transient JavaSparkContext jssc;
 
   /**
-   * Spark Session
+   * Spark Session.
    */
   private transient SparkSession sparkSession;
 
   /**
-   * Hive Config
+   * Hive Config.
    */
   private transient HiveConf hiveConf;
 
@@ -139,22 +138,22 @@ public class DeltaSync implements Serializable {
   private final TypedProperties props;
 
   /**
-   * Callback when write client is instantiated
+   * Callback when write client is instantiated.
    */
   private transient Function<HoodieWriteClient, Boolean> onInitializingHoodieWriteClient;
 
   /**
-   * Timeline with completed commits
+   * Timeline with completed commits.
    */
   private transient Option<HoodieTimeline> commitTimelineOpt;
 
   /**
-   * Write Client
+   * Write Client.
    */
   private transient HoodieWriteClient writeClient;
 
   /**
-   * Table Type
+   * Table Type.
    */
   private final HoodieTableType tableType;
 
@@ -190,7 +189,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Refresh Timeline
+   * Refresh Timeline.
    */
   private void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
@@ -204,7 +203,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Run one round of delta sync and return new compaction instant if one got scheduled
+   * Run one round of delta sync and return new compaction instant if one got scheduled.
    */
   public Option<String> syncOnce() throws Exception {
     Option<String> scheduledCompaction = Option.empty();
@@ -236,7 +235,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Read from Upstream Source and apply transformation if needed
+   * Read from Upstream Source and apply transformation if needed.
    */
   private Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(
       Option<HoodieTimeline> commitTimelineOpt) throws Exception {
@@ -321,7 +320,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed
+   * Perform Hoodie Write. Run Cleaner, schedule compaction and syncs to hive if needed.
    *
    * @param records Input Records
    * @param checkpointStr Checkpoint String
@@ -434,7 +433,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Sync to Hive
+   * Sync to Hive.
    */
   private void syncHive() throws ClassNotFoundException {
     if (cfg.enableHiveSync) {
@@ -462,7 +461,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Helper to construct Write Client config
+   * Helper to construct Write Client config.
    *
    * @param schemaProvider Schema Provider
    */
@@ -491,7 +490,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Register Avro Schemas
+   * Register Avro Schemas.
    *
    * @param schemaProvider Schema Provider
    */
@@ -510,7 +509,7 @@ public class DeltaSync implements Serializable {
   }
 
   /**
-   * Close all resources
+   * Close all resources.
    */
   public void close() {
     if (null != writeClient) {

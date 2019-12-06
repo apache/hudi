@@ -47,7 +47,7 @@ import scala.collection.mutable.StringBuilder;
 import scala.util.Either;
 
 /**
- * Source to read data from Kafka, incrementally
+ * Source to read data from Kafka, incrementally.
  */
 public class KafkaOffsetGen {
 
@@ -162,7 +162,7 @@ public class KafkaOffsetGen {
   }
 
   /**
-   * Kafka reset offset strategies
+   * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
     LARGEST, SMALLEST

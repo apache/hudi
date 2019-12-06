@@ -42,7 +42,7 @@ public class SqlQueryBasedTransformer implements Transformer {
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";
 
   /**
-   * Configs supported
+   * Configs supported.
    */
   static class Config {
 

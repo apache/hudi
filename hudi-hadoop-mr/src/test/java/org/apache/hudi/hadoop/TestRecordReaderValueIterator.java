@@ -49,7 +49,7 @@ public class TestRecordReaderValueIterator {
   }
 
   /**
-   * Simple replay record reader for unit-testing
+   * Simple replay record reader for unit-testing.
    */
   private static class TestRecordReader implements RecordReader<IntWritable, Text> {
 

@@ -141,7 +141,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
   /**
    * Lookup the location for each record key and return the pair<record_key,location> for all record keys already
-   * present and drop the record keys if not present
+   * present and drop the record keys if not present.
    */
   private JavaPairRDD<HoodieKey, HoodieRecordLocation> lookupIndex(
       JavaPairRDD<String, String> partitionRecordKeyPairRDD, final JavaSparkContext jsc,
@@ -167,7 +167,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   /**
-   * Compute the estimated number of bloom filter comparisons to be performed on each file group
+   * Compute the estimated number of bloom filter comparisons to be performed on each file group.
    */
   private Map<String, Long> computeComparisonsPerFileGroup(final Map<String, Long> recordsPerPartition,
       final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
@@ -278,7 +278,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   /**
-   * This is not global, since we depend on the partitionPath to do the lookup
+   * This is not global, since we depend on the partitionPath to do the lookup.
    */
   @Override
   public boolean isGlobal() {

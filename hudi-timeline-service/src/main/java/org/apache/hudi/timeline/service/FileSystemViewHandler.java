@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Main REST Handler class that handles local view staleness and delegates calls to slice/data-file/timeline handlers
+ * Main REST Handler class that handles local view staleness and delegates calls to slice/data-file/timeline handlers.
  */
 public class FileSystemViewHandler {
 
@@ -79,7 +79,7 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Determines if local view of dataset's timeline is behind that of client's view
+   * Determines if local view of dataset's timeline is behind that of client's view.
    */
   private boolean isLocalViewBehind(Context ctx) {
     String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
@@ -108,7 +108,7 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Syncs data-set view if local view is behind
+   * Syncs data-set view if local view is behind.
    */
   private boolean syncIfLocalViewBehind(Context ctx) {
     if (isLocalViewBehind(ctx)) {
@@ -141,7 +141,7 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Register Timeline API calls
+   * Register Timeline API calls.
    */
   private void registerTimelineAPI() {
     app.get(RemoteHoodieTableFileSystemView.LAST_INSTANT, new ViewHandler(ctx -> {
@@ -158,7 +158,7 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Register Data-Files API calls
+   * Register Data-Files API calls.
    */
   private void registerDataFilesAPI() {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_DATA_FILES_URL, new ViewHandler(ctx -> {
@@ -215,7 +215,7 @@ public class FileSystemViewHandler {
   }
 
   /**
-   * Register File Slices API calls
+   * Register File Slices API calls.
    */
   private void registerFileSlicesAPI() {
     app.get(RemoteHoodieTableFileSystemView.LATEST_PARTITION_SLICES_URL, new ViewHandler(ctx -> {

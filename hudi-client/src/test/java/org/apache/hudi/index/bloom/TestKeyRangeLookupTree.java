@@ -31,7 +31,7 @@ import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
 
 /**
- * Tests {@link KeyRangeLookupTree}
+ * Tests {@link KeyRangeLookupTree}.
  */
 public class TestKeyRangeLookupTree {
 
@@ -59,7 +59,7 @@ public class TestKeyRangeLookupTree {
   }
 
   /**
-   * Tests for many entries in the tree with same start value and different end values
+   * Tests for many entries in the tree with same start value and different end values.
    */
   @Test
   public void testFileGroupLookUpManyEntriesWithSameStartValue() {
@@ -78,7 +78,7 @@ public class TestKeyRangeLookupTree {
   }
 
   /**
-   * Tests for many duplicte entries in the tree
+   * Tests for many duplicte entries in the tree.
    */
   @Test
   public void testFileGroupLookUpManyDulicateEntries() {
@@ -158,7 +158,7 @@ public class TestKeyRangeLookupTree {
   }
 
   /**
-   * Updates the expected matches for a given {@link KeyRangeNode}
+   * Updates the expected matches for a given {@link KeyRangeNode}.
    *
    * @param toInsert the {@link KeyRangeNode} to be inserted
    */

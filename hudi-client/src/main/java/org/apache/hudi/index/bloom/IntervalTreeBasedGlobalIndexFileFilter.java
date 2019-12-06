@@ -36,7 +36,7 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
   private final Set<String> filesWithNoRanges = new HashSet<>();
 
   /**
-   * Instantiates {@link IntervalTreeBasedGlobalIndexFileFilter}
+   * Instantiates {@link IntervalTreeBasedGlobalIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}s
    */

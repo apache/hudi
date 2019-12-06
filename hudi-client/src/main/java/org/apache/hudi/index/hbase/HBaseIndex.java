@@ -67,7 +67,7 @@ import java.util.List;
 import scala.Tuple2;
 
 /**
- * Hoodie Index implementation backed by HBase
+ * Hoodie Index implementation backed by HBase.
  */
 public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
@@ -89,7 +89,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   private int maxQpsPerRegionServer;
   /**
    * multiPutBatchSize will be computed and re-set in updateLocation if
-   * {@link HoodieIndexConfig.HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP} is set to true
+   * {@link HoodieIndexConfig.HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP} is set to true.
    */
   private Integer multiPutBatchSize;
   private Integer numRegionServersForTable;
@@ -150,7 +150,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
 
   /**
    * Since we are sharing the HbaseConnection across tasks in a JVM, make sure the HbaseConnectio is closed when JVM
-   * exits
+   * exits.
    */
   private void addShutDownHook() {
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -342,7 +342,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   /**
-   * Helper method to facilitate performing puts and deletes in Hbase
+   * Helper method to facilitate performing puts and deletes in Hbase.
    */
   private void doPutsAndDeletes(HTable hTable, List<Put> puts, List<Delete> deletes) throws IOException {
     if (puts.size() > 0) {
@@ -500,7 +500,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   }
 
   /**
-   * Only looks up by recordKey
+   * Only looks up by recordKey.
    */
   @Override
   public boolean isGlobal() {

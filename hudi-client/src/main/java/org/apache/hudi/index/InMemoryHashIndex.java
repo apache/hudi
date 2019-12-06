@@ -99,7 +99,7 @@ public class InMemoryHashIndex<T extends HoodieRecordPayload> extends HoodieInde
   }
 
   /**
-   * Only looks up by recordKey
+   * Only looks up by recordKey.
    */
   @Override
   public boolean isGlobal() {

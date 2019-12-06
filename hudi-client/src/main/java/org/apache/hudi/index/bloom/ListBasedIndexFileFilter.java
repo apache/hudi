@@ -32,7 +32,7 @@ class ListBasedIndexFileFilter implements IndexFileFilter {
   final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo;
 
   /**
-   * Instantiates {@link ListBasedIndexFileFilter}
+   * Instantiates {@link ListBasedIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */

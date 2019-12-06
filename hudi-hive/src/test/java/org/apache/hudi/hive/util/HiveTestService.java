@@ -64,7 +64,7 @@ public class HiveTestService {
   private static final int CONNECTION_TIMEOUT = 30000;
 
   /**
-   * Configuration settings
+   * Configuration settings.
    */
   private Configuration hadoopConf;
   private String workDir;

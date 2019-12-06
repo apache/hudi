@@ -33,7 +33,7 @@ import org.apache.spark.SparkConf;
 import java.io.IOException;
 
 /**
- * Timeline Service that runs as part of write client
+ * Timeline Service that runs as part of write client.
  */
 public class EmbeddedTimelineService {
 
@@ -86,7 +86,7 @@ public class EmbeddedTimelineService {
   }
 
   /**
-   * Retrieves proper view storage configs for remote clients to access this service
+   * Retrieves proper view storage configs for remote clients to access this service.
    */
   public FileSystemViewStorageConfig getRemoteFileSystemViewConfig() {
     return FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.REMOTE_FIRST)

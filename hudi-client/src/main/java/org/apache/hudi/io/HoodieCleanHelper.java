@@ -51,7 +51,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Cleaner is responsible for garbage collecting older files in a given partition path, such that
+ * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
  * <p>
  * 1) It provides sufficient time for existing queries running on older versions, to close
  * <p>
@@ -83,7 +83,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
   }
 
   /**
-   * Returns list of partitions where clean operations needs to be performed
+   * Returns list of partitions where clean operations needs to be performed.
+   *
    * @param newInstantToRetain New instant to be retained after this cleanup operation
    * @return list of partitions to scan for cleaning
    * @throws IOException when underlying file-system throws this exception
@@ -294,7 +295,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
   }
 
   /**
-   * Determine if file slice needed to be preserved for pending compaction
+   * Determine if file slice needed to be preserved for pending compaction.
    * 
    * @param fileSlice File Slice
    * @return true if file slice needs to be preserved, false otherwise.

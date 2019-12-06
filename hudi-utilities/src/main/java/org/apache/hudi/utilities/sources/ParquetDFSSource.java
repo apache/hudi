@@ -32,7 +32,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * DFS Source that reads parquet data
+ * DFS Source that reads parquet data.
  */
 public class ParquetDFSSource extends ParquetSource {
 

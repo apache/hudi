@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
 
 /**
- * Client to perform admin operations related to compaction
+ * Client to perform admin operations related to compaction.
  */
 public class CompactionAdminClient extends AbstractHoodieClient {
 
@@ -214,7 +214,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   }
 
   /**
-   * Construction Compaction Plan from compaction instant
+   * Construction Compaction Plan from compaction instant.
    */
   private static HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, String compactionInstant)
       throws IOException {
@@ -273,7 +273,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   }
 
   /**
-   * Check if a compaction operation is valid
+   * Check if a compaction operation is valid.
    *
    * @param metaClient Hoodie Table Meta client
    * @param compactionInstant Compaction Instant
@@ -342,7 +342,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   }
 
   /**
-   * Execute Renaming operation
+   * Execute Renaming operation.
    *
    * @param metaClient HoodieTable MetaClient
    * @param renameActions List of rename operations
@@ -484,7 +484,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   }
 
   /**
-   * Holds Operation result for Renaming
+   * Holds Operation result for Renaming.
    */
   public static class RenameOpResult extends OperationResult<RenameInfo> {
 
@@ -505,7 +505,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   }
 
   /**
-   * Holds Operation result for Renaming
+   * Holds Operation result for Renaming.
    */
   public static class ValidationOpResult extends OperationResult<CompactionOperation> {
 

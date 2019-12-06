@@ -34,7 +34,7 @@ import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.apache.spark.streaming.kafka.OffsetRange;
 
 /**
- * Read json kafka data
+ * Read json kafka data.
  */
 public class JsonKafkaSource extends JsonSource {
 

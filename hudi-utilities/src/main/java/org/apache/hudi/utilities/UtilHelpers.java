@@ -55,7 +55,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Bunch of helper methods
+ * Bunch of helper methods.
  */
 public class UtilHelpers {
   private static Logger logger = LogManager.getLogger(UtilHelpers.class);
@@ -115,7 +115,7 @@ public class UtilHelpers {
   }
 
   /**
-   * Parse Schema from file
+   * Parse Schema from file.
    *
    * @param fs File System
    * @param schemaFile Schema File
@@ -167,7 +167,7 @@ public class UtilHelpers {
   }
 
   /**
-   * Build Spark Context for ingestion/compaction
+   * Build Spark Context for ingestion/compaction.
    * 
    * @return
    */
@@ -178,7 +178,7 @@ public class UtilHelpers {
   }
 
   /**
-   * Build Hoodie write client
+   * Build Hoodie write client.
    *
    * @param jsc Java Spark Context
    * @param basePath Base Path

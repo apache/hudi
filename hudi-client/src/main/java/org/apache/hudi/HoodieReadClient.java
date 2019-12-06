@@ -145,7 +145,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   }
 
   /**
-   * Given a bunch of hoodie keys, fetches all the individual records out as a data frame
+   * Given a bunch of hoodie keys, fetches all the individual records out as a data frame.
    *
    * @return a dataframe
    */

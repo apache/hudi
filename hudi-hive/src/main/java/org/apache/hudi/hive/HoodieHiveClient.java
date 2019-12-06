@@ -132,7 +132,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Add the (NEW) partitons to the table
+   * Add the (NEW) partitons to the table.
    */
   void addPartitionsToTable(List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
@@ -145,7 +145,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Partition path has changed - update the path for te following partitions
+   * Partition path has changed - update the path for te following partitions.
    */
   void updatePartitionsToTable(List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
@@ -172,7 +172,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Generate Hive Partition from partition values
+   * Generate Hive Partition from partition values.
    *
    * @param partition Partition path
    * @return
@@ -241,7 +241,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Scan table partitions
+   * Scan table partitions.
    */
   public List<Partition> scanTablePartitions() throws TException {
     return client.listPartitions(syncConfig.databaseName, syncConfig.tableName, (short) -1);
@@ -274,7 +274,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Get the table schema
+   * Get the table schema.
    */
   public Map<String, String> getTableSchema() {
     if (syncConfig.useJdbc) {
@@ -428,7 +428,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Read the schema from the log file on path
+   * Read the schema from the log file on path.
    */
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private MessageType readSchemaFromLogFile(Option<HoodieInstant> lastCompactionCommitOpt, Path path)
@@ -443,7 +443,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Read the parquet schema from a parquet File
+   * Read the parquet schema from a parquet File.
    */
   private MessageType readSchemaFromDataFile(Path parquetFilePath) throws IOException {
     LOG.info("Reading schema from " + parquetFilePath);
@@ -468,7 +468,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Execute a update in hive metastore with this SQL
+   * Execute a update in hive metastore with this SQL.
    *
    * @param s SQL to execute
    */
@@ -490,7 +490,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Execute a update in hive using Hive Driver
+   * Execute a update in hive using Hive Driver.
    *
    * @param sql SQL statement to execute
    */
@@ -663,7 +663,7 @@ public class HoodieHiveClient {
   }
 
   /**
-   * Partition Event captures any partition that needs to be added or updated
+   * Partition Event captures any partition that needs to be added or updated.
    */
   static class PartitionEvent {
 

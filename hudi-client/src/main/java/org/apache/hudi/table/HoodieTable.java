@@ -69,7 +69,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Abstract implementation of a HoodieTable
+ * Abstract implementation of a HoodieTable.
  */
 public abstract class HoodieTable<T extends HoodieRecordPayload> implements Serializable {
 
@@ -111,17 +111,17 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Provides a partitioner to perform the upsert operation, based on the workload profile
+   * Provides a partitioner to perform the upsert operation, based on the workload profile.
    */
   public abstract Partitioner getUpsertPartitioner(WorkloadProfile profile);
 
   /**
-   * Provides a partitioner to perform the insert operation, based on the workload profile
+   * Provides a partitioner to perform the insert operation, based on the workload profile.
    */
   public abstract Partitioner getInsertPartitioner(WorkloadProfile profile);
 
   /**
-   * Return whether this HoodieTable implementation can benefit from workload profiling
+   * Return whether this HoodieTable implementation can benefit from workload profiling.
    */
   public abstract boolean isWorkloadProfileNeeded();
 
@@ -138,84 +138,84 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Get the view of the file system for this table
+   * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
     return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
   }
 
   /**
-   * Get the read optimized view of the file system for this table
+   * Get the read optimized view of the file system for this table.
    */
   public TableFileSystemView.ReadOptimizedView getROFileSystemView() {
     return getViewManager().getFileSystemView(metaClient.getBasePath());
   }
 
   /**
-   * Get the real time view of the file system for this table
+   * Get the real time view of the file system for this table.
    */
   public TableFileSystemView.RealtimeView getRTFileSystemView() {
     return getViewManager().getFileSystemView(metaClient.getBasePath());
   }
 
   /**
-   * Get complete view of the file system for this table with ability to force sync
+   * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
     return getViewManager().getFileSystemView(metaClient.getBasePath());
   }
 
   /**
-   * Get only the completed (no-inflights) commit + deltacommit timeline
+   * Get only the completed (no-inflights) commit + deltacommit timeline.
    */
   public HoodieTimeline getCompletedCommitsTimeline() {
     return metaClient.getCommitsTimeline().filterCompletedInstants();
   }
 
   /**
-   * Get only the completed (no-inflights) commit timeline
+   * Get only the completed (no-inflights) commit timeline.
    */
   public HoodieTimeline getCompletedCommitTimeline() {
     return metaClient.getCommitTimeline().filterCompletedInstants();
   }
 
   /**
-   * Get only the inflights (no-completed) commit timeline
+   * Get only the inflights (no-completed) commit timeline.
    */
   public HoodieTimeline getInflightCommitTimeline() {
     return metaClient.getCommitsTimeline().filterInflightsExcludingCompaction();
   }
 
   /**
-   * Get only the completed (no-inflights) clean timeline
+   * Get only the completed (no-inflights) clean timeline.
    */
   public HoodieTimeline getCompletedCleanTimeline() {
     return getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
   }
 
   /**
-   * Get clean timeline
+   * Get clean timeline.
    */
   public HoodieTimeline getCleanTimeline() {
     return getActiveTimeline().getCleanerTimeline();
   }
 
   /**
-   * Get only the completed (no-inflights) savepoint timeline
+   * Get only the completed (no-inflights) savepoint timeline.
    */
   public HoodieTimeline getCompletedSavepointTimeline() {
     return getActiveTimeline().getSavePointTimeline().filterCompletedInstants();
   }
 
   /**
-   * Get the list of savepoints in this table
+   * Get the list of savepoints in this table.
    */
   public List<String> getSavepoints() {
     return getCompletedSavepointTimeline().getInstants().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
   /**
-   * Get the list of data file names savepointed
+   * Get the list of data file names savepointed.
    */
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
     if (!getSavepoints().contains(savepointTime)) {
@@ -237,26 +237,26 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Return the index
+   * Return the index.
    */
   public HoodieIndex<T> getIndex() {
     return index;
   }
 
   /**
-   * Perform the ultimate IO for a given upserted (RDD) partition
+   * Perform the ultimate IO for a given upserted (RDD) partition.
    */
   public abstract Iterator<List<WriteStatus>> handleUpsertPartition(String commitTime, Integer partition,
       Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
   /**
-   * Perform the ultimate IO for a given inserted (RDD) partition
+   * Perform the ultimate IO for a given inserted (RDD) partition.
    */
   public abstract Iterator<List<WriteStatus>> handleInsertPartition(String commitTime, Integer partition,
       Iterator<HoodieRecord<T>> recordIterator, Partitioner partitioner);
 
   /**
-   * Schedule compaction for the instant time
+   * Schedule compaction for the instant time.
    * 
    * @param jsc Spark Context
    * @param instantTime Instant Time for scheduling compaction
@@ -265,7 +265,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract HoodieCompactionPlan scheduleCompaction(JavaSparkContext jsc, String instantTime);
 
   /**
-   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access
+   * Run Compaction on the table. Compaction arranges the data so that it is optimized for data access.
    *
    * @param jsc Spark Context
    * @param compactionInstantTime Instant Time
@@ -275,7 +275,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       HoodieCompactionPlan compactionPlan);
 
   /**
-   * Generates list of files that are eligible for cleaning
+   * Generates list of files that are eligible for cleaning.
    * 
    * @param jsc Java Spark Context
    * @return Cleaner Plan containing list of files to be deleted.
@@ -283,7 +283,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract HoodieCleanerPlan scheduleClean(JavaSparkContext jsc);
 
   /**
-   * Cleans the files listed in the cleaner plan associated with clean instant
+   * Cleans the files listed in the cleaner plan associated with clean instant.
    * 
    * @param jsc Java Spark Context
    * @param cleanInstant Clean Instant
@@ -300,7 +300,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
       throws IOException;
 
   /**
-   * Finalize the written data onto storage. Perform any final cleanups
+   * Finalize the written data onto storage. Perform any final cleanups.
    *
    * @param jsc Spark Context
    * @param stats List of HoodieWriteStats
@@ -312,7 +312,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Delete Marker directory corresponding to an instant
+   * Delete Marker directory corresponding to an instant.
    * 
    * @param instantTs Instant Time
    */
@@ -409,7 +409,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   }
 
   /**
-   * Ensures all files passed either appear or disappear
+   * Ensures all files passed either appear or disappear.
    * 
    * @param jsc JavaSparkContext
    * @param groupByPartition Files grouped by partition

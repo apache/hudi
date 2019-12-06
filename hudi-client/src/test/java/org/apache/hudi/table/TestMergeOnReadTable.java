@@ -1019,7 +1019,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure rolling stats are correctly written to metadata file
+   * Test to ensure rolling stats are correctly written to metadata file.
    */
   @Test
   public void testRollingStatsInMetadata() throws Exception {
@@ -1118,7 +1118,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure rolling stats are correctly written to the metadata file, identifies small files and corrects them
+   * Test to ensure rolling stats are correctly written to the metadata file, identifies small files and corrects them.
    */
   @Test
   public void testRollingStatsWithSmallFileHandling() throws Exception {

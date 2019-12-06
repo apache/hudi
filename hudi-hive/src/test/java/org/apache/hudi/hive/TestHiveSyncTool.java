@@ -74,7 +74,7 @@ public class TestHiveSyncTool {
   }
 
   /**
-   * Testing converting array types to Hive field declaration strings, according to the Parquet-113 spec:
+   * Testing converting array types to Hive field declaration strings. According to the Parquet-113 spec:
    * https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
    */
   @Test

@@ -42,7 +42,7 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Class storing configs for the {@link HoodieWriteClient}
+ * Class storing configs for the {@link HoodieWriteClient}.
  */
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {
@@ -115,8 +115,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * base properties
-   **/
+   * base properties.
+   */
   public String getBasePath() {
     return props.getProperty(BASE_PATH_PROP);
   }
@@ -210,8 +210,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * compaction properties
-   **/
+   * compaction properties.
+   */
   public HoodieCleaningPolicy getCleanerPolicy() {
     return HoodieCleaningPolicy.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_POLICY_PROP));
   }
@@ -297,8 +297,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * index properties
-   **/
+   * index properties.
+   */
   public HoodieIndex.IndexType getIndexType() {
     return HoodieIndex.IndexType.valueOf(props.getProperty(HoodieIndexConfig.INDEX_TYPE_PROP));
   }
@@ -417,8 +417,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * storage properties
-   **/
+   * storage properties.
+   */
   public long getParquetMaxFileSize() {
     return Long.parseLong(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
   }
@@ -452,8 +452,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * metrics properties
-   **/
+   * metrics properties.
+   */
   public boolean isMetricsOn() {
     return Boolean.parseBoolean(props.getProperty(HoodieMetricsConfig.METRICS_ON));
   }
@@ -483,7 +483,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * memory configs
+   * memory configs.
    */
   public Double getMaxMemoryFractionPerPartitionMerge() {
     return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP));

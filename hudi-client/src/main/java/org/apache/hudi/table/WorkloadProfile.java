@@ -33,19 +33,19 @@ import java.util.Set;
 import scala.Tuple2;
 
 /**
- * Information about incoming records for upsert/insert obtained either via sampling or introspecting the data fully
+ * Information about incoming records for upsert/insert obtained either via sampling or introspecting the data fully.
  * <p>
  * TODO(vc): Think about obtaining this directly from index.tagLocation
  */
 public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializable {
 
   /**
-   * Input workload
+   * Input workload.
    */
   private final JavaRDD<HoodieRecord<T>> taggedRecords;
 
   /**
-   * Computed workload profile
+   * Computed workload profile.
    */
   private final HashMap<String, WorkloadStat> partitionPathStatMap;
 

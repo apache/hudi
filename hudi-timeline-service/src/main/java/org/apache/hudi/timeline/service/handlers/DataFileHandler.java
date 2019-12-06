@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * REST Handler servicing data-file requests
+ * REST Handler servicing data-file requests.
  */
 public class DataFileHandler extends Handler {
 

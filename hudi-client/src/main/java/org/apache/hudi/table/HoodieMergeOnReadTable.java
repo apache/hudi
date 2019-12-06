@@ -201,7 +201,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   /**
    * Generate all rollback requests that we need to perform for rolling back this action without actually performing
-   * rolling back
+   * rolling back.
    * 
    * @param jsc JavaSparkContext
    * @param instantToRollback Instant to Rollback

@@ -486,7 +486,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   }
 
   /**
-   * Gets all the path indices that should not be combined
+   * Gets all the path indices that should not be combined.
    */
   @VisibleForTesting
   public Set<Integer> getNonCombinablePathIndices(JobConf job, Path[] paths, int numThreads)
@@ -602,8 +602,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   }
 
   /**
-   * MOD - Just added this for visibility
-   **/
+   * MOD - Just added this for visibility.
+   */
   Path[] getInputPaths(JobConf job) throws IOException {
     Path[] dirs = FileInputFormat.getInputPaths(job);
     if (dirs.length == 0) {
@@ -786,7 +786,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   }
 
   /**
-   * This is a marker interface that is used to identify the formats where combine split generation is not applicable
+   * This is a marker interface that is used to identify the formats where combine split generation is not applicable.
    */
   public interface AvoidSplitCombination {
 
@@ -794,8 +794,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   }
 
   /**
-   * **MOD** this is the implementation of CombineFileInputFormat which is a copy of
-   * org.apache.hadoop.hive.shims.HadoopShimsSecure.CombineFileInputFormatShim with changes in listStatus
+   * **MOD** This is the implementation of CombineFileInputFormat which is a copy of
+   * org.apache.hadoop.hive.shims.HadoopShimsSecure.CombineFileInputFormatShim with changes in listStatus.
    */
   public static class HoodieCombineFileInputFormatShim<K, V> extends CombineFileInputFormat<K, V>
       implements org.apache.hadoop.hive.shims.HadoopShims.CombineFileInputFormatShim<K, V> {

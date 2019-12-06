@@ -32,12 +32,12 @@ import java.io.IOException;
 import java.util.Collections;
 
 /**
- * A simple schema provider, that reads off files on DFS
+ * A simple schema provider, that reads off files on DFS.
  */
 public class FilebasedSchemaProvider extends SchemaProvider {
 
   /**
-   * Configs supported
+   * Configs supported.
    */
   public static class Config {
     private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".source.schema.file";

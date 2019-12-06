@@ -87,7 +87,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Test Cleaning related logic
+ * Test Cleaning related logic.
  */
 public class TestCleaner extends TestHoodieClientBase {
 
@@ -95,7 +95,7 @@ public class TestCleaner extends TestHoodieClientBase {
   private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
 
   /**
-   * Helper method to do first batch of insert for clean by versions/commits tests
+   * Helper method to do first batch of insert for clean by versions/commits tests.
    *
    * @param cfg Hoodie Write Config
    * @param client Hoodie Client
@@ -140,7 +140,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using insert/upsert API
+   * Test Clean-By-Versions using insert/upsert API.
    */
   @Test
   public void testInsertAndCleanByVersions() throws Exception {
@@ -148,7 +148,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of insert/upsert API
+   * Test Clean-By-Versions using prepped versions of insert/upsert API.
    */
   @Test
   public void testInsertPreppedAndCleanByVersions() throws Exception {
@@ -157,7 +157,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using bulk-insert/upsert API
+   * Test Clean-By-Versions using bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertAndCleanByVersions() throws Exception {
@@ -165,7 +165,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API
+   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertPreppedAndCleanByVersions() throws Exception {
@@ -175,7 +175,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective
+   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective.
    *
    * @param insertFn Insert API to be tested
    * @param upsertFn Upsert API to be tested
@@ -301,7 +301,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using insert/upsert API
+   * Test Clean-By-Versions using insert/upsert API.
    */
   @Test
   public void testInsertAndCleanByCommits() throws Exception {
@@ -309,7 +309,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped version of insert/upsert API
+   * Test Clean-By-Versions using prepped version of insert/upsert API.
    */
   @Test
   public void testInsertPreppedAndCleanByCommits() throws Exception {
@@ -317,7 +317,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API
+   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
@@ -327,7 +327,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using bulk-insert/upsert API
+   * Test Clean-By-Versions using bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertAndCleanByCommits() throws Exception {
@@ -335,7 +335,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective
+   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective.
    *
    * @param insertFn Insert API to be tested
    * @param upsertFn Upsert API to be tested
@@ -407,7 +407,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Helper to run cleaner and collect Clean Stats
+   * Helper to run cleaner and collect Clean Stats.
    *
    * @param config HoodieWriteConfig
    */
@@ -416,7 +416,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Helper to run cleaner and collect Clean Stats
+   * Helper to run cleaner and collect Clean Stats.
    *
    * @param config HoodieWriteConfig
    */
@@ -463,7 +463,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by versions logic
+   * Test HoodieTable.clean() Cleaning by versions logic.
    */
   @Test
   public void testKeepLatestFileVersions() throws IOException {
@@ -555,7 +555,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by versions logic for MOR table with Log files
+   * Test HoodieTable.clean() Cleaning by versions logic for MOR table with Log files.
    */
   @Test
   public void testKeepLatestFileVersionsMOR() throws IOException {
@@ -701,7 +701,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files
+   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
    */
   @Test
   public void testKeepLatestCommits() throws IOException {
@@ -718,7 +718,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files
+   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
    */
   @Test
   public void testKeepLatestCommitsIncrMode() throws IOException {
@@ -936,7 +936,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Keep Latest Commits when there are pending compactions
+   * Test Keep Latest Commits when there are pending compactions.
    */
   @Test
   public void testKeepLatestCommitsWithPendingCompactions() throws IOException {
@@ -967,7 +967,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
 
   /**
-   * Test Keep Latest Versions when there are pending compactions
+   * Test Keep Latest Versions when there are pending compactions.
    */
   @Test
   public void testKeepLatestVersionsWithPendingCompactionsAndFailureRetry() throws IOException {
@@ -993,7 +993,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Common test method for validating pending compactions
+   * Common test method for validating pending compactions.
    *
    * @param config Hoodie Write Config
    * @param expNumFilesDeleted Number of files deleted
@@ -1111,7 +1111,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Utility method to create temporary data files
+   * Utility method to create temporary data files.
    *
    * @param commitTime Commit Timestamp
    * @param numFiles Number for files to be generated
@@ -1127,7 +1127,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /***
-   * Helper method to return temporary files count
+   * Helper method to return temporary files count.
    * 
    * @return Number of temporary files found
    * @throws IOException in case of error

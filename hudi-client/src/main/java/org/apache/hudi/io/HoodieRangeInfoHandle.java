@@ -28,7 +28,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hadoop.fs.Path;
 
 /**
- * Extract range information for a given file slice
+ * Extract range information for a given file slice.
  */
 public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
 

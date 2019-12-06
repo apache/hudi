@@ -48,7 +48,7 @@ import java.util.HashMap;
 import static org.junit.Assert.assertEquals;
 
 /**
- * Tests against {@link AvroKafkaSource}
+ * Tests against {@link AvroKafkaSource}.
  */
 public class TestKafkaSource extends UtilitiesTestBase {
 

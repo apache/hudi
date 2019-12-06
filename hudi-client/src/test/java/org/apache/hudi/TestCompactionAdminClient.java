@@ -163,7 +163,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   }
 
   /**
-   * Enssure compaction plan is valid
+   * Enssure compaction plan is valid.
    *
    * @param compactionInstant Compaction Instant
    */
@@ -206,7 +206,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   }
 
   /**
-   * Validate Unschedule operations
+   * Validate Unschedule operations.
    */
   private List<Pair<HoodieLogFile, HoodieLogFile>> validateUnSchedulePlan(CompactionAdminClient client,
       String ingestionInstant, String compactionInstant, int numEntriesPerInstant, int expNumRenames) throws Exception {
@@ -215,7 +215,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   }
 
   /**
-   * Validate Unschedule operations
+   * Validate Unschedule operations.
    */
   private List<Pair<HoodieLogFile, HoodieLogFile>> validateUnSchedulePlan(CompactionAdminClient client,
       String ingestionInstant, String compactionInstant, int numEntriesPerInstant, int expNumRenames,
@@ -287,7 +287,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
   }
 
   /**
-   * Validate Unschedule operations
+   * Validate Unschedule operations.
    */
   private void validateUnScheduleFileId(CompactionAdminClient client, String ingestionInstant, String compactionInstant,
       CompactionOperation op, int expNumRenames) throws Exception {

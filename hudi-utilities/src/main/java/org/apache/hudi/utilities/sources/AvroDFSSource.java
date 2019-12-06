@@ -34,7 +34,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * DFS Source that reads avro data
+ * DFS Source that reads avro data.
  */
 public class AvroDFSSource extends AvroSource {
 

@@ -29,7 +29,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * DFS Source that reads json data
+ * DFS Source that reads json data.
  */
 public class JsonDFSSource extends JsonSource {
 

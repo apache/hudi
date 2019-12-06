@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR)
+ * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
 public class HoodieMergeOnReadTestUtils {
 

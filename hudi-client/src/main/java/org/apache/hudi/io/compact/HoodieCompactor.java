@@ -32,12 +32,12 @@ import java.io.Serializable;
 import java.util.Set;
 
 /**
- * A HoodieCompactor runs compaction on a hoodie table
+ * A HoodieCompactor runs compaction on a hoodie table.
  */
 public interface HoodieCompactor extends Serializable {
 
   /**
-   * Generate a new compaction plan for scheduling
+   * Generate a new compaction plan for scheduling.
    *
    * @param jsc Spark Context
    * @param hoodieTable Hoodie Table
@@ -51,7 +51,7 @@ public interface HoodieCompactor extends Serializable {
       String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactions) throws IOException;
 
   /**
-   * Execute compaction operations and report back status
+   * Execute compaction operations and report back status.
    */
   JavaRDD<WriteStatus> compact(JavaSparkContext jsc, HoodieCompactionPlan compactionPlan, HoodieTable hoodieTable,
       HoodieWriteConfig config, String compactionInstantTime) throws IOException;

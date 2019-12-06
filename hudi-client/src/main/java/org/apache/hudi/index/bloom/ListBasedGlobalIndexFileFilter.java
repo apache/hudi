@@ -26,7 +26,7 @@ import java.util.Set;
 class ListBasedGlobalIndexFileFilter extends ListBasedIndexFileFilter {
 
   /**
-   * Instantiates {@link ListBasedGlobalIndexFileFilter}
+   * Instantiates {@link ListBasedGlobalIndexFileFilter}.
    *
    * @param partitionToFileIndexInfo Map of partition to List of {@link BloomIndexFileInfo}
    */

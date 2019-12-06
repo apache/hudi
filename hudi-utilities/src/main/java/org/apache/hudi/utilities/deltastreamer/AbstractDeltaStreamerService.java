@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
- * Base Class for running delta-sync/compaction in separate thread and controlling their life-cyle
+ * Base Class for running delta-sync/compaction in separate thread and controlling their life-cyle.
  */
 public abstract class AbstractDeltaStreamerService implements Serializable {
 
@@ -116,14 +116,14 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
   }
 
   /**
-   * Service implementation
+   * Service implementation.
    * 
    * @return
    */
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
   /**
-   * A monitor thread is started which would trigger a callback if the service is shutdown
+   * A monitor thread is started which would trigger a callback if the service is shutdown.
    * 
    * @param onShutdownCallback
    */

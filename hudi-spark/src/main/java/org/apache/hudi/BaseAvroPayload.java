@@ -28,17 +28,17 @@ import java.io.IOException;
 import java.io.Serializable;
 
 /**
- * Base class for all AVRO record based payloads, that can be ordered based on a field
+ * Base class for all AVRO record based payloads, that can be ordered based on a field.
  */
 public abstract class BaseAvroPayload implements Serializable {
 
   /**
-   * Avro data extracted from the source converted to bytes
+   * Avro data extracted from the source converted to bytes.
    */
   protected final byte[] recordBytes;
 
   /**
-   * For purposes of preCombining
+   * For purposes of preCombining.
    */
   protected final Comparable orderingVal;
 

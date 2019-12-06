@@ -56,7 +56,7 @@ public class HoodieCompactionAdminTool {
   }
 
   /**
-   * Executes one of compaction admin operations
+   * Executes one of compaction admin operations.
    */
   public void run(JavaSparkContext jsc) throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath);
@@ -118,7 +118,7 @@ public class HoodieCompactionAdminTool {
   }
 
   /**
-   * Print Operation Result
+   * Print Operation Result.
    *
    * @param initialLine Initial Line
    * @param result Result
@@ -131,14 +131,14 @@ public class HoodieCompactionAdminTool {
   }
 
   /**
-   * Operation Types
+   * Operation Types.
    */
   public enum Operation {
     VALIDATE, UNSCHEDULE_PLAN, UNSCHEDULE_FILE, REPAIR
   }
 
   /**
-   * Admin Configuration Options
+   * Admin Configuration Options.
    */
   public static class Config implements Serializable {
 

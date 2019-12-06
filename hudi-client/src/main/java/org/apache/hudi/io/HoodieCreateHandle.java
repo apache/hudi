@@ -77,7 +77,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   /**
-   * Called by the compactor code path
+   * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator) {
@@ -124,7 +124,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   /**
-   * Writes all records passed
+   * Writes all records passed.
    */
   public void write() {
     try {
@@ -147,7 +147,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
   }
 
   /**
-   * Performs actions to durably, persist the current changes and returns a WriteStatus object
+   * Performs actions to durably, persist the current changes and returns a WriteStatus object.
    */
   @Override
   public WriteStatus close() {

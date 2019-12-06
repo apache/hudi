@@ -60,7 +60,7 @@ public class SchedulerConfGenerator {
   }
 
   /**
-   * Helper to set Spark Scheduling Configs dynamically
+   * Helper to set Spark Scheduling Configs dynamically.
    *
    * @param cfg Config
    */
