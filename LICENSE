@@ -300,6 +300,8 @@ This product includes code from org.apache.hadoop.
 
 * org.apache.hudi.common.bloom.filter.InternalFilter copied from classes in org.apache.hadoop.util.bloom package
 
+with the following license
+
 Copyright (c) 2005, European Commission project OneLab under contract 034819 (http://www.one-lab.org)
 
   Licensed to the Apache Software Foundation (ASF) under one

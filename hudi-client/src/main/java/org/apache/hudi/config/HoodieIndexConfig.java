@@ -23,7 +23,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 import javax.annotation.concurrent.Immutable;
-import org.apache.hudi.common.bloom.filter.SimpleBloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
 import org.apache.hudi.index.HoodieIndex;
 
 /**
@@ -53,7 +53,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = "hoodie.bloom.index.bucketized.checking";
   public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
   public static final String BLOOM_INDEX_FILTER_TYPE = "hoodie.bloom.index.filter.type";
-  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = SimpleBloomFilter.TYPE_CODE;
+  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = Integer.toString(BloomFilterTypeCode.SIMPLE.ordinal());
   public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "hoodie.bloom.index.filter.dynamic.max.entries";
   public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "100000";
 
