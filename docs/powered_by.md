@@ -14,7 +14,7 @@ Apache Hudi was originally developed at [Uber](https://uber.com), to achieve [lo
 It has been in production since Aug 2016, powering the massive [100PB data lake](https://eng.uber.com/uber-big-data-platform/), including highly business critical tables like core trips,riders,partners. It also 
 powers several incremental Hive ETL pipelines and being currently integrated into Uber's data dispersal system.
 
-#### Amazon EMR
+#### Amazon Web Services
 Amazon Web Services is the World's leading cloud services provider. Apache Hudi is [pre-installed](https://aws.amazon.com/emr/features/hudi/) with the AWS Elastic Map Reduce 
 offering, providing means for AWS users to perform record-level updates/deletes and manage storage efficiently.
 
@@ -56,6 +56,9 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 8. ["Apache Hudi (Incubating) - The Past, Present and Future Of Efficient Data Lake Architectures"](https://docs.google.com/presentation/d/1FHhsvh70ZP6xXlHdVsAI0g__B_6Mpto5KQFlZ0b8-mM) - By Vinoth Chandar & Balaji Varadarajan
    September 2019, ApacheCon NA 19, Las Vegas, NV, USA
+   
+9. ["Insert, upsert, and delete data in Amazon S3 using Amazon EMR"](https://www.portal.reinvent.awsevents.com/connect/sessionDetail.ww?SESSION_ID=98662&csrftkn=YS67-AG7B-QIAV-ZZBK-E6TT-MD4Q-1HEP-747P) - By Paul Codding & Vinoth Chandar
+   December 2019, AWS re:Invent 2019, Las Vegas, NV, USA 
 
 ## Articles
 
