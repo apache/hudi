@@ -59,7 +59,7 @@ public class HoodieSplashScreen extends DefaultBannerProvider {
   }
 
   public String getWelcomeMessage() {
-    return "Welcome to Hoodie CLI. Please type help if you are looking for help. ";
+    return "Welcome to Apache Hudi CLI. Please type help if you are looking for help. ";
   }
 
   @Override
