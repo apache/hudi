@@ -46,7 +46,7 @@ public class HoodieSplashScreen extends DefaultBannerProvider {
       + "*         \\  /  /    \\ \\  / /  /   \\ \\  / /  /   \\  /__/          *" + OsUtils.LINE_SEPARATOR
       + "*         / /  /      \\ \\/ /  /     \\ \\/ /  /     \\ \\__\\          *" + OsUtils.LINE_SEPARATOR
       + "*        / /  /        \\  /  /       \\  /  /       \\/__/          *" + OsUtils.LINE_SEPARATOR
-      + "*        \\/__/          \\/__/         \\/__/    Apache Hudi Cli    *" + OsUtils.LINE_SEPARATOR
+      + "*        \\/__/          \\/__/         \\/__/    Apache Hudi CLI    *" + OsUtils.LINE_SEPARATOR
       + "*                                                                 *" + OsUtils.LINE_SEPARATOR
       + "===================================================================" + OsUtils.LINE_SEPARATOR;
 
