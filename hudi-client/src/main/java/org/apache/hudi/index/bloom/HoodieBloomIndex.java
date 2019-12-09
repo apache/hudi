@@ -105,7 +105,6 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       recordRDD.unpersist(); // unpersist the input Record RDD
       keyFilenamePairRDD.unpersist();
     }
-
     return taggedRecordRDD;
   }
 
@@ -321,8 +320,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
       String recordKey = partitionRecordKeyPair._2();
       String partitionPath = partitionRecordKeyPair._1();
 
-      return indexFileFilter.getMatchingFiles(partitionPath, recordKey).stream()
-          .map(matchingFile -> new Tuple2<>(matchingFile, new HoodieKey(recordKey, partitionPath)))
+      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
+          .map(partitionFileIdPair -> new Tuple2<>(partitionFileIdPair.getRight(),
+              new HoodieKey(recordKey, partitionPath)))
           .collect(Collectors.toList());
     }).flatMap(List::iterator);
   }

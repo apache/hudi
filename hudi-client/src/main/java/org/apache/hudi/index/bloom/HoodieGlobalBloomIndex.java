@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -85,6 +86,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   JavaRDD<Tuple2<String, HoodieKey>> explodeRecordRDDWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
+
     Map<String, String> indexToPartitionMap = new HashMap<>();
     for (Entry<String, List<BloomIndexFileInfo>> entry : partitionToFileIndexInfo.entrySet()) {
       entry.getValue().forEach(indexFile -> indexToPartitionMap.put(indexFile.getFileId(), entry.getKey()));
@@ -98,12 +100,12 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
       String recordKey = partitionRecordKeyPair._2();
       String partitionPath = partitionRecordKeyPair._1();
 
-      return indexFileFilter.getMatchingFiles(partitionPath, recordKey).stream()
-          .map(file -> new Tuple2<>(file, new HoodieKey(recordKey, indexToPartitionMap.get(file))))
+      return indexFileFilter.getMatchingFilesAndPartition(partitionPath, recordKey).stream()
+          .map(partitionFileIdPair -> new Tuple2<>(partitionFileIdPair.getRight(),
+              new HoodieKey(recordKey, partitionFileIdPair.getLeft())))
           .collect(Collectors.toList());
     }).flatMap(List::iterator);
   }
-
 
   /**
    * Tagging for global index should only consider the record key.
@@ -111,13 +113,21 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
       JavaPairRDD<HoodieKey, HoodieRecordLocation> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
-    JavaPairRDD<String, HoodieRecord<T>> rowKeyRecordPairRDD =
-        recordRDD.mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
-    // so we do left outer join.
-    return rowKeyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), p._2)))
-        .values().map(value -> getTaggedRecord(value._1, Option.ofNullable(value._2.orNull())));
+    Map<String, Pair<HoodieKey, HoodieRecordLocation>> keyMap = keyFilenamePairRDD
+        .mapToPair(e -> new Tuple2<>(e._1.getRecordKey(), Pair.of(e._1, e._2))).collectAsMap();
+
+    JavaRDD<HoodieRecord<T>> toReturn = recordRDD.map(rec -> {
+      if (keyMap.containsKey(rec.getRecordKey())) {
+        Pair<HoodieKey, HoodieRecordLocation> value = keyMap.get(rec.getRecordKey());
+        return getTaggedRecord(new HoodieRecord(value.getLeft(), rec.getData()), Option.of(value
+            .getRight()));
+      } else {
+        return getTaggedRecord(rec, Option.empty());
+      }
+    });
+
+    return toReturn;
   }
 
   @Override

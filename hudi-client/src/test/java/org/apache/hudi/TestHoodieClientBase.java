@@ -95,7 +95,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   }
 
   protected HoodieWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit,
-      HoodieIndex index) {
+                                                   HoodieIndex index) {
     return new HoodieWriteClient(jsc, cfg, rollbackInflightCommit, index);
   }
 
@@ -112,6 +112,9 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
     return getConfigBuilder().build();
   }
 
+  protected HoodieWriteConfig getConfig(IndexType indexType) {
+    return getConfigBuilder(indexType).build();
+  }
 
   /**
    * Get Config builder with default configs set.
@@ -127,7 +130,20 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    *
    * @return Config Builder
    */
+  HoodieWriteConfig.Builder getConfigBuilder(IndexType indexType) {
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType);
+  }
+
   HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
+    return getConfigBuilder(schemaStr, IndexType.BLOOM);
+  }
+
+  /**
+   * Get Config builder with default configs set.
+   *
+   * @return Config Builder
+   */
+  HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
@@ -135,7 +151,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(IndexType.BLOOM).build())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
   }
@@ -162,7 +178,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Ensure presence of partition meta-data at known depth.
    *
    * @param partitionPaths Partition paths to check
-   * @param fs File System
+   * @param fs             File System
    * @throws IOException in case of error
    */
   void assertPartitionMetadata(String[] partitionPaths, FileSystem fs) throws IOException {
@@ -178,7 +194,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Ensure records have location field set.
    *
    * @param taggedRecords Tagged Records
-   * @param commitTime Commit Timestamp
+   * @param commitTime    Commit Timestamp
    */
   void checkTaggedRecords(List<HoodieRecord> taggedRecords, String commitTime) {
     for (HoodieRecord rec : taggedRecords) {
@@ -212,7 +228,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * to be already de-duped and have location set. This wrapper takes care of record-location setting. Uniqueness is
    * guaranteed by record-generation function itself.
    *
-   * @param writeConfig Hoodie Write Config
+   * @param writeConfig       Hoodie Write Config
    * @param recordGenFunction Records Generation function
    * @return Wrapped function
    */
@@ -233,7 +249,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * to be already de-duped and have location set. This wrapper takes care of record-location setting. Uniqueness is
    * guaranteed by key-generation function itself.
    *
-   * @param writeConfig Hoodie Write Config
+   * @param writeConfig    Hoodie Write Config
    * @param keyGenFunction Keys Generation function
    * @return Wrapped function
    */
@@ -255,12 +271,12 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Generate wrapper for record generation function for testing Prepped APIs.
    *
    * @param isPreppedAPI Flag to indicate if this is for testing prepped-version of APIs
-   * @param writeConfig Hoodie Write Config
-   * @param wrapped Actual Records Generation function
+   * @param writeConfig  Hoodie Write Config
+   * @param wrapped      Actual Records Generation function
    * @return Wrapped Function
    */
   Function2<List<HoodieRecord>, String, Integer> generateWrapRecordsFn(boolean isPreppedAPI,
-      HoodieWriteConfig writeConfig, Function2<List<HoodieRecord>, String, Integer> wrapped) {
+                                                                       HoodieWriteConfig writeConfig, Function2<List<HoodieRecord>, String, Integer> wrapped) {
     if (isPreppedAPI) {
       return wrapRecordsGenFunctionForPreppedCalls(writeConfig, wrapped);
     } else {
@@ -272,12 +288,12 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Generate wrapper for delete key generation function for testing Prepped APIs.
    *
    * @param isPreppedAPI Flag to indicate if this is for testing prepped-version of APIs
-   * @param writeConfig Hoodie Write Config
-   * @param wrapped Actual Records Generation function
+   * @param writeConfig  Hoodie Write Config
+   * @param wrapped      Actual Records Generation function
    * @return Wrapped Function
    */
   Function2<List<HoodieKey>, String, Integer> generateWrapDeleteKeysFn(boolean isPreppedAPI,
-      HoodieWriteConfig writeConfig, Function2<List<HoodieKey>, String, Integer> wrapped) {
+                                                                       HoodieWriteConfig writeConfig, Function2<List<HoodieKey>, String, Integer> wrapped) {
     if (isPreppedAPI) {
       return wrapDeleteKeysGenFunctionForPreppedCalls(writeConfig, wrapped);
     } else {
@@ -288,22 +304,22 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   /**
    * Helper to insert first batch of records and do regular assertions on the state after successful completion.
    *
-   * @param writeConfig Hoodie Write Config
-   * @param client Hoodie Write Client
-   * @param newCommitTime New Commit Timestamp to be used
-   * @param initCommitTime Begin Timestamp (usually "000")
+   * @param writeConfig            Hoodie Write Config
+   * @param client                 Hoodie Write Client
+   * @param newCommitTime          New Commit Timestamp to be used
+   * @param initCommitTime         Begin Timestamp (usually "000")
    * @param numRecordsInThisCommit Number of records to be added in the new commit
-   * @param writeFn Write Function to be used for insertion
-   * @param isPreppedAPI Boolean flag to indicate writeFn expects prepped records
-   * @param assertForCommit Enable Assertion of Writes
+   * @param writeFn                Write Function to be used for insertion
+   * @param isPreppedAPI           Boolean flag to indicate writeFn expects prepped records
+   * @param assertForCommit        Enable Assertion of Writes
    * @param expRecordsInThisCommit Expected number of records in this commit
    * @return RDD of write-status
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> insertFirstBatch(HoodieWriteConfig writeConfig, HoodieWriteClient client, String newCommitTime,
-      String initCommitTime, int numRecordsInThisCommit,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit) throws Exception {
+                                        String initCommitTime, int numRecordsInThisCommit,
+                                        Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
+                                        boolean assertForCommit, int expRecordsInThisCommit) throws Exception {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateInserts);
 
@@ -314,27 +330,27 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   /**
    * Helper to upsert batch of records and do regular assertions on the state after successful completion.
    *
-   * @param writeConfig Hoodie Write Config
-   * @param client Hoodie Write Client
-   * @param newCommitTime New Commit Timestamp to be used
-   * @param prevCommitTime Commit Timestamp used in previous commit
+   * @param writeConfig                  Hoodie Write Config
+   * @param client                       Hoodie Write Client
+   * @param newCommitTime                New Commit Timestamp to be used
+   * @param prevCommitTime               Commit Timestamp used in previous commit
    * @param commitTimesBetweenPrevAndNew Sample of Timestamps between prevCommitTime and newCommitTime
-   * @param initCommitTime Begin Timestamp (usually "000")
-   * @param numRecordsInThisCommit Number of records to be added in the new commit
-   * @param writeFn Write Function to be used for upsert
-   * @param isPreppedAPI Boolean flag to indicate writeFn expects prepped records
-   * @param assertForCommit Enable Assertion of Writes
-   * @param expRecordsInThisCommit Expected number of records in this commit
-   * @param expTotalRecords Expected number of records when scanned
-   * @param expTotalCommits Expected number of commits (including this commit)
+   * @param initCommitTime               Begin Timestamp (usually "000")
+   * @param numRecordsInThisCommit       Number of records to be added in the new commit
+   * @param writeFn                      Write Function to be used for upsert
+   * @param isPreppedAPI                 Boolean flag to indicate writeFn expects prepped records
+   * @param assertForCommit              Enable Assertion of Writes
+   * @param expRecordsInThisCommit       Expected number of records in this commit
+   * @param expTotalRecords              Expected number of records when scanned
+   * @param expTotalCommits              Expected number of commits (including this commit)
    * @return RDD of write-status
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> updateBatch(HoodieWriteConfig writeConfig, HoodieWriteClient client, String newCommitTime,
-      String prevCommitTime, Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime,
-      int numRecordsInThisCommit,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
+                                   String prevCommitTime, Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime,
+                                   int numRecordsInThisCommit,
+                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPreppedAPI,
+                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
         generateWrapRecordsFn(isPreppedAPI, writeConfig, dataGen::generateUniqueUpdates);
 
@@ -346,25 +362,25 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   /**
    * Helper to delete batch of keys and do regular assertions on the state after successful completion.
    *
-   * @param writeConfig Hoodie Write Config
-   * @param client Hoodie Write Client
-   * @param newCommitTime New Commit Timestamp to be used
-   * @param prevCommitTime Commit Timestamp used in previous commit
-   * @param initCommitTime Begin Timestamp (usually "000")
+   * @param writeConfig            Hoodie Write Config
+   * @param client                 Hoodie Write Client
+   * @param newCommitTime          New Commit Timestamp to be used
+   * @param prevCommitTime         Commit Timestamp used in previous commit
+   * @param initCommitTime         Begin Timestamp (usually "000")
    * @param numRecordsInThisCommit Number of records to be added in the new commit
-   * @param deleteFn Delete Function to be used for deletes
-   * @param isPreppedAPI Boolean flag to indicate writeFn expects prepped records
-   * @param assertForCommit Enable Assertion of Writes
+   * @param deleteFn               Delete Function to be used for deletes
+   * @param isPreppedAPI           Boolean flag to indicate writeFn expects prepped records
+   * @param assertForCommit        Enable Assertion of Writes
    * @param expRecordsInThisCommit Expected number of records in this commit
-   * @param expTotalRecords Expected number of records when scanned
+   * @param expTotalRecords        Expected number of records when scanned
    * @return RDD of write-status
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> deleteBatch(HoodieWriteConfig writeConfig, HoodieWriteClient client, String newCommitTime,
-      String prevCommitTime, String initCommitTime,
-      int numRecordsInThisCommit,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+                                   String prevCommitTime, String initCommitTime,
+                                   int numRecordsInThisCommit,
+                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieKey>, String> deleteFn, boolean isPreppedAPI,
+                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
     final Function2<List<HoodieKey>, String, Integer> keyGenFunction =
         generateWrapDeleteKeysFn(isPreppedAPI, writeConfig, dataGen::generateUniqueDeletes);
 
@@ -376,25 +392,25 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   /**
    * Helper to insert/upsert batch of records and do regular assertions on the state after successful completion.
    *
-   * @param client Hoodie Write Client
-   * @param newCommitTime New Commit Timestamp to be used
-   * @param prevCommitTime Commit Timestamp used in previous commit
+   * @param client                       Hoodie Write Client
+   * @param newCommitTime                New Commit Timestamp to be used
+   * @param prevCommitTime               Commit Timestamp used in previous commit
    * @param commitTimesBetweenPrevAndNew Sample of Timestamps between prevCommitTime and newCommitTime
-   * @param initCommitTime Begin Timestamp (usually "000")
-   * @param numRecordsInThisCommit Number of records to be added in the new commit
-   * @param recordGenFunction Records Generation Function
-   * @param writeFn Write Function to be used for upsert
-   * @param assertForCommit Enable Assertion of Writes
-   * @param expRecordsInThisCommit Expected number of records in this commit
-   * @param expTotalRecords Expected number of records when scanned
-   * @param expTotalCommits Expected number of commits (including this commit)
+   * @param initCommitTime               Begin Timestamp (usually "000")
+   * @param numRecordsInThisCommit       Number of records to be added in the new commit
+   * @param recordGenFunction            Records Generation Function
+   * @param writeFn                      Write Function to be used for upsert
+   * @param assertForCommit              Enable Assertion of Writes
+   * @param expRecordsInThisCommit       Expected number of records in this commit
+   * @param expTotalRecords              Expected number of records when scanned
+   * @param expTotalCommits              Expected number of commits (including this commit)
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> writeBatch(HoodieWriteClient client, String newCommitTime, String prevCommitTime,
-      Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
-      Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
+                                  Option<List<String>> commitTimesBetweenPrevAndNew, String initCommitTime, int numRecordsInThisCommit,
+                                  Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
+                                  Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
+                                  boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords, int expTotalCommits) throws Exception {
 
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
@@ -447,22 +463,22 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   /**
    * Helper to delete batch of hoodie keys and do regular assertions on the state after successful completion.
    *
-   * @param client Hoodie Write Client
-   * @param newCommitTime New Commit Timestamp to be used
-   * @param prevCommitTime Commit Timestamp used in previous commit
-   * @param initCommitTime Begin Timestamp (usually "000")
-   * @param keyGenFunction Key Generation function
-   * @param deleteFn Write Function to be used for delete
-   * @param assertForCommit Enable Assertion of Writes
+   * @param client                 Hoodie Write Client
+   * @param newCommitTime          New Commit Timestamp to be used
+   * @param prevCommitTime         Commit Timestamp used in previous commit
+   * @param initCommitTime         Begin Timestamp (usually "000")
+   * @param keyGenFunction         Key Generation function
+   * @param deleteFn               Write Function to be used for delete
+   * @param assertForCommit        Enable Assertion of Writes
    * @param expRecordsInThisCommit Expected number of records in this commit
-   * @param expTotalRecords Expected number of records when scanned
+   * @param expTotalRecords        Expected number of records when scanned
    * @throws Exception in case of error
    */
   JavaRDD<WriteStatus> deleteBatch(HoodieWriteClient client, String newCommitTime, String prevCommitTime,
-      String initCommitTime, int numRecordsInThisCommit,
-      Function2<List<HoodieKey>, String, Integer> keyGenFunction,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieKey>, String> deleteFn,
-      boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
+                                   String initCommitTime, int numRecordsInThisCommit,
+                                   Function2<List<HoodieKey>, String, Integer> keyGenFunction,
+                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieKey>, String> deleteFn,
+                                   boolean assertForCommit, int expRecordsInThisCommit, int expTotalRecords) throws Exception {
 
     // Delete 1 (only deletes)
     client.startCommitWithTime(newCommitTime);
@@ -510,7 +526,7 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Get Cleaner state corresponding to a partition path.
    *
    * @param hoodieCleanStatsTwo List of Clean Stats
-   * @param partitionPath Partition path for filtering
+   * @param partitionPath       Partition path for filtering
    * @return Cleaner state corresponding to partition path
    */
   HoodieCleanStat getCleanStat(List<HoodieCleanStat> hoodieCleanStatsTwo, String partitionPath) {
@@ -520,9 +536,9 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
   /**
    * Utility to simulate commit touching files in a partition.
    *
-   * @param files List of file-Ids to be touched
+   * @param files         List of file-Ids to be touched
    * @param partitionPath Partition
-   * @param commitTime Commit Timestamp
+   * @param commitTime    Commit Timestamp
    * @throws IOException in case of error
    */
   void updateAllFilesInPartition(List<String> files, String partitionPath, String commitTime) throws IOException {
@@ -535,8 +551,8 @@ public class TestHoodieClientBase extends HoodieClientTestHarness {
    * Helper methods to create new data files in a partition.
    *
    * @param partitionPath Partition
-   * @param commitTime Commit Timestamp
-   * @param numFiles Number of files to be added
+   * @param commitTime    Commit Timestamp
+   * @param numFiles      Number of files to be added
    * @return Created files
    * @throws IOException in case of error
    */

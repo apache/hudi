@@ -22,7 +22,9 @@ import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
 import org.apache.hudi.index.hbase.HBaseIndex;
 
 import org.junit.After;
@@ -62,5 +64,8 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
     assertTrue(HoodieIndex.createIndex(config, jsc) instanceof HoodieBloomIndex);
+    config = clientConfigBuilder.withPath(basePath)
+        .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.GLOBAL_BLOOM).build()).build();
+    assertTrue(HoodieIndex.createIndex(config, jsc) instanceof HoodieGlobalBloomIndex);
   }
 }

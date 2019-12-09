@@ -45,6 +45,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -138,7 +139,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    * @throws Exception in case of failure
    */
   private void testAutoCommit(Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
-      boolean isPrepped) throws Exception {
+                              boolean isPrepped) throws Exception {
     // Set autoCommit false
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     try (HoodieWriteClient client = getHoodieWriteClient(cfg);) {
@@ -261,12 +262,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   /**
    * Test one of HoodieWriteClient upsert(Prepped) APIs.
    *
-   * @param config Write Config
+   * @param config  Write Config
    * @param writeFn One of Hoodie Write Function API
    * @throws Exception in case of error
    */
   private void testUpsertsInternal(HoodieWriteConfig config,
-      Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPrepped)
+                                   Function3<JavaRDD<WriteStatus>, HoodieWriteClient, JavaRDD<HoodieRecord>, String> writeFn, boolean isPrepped)
       throws Exception {
     // Force using older timeline layout
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
@@ -383,6 +384,53 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
+   * Test update of a record to different partition with Global Index.
+   */
+  @Test
+  public void testUpsertToDiffPartitionGlobaIndex() throws Exception {
+    HoodieWriteClient client = getHoodieWriteClient(getConfig(IndexType.GLOBAL_BLOOM), false);
+    /**
+     * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
+     */
+    String initCommitTime = "000";
+    String newCommitTime = "001";
+    List<HoodieRecord> inserts1 = dataGen.generateInserts(newCommitTime, 10);
+
+    // Write 1 (only inserts)
+    client.startCommitWithTime(newCommitTime);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(inserts1, 1);
+    System.out.println("Records to be inserted " + writeRecords.collect());
+
+    JavaRDD<WriteStatus> result = client.insert(writeRecords, newCommitTime);
+    List<WriteStatus> statuses = result.collect();
+    assertNoWriteErrors(statuses);
+
+    // check the partition metadata is written out
+    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+
+    /**
+     * Write 2 updates
+     */
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
+
+    // Write 1 (only inserts)
+    client.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> updates1 = dataGen.generateUpdatesWithDiffPartition(newCommitTime, inserts1);
+    JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(updates1, 1);
+
+    System.out.println("Records to be updated " + updateRecords.collect());
+
+    JavaRDD<WriteStatus> result1 = client.upsert(updateRecords, newCommitTime);
+    List<WriteStatus> statuses1 = result1.collect();
+    assertNoWriteErrors(statuses1);
+
+    // check the partition metadata is written out
+    assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+  }
+
+  /**
    * Test scenario of new file-group getting added during upsert().
    */
   @Test
@@ -391,7 +439,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     final int insertSplitLimit = 100;
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
-    dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
+    dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
 
     HoodieWriteClient client = getHoodieWriteClient(config, false);
 
@@ -504,7 +552,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     final int insertSplitLimit = 100;
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
-    dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
+    dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     HoodieWriteClient client = getHoodieWriteClient(config, false);
 
     // Inserts => will write file1
@@ -516,7 +564,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     List<WriteStatus> statuses = client.insert(insertRecordsRDD1, commitTime1).collect();
 
     assertNoWriteErrors(statuses);
-    assertPartitionMetadata(new String[]{testPartitionPath}, fs);
+    assertPartitionMetadata(new String[] {testPartitionPath}, fs);
 
     assertEquals("Just 1 file needs to be added.", 1, statuses.size());
     String file1 = statuses.get(0).getFileId();
@@ -586,7 +634,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     List<String> keysSoFar = new ArrayList<>();
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit); // hold upto 200 records max
-    dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
+    dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
 
     HoodieWriteClient client = getHoodieWriteClient(config, false);
 
@@ -648,7 +696,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   private Pair<Set<String>, List<HoodieRecord>> testUpdates(String commitTime, HoodieWriteClient client,
-      int sizeToInsertAndUpdate, int expectedTotalRecords)
+                                                            int sizeToInsertAndUpdate, int expectedTotalRecords)
       throws IOException {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, sizeToInsertAndUpdate);
@@ -672,7 +720,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   private void testDeletes(HoodieWriteClient client, List<HoodieRecord> previousRecords, int sizeToDelete,
-      String existingFile, String commitTime, int exepctedRecords, List<String> keys) {
+                           String existingFile, String commitTime, int exepctedRecords, List<String> keys) {
     client.startCommitWithTime(commitTime);
 
     List<HoodieKey> hoodieKeysToDelete = HoodieClientTestUtils
@@ -714,7 +762,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     final int insertSplitLimit = 100;
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, true); // hold upto 200 records max
-    dataGen = new HoodieTestDataGenerator(new String[]{testPartitionPath});
+    dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
 
     HoodieWriteClient client = getHoodieWriteClient(config, false);
 
