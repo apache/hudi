@@ -54,6 +54,7 @@ import java.util.stream.Collectors;
 public class SchemaUtil {
 
   private static final Logger LOG = LogManager.getLogger(SchemaUtil.class);
+  public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   /**
    * Get the schema difference between the storage schema and hive table schema.
@@ -402,7 +403,8 @@ public class SchemaUtil {
 
     String partitionsStr = partitionFields.stream().collect(Collectors.joining(","));
     StringBuilder sb = new StringBuilder("CREATE EXTERNAL TABLE  IF NOT EXISTS ");
-    sb = sb.append(config.databaseName).append(".").append(config.tableName);
+    sb = sb.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName).append(HIVE_ESCAPE_CHARACTER)
+            .append(".").append(HIVE_ESCAPE_CHARACTER).append(config.tableName).append(HIVE_ESCAPE_CHARACTER);
     sb = sb.append("( ").append(columns).append(")");
     if (!config.partitionFields.isEmpty()) {
       sb = sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
