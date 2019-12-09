@@ -35,16 +35,20 @@ public class HoodieSplashScreen extends DefaultBannerProvider {
     System.out.println("HoodieSplashScreen loaded");
   }
 
-  private static String screen = "============================================" + OsUtils.LINE_SEPARATOR
-      + "*                                          *" + OsUtils.LINE_SEPARATOR
-      + "*     _    _           _   _               *" + OsUtils.LINE_SEPARATOR
-      + "*    | |  | |         | | (_)              *" + OsUtils.LINE_SEPARATOR
-      + "*    | |__| |       __| |  -               *" + OsUtils.LINE_SEPARATOR
-      + "*    |  __  ||   | / _` | ||               *" + OsUtils.LINE_SEPARATOR
-      + "*    | |  | ||   || (_| | ||               *" + OsUtils.LINE_SEPARATOR
-      + "*    |_|  |_|\\___/ \\____/ ||               *" + OsUtils.LINE_SEPARATOR
-      + "*                                          *" + OsUtils.LINE_SEPARATOR
-      + "============================================" + OsUtils.LINE_SEPARATOR;
+  private static String screen = "===================================================================" + OsUtils.LINE_SEPARATOR
+      + "*         ___                          ___                        *" + OsUtils.LINE_SEPARATOR
+      + "*        /\\__\\          ___           /\\  \\           ___         *" + OsUtils.LINE_SEPARATOR
+      + "*       / /  /         /\\__\\         /  \\  \\         /\\  \\        *" + OsUtils.LINE_SEPARATOR
+      + "*      / /__/         / /  /        / /\\ \\  \\        \\ \\  \\       *" + OsUtils.LINE_SEPARATOR
+      + "*     /  \\  \\ ___    / /  /        / /  \\ \\__\\       /  \\__\\      *" + OsUtils.LINE_SEPARATOR
+      + "*    / /\\ \\  /\\__\\  / /__/  ___   / /__/ \\ |__|     / /\\/__/      *" + OsUtils.LINE_SEPARATOR
+      + "*    \\/  \\ \\/ /  /  \\ \\  \\ /\\__\\  \\ \\  \\ / /  /  /\\/ /  /         *" + OsUtils.LINE_SEPARATOR
+      + "*         \\  /  /    \\ \\  / /  /   \\ \\  / /  /   \\  /__/          *" + OsUtils.LINE_SEPARATOR
+      + "*         / /  /      \\ \\/ /  /     \\ \\/ /  /     \\ \\__\\          *" + OsUtils.LINE_SEPARATOR
+      + "*        / /  /        \\  /  /       \\  /  /       \\/__/          *" + OsUtils.LINE_SEPARATOR
+      + "*        \\/__/          \\/__/         \\/__/    Apache Hudi CLI    *" + OsUtils.LINE_SEPARATOR
+      + "*                                                                 *" + OsUtils.LINE_SEPARATOR
+      + "===================================================================" + OsUtils.LINE_SEPARATOR;
 
   public String getBanner() {
     return screen;
@@ -55,7 +59,7 @@ public class HoodieSplashScreen extends DefaultBannerProvider {
   }
 
   public String getWelcomeMessage() {
-    return "Welcome to Hoodie CLI. Please type help if you are looking for help. ";
+    return "Welcome to Apache Hudi CLI. Please type help if you are looking for help. ";
   }
 
   @Override
