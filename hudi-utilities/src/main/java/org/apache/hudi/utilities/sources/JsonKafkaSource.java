@@ -24,14 +24,15 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
-import kafka.serializer.StringDecoder;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.streaming.kafka.KafkaUtils;
-import org.apache.spark.streaming.kafka.OffsetRange;
+import org.apache.spark.streaming.kafka010.KafkaUtils;
+import org.apache.spark.streaming.kafka010.LocationStrategies;
+import org.apache.spark.streaming.kafka010.OffsetRange;
 
 /**
  * Read json kafka data.
@@ -45,6 +46,8 @@ public class JsonKafkaSource extends JsonSource {
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(properties, sparkContext, sparkSession, schemaProvider);
+    properties.put("key.deserializer", StringDeserializer.class);
+    properties.put("value.deserializer", StringDeserializer.class);
     offsetGen = new KafkaOffsetGen(properties);
   }
 
@@ -61,7 +64,7 @@ public class JsonKafkaSource extends JsonSource {
   }
 
   private JavaRDD<String> toRDD(OffsetRange[] offsetRanges) {
-    return KafkaUtils.createRDD(sparkContext, String.class, String.class, StringDecoder.class, StringDecoder.class,
-        offsetGen.getKafkaParams(), offsetRanges).values();
+    return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+            LocationStrategies.PreferConsistent()).map(x -> (String) x.value());
   }
 }

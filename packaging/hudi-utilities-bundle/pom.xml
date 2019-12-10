@@ -85,8 +85,8 @@
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
-                  <include>com.twitter:bijection-avro_2.11</include>
-                  <include>com.twitter:bijection-core_2.11</include>
+                  <include>com.twitter:bijection-avro_${scala.binary.version}</include>
+                  <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
@@ -94,8 +94,8 @@
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>org.apache.spark:spark-streaming-kafka-0-8_2.11</include>
-                  <include>org.apache.kafka:kafka_2.11</include>
+                  <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
+                  <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
 
