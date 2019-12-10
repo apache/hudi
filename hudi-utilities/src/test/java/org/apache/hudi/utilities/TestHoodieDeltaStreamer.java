@@ -89,7 +89,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   private static final String PROPS_FILENAME_TEST_SOURCE = "test-source.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
-  private static volatile Logger log = LogManager.getLogger(TestHoodieDeltaStreamer.class);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
 
   @BeforeClass
   public static void initClass() throws Exception {
@@ -247,7 +247,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     static void assertAtleastNCompactionCommits(int minExpected, String datasetPath, FileSystem fs) {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
       HoodieTimeline timeline = meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants();
-      log.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numCompactionCommits = (int) timeline.getInstants().count();
       assertTrue("Got=" + numCompactionCommits + ", exp >=" + minExpected, minExpected <= numCompactionCommits);
     }
@@ -255,7 +255,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     static void assertAtleastNDeltaCommits(int minExpected, String datasetPath, FileSystem fs) {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), datasetPath);
       HoodieTimeline timeline = meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
-      log.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue("Got=" + numDeltaCommits + ", exp >=" + minExpected, minExpected <= numDeltaCommits);
     }
@@ -280,7 +280,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
             Thread.sleep(3000);
             ret = condition.apply(true);
           } catch (Throwable error) {
-            log.warn("Got error :", error);
+            LOG.warn("Got error :", error);
             ret = false;
           }
         }
@@ -311,7 +311,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       fail("Should error out when setting the key generator class property to an invalid value");
     } catch (IOException e) {
       // expected
-      log.error("Expected error during getting the key generator", e);
+      LOG.error("Expected error during getting the key generator", e);
       assertTrue(e.getMessage().contains("Could not load key generator class"));
     }
   }
@@ -326,7 +326,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       fail("Should error out when pointed out at a dir thats not a dataset");
     } catch (DatasetNotFoundException e) {
       // expected
-      log.error("Expected error during dataset creation", e);
+      LOG.error("Expected error during dataset creation", e);
     }
   }
 
@@ -497,7 +497,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       new HoodieDeltaStreamer(cfg, jsc, dfs, hiveServer.getHiveConf()).sync();
       fail("Should error out when schema provider is not provided");
     } catch (HoodieException e) {
-      log.error("Expected error during reading data from source ", e);
+      LOG.error("Expected error during reading data from source ", e);
       assertTrue(e.getMessage().contains("Please provide a valid schema provider class!"));
     }
   }

@@ -44,7 +44,7 @@ import java.util.Set;
  */
 public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
 
-  private static Logger logger = LogManager.getLogger(HoodieKeyLookupHandle.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieKeyLookupHandle.class);
 
   private final HoodieTableType tableType;
 
@@ -63,7 +63,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
     HoodieTimer timer = new HoodieTimer().startTimer();
     this.bloomFilter = ParquetUtils.readBloomFilterFromParquetMetadata(hoodieTable.getHadoopConf(),
         new Path(getLatestDataFile().getPath()));
-    logger.info(String.format("Read bloom filter from %s in %d ms", partitionPathFilePair, timer.endTimer()));
+    LOG.info(String.format("Read bloom filter from %s in %d ms", partitionPathFilePair, timer.endTimer()));
   }
 
   /**
@@ -79,10 +79,10 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
         Set<String> fileRowKeys =
             ParquetUtils.filterParquetRowKeys(configuration, filePath, new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
-        logger.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
+        LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
             timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
-        if (logger.isDebugEnabled()) {
-          logger.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
         }
       }
     } catch (Exception e) {
@@ -97,8 +97,8 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
   public void addKey(String recordKey) {
     // check record key against bloom filter of current file & add to possible keys if needed
     if (bloomFilter.mightContain(recordKey)) {
-      if (logger.isDebugEnabled()) {
-        logger.debug("Record key " + recordKey + " matches bloom filter in  " + partitionPathFilePair);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Record key " + recordKey + " matches bloom filter in  " + partitionPathFilePair);
       }
       candidateRecordKeys.add(recordKey);
     }
@@ -109,14 +109,14 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends Hoodie
    * Of all the keys, that were added, return a list of keys that were actually found in the file group.
    */
   public KeyLookupResult getLookupResult() {
-    if (logger.isDebugEnabled()) {
-      logger.debug("#The candidate row keys for " + partitionPathFilePair + " => " + candidateRecordKeys);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("#The candidate row keys for " + partitionPathFilePair + " => " + candidateRecordKeys);
     }
 
     HoodieDataFile dataFile = getLatestDataFile();
     List<String> matchingKeys =
         checkCandidatesAgainstFile(hoodieTable.getHadoopConf(), candidateRecordKeys, new Path(dataFile.getPath()));
-    logger.info(
+    LOG.info(
         String.format("Total records (%d), bloom filter candidates (%d)/fp(%d), actual matches (%d)", totalKeysChecked,
             candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
     return new KeyLookupResult(partitionPathFilePair.getRight(), partitionPathFilePair.getLeft(),

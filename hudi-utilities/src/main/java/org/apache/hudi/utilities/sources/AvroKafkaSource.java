@@ -40,7 +40,7 @@ import org.apache.spark.streaming.kafka.OffsetRange;
  */
 public class AvroKafkaSource extends AvroSource {
 
-  private static Logger log = LogManager.getLogger(AvroKafkaSource.class);
+  private static final Logger LOG = LogManager.getLogger(AvroKafkaSource.class);
 
   private final KafkaOffsetGen offsetGen;
 
@@ -57,7 +57,7 @@ public class AvroKafkaSource extends AvroSource {
     if (totalNewMsgs <= 0) {
       return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     } else {
-      log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+      LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     }
     JavaRDD<GenericRecord> newDataRDD = toRDD(offsetRanges);
     return new InputBatch<>(Option.of(newDataRDD), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));

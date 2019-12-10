@@ -38,7 +38,7 @@ import org.apache.spark.streaming.kafka.OffsetRange;
  */
 public class JsonKafkaSource extends JsonSource {
 
-  private static Logger log = LogManager.getLogger(JsonKafkaSource.class);
+  private static final Logger LOG = LogManager.getLogger(JsonKafkaSource.class);
 
   private final KafkaOffsetGen offsetGen;
 
@@ -55,7 +55,7 @@ public class JsonKafkaSource extends JsonSource {
     if (totalNewMsgs <= 0) {
       return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     }
-    log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     JavaRDD<String> newDataRDD = toRDD(offsetRanges);
     return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }

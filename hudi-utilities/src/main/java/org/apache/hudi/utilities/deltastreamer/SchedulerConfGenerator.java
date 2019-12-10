@@ -39,7 +39,7 @@ import java.util.UUID;
  */
 public class SchedulerConfGenerator {
 
-  protected static volatile Logger log = LogManager.getLogger(SchedulerConfGenerator.class);
+  private static final Logger LOG = LogManager.getLogger(SchedulerConfGenerator.class);
 
   public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
   public static final String COMPACT_POOL_NAME = "hoodiecompact";
@@ -76,7 +76,7 @@ public class SchedulerConfGenerator {
           cfg.compactSchedulingWeight, cfg.deltaSyncSchedulingMinShare, cfg.compactSchedulingMinShare);
       additionalSparkConfigs.put(SPARK_SCHEDULER_ALLOCATION_FILE_KEY, sparkSchedulingConfFile);
     } else {
-      log.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
+      LOG.warn("Job Scheduling Configs will not be in effect as spark.scheduler.mode "
           + "is not set to FAIR at instatiation time. Continuing without scheduling configs");
     }
     return additionalSparkConfigs;
@@ -88,7 +88,7 @@ public class SchedulerConfGenerator {
     BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile));
     bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare));
     bw.close();
-    log.info("Configs written to file" + tempConfigFile.getAbsolutePath());
+    LOG.info("Configs written to file" + tempConfigFile.getAbsolutePath());
     return tempConfigFile.getAbsolutePath();
   }
 }

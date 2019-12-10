@@ -68,7 +68,7 @@ import java.util.stream.Stream;
  */
 public class HoodieCommitArchiveLog {
 
-  private static Logger log = LogManager.getLogger(HoodieCommitArchiveLog.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCommitArchiveLog.class);
 
   private final Path archiveFilePath;
   private final HoodieTableMetaClient metaClient;
@@ -114,11 +114,11 @@ public class HoodieCommitArchiveLog {
       boolean success = true;
       if (instantsToArchive.iterator().hasNext()) {
         this.writer = openWriter();
-        log.info("Archiving instants " + instantsToArchive);
+        LOG.info("Archiving instants " + instantsToArchive);
         archive(instantsToArchive);
         success = deleteArchivedInstants(instantsToArchive);
       } else {
-        log.info("No Instants to archive");
+        LOG.info("No Instants to archive");
       }
       return success;
     } finally {
@@ -175,14 +175,14 @@ public class HoodieCommitArchiveLog {
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants) throws IOException {
-    log.info("Deleting instants " + archivedInstants);
+    LOG.info("Deleting instants " + archivedInstants);
     boolean success = true;
     for (HoodieInstant archivedInstant : archivedInstants) {
       Path commitFile = new Path(metaClient.getMetaPath(), archivedInstant.getFileName());
       try {
         if (metaClient.getFs().exists(commitFile)) {
           success &= metaClient.getFs().delete(commitFile, false);
-          log.info("Archived and deleted instant file " + commitFile);
+          LOG.info("Archived and deleted instant file " + commitFile);
         }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to delete archived instant " + archivedInstant, e);
@@ -217,11 +217,11 @@ public class HoodieCommitArchiveLog {
 
     boolean success = true;
     for (HoodieInstant deleteInstant : instantsToBeDeleted) {
-      log.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
+      LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
       Path metaFile = new Path(metaClient.getMetaAuxiliaryPath(), deleteInstant.getFileName());
       if (metaClient.getFs().exists(metaFile)) {
         success &= metaClient.getFs().delete(metaFile, false);
-        log.info("Deleted instant file in auxiliary metapath : " + metaFile);
+        LOG.info("Deleted instant file in auxiliary metapath : " + metaFile);
       }
     }
     return success;
@@ -231,7 +231,7 @@ public class HoodieCommitArchiveLog {
     try {
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
-      log.info("Wrapper schema " + wrapperSchema.toString());
+      LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
@@ -240,7 +240,7 @@ public class HoodieCommitArchiveLog {
             writeToFile(wrapperSchema, records);
           }
         } catch (Exception e) {
-          log.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
+          LOG.error("Failed to archive commits, .commit file: " + hoodieInstant.getFileName(), e);
           if (this.config.isFailOnTimelineArchivingEnabled()) {
             throw e;
           }

@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrementalPuller {
 
-  private static Logger log = LogManager.getLogger(HiveIncrementalPuller.class);
+  private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
   private static String driverName = "org.apache.hive.jdbc.HiveDriver";
 
   public static class Config implements Serializable {
@@ -129,14 +129,14 @@ public class HiveIncrementalPuller {
     try {
       if (config.fromCommitTime == null) {
         config.fromCommitTime = inferCommitTime(fs);
-        log.info("FromCommitTime inferred as " + config.fromCommitTime);
+        LOG.info("FromCommitTime inferred as " + config.fromCommitTime);
       }
 
-      log.info("FromCommitTime - " + config.fromCommitTime);
+      LOG.info("FromCommitTime - " + config.fromCommitTime);
       String sourceTableLocation = getTableLocation(config.sourceDb, config.sourceTable);
       String lastCommitTime = getLastCommitTimePulled(fs, sourceTableLocation);
       if (lastCommitTime == null) {
-        log.info("Nothing to pull. However we will continue to create a empty table");
+        LOG.info("Nothing to pull. However we will continue to create a empty table");
         lastCommitTime = config.fromCommitTime;
       }
 
@@ -155,9 +155,9 @@ public class HiveIncrementalPuller {
 
       initHiveBeelineProperties(stmt);
       executeIncrementalSQL(tempDbTable, tempDbTablePath, stmt);
-      log.info("Finished HoodieReader execution");
+      LOG.info("Finished HoodieReader execution");
     } catch (SQLException e) {
-      log.error("Exception when executing SQL", e);
+      LOG.error("Exception when executing SQL", e);
       throw new IOException("Could not scan " + config.sourceTable + " incrementally", e);
     } finally {
       try {
@@ -165,7 +165,7 @@ public class HiveIncrementalPuller {
           stmt.close();
         }
       } catch (SQLException e) {
-        log.error("Could not close the resultset opened ", e);
+        LOG.error("Could not close the resultset opened ", e);
       }
     }
   }
@@ -180,13 +180,13 @@ public class HiveIncrementalPuller {
     incrementalPullSQLtemplate.add("storedAsClause", storedAsClause);
     String incrementalSQL = new Scanner(new File(config.incrementalSQLFile)).useDelimiter("\\Z").next();
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
-      log.info("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
+      LOG.info("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
           + ", which means its pulling from a different table. Fencing this from " + "happening.");
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
     }
     if (!incrementalSQL.contains("`_hoodie_commit_time` > '%targetBasePath'")) {
-      log.info("Incremental SQL : " + incrementalSQL
+      LOG.info("Incremental SQL : " + incrementalSQL
           + " does not contain `_hoodie_commit_time` > '%targetBasePath'. Please add "
           + "this clause for incremental to work properly.");
       throw new HoodieIncrementalPullSQLException(
@@ -205,7 +205,7 @@ public class HiveIncrementalPuller {
   }
 
   private void initHiveBeelineProperties(Statement stmt) throws SQLException {
-    log.info("Setting up Hive JDBC Session with properties");
+    LOG.info("Setting up Hive JDBC Session with properties");
     // set the queue
     executeStatement("set mapred.job.queue.name=" + config.yarnQueueName, stmt);
     // Set the inputformat to HoodieCombineHiveInputFormat
@@ -224,17 +224,17 @@ public class HiveIncrementalPuller {
   }
 
   private boolean deleteHDFSPath(FileSystem fs, String path) throws IOException {
-    log.info("Deleting path " + path);
+    LOG.info("Deleting path " + path);
     return fs.delete(new Path(path), true);
   }
 
   private void executeStatement(String sql, Statement stmt) throws SQLException {
-    log.info("Executing: " + sql);
+    LOG.info("Executing: " + sql);
     stmt.execute(sql);
   }
 
   private String inferCommitTime(FileSystem fs) throws SQLException, IOException {
-    log.info("FromCommitTime not specified. Trying to infer it from Hoodie dataset " + config.targetDb + "."
+    LOG.info("FromCommitTime not specified. Trying to infer it from Hoodie dataset " + config.targetDb + "."
         + config.targetTable);
     String targetDataLocation = getTableLocation(config.targetDb, config.targetTable);
     return scanForCommitTime(fs, targetDataLocation);
@@ -249,7 +249,7 @@ public class HiveIncrementalPuller {
       resultSet = stmt.executeQuery("describe formatted `" + db + "." + table + "`");
       while (resultSet.next()) {
         if (resultSet.getString(1).trim().equals("Location:")) {
-          log.info("Inferred table location for " + db + "." + table + " as " + resultSet.getString(2));
+          LOG.info("Inferred table location for " + db + "." + table + " as " + resultSet.getString(2));
           return resultSet.getString(2);
         }
       }
@@ -264,7 +264,7 @@ public class HiveIncrementalPuller {
           resultSet.close();
         }
       } catch (SQLException e) {
-        log.error("Could not close the resultset opened ", e);
+        LOG.error("Could not close the resultset opened ", e);
       }
     }
     return null;
@@ -290,7 +290,7 @@ public class HiveIncrementalPuller {
   private boolean ensureTempPathExists(FileSystem fs, String lastCommitTime) throws IOException {
     Path targetBaseDirPath = new Path(config.hoodieTmpDir, config.targetTable + "__" + config.sourceTable);
     if (!fs.exists(targetBaseDirPath)) {
-      log.info("Creating " + targetBaseDirPath + " with permission drwxrwxrwx");
+      LOG.info("Creating " + targetBaseDirPath + " with permission drwxrwxrwx");
       boolean result =
           FileSystem.mkdirs(fs, targetBaseDirPath, new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
       if (!result) {
@@ -305,7 +305,7 @@ public class HiveIncrementalPuller {
         throw new HoodieException("Could not delete existing " + targetPath);
       }
     }
-    log.info("Creating " + targetPath + " with permission drwxrwxrwx");
+    LOG.info("Creating " + targetPath + " with permission drwxrwxrwx");
     return FileSystem.mkdirs(fs, targetBaseDirPath, new FsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL));
   }
 
@@ -315,20 +315,20 @@ public class HiveIncrementalPuller {
         .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
-      log.warn(
+      LOG.warn(
           "Nothing to sync. All commits in "
               + config.sourceTable + " are " + metadata.getActiveTimeline().getCommitsTimeline()
                   .filterCompletedInstants().getInstants().collect(Collectors.toList())
               + " and from commit time is " + config.fromCommitTime);
       return null;
     }
-    log.info("Syncing commits " + commitsToSync);
+    LOG.info("Syncing commits " + commitsToSync);
     return commitsToSync.get(commitsToSync.size() - 1);
   }
 
   private Connection getConnection() throws SQLException {
     if (connection == null) {
-      log.info("Getting Hive Connection to " + config.hiveJDBCUrl);
+      LOG.info("Getting Hive Connection to " + config.hiveJDBCUrl);
       this.connection = DriverManager.getConnection(config.hiveJDBCUrl, config.hiveUsername, config.hivePassword);
 
     }

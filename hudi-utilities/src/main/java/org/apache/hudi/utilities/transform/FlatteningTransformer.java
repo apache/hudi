@@ -37,7 +37,7 @@ import java.util.UUID;
 public class FlatteningTransformer implements Transformer {
 
   private static final String TMP_TABLE = "HUDI_SRC_TMP_TABLE_";
-  private static volatile Logger log = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LogManager.getLogger(SqlQueryBasedTransformer.class);
 
   /**
    * Configs supported.
@@ -48,7 +48,7 @@ public class FlatteningTransformer implements Transformer {
 
     // tmp table name doesn't like dashes
     String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    log.info("Registering tmp table : " + tmpTable);
+    LOG.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
     return sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
   }

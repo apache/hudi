@@ -108,7 +108,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
 
-  private static Logger log = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
 
   private final String serverHost;
   private final int serverPort;
@@ -148,7 +148,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
 
     String url = builder.toString();
-    log.info("Sending request : (" + url + ")");
+    LOG.info("Sending request : (" + url + ")");
     Response response = null;
     int timeout = 1000 * 300; // 5 min timeout
     switch (method) {

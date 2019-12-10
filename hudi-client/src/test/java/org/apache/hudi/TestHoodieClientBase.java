@@ -70,7 +70,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class TestHoodieClientBase extends HoodieClientTestHarness {
 
-  protected static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieClientBase.class);
 
   @Before
   public void setUp() throws Exception {

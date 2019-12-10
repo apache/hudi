@@ -39,7 +39,7 @@ import java.util.List;
 
 public class HoodieCompactor {
 
-  private static volatile Logger logger = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
   private final Config cfg;
   private transient FileSystem fs;
   private TypedProperties props;
@@ -110,7 +110,7 @@ public class HoodieCompactor {
         }
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      logger.error(t);
+      LOG.error(t);
     }
     return ret;
   }

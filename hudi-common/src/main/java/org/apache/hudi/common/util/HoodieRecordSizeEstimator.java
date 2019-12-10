@@ -33,7 +33,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements SizeEstimator<HoodieRecord<T>> {
 
-  private static Logger log = LogManager.getLogger(HoodieRecordSizeEstimator.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieRecordSizeEstimator.class);
 
   // Schema used to get GenericRecord from HoodieRecordPayload then convert to bytes and vice-versa
   private final Schema schema;
@@ -50,7 +50,7 @@ public class HoodieRecordSizeEstimator<T extends HoodieRecordPayload> implements
     /** {@link ExternalSpillableMap} **/
     long sizeOfRecord = ObjectSizeCalculator.getObjectSize(hoodieRecord);
     long sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
-    log.info("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
+    LOG.info("SizeOfRecord => " + sizeOfRecord + " SizeOfSchema => " + sizeOfSchema);
     return sizeOfRecord;
   }
 }

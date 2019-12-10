@@ -51,7 +51,7 @@ import scala.util.Either;
  */
 public class KafkaOffsetGen {
 
-  private static volatile Logger log = LogManager.getLogger(KafkaOffsetGen.class);
+  private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
 
   public static class CheckpointUtils {
 

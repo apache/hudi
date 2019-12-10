@@ -85,7 +85,7 @@ public class HoodieJavaApp {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
-  private static Logger logger = LogManager.getLogger(HoodieJavaApp.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieJavaApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
@@ -154,7 +154,7 @@ public class HoodieJavaApp {
     // new dataset if needed
     writer.save(tablePath); // ultimately where the dataset will be placed
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("First commit at instant time :" + commitInstantTime1);
+    LOG.info("First commit at instant time :" + commitInstantTime1);
 
     /**
      * Commit that updates records
@@ -177,7 +177,7 @@ public class HoodieJavaApp {
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("Second commit at instant time :" + commitInstantTime2);
+    LOG.info("Second commit at instant time :" + commitInstantTime2);
 
     /**
      * Commit that Deletes some records
@@ -201,7 +201,7 @@ public class HoodieJavaApp {
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
     String commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("Third commit at instant time :" + commitInstantTime3);
+    LOG.info("Third commit at instant time :" + commitInstantTime3);
 
     /**
      * Read & do some queries
@@ -226,7 +226,7 @@ public class HoodieJavaApp {
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
-      logger.info("You will only see records from : " + commitInstantTime2);
+      LOG.info("You will only see records from : " + commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
     }
   }
@@ -236,7 +236,7 @@ public class HoodieJavaApp {
    */
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
-      logger.info("Enabling Hive sync to " + hiveJdbcUrl);
+      LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
           .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
           .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)

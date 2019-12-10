@@ -36,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class RecordReaderValueIterator<K, V> implements Iterator<V> {
 
-  private static final transient Logger LOG = LogManager.getLogger(RecordReaderValueIterator.class);
+  private static final Logger LOG = LogManager.getLogger(RecordReaderValueIterator.class);
 
   private final RecordReader<K, V> reader;
   private V nextVal = null;

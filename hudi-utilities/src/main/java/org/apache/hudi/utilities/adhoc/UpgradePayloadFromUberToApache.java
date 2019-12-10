@@ -46,7 +46,7 @@ import java.util.Properties;
  */
 public class UpgradePayloadFromUberToApache implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(UpgradePayloadFromUberToApache.class);
+  private static final Logger LOG = LogManager.getLogger(UpgradePayloadFromUberToApache.class);
 
   private final Config cfg;
 
@@ -59,13 +59,13 @@ public class UpgradePayloadFromUberToApache implements Serializable {
     try (BufferedReader reader = new BufferedReader(new FileReader(cfg.inputPath))) {
       basePath = reader.readLine();
     } catch (IOException e) {
-      logger.error("Read from path: " + cfg.inputPath + " error.", e);
+      LOG.error("Read from path: " + cfg.inputPath + " error.", e);
     }
 
     while (basePath != null) {
       basePath = basePath.trim();
       if (!basePath.startsWith("#")) {
-        logger.info("Performing upgrade for " + basePath);
+        LOG.info("Performing upgrade for " + basePath);
         String metaPath = String.format("%s/.hoodie", basePath);
         HoodieTableMetaClient metaClient =
             new HoodieTableMetaClient(FSUtils.prepareHadoopConf(new Configuration()), basePath, false);
@@ -74,20 +74,20 @@ public class UpgradePayloadFromUberToApache implements Serializable {
           Map<String, String> propsMap = tableConfig.getProps();
           if (propsMap.containsKey(HoodieCompactionConfig.PAYLOAD_CLASS_PROP)) {
             String payloadClass = propsMap.get(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
-            logger.info("Found payload class=" + payloadClass);
+            LOG.info("Found payload class=" + payloadClass);
             if (payloadClass.startsWith("com.uber.hoodie")) {
               String newPayloadClass = payloadClass.replace("com.uber.hoodie", "org.apache.hudi");
-              logger.info("Replacing payload class (" + payloadClass + ") with (" + newPayloadClass + ")");
+              LOG.info("Replacing payload class (" + payloadClass + ") with (" + newPayloadClass + ")");
               Map<String, String> newPropsMap = new HashMap<>(propsMap);
               newPropsMap.put(HoodieCompactionConfig.PAYLOAD_CLASS_PROP, newPayloadClass);
               Properties props = new Properties();
               props.putAll(newPropsMap);
               HoodieTableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaPath), props);
-              logger.info("Finished upgrade for " + basePath);
+              LOG.info("Finished upgrade for " + basePath);
             }
           }
         } else {
-          logger.info("Skipping as this table is COW table. BasePath=" + basePath);
+          LOG.info("Skipping as this table is COW table. BasePath=" + basePath);
 
         }
       }

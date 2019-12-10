@@ -33,7 +33,7 @@ import java.io.Closeable;
  * This is the main class of the metrics system.
  */
 public class Metrics {
-  private static Logger logger = LogManager.getLogger(Metrics.class);
+  private static final Logger LOG = LogManager.getLogger(Metrics.class);
 
   private static volatile boolean initialized = false;
   private static Metrics metrics = null;
@@ -87,7 +87,7 @@ public class Metrics {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
       // metrics system
       // has some issues.
-      logger.error("Failed to send metrics: ", e);
+      LOG.error("Failed to send metrics: ", e);
     }
   }
 

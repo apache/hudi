@@ -58,7 +58,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   public static final int RECORD_SAMPLING_RATE = 64;
   // maximum records that will be cached
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
-  private static Logger logger = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
   // It indicates number of records to cache. We will be using sampled record's average size to
   // determine how many
   // records we should cache and will change (increase/decrease) permits accordingly.
@@ -203,7 +203,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
           break;
         }
       } catch (InterruptedException e) {
-        logger.error("error reading records from queue", e);
+        LOG.error("error reading records from queue", e);
         throw new HoodieException(e);
       }
     }

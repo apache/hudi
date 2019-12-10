@@ -45,7 +45,7 @@ import java.util.stream.Stream;
  */
 public class PriorityBasedFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static Logger log = LogManager.getLogger(PriorityBasedFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(PriorityBasedFileSystemView.class);
 
   private final SyncableFileSystemView preferredView;
   private final SyncableFileSystemView secondaryView;
@@ -59,13 +59,13 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   private <R> R execute(Function0<R> preferredFunction, Function0<R> secondaryFunction) {
     if (errorOnPreferredView) {
-      log.warn("Routing request to secondary file-system view");
+      LOG.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply();
     } else {
       try {
         return preferredFunction.apply();
       } catch (RuntimeException re) {
-        log.error("Got error running preferred function. Trying secondary", re);
+        LOG.error("Got error running preferred function. Trying secondary", re);
         errorOnPreferredView = true;
         return secondaryFunction.apply();
       }
@@ -74,13 +74,13 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   private <T1, R> R execute(T1 val, Function1<T1, R> preferredFunction, Function1<T1, R> secondaryFunction) {
     if (errorOnPreferredView) {
-      log.warn("Routing request to secondary file-system view");
+      LOG.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val);
     } else {
       try {
         return preferredFunction.apply(val);
       } catch (RuntimeException re) {
-        log.error("Got error running preferred function. Trying secondary", re);
+        LOG.error("Got error running preferred function. Trying secondary", re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val);
       }
@@ -90,13 +90,13 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private <T1, T2, R> R execute(T1 val, T2 val2, Function2<T1, T2, R> preferredFunction,
       Function2<T1, T2, R> secondaryFunction) {
     if (errorOnPreferredView) {
-      log.warn("Routing request to secondary file-system view");
+      LOG.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val, val2);
     } else {
       try {
         return preferredFunction.apply(val, val2);
       } catch (RuntimeException re) {
-        log.error("Got error running preferred function. Trying secondary", re);
+        LOG.error("Got error running preferred function. Trying secondary", re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2);
       }
@@ -106,13 +106,13 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   private <T1, T2, T3, R> R execute(T1 val, T2 val2, T3 val3, Function3<T1, T2, T3, R> preferredFunction,
       Function3<T1, T2, T3, R> secondaryFunction) {
     if (errorOnPreferredView) {
-      log.warn("Routing request to secondary file-system view");
+      LOG.warn("Routing request to secondary file-system view");
       return secondaryFunction.apply(val, val2, val3);
     } else {
       try {
         return preferredFunction.apply(val, val2, val3);
       } catch (RuntimeException re) {
-        log.error("Got error running preferred function. Trying secondary", re);
+        LOG.error("Got error running preferred function. Trying secondary", re);
         errorOnPreferredView = true;
         return secondaryFunction.apply(val, val2, val3);
       }

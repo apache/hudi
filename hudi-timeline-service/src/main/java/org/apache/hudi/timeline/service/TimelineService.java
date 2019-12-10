@@ -40,7 +40,7 @@ import java.io.Serializable;
  */
 public class TimelineService {
 
-  private static volatile Logger log = LogManager.getLogger(TimelineService.class);
+  private static final Logger LOG = LogManager.getLogger(TimelineService.class);
 
   private int serverPort;
   private Configuration conf;
@@ -106,7 +106,7 @@ public class TimelineService {
     app.start(serverPort);
     // If port = 0, a dynamic port is assigned. Store it.
     serverPort = app.port();
-    log.info("Starting Timeline server on port :" + serverPort);
+    LOG.info("Starting Timeline server on port :" + serverPort);
     return serverPort;
   }
 
@@ -140,11 +140,11 @@ public class TimelineService {
   }
 
   public void close() {
-    log.info("Closing Timeline Service");
+    LOG.info("Closing Timeline Service");
     this.app.stop();
     this.app = null;
     this.fsViewsManager.close();
-    log.info("Closed Timeline Service");
+    LOG.info("Closed Timeline Service");
   }
 
   public Configuration getConf() {

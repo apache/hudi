@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
 @Component
 public class CompactionCommand implements CommandMarker {
 
-  private static Logger log = LogManager.getLogger(CompactionCommand.class);
+  private static final Logger LOG = LogManager.getLogger(CompactionCommand.class);
 
   private static final String TMP_DIR = "/tmp/";
 
@@ -249,7 +249,7 @@ public class CompactionCommand implements CommandMarker {
     ObjectInputStream in = new ObjectInputStream(fsDataInputStream);
     try {
       T result = (T) in.readObject();
-      log.info("Result : " + result);
+      LOG.info("Result : " + result);
       return result;
     } finally {
       in.close();

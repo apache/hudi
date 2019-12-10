@@ -38,7 +38,7 @@ import java.rmi.registry.LocateRegistry;
  */
 public class JmxMetricsReporter extends MetricsReporter {
 
-  private static Logger logger = LogManager.getLogger(JmxMetricsReporter.class);
+  private static final Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
   private final JMXConnectorServer connector;
   private String host;
   private int port;
@@ -61,7 +61,7 @@ public class JmxMetricsReporter extends MetricsReporter {
           .newJMXConnectorServer(url, null, ManagementFactory.getPlatformMBeanServer());
     } catch (Exception e) {
       String msg = "Jmx initialize failed: ";
-      logger.error(msg, e);
+      LOG.error(msg, e);
       throw new HoodieException(msg, e);
     }
   }

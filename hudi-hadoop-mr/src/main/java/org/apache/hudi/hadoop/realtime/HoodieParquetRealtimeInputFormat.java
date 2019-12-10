@@ -65,7 +65,7 @@ import java.util.stream.Stream;
 @UseFileSplitsFromInputFormat
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
 
   // These positions have to be deterministic across all tables
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;

@@ -48,7 +48,7 @@ import java.util.stream.Stream;
  */
 public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static Logger log = LogManager.getLogger(HoodieTableFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieTableFileSystemView.class);
 
   // mapping from partition paths to file groups contained within them
   protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;
@@ -193,7 +193,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    log.info("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
+    LOG.info("Adding file-groups for partition :" + partitionPath + ", #FileGroups=" + fileGroups.size());
     List<HoodieFileGroup> newList = new ArrayList<>(fileGroups);
     partitionToFileGroupsMap.put(partitionPath, newList);
   }

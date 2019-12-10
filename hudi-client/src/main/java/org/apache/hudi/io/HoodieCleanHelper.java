@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(HoodieCleanHelper.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCleanHelper.class);
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -99,7 +99,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
             .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
             && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
-          logger.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
+          LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
               + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
               + ". New Instant to retain : " + newInstantToRetain);
           return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> {
@@ -129,7 +129,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    * single file (i.e run it with versionsRetained = 1)
    */
   private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath) throws IOException {
-    logger.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
+    LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
         + " file versions. ");
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     List<String> deletePaths = new ArrayList<>();
@@ -189,7 +189,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    */
   private List<String> getFilesToCleanKeepingLatestCommits(String partitionPath) throws IOException {
     int commitsRetained = config.getCleanerCommitsRetained();
-    logger.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
+    LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
     List<String> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
@@ -276,7 +276,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
-    logger.info(deletePaths.size() + " patterns used to delete in partition path:" + partitionPath);
+    LOG.info(deletePaths.size() + " patterns used to delete in partition path:" + partitionPath);
 
     return deletePaths;
   }

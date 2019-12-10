@@ -72,7 +72,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieClientTestUtils {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
   private static final Random RANDOM = new Random();
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {

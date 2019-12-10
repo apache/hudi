@@ -51,7 +51,7 @@ import java.util.List;
  */
 public class HoodieClientExample {
 
-  private static Logger logger = LogManager.getLogger(HoodieClientExample.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieClientExample.class);
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
   @Parameter(names = {"--table-path", "-p"}, description = "path for Hoodie sample table")
@@ -103,7 +103,7 @@ public class HoodieClientExample {
      * Write 1 (only inserts)
      */
     String newCommitTime = client.startCommit();
-    logger.info("Starting commit " + newCommitTime);
+    LOG.info("Starting commit " + newCommitTime);
 
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
     recordsSoFar.addAll(records);
@@ -114,7 +114,7 @@ public class HoodieClientExample {
      * Write 2 (updates)
      */
     newCommitTime = client.startCommit();
-    logger.info("Starting commit " + newCommitTime);
+    LOG.info("Starting commit " + newCommitTime);
     List<HoodieRecord> toBeUpdated = dataGen.generateUpdates(newCommitTime, 100);
     records.addAll(toBeUpdated);
     recordsSoFar.addAll(toBeUpdated);
@@ -125,7 +125,7 @@ public class HoodieClientExample {
      * Delete 1
      */
     newCommitTime = client.startCommit();
-    logger.info("Starting commit " + newCommitTime);
+    LOG.info("Starting commit " + newCommitTime);
     List<HoodieKey> toBeDeleted = HoodieClientTestUtils
         .getKeysToDelete(HoodieClientTestUtils.getHoodieKeys(recordsSoFar), 10);
     JavaRDD<HoodieKey> deleteRecords = jsc.<HoodieKey>parallelize(toBeDeleted, 1);

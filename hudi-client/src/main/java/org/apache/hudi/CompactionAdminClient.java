@@ -65,7 +65,7 @@ import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
  */
 public class CompactionAdminClient extends AbstractHoodieClient {
 
-  private static Logger log = LogManager.getLogger(CompactionAdminClient.class);
+  private static final Logger LOG = LogManager.getLogger(CompactionAdminClient.class);
 
   public CompactionAdminClient(JavaSparkContext jsc, String basePath) {
     super(jsc, HoodieWriteConfig.newBuilder().withPath(basePath).build());
@@ -350,25 +350,25 @@ public class CompactionAdminClient extends AbstractHoodieClient {
   private List<RenameOpResult> runRenamingOps(HoodieTableMetaClient metaClient,
       List<Pair<HoodieLogFile, HoodieLogFile>> renameActions, int parallelism, boolean dryRun) {
     if (renameActions.isEmpty()) {
-      log.info("No renaming of log-files needed. Proceeding to removing file-id from compaction-plan");
+      LOG.info("No renaming of log-files needed. Proceeding to removing file-id from compaction-plan");
       return new ArrayList<>();
     } else {
-      log.info("The following compaction renaming operations needs to be performed to un-schedule");
+      LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
         return jsc.parallelize(renameActions, parallelism).map(lfPair -> {
           try {
-            log.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
+            LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
             renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
             return new RenameOpResult(lfPair, true, Option.empty());
           } catch (IOException e) {
-            log.error("Error renaming log file", e);
-            log.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
+            LOG.error("Error renaming log file", e);
+            LOG.error("\n\n\n***NOTE Compaction is in inconsistent state. Try running \"compaction repair "
                 + lfPair.getLeft().getBaseCommitTime() + "\" to recover from failure ***\n\n\n");
             return new RenameOpResult(lfPair, false, Option.of(e));
           }
         }).collect();
       } else {
-        log.info("Dry-Run Mode activated for rename operations");
+        LOG.info("Dry-Run Mode activated for rename operations");
         return renameActions.parallelStream().map(lfPair -> new RenameOpResult(lfPair, false, false, Option.empty()))
             .collect(Collectors.toList());
       }
@@ -393,7 +393,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
         : new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
     HoodieCompactionPlan plan = getCompactionPlan(metaClient, compactionInstant);
     if (plan.getOperations() != null) {
-      log.info(
+      LOG.info(
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
@@ -408,7 +408,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
         }
       }).collect();
     }
-    log.warn("No operations for compaction instant : " + compactionInstant);
+    LOG.warn("No operations for compaction instant : " + compactionInstant);
     return new ArrayList<>();
   }
 

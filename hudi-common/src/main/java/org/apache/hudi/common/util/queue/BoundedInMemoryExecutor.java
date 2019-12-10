@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  */
 public class BoundedInMemoryExecutor<I, O, E> {
 
-  private static Logger logger = LogManager.getLogger(BoundedInMemoryExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
 
   // Executor service used for launching writer thread.
   private final ExecutorService executorService;
@@ -91,7 +91,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
           preExecute();
           producer.produce(queue);
         } catch (Exception e) {
-          logger.error("error producing records", e);
+          LOG.error("error producing records", e);
           queue.markAsFailed(e);
           throw e;
         } finally {
@@ -115,14 +115,14 @@ public class BoundedInMemoryExecutor<I, O, E> {
   private Future<E> startConsumer() {
     return consumer.map(consumer -> {
       return executorService.submit(() -> {
-        logger.info("starting consumer thread");
+        LOG.info("starting consumer thread");
         preExecute();
         try {
           E result = consumer.consume(queue);
-          logger.info("Queue Consumption is done; notifying producer threads");
+          LOG.info("Queue Consumption is done; notifying producer threads");
           return result;
         } catch (Exception e) {
-          logger.error("error consuming records", e);
+          LOG.error("error consuming records", e);
           queue.markAsFailed(e);
           throw e;
         }

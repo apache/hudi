@@ -66,7 +66,7 @@ import scala.Tuple2;
  */
 public class HDFSParquetImporter implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HDFSParquetImporter.class);
+  private static final Logger LOG = LogManager.getLogger(HDFSParquetImporter.class);
 
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")
       .withZone(ZoneId.systemDefault());
@@ -103,7 +103,7 @@ public class HDFSParquetImporter implements Serializable {
     this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-    log.info("Starting data import with configs : " + props.toString());
+    LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
       // Verify that targetPath is not present.
@@ -114,7 +114,7 @@ public class HDFSParquetImporter implements Serializable {
         ret = dataImport(jsc);
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      log.error(t);
+      LOG.error(t);
     }
     return ret;
   }
@@ -145,7 +145,7 @@ public class HDFSParquetImporter implements Serializable {
       JavaRDD<WriteStatus> writeResponse = load(client, instantTime, hoodieRecords);
       return UtilHelpers.handleErrors(jsc, instantTime, writeResponse);
     } catch (Throwable t) {
-      log.error("Error occurred.", t);
+      LOG.error("Error occurred.", t);
     }
     return -1;
   }
@@ -175,13 +175,13 @@ public class HDFSParquetImporter implements Serializable {
             throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
           }
           String partitionPath = partitionField.toString();
-          log.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              log.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
           }
           return new HoodieRecord<>(new HoodieKey(rowField.toString(), partitionPath),

@@ -41,7 +41,7 @@ import scala.collection.JavaConverters;
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
 
-  private static Logger log = LogManager.getLogger(HDFSParquetImportCommand.class);
+  private static final Logger LOG = LogManager.getLogger(HDFSParquetImportCommand.class);
 
   @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
   public String convert(

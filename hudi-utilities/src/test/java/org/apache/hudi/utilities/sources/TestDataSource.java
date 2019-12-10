@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
  */
 public class TestDataSource extends AbstractBaseTestSource {
 
-  private static volatile Logger log = LogManager.getLogger(TestDataSource.class);
+  private static final Logger LOG = LogManager.getLogger(TestDataSource.class);
 
   public TestDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
@@ -50,7 +50,7 @@ public class TestDataSource extends AbstractBaseTestSource {
 
     int nextCommitNum = lastCheckpointStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String commitTime = String.format("%05d", nextCommitNum);
-    log.info("Source Limit is set to " + sourceLimit);
+    LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0) {

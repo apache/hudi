@@ -58,7 +58,7 @@ import java.util.Map;
  * Bunch of helper methods.
  */
 public class UtilHelpers {
-  private static Logger logger = LogManager.getLogger(UtilHelpers.class);
+  private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
       SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
@@ -95,7 +95,7 @@ public class UtilHelpers {
     try {
       DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
       if (!overriddenProps.isEmpty()) {
-        logger.info("Adding overridden properties to file properties.");
+        LOG.info("Adding overridden properties to file properties.");
         conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
       return conf;
@@ -206,14 +206,14 @@ public class UtilHelpers {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        logger.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
       }
     });
     if (errors.value() == 0) {
-      logger.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
+      LOG.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
       return 0;
     }
-    logger.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error(String.format("Import failed with %d errors.", errors.value()));
     return -1;
   }
 

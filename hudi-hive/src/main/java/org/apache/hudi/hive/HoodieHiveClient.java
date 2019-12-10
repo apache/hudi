@@ -86,7 +86,7 @@ public class HoodieHiveClient {
     }
   }
 
-  private static Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final HoodieTableMetaClient metaClient;
   private final HoodieTableType tableType;
   private final PartitionValueExtractor partitionValueExtractor;

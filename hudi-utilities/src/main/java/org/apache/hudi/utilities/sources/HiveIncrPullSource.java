@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrPullSource extends AvroSource {
 
-  private static volatile Logger log = LogManager.getLogger(HiveIncrPullSource.class);
+  private static final Logger LOG = LogManager.getLogger(HiveIncrPullSource.class);
 
   private final transient FileSystem fs;
 
@@ -86,7 +86,7 @@ public class HiveIncrPullSource extends AvroSource {
    */
   private Option<String> findCommitToPull(Option<String> latestTargetCommit) throws IOException {
 
-    log.info("Looking for commits ");
+    LOG.info("Looking for commits ");
 
     FileStatus[] commitTimePaths = fs.listStatus(new Path(incrPullRootPath));
     List<String> commitTimes = new ArrayList<>(commitTimePaths.length);
@@ -95,7 +95,7 @@ public class HiveIncrPullSource extends AvroSource {
       commitTimes.add(splits[splits.length - 1]);
     }
     Collections.sort(commitTimes);
-    log.info("Retrieved commit times " + commitTimes);
+    LOG.info("Retrieved commit times " + commitTimes);
 
     if (!latestTargetCommit.isPresent()) {
       // start from the beginning

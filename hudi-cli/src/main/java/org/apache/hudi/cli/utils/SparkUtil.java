@@ -36,7 +36,7 @@ import java.net.URISyntaxException;
  */
 public class SparkUtil {
 
-  public static Logger logger = Logger.getLogger(SparkUtil.class);
+  private static final Logger LOG = Logger.getLogger(SparkUtil.class);
   public static final String DEFUALT_SPARK_MASTER = "yarn-client";
 
   /**
