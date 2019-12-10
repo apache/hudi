@@ -31,7 +31,7 @@ import java.util.Map;
  */
 public class HoodieRollingStatMetadata implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieRollingStatMetadata.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieRollingStatMetadata.class);
   protected Map<String, Map<String, HoodieRollingStat>> partitionToRollingStats;
   private String actionType = "DUMMY_ACTION";
   public static final String ROLLING_STAT_METADATA_KEY = "ROLLING_STAT";
@@ -78,7 +78,7 @@ public class HoodieRollingStatMetadata implements Serializable {
 
   public String toJsonString() throws IOException {
     if (partitionToRollingStats.containsKey(null)) {
-      log.info("partition path is null for " + partitionToRollingStats.get(null));
+      LOG.info("partition path is null for " + partitionToRollingStats.get(null));
       partitionToRollingStats.remove(null);
     }
     return HoodieCommitMetadata.getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);

@@ -94,7 +94,7 @@ public class HoodieJavaStreamingApp {
   public Boolean help = false;
 
 
-  private static Logger logger = LogManager.getLogger(HoodieJavaStreamingApp.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieJavaStreamingApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaStreamingApp cli = new HoodieJavaStreamingApp();
@@ -143,17 +143,17 @@ public class HoodieJavaStreamingApp {
 
     // thread for spark strucutured streaming
     Future<Void> streamFuture = executor.submit(() -> {
-      logger.info("===== Streaming Starting =====");
+      LOG.info("===== Streaming Starting =====");
       stream(streamingInput);
-      logger.info("===== Streaming Ends =====");
+      LOG.info("===== Streaming Ends =====");
       return null;
     });
 
     // thread for adding data to the streaming source and showing results over time
     Future<Void> showFuture = executor.submit(() -> {
-      logger.info("===== Showing Starting =====");
+      LOG.info("===== Showing Starting =====");
       show(spark, fs, inputDF1, inputDF2);
-      logger.info("===== Showing Ends =====");
+      LOG.info("===== Showing Ends =====");
       return null;
     });
 
@@ -178,13 +178,13 @@ public class HoodieJavaStreamingApp {
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("First commit at instant time :" + commitInstantTime1);
+    LOG.info("First commit at instant time :" + commitInstantTime1);
 
     inputDF2.write().mode(SaveMode.Append).json(streamingSourcePath);
     // wait for spark streaming to process one microbatch
     Thread.sleep(3000);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("Second commit at instant time :" + commitInstantTime2);
+    LOG.info("Second commit at instant time :" + commitInstantTime2);
 
     /**
      * Read & do some queries
@@ -209,7 +209,7 @@ public class HoodieJavaStreamingApp {
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
-      logger.info("You will only see records from : " + commitInstantTime2);
+      LOG.info("You will only see records from : " + commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
     }
   }
@@ -243,7 +243,7 @@ public class HoodieJavaStreamingApp {
    */
   private DataStreamWriter<Row> updateHiveSyncConfig(DataStreamWriter<Row> writer) {
     if (enableHiveSync) {
-      logger.info("Enabling Hive sync to " + hiveJdbcUrl);
+      LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
           .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
           .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)

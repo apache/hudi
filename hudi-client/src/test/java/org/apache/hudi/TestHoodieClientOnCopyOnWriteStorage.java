@@ -47,6 +47,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Assert;
 import org.junit.Test;
@@ -75,6 +77,8 @@ import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
+
+  private static final Logger LOG = LogManager.getLogger(TestHoodieClientOnCopyOnWriteStorage.class);
 
   /**
    * Test Auto Commit behavior for HoodieWriteClient insert API.
@@ -867,7 +871,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     Path markerFilePath = new Path(String.format("%s/%s", partitionPath,
         FSUtils.makeMarkerFile(commitTime, "1-0-1", UUID.randomUUID().toString())));
     metaClient.getFs().create(markerFilePath);
-    logger.info("Created a dummy marker path=" + markerFilePath);
+    LOG.info("Created a dummy marker path=" + markerFilePath);
 
     try {
       client.commit(commitTime, result);

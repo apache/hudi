@@ -58,7 +58,7 @@ import java.util.stream.IntStream;
 
 public class TimelineServerPerf implements Serializable {
 
-  private static volatile Logger logger = LogManager.getLogger(TimelineServerPerf.class);
+  private static final Logger LOG = LogManager.getLogger(TimelineServerPerf.class);
   private final Config cfg;
   private transient TimelineService timelineServer;
   private final boolean useExternalTimelineServer;
@@ -73,10 +73,10 @@ public class TimelineServerPerf implements Serializable {
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
     String hostAddr = sparkConf.get("spark.driver.host", null);
     if (hostAddr != null) {
-      logger.info("Overriding hostIp to (" + hostAddr + ") found in spark-conf. It was " + this.hostAddr);
+      LOG.info("Overriding hostIp to (" + hostAddr + ") found in spark-conf. It was " + this.hostAddr);
       this.hostAddr = hostAddr;
     } else {
-      logger.warn("Unable to find driver bind address from spark config");
+      LOG.warn("Unable to find driver bind address from spark config");
     }
   }
 

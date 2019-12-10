@@ -38,7 +38,7 @@ import java.util.List;
 
 public class HoodieCleaner {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieCleaner.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCleaner.class);
 
   /**
    * Config for Cleaner.
@@ -66,7 +66,7 @@ public class HoodieCleaner {
     this.fs = FSUtils.getFs(cfg.basePath, jssc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-    log.info("Creating Cleaner with configs : " + props.toString());
+    LOG.info("Creating Cleaner with configs : " + props.toString());
   }
 
   public void run() throws Exception {

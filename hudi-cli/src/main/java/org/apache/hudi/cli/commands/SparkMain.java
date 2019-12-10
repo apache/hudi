@@ -41,7 +41,7 @@ import org.apache.spark.sql.SQLContext;
  */
 public class SparkMain {
 
-  protected static final Logger LOG = Logger.getLogger(SparkMain.class);
+  private static final Logger LOG = Logger.getLogger(SparkMain.class);
 
   /**
    * Commands.

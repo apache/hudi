@@ -77,7 +77,7 @@ import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
  */
 public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
-  private static final transient Logger LOG = LogManager.getLogger(TestIncrementalFSViewSync.class);
+  private static final Logger LOG = LogManager.getLogger(TestIncrementalFSViewSync.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 

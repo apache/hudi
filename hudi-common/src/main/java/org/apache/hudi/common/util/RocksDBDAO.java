@@ -55,7 +55,7 @@ import java.util.stream.Stream;
  */
 public class RocksDBDAO {
 
-  protected static final transient Logger LOG = LogManager.getLogger(RocksDBDAO.class);
+  private static final Logger LOG = LogManager.getLogger(RocksDBDAO.class);
 
   private transient ConcurrentHashMap<String, ColumnFamilyHandle> managedHandlesMap;
   private transient ConcurrentHashMap<String, ColumnFamilyDescriptor> managedDescriptorMap;

@@ -43,7 +43,7 @@ import java.util.Map;
 public class HoodieCommitMetadata implements Serializable {
 
   public static final String SCHEMA_KEY = "schema";
-  private static volatile Logger log = LogManager.getLogger(HoodieCommitMetadata.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCommitMetadata.class);
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
@@ -118,7 +118,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   public String toJsonString() throws IOException {
     if (partitionToWriteStats.containsKey(null)) {
-      log.info("partition path is null for " + partitionToWriteStats.get(null));
+      LOG.info("partition path is null for " + partitionToWriteStats.get(null));
       partitionToWriteStats.remove(null);
     }
     return getObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(this);

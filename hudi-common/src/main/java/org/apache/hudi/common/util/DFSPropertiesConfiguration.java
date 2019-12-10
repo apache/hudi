@@ -41,7 +41,7 @@ import java.util.Set;
  */
 public class DFSPropertiesConfiguration {
 
-  private static volatile Logger log = LogManager.getLogger(DFSPropertiesConfiguration.class);
+  private static final Logger LOG = LogManager.getLogger(DFSPropertiesConfiguration.class);
 
   private final FileSystem fs;
 
@@ -76,7 +76,7 @@ public class DFSPropertiesConfiguration {
       BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(file)));
       addProperties(reader);
     } catch (IOException ioe) {
-      log.error("Error reading in properies from dfs", ioe);
+      LOG.error("Error reading in properies from dfs", ioe);
       throw new IllegalArgumentException("Cannot read properties from dfs", ioe);
     }
   }

@@ -92,7 +92,7 @@ import static org.junit.Assert.assertTrue;
 public class TestCleaner extends TestHoodieClientBase {
 
   private static final int BIG_BATCH_INSERT_SIZE = 500;
-  private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieClientBase.class);
 
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests.
@@ -393,7 +393,7 @@ public class TestCleaner extends TestHoodieClientBase {
           for (HoodieFileGroup fileGroup : fileGroups) {
             Set<String> commitTimes = new HashSet<>();
             fileGroup.getAllDataFiles().forEach(value -> {
-              logger.debug("Data File - " + value);
+              LOG.debug("Data File - " + value);
               commitTimes.add(value.getCommitTime());
             });
             assertEquals("Only contain acceptable versions of file should be present",

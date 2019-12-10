@@ -31,6 +31,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -47,6 +49,8 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
 public class TestCompactionAdminClient extends TestHoodieClientBase {
+
+  private static final Logger LOG = LogManager.getLogger(TestCompactionAdminClient.class);
 
   private HoodieTableMetaClient metaClient;
   private CompactionAdminClient client;
@@ -151,7 +155,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
       Assert.assertTrue("Rename Files must be empty", renameFiles.isEmpty());
     }
     expRenameFiles.entrySet().stream().forEach(r -> {
-      logger.info("Key :" + r.getKey() + " renamed to " + r.getValue() + " rolled back to "
+      LOG.info("Key :" + r.getKey() + " renamed to " + r.getValue() + " rolled back to "
           + renameFilesFromUndo.get(r.getKey()));
     });
 

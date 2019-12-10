@@ -47,7 +47,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieTableConfig implements Serializable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";

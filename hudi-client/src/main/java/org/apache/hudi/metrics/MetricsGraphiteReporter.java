@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class MetricsGraphiteReporter extends MetricsReporter {
 
-  private static Logger logger = LogManager.getLogger(MetricsGraphiteReporter.class);
+  private static final Logger LOG = LogManager.getLogger(MetricsGraphiteReporter.class);
   private final MetricRegistry registry;
   private final GraphiteReporter graphiteReporter;
   private final HoodieWriteConfig config;
@@ -63,7 +63,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     if (graphiteReporter != null) {
       graphiteReporter.start(30, TimeUnit.SECONDS);
     } else {
-      logger.error("Cannot start as the graphiteReporter is null.");
+      LOG.error("Cannot start as the graphiteReporter is null.");
     }
   }
 
@@ -72,7 +72,7 @@ public class MetricsGraphiteReporter extends MetricsReporter {
     if (graphiteReporter != null) {
       graphiteReporter.report();
     } else {
-      logger.error("Cannot report metrics as the graphiteReporter is null.");
+      LOG.error("Cannot report metrics as the graphiteReporter is null.");
     }
   }
 

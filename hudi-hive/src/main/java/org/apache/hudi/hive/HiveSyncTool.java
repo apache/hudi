@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
 
-  private static Logger LOG = LogManager.getLogger(HiveSyncTool.class);
+  private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
   public static final String SUFFIX_REALTIME_TABLE = "_rt";
   private final HiveSyncConfig cfg;

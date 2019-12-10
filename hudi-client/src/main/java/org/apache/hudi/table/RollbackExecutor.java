@@ -55,7 +55,7 @@ import scala.Tuple2;
  */
 public class RollbackExecutor implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(RollbackExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(RollbackExecutor.class);
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;
@@ -181,13 +181,13 @@ public class RollbackExecutor implements Serializable {
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
       Map<FileStatus, Boolean> results, String partitionPath, PathFilter filter) throws IOException {
-    logger.info("Cleaning path " + partitionPath);
+    LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
     FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
-      logger.info("Delete file " + file.getPath() + "\t" + success);
+      LOG.info("Delete file " + file.getPath() + "\t" + success);
     }
     return results;
   }
@@ -197,7 +197,7 @@ public class RollbackExecutor implements Serializable {
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
       Map<FileStatus, Boolean> results, String commit, String partitionPath) throws IOException {
-    logger.info("Cleaning path " + partitionPath);
+    LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
     PathFilter filter = (path) -> {
       if (path.toString().contains(".parquet")) {
@@ -210,7 +210,7 @@ public class RollbackExecutor implements Serializable {
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
-      logger.info("Delete file " + file.getPath() + "\t" + success);
+      LOG.info("Delete file " + file.getPath() + "\t" + success);
     }
     return results;
   }

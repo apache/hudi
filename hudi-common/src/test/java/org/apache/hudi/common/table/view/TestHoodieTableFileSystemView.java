@@ -71,7 +71,7 @@ import static org.junit.Assert.assertTrue;
 @SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
-  private static final transient Logger LOG = LogManager.getLogger(TestHoodieTableFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieTableFileSystemView.class);
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 

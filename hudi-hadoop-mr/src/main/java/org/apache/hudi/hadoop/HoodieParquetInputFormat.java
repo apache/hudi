@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 @UseFileSplitsFromInputFormat
 public class HoodieParquetInputFormat extends MapredParquetInputFormat implements Configurable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieParquetInputFormat.class);
 
   protected Configuration conf;
 

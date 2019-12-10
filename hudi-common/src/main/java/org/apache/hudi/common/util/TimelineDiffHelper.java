@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  */
 public class TimelineDiffHelper {
 
-  protected static Logger log = LogManager.getLogger(TimelineDiffHelper.class);
+  private static final Logger LOG = LogManager.getLogger(TimelineDiffHelper.class);
 
   public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldTimeline,
       HoodieTimeline newTimeline) {
@@ -64,7 +64,7 @@ public class TimelineDiffHelper {
       if (!lostPendingCompactions.isEmpty()) {
         // If a compaction is unscheduled, fall back to complete refresh of fs view since some log files could have been
         // moved. Its unsafe to incrementally sync in that case.
-        log.warn("Some pending compactions are no longer in new timeline (unscheduled ?)." + "They are :"
+        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?)." + "They are :"
             + lostPendingCompactions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
@@ -77,7 +77,7 @@ public class TimelineDiffHelper {
       return new TimelineDiffResult(newInstants, finishedCompactionInstants, true);
     } else {
       // One or more timelines is empty
-      log.warn("One or more timelines is empty");
+      LOG.warn("One or more timelines is empty");
       return TimelineDiffResult.UNSAFE_SYNC_RESULT;
     }
   }

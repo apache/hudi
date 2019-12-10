@@ -83,7 +83,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
  */
 public class DeltaSync implements Serializable {
 
-  protected static volatile Logger log = LogManager.getLogger(DeltaSync.class);
+  private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
   public static String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 
@@ -168,7 +168,7 @@ public class DeltaSync implements Serializable {
     this.tableType = tableType;
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
-    log.info("Creating delta streamer with configs : " + props.toString());
+    LOG.info("Creating delta streamer with configs : " + props.toString());
     this.schemaProvider = schemaProvider;
 
     refreshTimeline();
@@ -266,7 +266,7 @@ public class DeltaSync implements Serializable {
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
       resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
-    log.info("Checkpoint to resume from : " + resumeCheckpointStr);
+    LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
@@ -300,13 +300,13 @@ public class DeltaSync implements Serializable {
     }
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
-      log.info("No new data, source checkpoint has not changed. Nothing to commit." + "Old checkpoint=("
+      LOG.info("No new data, source checkpoint has not changed. Nothing to commit." + "Old checkpoint=("
           + resumeCheckpointStr + "). New Checkpoint=(" + checkpointStr + ")");
       return null;
     }
 
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
-      log.info("No new data, perform empty commit.");
+      LOG.info("No new data, perform empty commit.");
       return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
     }
 
@@ -342,7 +342,7 @@ public class DeltaSync implements Serializable {
     boolean isEmpty = records.isEmpty();
 
     String commitTime = startCommit();
-    log.info("Starting commit  : " + commitTime);
+    LOG.info("Starting commit  : " + commitTime);
 
     JavaRDD<WriteStatus> writeStatusRDD;
     if (cfg.operation == Operation.INSERT) {
@@ -367,13 +367,13 @@ public class DeltaSync implements Serializable {
       }
 
       if (hasErrors) {
-        log.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
+        LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
             + totalErrorRecords + "/" + totalRecords);
       }
 
       boolean success = writeClient.commit(commitTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
-        log.info("Commit " + commitTime + " successful!");
+        LOG.info("Commit " + commitTime + " successful!");
 
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
@@ -387,16 +387,16 @@ public class DeltaSync implements Serializable {
           hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
         }
       } else {
-        log.info("Commit " + commitTime + " failed!");
+        LOG.info("Commit " + commitTime + " failed!");
         throw new HoodieException("Commit " + commitTime + " failed!");
       }
     } else {
-      log.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-      log.error("Printing out the top 100 errors");
+      LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
+      LOG.error("Printing out the top 100 errors");
       writeStatusRDD.filter(ws -> ws.hasErrors()).take(100).forEach(ws -> {
-        log.error("Global error :", ws.getGlobalError());
+        LOG.error("Global error :", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
-          ws.getErrors().entrySet().forEach(r -> log.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
+          ws.getErrors().entrySet().forEach(r -> LOG.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
         }
       });
       // Rolling back instant
@@ -420,7 +420,7 @@ public class DeltaSync implements Serializable {
         return writeClient.startCommit();
       } catch (IllegalArgumentException ie) {
         lastException = ie;
-        log.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
+        LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
         retryNum++;
         try {
           Thread.sleep(1000);
@@ -438,7 +438,7 @@ public class DeltaSync implements Serializable {
   private void syncHive() throws ClassNotFoundException {
     if (cfg.enableHiveSync) {
       HiveSyncConfig hiveSyncConfig = DataSourceUtils.buildHiveSyncConfig(props, cfg.targetBasePath);
-      log.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
+      LOG.info("Syncing target hoodie table with hive table(" + hiveSyncConfig.tableName + "). Hive metastore URL :"
           + hiveSyncConfig.jdbcUrl + ", basePath :" + cfg.targetBasePath);
 
       new HiveSyncTool(hiveSyncConfig, hiveConf, fs).syncHoodieTable();
@@ -451,7 +451,7 @@ public class DeltaSync implements Serializable {
    * this constraint.
    */
   public void setupWriteClient() {
-    log.info("Setting up Hoodie Write Client");
+    LOG.info("Setting up Hoodie Write Client");
     if ((null != schemaProvider) && (null == writeClient)) {
       registerAvroSchemas(schemaProvider);
       HoodieWriteConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
@@ -503,7 +503,7 @@ public class DeltaSync implements Serializable {
         schemas.add(schemaProvider.getTargetSchema());
       }
 
-      log.info("Registering Schema :" + schemas);
+      LOG.info("Registering Schema :" + schemas);
       jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
   }

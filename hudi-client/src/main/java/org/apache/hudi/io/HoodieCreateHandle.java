@@ -45,7 +45,7 @@ import java.util.Iterator;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
-  private static Logger logger = LogManager.getLogger(HoodieCreateHandle.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
   private final HoodieStorageWriter<IndexedRecord> storageWriter;
   private final Path path;
@@ -73,7 +73,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
-    logger.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
+    LOG.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
   /**
@@ -119,7 +119,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
       writeStatus.markFailure(record, t, recordMetadata);
-      logger.error("Error writing record " + record, t);
+      LOG.error("Error writing record " + record, t);
     }
   }
 
@@ -151,7 +151,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    */
   @Override
   public WriteStatus close() {
-    logger
+    LOG
         .info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
@@ -174,7 +174,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       stat.setRuntimeStats(runtimeStats);
       writeStatus.setStat(stat);
 
-      logger.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
+      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalCreateTime()));
 
       return writeStatus;

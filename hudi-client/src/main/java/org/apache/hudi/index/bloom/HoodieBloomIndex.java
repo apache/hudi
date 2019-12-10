@@ -63,7 +63,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   private static final int SPARK_MAXIMUM_BYTES_PER_PARTITION = 1500 * 1024 * 1024;
   // this is how much a triplet of (partitionPath, fileId, recordKey) costs.
   private static final int BYTES_PER_PARTITION_FILE_KEY_TRIPLET = 300;
-  private static Logger logger = LogManager.getLogger(HoodieBloomIndex.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
   private static int MAX_ITEMS_PER_SHUFFLE_PARTITION =
       SPARK_MAXIMUM_BYTES_PER_PARTITION / BYTES_PER_PARTITION_FILE_KEY_TRIPLET;
 
@@ -92,9 +92,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     if (config.getBloomIndexUseCaching()) {
       keyFilenamePairRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
     }
-    if (logger.isDebugEnabled()) {
+    if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairRDD.count();
-      logger.debug("Number of update records (ones tagged with a fileID): " + totalTaggedRecords);
+      LOG.debug("Number of update records (ones tagged with a fileID): " + totalTaggedRecords);
     }
 
     // Step 4: Tag the incoming records, as inserts or updates, by joining with existing record keys
@@ -206,7 +206,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     long totalFiles = comparisonsPerFileGroup.size();
     long totalRecords = recordsPerPartition.values().stream().mapToLong(Long::longValue).sum();
     int parallelism = (int) (totalComparisons / MAX_ITEMS_PER_SHUFFLE_PARTITION + 1);
-    logger.info(String.format(
+    LOG.info(String.format(
         "TotalRecords %d, TotalFiles %d, TotalAffectedPartitions %d, TotalComparisons %d, " + "SafeParallelism %d",
         totalRecords, totalFiles, recordsPerPartition.size(), totalComparisons, parallelism));
     return parallelism;
@@ -226,7 +226,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     // take the max
     int indexParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     int joinParallelism = Math.max(totalSubPartitions, indexParallelism);
-    logger.info("InputParallelism: ${" + inputParallelism + "}, " + "IndexParallelism: ${"
+    LOG.info("InputParallelism: ${" + inputParallelism + "}, " + "IndexParallelism: ${"
         + config.getBloomIndexParallelism() + "}, " + "TotalSubParts: ${" + totalSubPartitions + "}, "
         + "Join Parallelism set to : " + joinParallelism);
     return joinParallelism;
@@ -261,7 +261,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
           return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
         } catch (MetadataNotFoundException me) {
-          logger.warn("Unable to find range metadata in file :" + pf);
+          LOG.warn("Unable to find range metadata in file :" + pf);
           return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
         }
       }).collect();

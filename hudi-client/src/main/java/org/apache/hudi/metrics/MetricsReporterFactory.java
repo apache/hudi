@@ -29,7 +29,7 @@ import org.apache.log4j.Logger;
  */
 public class MetricsReporterFactory {
 
-  private static Logger logger = LogManager.getLogger(MetricsReporterFactory.class);
+  private static final Logger LOG = LogManager.getLogger(MetricsReporterFactory.class);
 
   public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
     MetricsReporterType type = config.getMetricsReporterType();
@@ -45,7 +45,7 @@ public class MetricsReporterFactory {
         reporter = new JmxMetricsReporter(config);
         break;
       default:
-        logger.error("Reporter type[" + type + "] is not supported.");
+        LOG.error("Reporter type[" + type + "] is not supported.");
         break;
     }
     return reporter;

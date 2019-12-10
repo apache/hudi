@@ -66,7 +66,7 @@ import java.util.stream.Stream;
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static Logger log = LogManager.getLogger(AbstractTableFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(AbstractTableFileSystemView.class);
 
   protected HoodieTableMetaClient metaClient;
 
@@ -123,7 +123,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       }
     });
     long storePartitionsTs = timer.endTimer();
-    log.info("addFilesToView: NumFiles=" + statuses.length + ", FileGroupsCreationTime=" + fgBuildTimeTakenMs
+    LOG.info("addFilesToView: NumFiles=" + statuses.length + ", FileGroupsCreationTime=" + fgBuildTimeTakenMs
         + ", StoreTimeTaken=" + storePartitionsTs);
     return fileGroups;
   }
@@ -216,7 +216,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!isPartitionAvailableInStore(partitionPathStr)) {
         // Not loaded yet
         try {
-          log.info("Building file system view for partition (" + partitionPathStr + ")");
+          LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
           // Create the path if it does not exist already
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
@@ -224,7 +224,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
           long endLsTs = System.currentTimeMillis();
-          log.info("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
+          LOG.info("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
               + (endLsTs - beginLsTs));
           List<HoodieFileGroup> groups = addFilesToView(statuses);
 
@@ -235,10 +235,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           throw new HoodieIOException("Failed to list data files in partition " + partitionPathStr, e);
         }
       } else {
-        log.debug("View already built for Partition :" + partitionPathStr + ", FOUND is ");
+        LOG.debug("View already built for Partition :" + partitionPathStr + ", FOUND is ");
       }
       long endTs = System.currentTimeMillis();
-      log.info("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
+      LOG.info("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
       return true;
     });
   }
@@ -289,7 +289,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected boolean isFileSliceAfterPendingCompaction(FileSlice fileSlice) {
     Option<Pair<String, CompactionOperation>> compactionWithInstantTime =
         getPendingCompactionOperationWithInstant(fileSlice.getFileGroupId());
-    log.info("Pending Compaction instant for (" + fileSlice + ") is :" + compactionWithInstantTime);
+    LOG.info("Pending Compaction instant for (" + fileSlice + ") is :" + compactionWithInstantTime);
     return (compactionWithInstantTime.isPresent())
         && fileSlice.getBaseInstantTime().equals(compactionWithInstantTime.get().getKey());
   }
@@ -302,7 +302,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected FileSlice filterDataFileAfterPendingCompaction(FileSlice fileSlice) {
     if (isFileSliceAfterPendingCompaction(fileSlice)) {
-      log.info("File Slice (" + fileSlice + ") is in pending compaction");
+      LOG.info("File Slice (" + fileSlice + ") is in pending compaction");
       // Data file is filtered out of the file-slice as the corresponding compaction
       // instant not completed yet.
       FileSlice transformed =

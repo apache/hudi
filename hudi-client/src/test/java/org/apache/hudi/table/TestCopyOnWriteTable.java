@@ -70,7 +70,7 @@ import static org.mockito.Mockito.when;
 
 public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
-  protected static Logger log = LogManager.getLogger(TestCopyOnWriteTable.class);
+  private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteTable.class);
 
   @Before
   public void setUp() throws Exception {
@@ -382,7 +382,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     int counts = 0;
     for (File file : new File(basePath + "/2016/01/31").listFiles()) {
       if (file.getName().endsWith(".parquet") && FSUtils.getCommitTime(file.getName()).equals(commitTime)) {
-        log.info(file.getName() + "-" + file.length());
+        LOG.info(file.getName() + "-" + file.length());
         counts++;
       }
     }
