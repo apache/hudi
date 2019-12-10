@@ -768,4 +768,113 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return config;
     }
   }
+
+  /**
+   * ConfigOption Part.
+   *
+   */
+  public void setString(ConfigOption<String> option, String value) {
+    Objects.requireNonNull(option);
+    Objects.requireNonNull(value);
+
+    setValueInternal(option.key(), value);
+  }
+
+  public void setInteger(ConfigOption<Integer> option, Integer value) {
+    Objects.requireNonNull(option);
+    Objects.requireNonNull(value);
+
+    setValueInternal(option.key(), value);
+  }
+
+  public void setBoolean(ConfigOption<Boolean> option, Boolean value) {
+    Objects.requireNonNull(option);
+    Objects.requireNonNull(value);
+
+    setValueInternal(option.key(), value);
+  }
+
+  private <T> void setValueInternal(String key, T value) {
+    synchronized (this.props) {
+      this.props.put(key, value);
+    }
+  }
+
+  public String getString(String key) {
+    Object rawValue = getRawValue(key);
+    return convertToString(rawValue, null);
+  }
+
+  public String getString(ConfigOption<String> configOption) {
+    Object rawValue = getRawValue(configOption.key());
+    return convertToString(rawValue, configOption.defaultValue());
+  }
+
+  public Integer getInteger(String key) {
+    Object rawValue = getRawValue(key);
+    return convertToInt(rawValue, null);
+  }
+
+  public Integer getInteger(ConfigOption<Integer> configOption) {
+    Object rawValue = getRawValue(configOption.key());
+    return convertToInt(rawValue, configOption.defaultValue());
+  }
+
+  public Integer getBoolean(String key) {
+    Object rawValue = getRawValue(key);
+    return convertToInt(rawValue, null);
+  }
+
+  public Boolean getBoolean(ConfigOption<Boolean> configOption) {
+    Object rawValue = getRawValue(configOption.key());
+    return convertToBoolean(rawValue, configOption.defaultValue());
+  }
+
+  private Object getRawValue(String key) {
+    if (key == null) {
+      throw new NullPointerException("Key must not be null.");
+    }
+
+    synchronized (this.props) {
+      return this.props.get(key);
+    }
+  }
+
+  // --------------------------------------------------------------------------------------------
+
+  private String convertToString(Object obj, String defaultValue) {
+    return obj != null ? obj.toString() : defaultValue;
+  }
+
+  private Integer convertToInt(Object obj, Integer defaultValue) {
+    if (obj == null) {
+      return defaultValue;
+    }
+
+    try {
+      return Integer.parseInt(obj.toString());
+    } catch (NumberFormatException e) {
+      return defaultValue;
+    }
+  }
+
+  private Boolean convertToBoolean(Object obj, Boolean defaultValue) {
+    if (obj == null) {
+      return defaultValue;
+    }
+
+    if (obj.getClass() == Boolean.class) {
+      return (Boolean) obj;
+    }
+
+    switch (obj.toString().trim().toUpperCase()) {
+      case "TRUE":
+        return true;
+      case "FALSE":
+        return false;
+      default:
+        return defaultValue;
+    }
+  }
+
 }
