@@ -21,10 +21,13 @@ To contribute code, you need
 
 ## IDE Setup
 
-To contribute, you would need to fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](quickstart.html)
-
-We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/incubator-hudi/tree/master/style).
-These instructions have been tested on IntelliJ. We also recommend setting up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
+To contribute, you would need to do the following
+ 
+ - Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](quickstart.html)
+ - [Recommended] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [here](https://github.com/apache/incubator-hudi/tree/master/style).
+These instructions have been tested on IntelliJ. 
+ - [Recommended] Set up the [Save Action Plugin](https://plugins.jetbrains.com/plugin/7642-save-actions) to auto format & organize imports on save. The Maven Compilation life-cycle will fail if there are checkstyle violations.
+ - [Optional] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
 
 
 ## Lifecycle
