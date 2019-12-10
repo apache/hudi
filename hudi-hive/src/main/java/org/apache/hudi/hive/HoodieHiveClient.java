@@ -77,6 +77,7 @@ public class HoodieHiveClient {
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
   // Make sure we have the hive JDBC driver in classpath
   private static String driverName = HiveDriver.class.getName();
+  private static final String HIVE_ESCAPE_CHARACTER = SchemaUtil.HIVE_ESCAPE_CHARACTER;
 
   static {
     try {
@@ -161,7 +162,9 @@ public class HoodieHiveClient {
 
   private String constructAddPartitions(List<String> partitions) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(syncConfig.databaseName).append(".").append(syncConfig.tableName).append(" ADD IF NOT EXISTS ");
+    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName)
+            .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
+            .append(syncConfig.tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
@@ -192,9 +195,9 @@ public class HoodieHiveClient {
   private List<String> constructChangePartitions(List<String> partitions) {
     List<String> changePartitions = Lists.newArrayList();
     // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
-    String useDatabase = "USE " + syncConfig.databaseName;
+    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + syncConfig.databaseName + HIVE_ESCAPE_CHARACTER;
     changePartitions.add(useDatabase);
-    String alterTable = "ALTER TABLE " + syncConfig.tableName;
+    String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + syncConfig.tableName + HIVE_ESCAPE_CHARACTER;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
@@ -252,9 +255,11 @@ public class HoodieHiveClient {
       String newSchemaStr = SchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
-      StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append("`").append(syncConfig.databaseName)
-          .append(".").append(syncConfig.tableName).append("`").append(" REPLACE COLUMNS(").append(newSchemaStr)
-          .append(" )").append(cascadeClause);
+      StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
+              .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
+              .append(HIVE_ESCAPE_CHARACTER).append(syncConfig.tableName)
+              .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
+              .append(newSchemaStr).append(" )").append(cascadeClause);
       LOG.info("Updating table definition with " + sqlBuilder);
       updateHiveSQL(sqlBuilder.toString());
     } catch (IOException e) {
