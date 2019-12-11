@@ -62,6 +62,6 @@ public class HoodieFileGroupId implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieFileGroupId{" + "partitionPath='" + partitionPath + '\'' + ", fileId='" + fileId + '\'' + '}';
+    return "HoodieFileGroupId{partitionPath='" + partitionPath + '\'' + ", fileId='" + fileId + '\'' + '}';
   }
 }

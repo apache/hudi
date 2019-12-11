@@ -62,7 +62,7 @@ class KeyRangeNode implements Comparable<KeyRangeNode>, Serializable {
 
   @Override
   public String toString() {
-    return "KeyRangeNode{" + "minRecordKey='" + minRecordKey + '\'' + ", maxRecordKey='" + maxRecordKey + '\''
+    return "KeyRangeNode{minRecordKey='" + minRecordKey + '\'' + ", maxRecordKey='" + maxRecordKey + '\''
         + ", fileNameList=" + fileNameList + ", rightSubTreeMax='" + rightSubTreeMax + '\'' + ", leftSubTreeMax='"
         + leftSubTreeMax + '\'' + ", rightSubTreeMin='" + rightSubTreeMin + '\'' + ", leftSubTreeMin='" + leftSubTreeMin
         + '\'' + '}';

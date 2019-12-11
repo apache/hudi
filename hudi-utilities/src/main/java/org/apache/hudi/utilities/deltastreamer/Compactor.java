@@ -53,9 +53,9 @@ public class Compactor implements Serializable {
     long numWriteErrors = res.collect().stream().filter(r -> r.hasErrors()).count();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
-      LOG.error("Compaction for instant (" + instant + ") failed with write errors. " + "Errors :" + numWriteErrors);
+      LOG.error("Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);
       throw new HoodieException(
-          "Compaction for instant (" + instant + ") failed with write errors. " + "Errors :" + numWriteErrors);
+          "Compaction for instant (" + instant + ") failed with write errors. Errors :" + numWriteErrors);
     }
     // Commit compaction
     compactionClient.commitCompaction(instant.getTimestamp(), res, Option.empty());

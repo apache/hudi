@@ -1017,7 +1017,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending -> {
       Preconditions.checkArgument(
           HoodieTimeline.compareTimestamps(latestPending.getTimestamp(), instantTime, HoodieTimeline.LESSER),
-          "Latest pending compaction instant time must be earlier " + "than this instant time. Latest Compaction :"
+          "Latest pending compaction instant time must be earlier than this instant time. Latest Compaction :"
               + latestPending + ",  Ingesting at " + instantTime);
     });
     HoodieTable<T> table = HoodieTable.getHoodieTable(metaClient, config, jsc);
@@ -1049,7 +1049,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     metaClient.getCommitsTimeline().filterInflightsExcludingCompaction().firstInstant().ifPresent(earliestInflight -> {
       Preconditions.checkArgument(
           HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), instantTime, HoodieTimeline.GREATER),
-          "Earliest write inflight instant time must be later " + "than compaction time. Earliest :" + earliestInflight
+          "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
               + ", Compaction scheduled at " + instantTime);
     });
     // Committed and pending compaction instants should have strictly lower timestamps

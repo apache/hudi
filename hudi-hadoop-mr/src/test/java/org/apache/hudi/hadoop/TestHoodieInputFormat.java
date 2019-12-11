@@ -108,7 +108,7 @@ public class TestHoodieInputFormat {
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals("We should exclude commit 100 when returning incremental pull with start commit time as " + "100", 0,
+    assertEquals("We should exclude commit 100 when returning incremental pull with start commit time as 100", 0,
         files.length);
   }
 
@@ -152,7 +152,7 @@ public class TestHoodieInputFormat {
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtil.MAX_COMMIT_ALL);
     files = inputFormat.listStatus(jobConf);
 
-    assertEquals("Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 " + "commits",
+    assertEquals("Pulling all commits from 100, should get us the 1 file from each of 200,300,400,500,400 commits",
         5, files.length);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 600 commit", files, "600", 1);
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 500 commit", files, "500", 1);

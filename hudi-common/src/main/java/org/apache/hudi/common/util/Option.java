@@ -140,6 +140,6 @@ public final class Option<T> implements Serializable {
 
   @Override
   public String toString() {
-    return "Option{" + "val=" + val + '}';
+    return "Option{val=" + val + '}';
   }
 }

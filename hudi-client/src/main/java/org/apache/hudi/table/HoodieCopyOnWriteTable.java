@@ -574,7 +574,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       assignUpdates(profile);
       assignInserts(profile);
 
-      LOG.info("Total Buckets :" + totalBuckets + ", " + "buckets info => " + bucketInfoMap + ", \n"
+      LOG.info("Total Buckets :" + totalBuckets + ", buckets info => " + bucketInfoMap + ", \n"
           + "Partition to insert buckets => " + partitionPathToInsertBuckets + ", \n"
           + "UpdateLocations mapped to buckets =>" + updateLocationToBucket);
     }

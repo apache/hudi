@@ -40,8 +40,8 @@ public class FilebasedSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
-    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".source.schema.file";
-    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".target.schema.file";
+    private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.file";
+    private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.file";
   }
 
   private final FileSystem fs;

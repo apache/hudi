@@ -218,7 +218,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         compactionPlan.getOperations().stream().noneMatch(
             op -> fgIdsInPendingCompactions.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
         "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
-            + "Please fix your strategy implementation." + "FileIdsWithPendingCompactions :" + fgIdsInPendingCompactions
+            + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactions
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
       LOG.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());

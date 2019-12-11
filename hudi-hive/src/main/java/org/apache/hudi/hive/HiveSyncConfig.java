@@ -50,12 +50,12 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
   public List<String> partitionFields = new ArrayList<>();
 
-  @Parameter(names = "--partition-value-extractor", description = "Class which implements " + "PartitionValueExtractor "
-      + "to extract the partition " + "values from HDFS path")
+  @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
+      + "to extract the partition values from HDFS path")
   public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getName();
 
   @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support " + "backward compatibility. If" + " you use hoodie 0.3.x, do " + "not set this parameter")
+      + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
   public Boolean assumeDatePartitioning = false;
 
   @Parameter(names = {"--use-pre-apache-input-format"},
@@ -88,7 +88,7 @@ public class HiveSyncConfig implements Serializable {
 
   @Override
   public String toString() {
-    return "HiveSyncConfig{" + "databaseName='" + databaseName + '\'' + ", tableName='" + tableName + '\''
+    return "HiveSyncConfig{databaseName='" + databaseName + '\'' + ", tableName='" + tableName + '\''
         + ", hiveUser='" + hiveUser + '\'' + ", hivePass='" + hivePass + '\'' + ", jdbcUrl='" + jdbcUrl + '\''
         + ", basePath='" + basePath + '\'' + ", partitionFields=" + partitionFields + ", partitionValueExtractorClass='"
         + partitionValueExtractorClass + '\'' + ", assumeDatePartitioning=" + assumeDatePartitioning

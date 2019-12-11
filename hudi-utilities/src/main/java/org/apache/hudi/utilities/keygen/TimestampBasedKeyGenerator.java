@@ -57,11 +57,11 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   static class Config {
 
     // One value from TimestampType above
-    private static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen" + ".timebased.timestamp.type";
+    private static final String TIMESTAMP_TYPE_FIELD_PROP = "hoodie.deltastreamer.keygen.timebased.timestamp.type";
     private static final String TIMESTAMP_INPUT_DATE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen" + ".timebased.input" + ".dateformat";
+        "hoodie.deltastreamer.keygen.timebased.input.dateformat";
     private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
-        "hoodie.deltastreamer.keygen" + ".timebased.output" + ".dateformat";
+        "hoodie.deltastreamer.keygen.timebased.output.dateformat";
   }
 
   public TimestampBasedKeyGenerator(TypedProperties config) {

@@ -144,11 +144,11 @@ public abstract class AbstractRealtimeRecordReader {
       if (w instanceof ArrayWritable) {
         builder.append(arrayWritableToString((ArrayWritable) w)).append(",");
       } else {
-        builder.append("\"value" + i + "\":" + "\"" + w + "\"").append(",");
+        builder.append("\"value" + i + "\":\"" + w + "\"").append(",");
         if (w == null) {
-          builder.append("\"type" + i + "\":" + "\"unknown\"").append(",");
+          builder.append("\"type" + i + "\":\"unknown\"").append(",");
         } else {
-          builder.append("\"type" + i + "\":" + "\"" + w.getClass().getSimpleName() + "\"").append(",");
+          builder.append("\"type" + i + "\":\"" + w.getClass().getSimpleName() + "\"").append(",");
         }
       }
       i++;
