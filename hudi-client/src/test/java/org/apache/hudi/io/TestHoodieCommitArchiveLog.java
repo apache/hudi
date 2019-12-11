@@ -341,7 +341,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     assertTrue(result);
     timeline = metaClient.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants();
     assertEquals(
-        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only " + "archive 100)", 5,
+        "Since we have a savepoint at 101, we should never archive any commit after 101 (we only archive 100)", 5,
         timeline.countInstants());
     assertTrue("Archived commits should always be safe",
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101")));
@@ -380,7 +380,7 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
     assertFalse("Instants before oldest pending compaction can be removed",
         timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")));
     assertEquals("Since we have a pending compaction at 101, we should never archive any commit "
-        + "after 101 (we only " + "archive 100)", 7, timeline.countInstants());
+        + "after 101 (we only archive 100)", 7, timeline.countInstants());
     assertTrue("Requested Compaction must still be present",
         timeline.containsInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "101")));
     assertTrue("Instants greater than oldest pending compaction must be present",

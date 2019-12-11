@@ -65,7 +65,7 @@ public class SpillableMapUtils {
     long crcOfReadValue = generateChecksum(value);
     if (crc != crcOfReadValue) {
       throw new HoodieCorruptedDataException(
-          "checksum of payload written to external disk does not match, " + "data may be corrupted");
+          "checksum of payload written to external disk does not match, data may be corrupted");
     }
     return new FileEntry(crc, keySize, valueSize, key, value, timestamp);
   }

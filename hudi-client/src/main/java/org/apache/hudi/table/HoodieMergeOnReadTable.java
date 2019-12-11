@@ -220,7 +220,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
           LOG.info(
-              "Rolling back commit action. There are higher delta commits. So only rolling back this " + "instant");
+              "Rolling back commit action. There are higher delta commits. So only rolling back this instant");
           partitionRollbackRequests.add(
               RollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath, instantToRollback));
           break;

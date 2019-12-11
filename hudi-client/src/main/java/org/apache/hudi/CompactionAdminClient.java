@@ -333,7 +333,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
         }
       } else {
         throw new CompactionValidationException(
-            "Unable to find any committed instant. Compaction Operation may " + "be pointing to stale file-slices");
+            "Unable to find any committed instant. Compaction Operation may be pointing to stale file-slices");
       }
     } catch (CompactionValidationException | IllegalArgumentException e) {
       return new ValidationOpResult(operation, false, Option.of(e));

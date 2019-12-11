@@ -45,7 +45,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_PARALLELISM_PROP = "hoodie.bloom.index.parallelism";
   // Disable explicit bloom index parallelism setting by default - hoodie auto computes
   public static final String DEFAULT_BLOOM_INDEX_PARALLELISM = "0";
-  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = "hoodie.bloom.index.prune.by" + ".ranges";
+  public static final String BLOOM_INDEX_PRUNE_BY_RANGES_PROP = "hoodie.bloom.index.prune.by.ranges";
   public static final String DEFAULT_BLOOM_INDEX_PRUNE_BY_RANGES = "true";
   public static final String BLOOM_INDEX_USE_CACHING_PROP = "hoodie.bloom.index.use.caching";
   public static final String DEFAULT_BLOOM_INDEX_USE_CACHING = "true";
@@ -69,7 +69,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_HBASE_BATCH_SIZE = "100";
 
 
-  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage" + ".level";
+  public static final String BLOOM_INDEX_INPUT_STORAGE_LEVEL = "hoodie.bloom.index.input.storage.level";
   public static final String DEFAULT_BLOOM_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
   private HoodieIndexConfig(Properties props) {

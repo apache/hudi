@@ -135,7 +135,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
         LOG.info("Monitoring thread(s) !!");
         future.get();
       } catch (ExecutionException ex) {
-        LOG.error("Monitor noticed one or more threads failed." + " Requesting graceful shutdown of other threads", ex);
+        LOG.error("Monitor noticed one or more threads failed. Requesting graceful shutdown of other threads", ex);
         error = true;
         shutdown(false);
       } catch (InterruptedException ie) {

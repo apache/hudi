@@ -472,8 +472,7 @@ public class CompactionCommand implements CommandMarker {
       if (result.get()) {
         System.out.println("All renames successfully completed to " + operation + " done !!");
       } else {
-        System.out
-            .println("Some renames failed. DataSet could be in inconsistent-state. " + "Try running compaction repair");
+        System.out.println("Some renames failed. DataSet could be in inconsistent-state. Try running compaction repair");
       }
 
       List<Comparable[]> rows = new ArrayList<>();

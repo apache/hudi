@@ -98,7 +98,7 @@ public class DataSourceUtils {
       }
     }
     throw new HoodieException(
-        fieldName + "(Part -" + parts[i] + ") field not found in record. " + "Acceptable fields were :"
+        fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
             + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
   }
 

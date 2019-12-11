@@ -179,6 +179,6 @@ public class HoodieLogFile implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieLogFile{" + "pathStr='" + pathStr + '\'' + ", fileLen=" + fileLen + '}';
+    return "HoodieLogFile{pathStr='" + pathStr + '\'' + ", fileLen=" + fileLen + '}';
   }
 }

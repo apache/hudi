@@ -53,7 +53,7 @@ public class RepairsCommand implements CommandMarker {
   }
 
   @CliCommand(value = "repair deduplicate",
-      help = "De-duplicate a partition path contains duplicates & produce " + "repaired files to replace with")
+      help = "De-duplicate a partition path contains duplicates & produce repaired files to replace with")
   public String deduplicate(
       @CliOption(key = {"duplicatedPartitionPath"}, help = "Partition Path containing the duplicates",
           mandatory = true) final String duplicatedPartitionPath,

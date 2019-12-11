@@ -135,7 +135,7 @@ public class CompactionOperation implements Serializable {
 
   @Override
   public String toString() {
-    return "CompactionOperation{" + "baseInstantTime='" + baseInstantTime + '\'' + ", dataFileCommitTime="
+    return "CompactionOperation{baseInstantTime='" + baseInstantTime + '\'' + ", dataFileCommitTime="
         + dataFileCommitTime + ", deltaFileNames=" + deltaFileNames + ", dataFileName=" + dataFileName + ", id='" + id
         + '\'' + ", metrics=" + metrics + '}';
   }
