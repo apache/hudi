@@ -18,13 +18,6 @@
 
 package org.apache.hudi.io;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -45,11 +38,20 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
- * Cleaner is responsible for garbage collecting older files in a given partition path, such that
+ * Cleaner is responsible for garbage collecting older files in a given partition path. Such that
  * <p>
  * 1) It provides sufficient time for existing queries running on older versions, to close
  * <p>
@@ -59,7 +61,7 @@ import org.apache.log4j.Logger;
  */
 public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(HoodieCleanHelper.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCleanHelper.class);
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -81,7 +83,8 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
   }
 
   /**
-   * Returns list of partitions where clean operations needs to be performed
+   * Returns list of partitions where clean operations needs to be performed.
+   *
    * @param newInstantToRetain New instant to be retained after this cleanup operation
    * @return list of partitions to scan for cleaning
    * @throws IOException when underlying file-system throws this exception
@@ -96,7 +99,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
             .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
             && (cleanMetadata.getEarliestCommitToRetain().length() > 0)) {
-          logger.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
+          LOG.warn("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
               + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
               + ". New Instant to retain : " + newInstantToRetain);
           return hoodieTable.getCompletedCommitsTimeline().getInstants().filter(instant -> {
@@ -126,7 +129,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    * single file (i.e run it with versionsRetained = 1)
    */
   private List<String> getFilesToCleanKeepingLatestVersions(String partitionPath) throws IOException {
-    logger.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
+    LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
         + " file versions. ");
     List<HoodieFileGroup> fileGroups = fileSystemView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     List<String> deletePaths = new ArrayList<>();
@@ -186,7 +189,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
    */
   private List<String> getFilesToCleanKeepingLatestCommits(String partitionPath) throws IOException {
     int commitsRetained = config.getCleanerCommitsRetained();
-    logger.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
+    LOG.info("Cleaning " + partitionPath + ", retaining latest " + commitsRetained + " commits. ");
     List<String> deletePaths = new ArrayList<>();
 
     // Collect all the datafiles savepointed by all the savepoints
@@ -273,7 +276,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
-    logger.info(deletePaths.size() + " patterns used to delete in partition path:" + partitionPath);
+    LOG.info(deletePaths.size() + " patterns used to delete in partition path:" + partitionPath);
 
     return deletePaths;
   }
@@ -292,7 +295,7 @@ public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Seri
   }
 
   /**
-   * Determine if file slice needed to be preserved for pending compaction
+   * Determine if file slice needed to be preserved for pending compaction.
    * 
    * @param fileSlice File Slice
    * @return true if file slice needs to be preserved, false otherwise.

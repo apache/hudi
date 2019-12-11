@@ -18,21 +18,6 @@
 
 package org.apache.hudi.io.compact;
 
-import static java.util.stream.Collectors.toList;
-
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -55,6 +40,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.HoodieCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
+
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -62,6 +54,16 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.util.AccumulatorV2;
 import org.apache.spark.util.LongAccumulator;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
+import static java.util.stream.Collectors.toList;
 
 /**
  * HoodieRealtimeTableCompactor compacts a hoodie table with merge on read storage. Computes all possible compactions,
@@ -72,7 +74,7 @@ import org.apache.spark.util.LongAccumulator;
  */
 public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
-  private static Logger log = LogManager.getLogger(HoodieRealtimeTableCompactor.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeTableCompactor.class);
   // Accumulator to keep track of total log files for a dataset
   private AccumulatorV2<Long, Long> totalLogFiles;
   // Accumulator to keep track of total log file slices for a dataset
@@ -90,7 +92,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     HoodieCopyOnWriteTable table = new HoodieCopyOnWriteTable(config, jsc);
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-    log.info("Compactor compacting " + operations + " files");
+    LOG.info("Compactor compacting " + operations + " files");
 
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionInstantTime)).flatMap(List::iterator);
@@ -101,7 +103,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     FileSystem fs = metaClient.getFs();
 
     Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
-    log.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
+    LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + commitTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
@@ -113,7 +115,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
         .getActiveTimeline().getTimelineOfActions(Sets.newHashSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant().get().getTimestamp();
-    log.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());
+    LOG.info("MaxMemoryPerCompaction => " + config.getMaxMemoryPerCompaction());
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(
         p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
@@ -174,7 +176,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     // TODO : check if maxMemory is not greater than JVM or spark.executor memory
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    log.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommitTime);
+    LOG.info("Compacting " + metaClient.getBasePath() + " with commit " + compactionCommitTime);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
         config.shouldAssumeDatePartitioning());
 
@@ -187,7 +189,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
     }
 
     RealtimeView fileSystemView = hoodieTable.getRTFileSystemView();
-    log.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
+    LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
     List<HoodieCompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
         .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
             .getLatestFileSlices(partitionPath)
@@ -204,10 +206,10 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
                   config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
             }).filter(c -> !c.getDeltaFileNames().isEmpty()).collect(toList()).iterator())
         .collect().stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
-    log.info("Total of " + operations.size() + " compactions are retrieved");
-    log.info("Total number of latest files slices " + totalFileSlices.value());
-    log.info("Total number of log files " + totalLogFiles.value());
-    log.info("Total number of file slices " + totalFileSlices.value());
+    LOG.info("Total of " + operations.size() + " compactions are retrieved");
+    LOG.info("Total number of latest files slices " + totalFileSlices.value());
+    LOG.info("Total number of log files " + totalLogFiles.value());
+    LOG.info("Total number of file slices " + totalFileSlices.value());
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
     HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
@@ -219,7 +221,7 @@ public class HoodieRealtimeTableCompactor implements HoodieCompactor {
             + "Please fix your strategy implementation." + "FileIdsWithPendingCompactions :" + fgIdsInPendingCompactions
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
-      log.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
+      LOG.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());
     }
     return compactionPlan;
   }

@@ -18,23 +18,25 @@
 
 package org.apache.hudi.hadoop;
 
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.DatasetNotFoundException;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Given a path is a part of - Hoodie dataset = accepts ONLY the latest version of each path - Non-Hoodie dataset = then
@@ -48,11 +50,11 @@ import org.apache.log4j.Logger;
  */
 public class HoodieROTablePathFilter implements PathFilter, Serializable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
 
   /**
    * Its quite common, to have all files from a given partition path be passed into accept(), cache the check for hoodie
-   * metadata for known partition paths and the latest versions of files
+   * metadata for known partition paths and the latest versions of files.
    */
   private HashMap<String, HashSet<Path>> hoodiePathCache;
 
@@ -70,7 +72,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
   }
 
   /**
-   * Obtain the path, two levels from provided path
+   * Obtain the path, two levels from provided path.
    *
    * @return said path if available, null otherwise
    */

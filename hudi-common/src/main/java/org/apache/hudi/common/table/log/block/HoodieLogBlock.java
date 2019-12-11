@@ -18,15 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import com.google.common.collect.Maps;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.EOFException;
-import java.io.IOException;
-import java.util.Map;
-import javax.annotation.Nonnull;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.FSUtils;
@@ -34,8 +25,21 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.google.common.collect.Maps;
+import org.apache.hadoop.fs.FSDataInputStream;
+
+import javax.annotation.Nonnull;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.util.Map;
+
+
 /**
- * Abstract class defining a block in HoodieLogFile
+ * Abstract class defining a block in HoodieLogFile.
  */
 public abstract class HoodieLogBlock {
 
@@ -184,7 +188,7 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}
+   * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}.
    */
   public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
 
@@ -225,7 +229,7 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * When lazyReading of blocks is turned on, inflate the content of a log block from disk
+   * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
   protected void inflate() throws IOException {
 
@@ -254,7 +258,7 @@ public abstract class HoodieLogBlock {
   }
 
   /**
-   * Handles difference in seek behavior for GCS and non-GCS input stream
+   * Handles difference in seek behavior for GCS and non-GCS input stream.
    * 
    * @param inputStream Input Stream
    * @param pos Position to seek

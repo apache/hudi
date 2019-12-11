@@ -18,23 +18,6 @@
 
 package org.apache.hudi.common;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieReadClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
@@ -54,6 +37,11 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -65,12 +53,26 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 /**
  * Utility methods to aid testing inside the HoodieClient module.
  */
 public class HoodieClientTestUtils {
 
-  private static final transient Logger log = LogManager.getLogger(HoodieClientTestUtils.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieClientTestUtils.class);
   private static final Random RANDOM = new Random();
 
   public static List<WriteStatus> collectStatuses(Iterator<List<WriteStatus>> statusListItr) {
@@ -164,7 +166,7 @@ public class HoodieClientTestUtils {
     try {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
-      log.info("Path :" + paths.values());
+      LOG.info("Path :" + paths.values());
       return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
           .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitTime));
     } catch (Exception e) {
@@ -190,7 +192,7 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * Reads the paths under the a hoodie dataset out as a DataFrame
+   * Reads the paths under the a hoodie dataset out as a DataFrame.
    */
   public static Dataset<Row> read(JavaSparkContext jsc, String basePath, SQLContext sqlContext, FileSystem fs,
       String... paths) {

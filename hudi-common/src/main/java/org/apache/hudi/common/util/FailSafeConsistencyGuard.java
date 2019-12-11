@@ -19,6 +19,12 @@
 package org.apache.hudi.common.util;
 
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,18 +33,13 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
- * A consistency checker that fails if it is unable to meet the required condition within a specified timeout
+ * A consistency checker that fails if it is unable to meet the required condition within a specified timeout.
  */
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
-  private static final transient Logger log = LogManager.getLogger(FailSafeConsistencyGuard.class);
+  private static final Logger LOG = LogManager.getLogger(FailSafeConsistencyGuard.class);
 
   private final FileSystem fs;
   private final ConsistencyGuardConfig consistencyGuardConfig;
@@ -70,7 +71,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper function to wait for all files belonging to single directory to appear
+   * Helper function to wait for all files belonging to single directory to appear.
    * 
    * @param dirPath Dir Path
    * @param files Files to appear/disappear
@@ -85,7 +86,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
     retryTillSuccess((retryNum) -> {
       try {
-        log.info("Trying " + retryNum);
+        LOG.info("Trying " + retryNum);
         FileStatus[] entries = fs.listStatus(dir);
         List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
             .map(p -> p.toString()).collect(Collectors.toList());
@@ -94,7 +95,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
         switch (event) {
           case DISAPPEAR:
-            log.info("Following files are visible" + candidateFiles);
+            LOG.info("Following files are visible" + candidateFiles);
             // If no candidate files gets removed, it means all of them have disappeared
             return !altered;
           case APPEAR:
@@ -103,14 +104,14 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
             return candidateFiles.isEmpty();
         }
       } catch (IOException ioe) {
-        log.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
+        LOG.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
       }
       return false;
     }, "Timed out waiting for files to become visible");
   }
 
   /**
-   * Helper to check of file visibility
+   * Helper to check of file visibility.
    * 
    * @param filePath File Path
    * @param visibility Visibility
@@ -139,7 +140,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Helper function to wait till file either appears/disappears
+   * Helper function to wait till file either appears/disappears.
    * 
    * @param filePath File Path
    * @param visibility
@@ -154,7 +155,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
           return;
         }
       } catch (IOException ioe) {
-        log.warn("Got IOException waiting for file visibility. Retrying", ioe);
+        LOG.warn("Got IOException waiting for file visibility. Retrying", ioe);
       }
 
       sleepSafe(waitMs);
@@ -166,7 +167,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   }
 
   /**
-   * Retries the predicate for condfigurable number of times till we the predicate returns success
+   * Retries the predicate for condfigurable number of times till we the predicate returns success.
    * 
    * @param predicate Predicate Function
    * @param timedOutMessage Timed-Out message for logging
@@ -175,7 +176,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
   private void retryTillSuccess(Function<Integer, Boolean> predicate, String timedOutMessage) throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
-    log.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
+    LOG.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
     while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
       boolean success = predicate.apply(attempt);
       if (success) {

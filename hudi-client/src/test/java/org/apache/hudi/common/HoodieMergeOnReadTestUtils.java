@@ -18,11 +18,10 @@
 
 package org.apache.hudi.common;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
+import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -34,12 +33,15 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR)
+ * Utility methods to aid in testing MergeOnRead (workaround for HoodieReadClient for MOR).
  */
 public class HoodieMergeOnReadTestUtils {
 

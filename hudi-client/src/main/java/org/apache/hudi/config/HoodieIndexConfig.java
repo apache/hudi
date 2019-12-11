@@ -18,15 +18,18 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.index.HoodieIndex;
+
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
-import org.apache.hudi.index.HoodieIndex;
+
 
 /**
- * Indexing related config
+ * Indexing related config.
  */
 @Immutable
 public class HoodieIndexConfig extends DefaultHoodieConfig {

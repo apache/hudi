@@ -18,12 +18,17 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.Serializable;
-import java.util.Objects;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.FSUtils;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+
+import java.io.Serializable;
+import java.util.Objects;
+
+/**
+ * Hoodie data file.
+ */
 public class HoodieDataFile implements Serializable {
 
   private transient FileStatus fileStatus;

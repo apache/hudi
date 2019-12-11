@@ -19,6 +19,7 @@
 package org.apache.hudi.hive.util;
 
 import com.google.common.collect.Maps;
+
 import java.util.Iterator;
 import java.util.Map;
 

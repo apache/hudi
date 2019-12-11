@@ -18,14 +18,18 @@
 
 package org.apache.hudi.common.util;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.Objects;
 import org.apache.avro.util.Utf8;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.Objects;
+
+/**
+ * Tests serialization utils.
+ */
 public class TestSerializationUtils {
 
   @Test

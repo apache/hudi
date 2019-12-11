@@ -18,19 +18,21 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 
+import org.apache.hadoop.conf.Configuration;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 /**
- * REST Handler servicing file-slice requests
+ * REST Handler servicing file-slice requests.
  */
 public class FileSliceHandler extends Handler {
 

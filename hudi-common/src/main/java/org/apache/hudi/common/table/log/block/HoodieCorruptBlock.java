@@ -18,15 +18,17 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import java.io.IOException;
-import java.util.Map;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.hadoop.fs.FSDataInputStream;
+
+import java.io.IOException;
+import java.util.Map;
+
 /**
  * Corrupt block is emitted whenever the scanner finds the length of the block written at the beginning does not match
- * (did not find a EOF or a sync marker after the length)
+ * (did not find a EOF or a sync marker after the length).
  */
 public class HoodieCorruptBlock extends HoodieLogBlock {
 

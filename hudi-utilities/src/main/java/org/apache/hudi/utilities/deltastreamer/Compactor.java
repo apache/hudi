@@ -18,24 +18,26 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import java.io.IOException;
-import java.io.Serializable;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.io.Serializable;
+
 /**
- * Run one round of compaction
+ * Run one round of compaction.
  */
 public class Compactor implements Serializable {
 
-  protected static volatile Logger log = LogManager.getLogger(Compactor.class);
+  private static final Logger LOG = LogManager.getLogger(Compactor.class);
 
   private transient HoodieWriteClient compactionClient;
   private transient JavaSparkContext jssc;
@@ -46,12 +48,12 @@ public class Compactor implements Serializable {
   }
 
   public void compact(HoodieInstant instant) throws IOException {
-    log.info("Compactor executing compaction " + instant);
+    LOG.info("Compactor executing compaction " + instant);
     JavaRDD<WriteStatus> res = compactionClient.compact(instant.getTimestamp());
     long numWriteErrors = res.collect().stream().filter(r -> r.hasErrors()).count();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal
-      log.error("Compaction for instant (" + instant + ") failed with write errors. " + "Errors :" + numWriteErrors);
+      LOG.error("Compaction for instant (" + instant + ") failed with write errors. " + "Errors :" + numWriteErrors);
       throw new HoodieException(
           "Compaction for instant (" + instant + ") failed with write errors. " + "Errors :" + numWriteErrors);
     }

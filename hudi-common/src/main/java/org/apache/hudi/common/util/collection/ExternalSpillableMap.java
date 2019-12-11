@@ -18,6 +18,13 @@
 
 package org.apache.hudi.common.util.collection;
 
+import org.apache.hudi.common.util.ObjectSizeCalculator;
+import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -29,11 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
-import org.apache.hudi.common.util.ObjectSizeCalculator;
-import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * An external map that spills content to disk when there is insufficient space for it to grow.
@@ -54,7 +56,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
-  private static final Logger log = LogManager.getLogger(ExternalSpillableMap.class);
+  private static final Logger LOG = LogManager.getLogger(ExternalSpillableMap.class);
   // maximum space allowed in-memory for this map
   private final long maxInMemorySizeInBytes;
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
@@ -104,35 +106,35 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * A custom iterator to wrap over iterating in-memory + disk spilled data
+   * A custom iterator to wrap over iterating in-memory + disk spilled data.
    */
   public Iterator<R> iterator() {
     return new IteratorWrapper<>(inMemoryMap.values().iterator(), getDiskBasedMap().iterator());
   }
 
   /**
-   * Number of entries in DiskBasedMap
+   * Number of entries in DiskBasedMap.
    */
   public int getDiskBasedMapNumEntries() {
     return getDiskBasedMap().size();
   }
 
   /**
-   * Number of bytes spilled to disk
+   * Number of bytes spilled to disk.
    */
   public long getSizeOfFileOnDiskInBytes() {
     return getDiskBasedMap().sizeOfFileOnDiskInBytes();
   }
 
   /**
-   * Number of entries in InMemoryMap
+   * Number of entries in InMemoryMap.
    */
   public int getInMemoryMapNumEntries() {
     return inMemoryMap.size();
   }
 
   /**
-   * Approximate memory footprint of the in-memory map
+   * Approximate memory footprint of the in-memory map.
    */
   public long getCurrentInMemoryMapSize() {
     return currentInMemoryMapSize;
@@ -175,7 +177,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         // At first, use the sizeEstimate of a record being inserted into the spillable map.
         // Note, the converter may over estimate the size of a record in the JVM
         this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
-        log.info("Estimated Payload size => " + estimatedPayloadSize);
+        LOG.info("Estimated Payload size => " + estimatedPayloadSize);
       } else if (shouldEstimatePayloadSize && inMemoryMap.size() % NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 0) {
         // Re-estimate the size of a record by calculating the size of the entire map containing
         // N entries and then dividing by the number of entries present (N). This helps to get a
@@ -184,7 +186,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         this.currentInMemoryMapSize = totalMapSize;
         this.estimatedPayloadSize = totalMapSize / inMemoryMap.size();
         shouldEstimatePayloadSize = false;
-        log.info("New Estimated Payload size => " + this.estimatedPayloadSize);
+        LOG.info("New Estimated Payload size => " + this.estimatedPayloadSize);
       }
       if (!inMemoryMap.containsKey(key)) {
         // TODO : Add support for adjusting payloadSize for updates to the same key
@@ -255,7 +257,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   /**
    * Iterator that wraps iterating over all the values for this map 1) inMemoryIterator - Iterates over all the data
-   * in-memory map 2) diskLazyFileIterator - Iterates over all the data spilled to disk
+   * in-memory map 2) diskLazyFileIterator - Iterates over all the data spilled to disk.
    */
   private class IteratorWrapper<R> implements Iterator<R> {
 

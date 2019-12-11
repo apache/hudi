@@ -18,13 +18,6 @@
 
 package org.apache.hudi.io;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
@@ -42,6 +35,8 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -49,6 +44,13 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 
 @SuppressWarnings("unchecked")
 public class TestHoodieMergeHandle extends HoodieClientTestHarness {
@@ -316,7 +318,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   }
 
   /**
-   * Assert no failures in writing hoodie files
+   * Assert no failures in writing hoodie files.
    *
    * @param statuses List of Write Status
    */
@@ -338,7 +340,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
   }
 
   /**
-   * Overridden so that we can capture and inspect all success records
+   * Overridden so that we can capture and inspect all success records.
    */
   public static class TestWriteStatus extends WriteStatus {
 

@@ -18,20 +18,25 @@
 
 package org.apache.hudi.cli.commands;
 
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.HiveUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * CLI command to display sync options.
+ */
 @Component
 public class HoodieSyncCommand implements CommandMarker {
 

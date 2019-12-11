@@ -20,12 +20,13 @@ package org.apache.hudi.common.table.timeline.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.io.Serializable;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 
+import java.io.Serializable;
+
 /**
- * A serializable FS Permission
+ * A serializable FS Permission.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FSPermissionDTO implements Serializable {

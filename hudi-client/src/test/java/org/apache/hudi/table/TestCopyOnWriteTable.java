@@ -18,19 +18,6 @@
 
 package org.apache.hudi.table;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.BloomFilter;
@@ -54,6 +41,9 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieCopyOnWriteTable.UpsertPartitioner;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -63,11 +53,24 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import scala.Tuple2;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestCopyOnWriteTable extends HoodieClientTestHarness {
 
-  protected static Logger log = LogManager.getLogger(TestCopyOnWriteTable.class);
+  private static final Logger LOG = LogManager.getLogger(TestCopyOnWriteTable.class);
 
   @Before
   public void setUp() throws Exception {
@@ -379,7 +382,7 @@ public class TestCopyOnWriteTable extends HoodieClientTestHarness {
     int counts = 0;
     for (File file : new File(basePath + "/2016/01/31").listFiles()) {
       if (file.getName().endsWith(".parquet") && FSUtils.getCommitTime(file.getName()).equals(commitTime)) {
-        log.info(file.getName() + "-" + file.length());
+        LOG.info(file.getName() + "-" + file.length());
         counts++;
       }
     }

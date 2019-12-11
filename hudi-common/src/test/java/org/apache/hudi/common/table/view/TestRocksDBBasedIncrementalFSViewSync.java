@@ -18,11 +18,15 @@
 
 package org.apache.hudi.common.table.view;
 
-import java.io.IOException;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 
+import java.io.IOException;
+
+/**
+ * Tests rocks db based incremental file system view sync {@link RocksDbBasedFileSystemView}.
+ */
 public class TestRocksDBBasedIncrementalFSViewSync extends TestIncrementalFSViewSync {
 
   @Override

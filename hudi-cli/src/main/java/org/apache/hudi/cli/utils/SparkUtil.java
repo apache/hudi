@@ -18,24 +18,29 @@
 
 package org.apache.hudi.cli.utils;
 
-import java.io.File;
-import java.net.URISyntaxException;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
+
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 
+import java.io.File;
+import java.net.URISyntaxException;
+
+/**
+ * Utility functions dealing with Spark.
+ */
 public class SparkUtil {
 
-  public static Logger logger = Logger.getLogger(SparkUtil.class);
+  private static final Logger LOG = Logger.getLogger(SparkUtil.class);
   public static final String DEFUALT_SPARK_MASTER = "yarn-client";
 
   /**
-   * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro
+   * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro.
    */
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
     String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
@@ -56,10 +61,14 @@ public class SparkUtil {
 
   public static JavaSparkContext initJavaSparkConf(String name) {
     SparkConf sparkConf = new SparkConf().setAppName(name);
-    String defMasterFromEnv = sparkConf.get("spark.master");
+
+    String defMasterFromEnv = sparkConf.getenv("SPARK_MASTER");
     if ((null == defMasterFromEnv) || (defMasterFromEnv.isEmpty())) {
       sparkConf.setMaster(DEFUALT_SPARK_MASTER);
+    } else {
+      sparkConf.setMaster(defMasterFromEnv);
     }
+
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.eventLog.overwrite", "true");

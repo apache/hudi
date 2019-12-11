@@ -18,19 +18,21 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieSerializationException;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.FieldSerializer;
 import com.esotericsoftware.reflectasm.ConstructorAccess;
+import org.objenesis.instantiator.ObjectInstantiator;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import org.apache.hudi.exception.HoodieSerializationException;
-import org.objenesis.instantiator.ObjectInstantiator;
 
 /**
  * {@link SerializationUtils} class internally uses {@link Kryo} serializer for serializing / deserializing objects.
@@ -38,7 +40,7 @@ import org.objenesis.instantiator.ObjectInstantiator;
 public class SerializationUtils {
 
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
-  private static final ThreadLocal<KryoSerializerInstance> serializerRef =
+  private static final ThreadLocal<KryoSerializerInstance> SERIALIZER_REF =
       ThreadLocal.withInitial(() -> new KryoSerializerInstance());
 
   // Serialize
@@ -54,7 +56,7 @@ public class SerializationUtils {
    * @throws IOException if the serialization fails
    */
   public static byte[] serialize(final Object obj) throws IOException {
-    return serializerRef.get().serialize(obj);
+    return SERIALIZER_REF.get().serialize(obj);
   }
 
   // Deserialize
@@ -81,7 +83,7 @@ public class SerializationUtils {
     if (objectData == null) {
       throw new IllegalArgumentException("The byte[] must not be null");
     }
-    return (T) serializerRef.get().deserialize(objectData);
+    return (T) SERIALIZER_REF.get().deserialize(objectData);
   }
 
   private static class KryoSerializerInstance implements Serializable {

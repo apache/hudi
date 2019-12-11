@@ -18,18 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import com.google.common.base.Preconditions;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringReader;
-import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.util.DFSPropertiesConfiguration;
@@ -44,6 +32,11 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.Transformer;
+
+import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Accumulator;
@@ -52,11 +45,20 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
- * Bunch of helper methods
+ * Bunch of helper methods.
  */
 public class UtilHelpers {
-  private static Logger logger = LogManager.getLogger(UtilHelpers.class);
+  private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
       SparkSession sparkSession, SchemaProvider schemaProvider) throws IOException {
@@ -93,7 +95,7 @@ public class UtilHelpers {
     try {
       DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
       if (!overriddenProps.isEmpty()) {
-        logger.info("Adding overridden properties to file properties.");
+        LOG.info("Adding overridden properties to file properties.");
         conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
       return conf;
@@ -113,7 +115,7 @@ public class UtilHelpers {
   }
 
   /**
-   * Parse Schema from file
+   * Parse Schema from file.
    *
    * @param fs File System
    * @param schemaFile Schema File
@@ -165,7 +167,7 @@ public class UtilHelpers {
   }
 
   /**
-   * Build Spark Context for ingestion/compaction
+   * Build Spark Context for ingestion/compaction.
    * 
    * @return
    */
@@ -176,7 +178,7 @@ public class UtilHelpers {
   }
 
   /**
-   * Build Hoodie write client
+   * Build Hoodie write client.
    *
    * @param jsc Java Spark Context
    * @param basePath Base Path
@@ -204,14 +206,14 @@ public class UtilHelpers {
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
-        logger.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
+        LOG.error(String.format("Error processing records :writeStatus:%s", writeStatus.getStat().toString()));
       }
     });
     if (errors.value() == 0) {
-      logger.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
+      LOG.info(String.format("Dataset imported into hoodie dataset with %s instant time.", instantTime));
       return 0;
     }
-    logger.error(String.format("Import failed with %d errors.", errors.value()));
+    LOG.error(String.format("Import failed with %d errors.", errors.value()));
     return -1;
   }
 

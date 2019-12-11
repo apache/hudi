@@ -18,33 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import com.google.common.collect.Maps;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.minicluster.MiniClusterUtil;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
@@ -67,6 +40,14 @@ import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.exception.CorruptedLogFileException;
 
+import com.google.common.collect.Maps;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -75,6 +56,29 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+/**
+ * Tests hoodie log format {@link HoodieLogFormat}.
+ */
 @SuppressWarnings("Duplicates")
 @RunWith(Parameterized.class)
 public class TestHoodieLogFormat extends HoodieCommonTestHarness {
@@ -306,7 +310,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
    *       writer.getCurrentSize(); assertTrue("We just wrote a new block - size2 should be > size1", size2 > size1);
    *       assertEquals("Write should be auto-flushed. The size reported by FileStatus and the writer should match",
    *       size2, fs.getFileStatus(writer.getLogFile().getPath()).getLen()); writer.close(); }
-   **/
+   */
 
   @Test
   public void testAppendNotSupported() throws IOException, URISyntaxException, InterruptedException {
@@ -492,7 +496,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(500);
     // Write out some bytes
@@ -520,7 +524,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(500);
     // Write out some bytes
@@ -690,7 +694,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // Write out a length that does not confirm with the content
     outputStream.writeLong(1000);
 
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
 
     // Write out some header
@@ -1062,7 +1066,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(100);
     outputStream.flush();
@@ -1075,7 +1079,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(100);
     outputStream.flush();
@@ -1095,7 +1099,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.write(HoodieLogFormat.MAGIC);
     outputStream.writeLong(1000);
     outputStream.writeInt(HoodieLogBlockType.AVRO_DATA_BLOCK.ordinal());
-    outputStream.writeInt(HoodieLogFormat.currentVersion);
+    outputStream.writeInt(HoodieLogFormat.CURRENT_VERSION);
     // Write out a length that does not confirm with the content
     outputStream.writeLong(100);
     outputStream.flush();

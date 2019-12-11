@@ -18,10 +18,11 @@
 
 package org.apache.hudi.io.compact.strategy;
 
-import java.util.List;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import java.util.List;
 
 /**
  * UnBoundedCompactionStrategy will not change ordering or filter any compaction. It is a pass-through and will compact

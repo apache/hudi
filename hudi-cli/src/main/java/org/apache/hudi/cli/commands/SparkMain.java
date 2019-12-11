@@ -31,16 +31,20 @@ import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
+
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
+/**
+ * This class deals with initializing spark context based on command entered to hudi-cli.
+ */
 public class SparkMain {
 
-  protected static final Logger LOG = Logger.getLogger(SparkMain.class);
+  private static final Logger LOG = Logger.getLogger(SparkMain.class);
 
   /**
-   * Commands
+   * Commands.
    */
   enum SparkCommand {
     ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN, COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR

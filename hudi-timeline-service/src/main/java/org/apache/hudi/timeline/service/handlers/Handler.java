@@ -18,10 +18,12 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
-import java.io.IOException;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
+
+import java.io.IOException;
 
 public abstract class Handler {
 

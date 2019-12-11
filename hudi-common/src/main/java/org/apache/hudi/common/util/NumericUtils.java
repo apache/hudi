@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.util;
 
+/**
+ * A utility class for numeric.
+ */
 public class NumericUtils {
 
   public static String humanReadableByteCount(double bytes) {

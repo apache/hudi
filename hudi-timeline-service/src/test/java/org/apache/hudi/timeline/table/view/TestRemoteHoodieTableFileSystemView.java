@@ -27,15 +27,16 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.timeline.service.TimelineService;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * Bring up a remote Timeline Server and run all test-cases of TestHoodieTableFileSystemView against it
+ * Bring up a remote Timeline Server and run all test-cases of TestHoodieTableFileSystemView against it.
  */
 public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView {
 
-  private static Logger log = LogManager.getLogger(TestRemoteHoodieTableFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(TestRemoteHoodieTableFileSystemView.class);
 
   private TimelineService server;
   private RemoteHoodieTableFileSystemView view;
@@ -50,7 +51,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
-    log.info("Connecting to Timeline Server :" + server.getServerPort());
+    LOG.info("Connecting to Timeline Server :" + server.getServerPort());
     view = new RemoteHoodieTableFileSystemView("localhost", server.getServerPort(), metaClient);
     return view;
   }

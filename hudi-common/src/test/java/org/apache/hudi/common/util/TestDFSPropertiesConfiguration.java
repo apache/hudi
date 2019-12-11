@@ -18,21 +18,23 @@
 
 package org.apache.hudi.common.util;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import org.apache.hudi.common.minicluster.HdfsTestService;
 
-import java.io.IOException;
-import java.io.PrintStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.io.PrintStream;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 /**
- * Tests basic functionality of {@link DFSPropertiesConfiguration}
+ * Tests basic functionality of {@link DFSPropertiesConfiguration}.
  */
 public class TestDFSPropertiesConfiguration {
 

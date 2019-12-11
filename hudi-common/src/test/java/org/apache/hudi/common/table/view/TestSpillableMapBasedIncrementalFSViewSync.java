@@ -22,6 +22,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 
+/**
+ * Tests spillable map based incremental fs view sync.
+ */
 public class TestSpillableMapBasedIncrementalFSViewSync extends TestIncrementalFSViewSync {
 
   @Override

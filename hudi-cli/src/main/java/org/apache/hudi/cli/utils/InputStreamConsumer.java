@@ -24,9 +24,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.logging.Logger;
 
+/**
+ * This class is responsible to read a Process output.
+ */
 public class InputStreamConsumer extends Thread {
 
-  protected static final Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
+  private static final Logger LOG = Logger.getLogger(InputStreamConsumer.class.getName());
   private InputStream is;
 
   public InputStreamConsumer(InputStream is) {

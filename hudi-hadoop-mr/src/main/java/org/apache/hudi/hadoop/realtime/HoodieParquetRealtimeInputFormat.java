@@ -18,29 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Sets;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
-import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapred.FileSplit;
-import org.apache.hadoop.mapred.InputSplit;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapred.Reporter;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -54,16 +31,41 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
+
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
+import org.apache.hadoop.conf.Configurable;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
+import org.apache.hadoop.mapred.Reporter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 /**
- * Input Format, that provides a real-time view of data in a Hoodie dataset
+ * Input Format, that provides a real-time view of data in a Hoodie dataset.
  */
 @UseFileSplitsFromInputFormat
 public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat implements Configurable {
 
-  private static final transient Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieParquetRealtimeInputFormat.class);
 
   // These positions have to be deterministic across all tables
   public static final int HOODIE_COMMIT_TIME_COL_POS = 0;
@@ -158,7 +160,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   /**
-   * Add a field to the existing fields projected
+   * Add a field to the existing fields projected.
    */
   private static Configuration addProjectionField(Configuration conf, String fieldName, int fieldIndex) {
     String readColNames = conf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");

@@ -18,13 +18,14 @@
 
 package org.apache.hudi.exception;
 
-import java.io.IOException;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
+
 /**
  * <p>
- * Exception thrown to indicate that a hoodie dataset was not found on the path provided
+ * Exception thrown to indicate that a hoodie dataset was not found on the path provided.
  * <p>
  */
 public class DatasetNotFoundException extends HoodieException {

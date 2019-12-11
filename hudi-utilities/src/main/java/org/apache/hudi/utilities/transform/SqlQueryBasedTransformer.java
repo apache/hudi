@@ -18,14 +18,16 @@
 
 package org.apache.hudi.utilities.transform;
 
-import java.util.UUID;
 import org.apache.hudi.common.util.TypedProperties;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.UUID;
 
 /**
  * A transformer that allows a sql-query template be used to transform the source before writing to Hudi data-set.
@@ -34,13 +36,13 @@ import org.apache.spark.sql.SparkSession;
  */
 public class SqlQueryBasedTransformer implements Transformer {
 
-  private static volatile Logger log = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LogManager.getLogger(SqlQueryBasedTransformer.class);
 
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";
 
   /**
-   * Configs supported
+   * Configs supported.
    */
   static class Config {
 
@@ -57,10 +59,10 @@ public class SqlQueryBasedTransformer implements Transformer {
 
     // tmp table name doesn't like dashes
     String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    log.info("Registering tmp table : " + tmpTable);
+    LOG.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
     String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
-    log.info("SQL Query for transformation : (" + sqlStr + ")");
+    LOG.info("SQL Query for transformation : (" + sqlStr + ")");
     return sparkSession.sql(sqlStr);
   }
 }

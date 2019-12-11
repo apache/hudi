@@ -18,9 +18,13 @@
 
 package org.apache.hudi.common;
 
-import java.io.IOException;
 import org.junit.Test;
 
+import java.io.IOException;
+
+/**
+ * Tests bloom filter {@link BloomFilter}.
+ */
 public class TestBloomFilter {
 
   @Test

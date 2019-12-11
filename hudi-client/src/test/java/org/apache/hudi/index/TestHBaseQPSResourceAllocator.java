@@ -18,8 +18,6 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -31,6 +29,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
 import org.apache.hudi.index.hbase.HBaseIndex;
 import org.apache.hudi.index.hbase.HBaseIndexQPSResourceAllocator;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseTestingUtility;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;

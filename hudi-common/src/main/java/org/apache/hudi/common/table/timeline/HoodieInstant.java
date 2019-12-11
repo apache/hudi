@@ -18,11 +18,13 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import java.io.Serializable;
-import java.util.Objects;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.util.FSUtils;
+
+import org.apache.hadoop.fs.FileStatus;
+
+import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * A Hoodie Instant represents a action done on a hoodie dataset. All actions start with a inflight instant and then
@@ -33,7 +35,7 @@ import org.apache.hudi.common.util.FSUtils;
 public class HoodieInstant implements Serializable {
 
   /**
-   * Instant State
+   * Instant State.
    */
   public enum State {
     // Requested State (valid state for Compaction)
@@ -51,7 +53,7 @@ public class HoodieInstant implements Serializable {
   private String timestamp;
 
   /**
-   * Load the instant from the meta FileStatus
+   * Load the instant from the meta FileStatus.
    */
   public HoodieInstant(FileStatus fileStatus) {
     // First read the instant timestamp. [==>20170101193025<==].commit
@@ -109,7 +111,7 @@ public class HoodieInstant implements Serializable {
   }
 
   /**
-   * Get the filename for this instant
+   * Get the filename for this instant.
    */
   public String getFileName() {
     if (HoodieTimeline.COMMIT_ACTION.equals(action)) {

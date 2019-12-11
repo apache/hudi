@@ -18,13 +18,14 @@
 
 package org.apache.hudi.common.versioning.compaction;
 
-import java.util.Arrays;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.versioning.MetadataMigrator;
 
+import java.util.Arrays;
+
 /**
- * Responsible for handling different versions of compaction plan
+ * Responsible for handling different versions of compaction plan.
  */
 public class CompactionPlanMigrator extends MetadataMigrator<HoodieCompactionPlan> {
 

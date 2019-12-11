@@ -18,14 +18,16 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.FSUtils;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Objects;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.FSUtils;
 
 /**
  * Abstracts a single log file. Contains methods to extract metadata like the fileId, version and extension from the log
@@ -123,7 +125,7 @@ public class HoodieLogFile implements Serializable {
   }
 
   /**
-   * Comparator to order log-files
+   * Comparator to order log-files.
    */
   public static class LogFileComparator implements Comparator<HoodieLogFile>, Serializable {
 

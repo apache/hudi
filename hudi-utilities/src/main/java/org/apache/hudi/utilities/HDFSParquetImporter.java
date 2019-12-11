@@ -18,26 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.IValueValidator;
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import com.beust.jcommander.ParameterException;
-import com.google.common.annotations.VisibleForTesting;
-import java.io.IOException;
-import java.io.Serializable;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.HoodieJsonPayload;
@@ -50,20 +30,43 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
+
+import com.beust.jcommander.IValueValidator;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
+import com.google.common.annotations.VisibleForTesting;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+
 import scala.Tuple2;
 
 /**
- * Loads data from Parquet Sources
+ * Loads data from Parquet Sources.
  */
 public class HDFSParquetImporter implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HDFSParquetImporter.class);
+  private static final Logger LOG = LogManager.getLogger(HDFSParquetImporter.class);
 
   private static final DateTimeFormatter PARTITION_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd")
       .withZone(ZoneId.systemDefault());
@@ -100,7 +103,7 @@ public class HDFSParquetImporter implements Serializable {
     this.fs = FSUtils.getFs(cfg.targetPath, jsc.hadoopConfiguration());
     this.props = cfg.propsFilePath == null ? UtilHelpers.buildProperties(cfg.configs)
         : UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-    log.info("Starting data import with configs : " + props.toString());
+    LOG.info("Starting data import with configs : " + props.toString());
     int ret = -1;
     try {
       // Verify that targetPath is not present.
@@ -111,7 +114,7 @@ public class HDFSParquetImporter implements Serializable {
         ret = dataImport(jsc);
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      log.error(t);
+      LOG.error(t);
     }
     return ret;
   }
@@ -142,7 +145,7 @@ public class HDFSParquetImporter implements Serializable {
       JavaRDD<WriteStatus> writeResponse = load(client, instantTime, hoodieRecords);
       return UtilHelpers.handleErrors(jsc, instantTime, writeResponse);
     } catch (Throwable t) {
-      log.error("Error occurred.", t);
+      LOG.error("Error occurred.", t);
     }
     return -1;
   }
@@ -172,13 +175,13 @@ public class HDFSParquetImporter implements Serializable {
             throw new HoodieIOException("row field is missing. :" + cfg.rowKey);
           }
           String partitionPath = partitionField.toString();
-          log.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
+          LOG.debug("Row Key : " + rowField + ", Partition Path is (" + partitionPath + ")");
           if (partitionField instanceof Number) {
             try {
               long ts = (long) (Double.parseDouble(partitionField.toString()) * 1000L);
               partitionPath = PARTITION_FORMATTER.format(Instant.ofEpochMilli(ts));
             } catch (NumberFormatException nfe) {
-              log.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
+              LOG.warn("Unable to parse date from partition field. Assuming partition as (" + partitionField + ")");
             }
           }
           return new HoodieRecord<>(new HoodieKey(rowField.toString(), partitionPath),
@@ -187,7 +190,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   /**
-   * Imports records to Hoodie dataset
+   * Imports records to Hoodie dataset.
    *
    * @param client Hoodie Client
    * @param instantTime Instant Time

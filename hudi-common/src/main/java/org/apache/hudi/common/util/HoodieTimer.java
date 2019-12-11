@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieException;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
-import org.apache.hudi.exception.HoodieException;
 
 /**
  * Timing utility to help keep track of execution times of code blocks. This class helps to allow multiple timers

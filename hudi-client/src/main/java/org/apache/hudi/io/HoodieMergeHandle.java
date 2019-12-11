@@ -18,15 +18,6 @@
 
 package org.apache.hudi.io;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -47,14 +38,25 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieStorageWriter;
 import org.apache.hudi.io.storage.HoodieStorageWriterFactory;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+
 @SuppressWarnings("Duplicates")
 public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
-  private static Logger logger = LogManager.getLogger(HoodieMergeHandle.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
   private Map<String, HoodieRecord<T>> keyToNewRecords;
   private Set<String> writtenRecordKeys;
@@ -75,7 +77,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Called by compactor code path
+   * Called by compactor code path.
    */
   public HoodieMergeHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecords, String fileId, HoodieDataFile dataFileToBeMerged) {
@@ -106,7 +108,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Determines whether we can accept the incoming records, into the current file, depending on
+   * Determines whether we can accept the incoming records, into the current file. Depending on
    * <p>
    * - Whether it belongs to the same partitionPath as existing records - Whether the current file written bytes lt max
    * file size
@@ -130,24 +132,24 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
     if (exception.isPresent() && exception.get() instanceof Throwable) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
-      logger.error("Error writing record " + record, exception.get());
+      LOG.error("Error writing record " + record, exception.get());
     } else {
       write(record, avroRecord);
     }
   }
 
   /**
-   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields
+   * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
     return HoodieAvroUtils.rewriteRecord(record, writerSchema);
   }
 
   /**
-   * Extract old file path, initialize StorageWriter and WriteStatus
+   * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieDataFile dataFileToBeMerged) {
-    logger.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     try {
@@ -163,7 +165,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
           + FSUtils.makeDataFileName(instantTime, writeToken, fileId)).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
 
-      logger.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
+      LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
           newFilePath.toString()));
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
@@ -179,7 +181,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       storageWriter =
           HoodieStorageWriterFactory.getStorageWriter(instantTime, newFilePath, hoodieTable, config, writerSchema);
     } catch (IOException io) {
-      logger.error("Error in update task at commit " + instantTime, io);
+      LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
           + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
@@ -187,13 +189,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   }
 
   /**
-   * Load the new incoming records in a map and return partitionPath
+   * Load the new incoming records in a map and return partitionPath.
    */
   private String init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
     try {
       // Load the new records in a map
       long memoryForMerge = config.getMaxMemoryPerPartitionMerge();
-      logger.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
+      LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(originalSchema));
     } catch (IOException io) {
@@ -210,7 +212,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }
-    logger.info("Number of entries in MemoryBasedMap => "
+    LOG.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
         + "Total size in bytes of MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in DiskBasedMap => "
@@ -245,7 +247,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       hoodieRecord.deflate();
       return true;
     } catch (Exception e) {
-      logger.error("Error writing record  " + hoodieRecord, e);
+      LOG.error("Error writing record  " + hoodieRecord, e);
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
     return false;
@@ -287,11 +289,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       try {
         storageWriter.writeAvro(key, oldRecord);
       } catch (ClassCastException e) {
-        logger.error("Schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
+        LOG.error("Schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
             + " to file " + newFilePath + " with writerSchema " + writerSchema.toString(true));
         throw new HoodieUpsertException(errMsg, e);
       } catch (IOException e) {
-        logger.error("Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
+        LOG.error("Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
             + " to new file " + newFilePath, e);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -335,7 +337,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
 
-      logger.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
+      LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
       return writeStatus;

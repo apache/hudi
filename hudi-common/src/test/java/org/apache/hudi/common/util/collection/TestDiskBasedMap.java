@@ -18,23 +18,6 @@
 
 package org.apache.hudi.common.util.collection;
 
-import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.model.AvroBinaryTestPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -47,10 +30,32 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.common.util.SpillableMapTestUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.SchemaTestUtil.getSimpleSchema;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Tests dis based map {@link DiskBasedMap}.
+ */
 public class TestDiskBasedMap extends HoodieCommonTestHarness {
 
   @Before

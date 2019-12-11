@@ -18,23 +18,6 @@
 
 package org.apache.hudi.table;
 
-import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.HoodieReadClient;
 import org.apache.hudi.HoodieWriteClient;
@@ -69,12 +52,31 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class TestMergeOnReadTable extends HoodieClientTestHarness {
 
@@ -1017,7 +1019,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure rolling stats are correctly written to metadata file
+   * Test to ensure rolling stats are correctly written to metadata file.
    */
   @Test
   public void testRollingStatsInMetadata() throws Exception {
@@ -1116,7 +1118,7 @@ public class TestMergeOnReadTable extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure rolling stats are correctly written to the metadata file, identifies small files and corrects them
+   * Test to ensure rolling stats are correctly written to the metadata file, identifies small files and corrects them.
    */
   @Test
   public void testRollingStatsWithSmallFileHandling() throws Exception {

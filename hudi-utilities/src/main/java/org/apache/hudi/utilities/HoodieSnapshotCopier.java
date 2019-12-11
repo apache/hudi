@@ -18,17 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Stream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -40,10 +29,24 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
 import scala.Tuple2;
 
 /**
@@ -51,7 +54,7 @@ import scala.Tuple2;
  */
 public class HoodieSnapshotCopier implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(HoodieSnapshotCopier.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieSnapshotCopier.class);
 
   static class Config implements Serializable {
 
@@ -76,21 +79,21 @@ public class HoodieSnapshotCopier implements Serializable {
     Option<HoodieInstant> latestCommit =
         tableMetadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
     if (!latestCommit.isPresent()) {
-      logger.warn("No commits present. Nothing to snapshot");
+      LOG.warn("No commits present. Nothing to snapshot");
       return;
     }
     final String latestCommitTimestamp = latestCommit.get().getTimestamp();
-    logger.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
+    LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
     List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir, shouldAssumeDatePartitioning);
     if (partitions.size() > 0) {
-      logger.info(String.format("The job needs to copy %d partitions.", partitions.size()));
+      LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
       // Make sure the output directory is empty
       Path outputPath = new Path(outputDir);
       if (fs.exists(outputPath)) {
-        logger.warn(String.format("The output path %s targetBasePath already exists, deleting", outputPath));
+        LOG.warn(String.format("The output path %s targetBasePath already exists, deleting", outputPath));
         fs.delete(new Path(outputDir), true);
       }
 
@@ -123,7 +126,7 @@ public class HoodieSnapshotCopier implements Serializable {
       });
 
       // Also copy the .commit files
-      logger.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
+      LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
       FileStatus[] commitFilesToCopy =
           fs.listStatus(new Path(baseDir + "/" + HoodieTableMetaClient.METAFOLDER_NAME), (commitFilePath) -> {
             if (commitFilePath.getName().equals(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
@@ -141,19 +144,19 @@ public class HoodieSnapshotCopier implements Serializable {
           fs.mkdirs(targetFilePath.getParent());
         }
         if (fs.exists(targetFilePath)) {
-          logger.error(
+          LOG.error(
               String.format("The target output commit file (%s targetBasePath) already exists.", targetFilePath));
         }
         FileUtil.copy(fs, commitStatus.getPath(), fs, targetFilePath, false, fs.getConf());
       }
     } else {
-      logger.info("The job has 0 partition to copy.");
+      LOG.info("The job has 0 partition to copy.");
     }
 
     // Create the _SUCCESS tag
     Path successTagPath = new Path(outputDir + "/_SUCCESS");
     if (!fs.exists(successTagPath)) {
-      logger.info(String.format("Creating _SUCCESS under targetBasePath: $s", outputDir));
+      LOG.info(String.format("Creating _SUCCESS under targetBasePath: $s", outputDir));
       fs.createNewFile(successTagPath);
     }
   }
@@ -162,14 +165,14 @@ public class HoodieSnapshotCopier implements Serializable {
     // Take input configs
     final Config cfg = new Config();
     new JCommander(cfg, args);
-    logger.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath", cfg.basePath,
+    LOG.info(String.format("Snapshot hoodie table from %s targetBasePath to %stargetBasePath", cfg.basePath,
         cfg.outputPath));
 
     // Create a spark job to do the snapshot copy
     SparkConf sparkConf = new SparkConf().setAppName("Hoodie-snapshot-copier");
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
-    logger.info("Initializing spark job.");
+    LOG.info("Initializing spark job.");
 
     // Copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();

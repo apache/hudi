@@ -18,22 +18,6 @@
 
 package org.apache.hudi.func;
 
-import static org.apache.hudi.func.CopyOnWriteLazyInsertIterable.getTransformFunction;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -48,11 +32,30 @@ import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.func.CopyOnWriteLazyInsertIterable.HoodieInsertValueGenResult;
+
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import scala.Tuple2;
+
+import static org.apache.hudi.func.CopyOnWriteLazyInsertIterable.getTransformFunction;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
 
@@ -107,7 +110,7 @@ public class TestBoundedInMemoryQueue extends HoodieClientTestHarness {
   }
 
   /**
-   * Test to ensure that we are reading all records from queue iterator when we have multiple producers
+   * Test to ensure that we are reading all records from queue iterator when we have multiple producers.
    */
   @SuppressWarnings("unchecked")
   @Test(timeout = 60000)

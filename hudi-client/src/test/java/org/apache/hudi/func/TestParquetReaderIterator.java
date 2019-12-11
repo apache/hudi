@@ -18,14 +18,16 @@
 
 package org.apache.hudi.func;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.io.IOException;
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.io.IOException;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestParquetReaderIterator {
 

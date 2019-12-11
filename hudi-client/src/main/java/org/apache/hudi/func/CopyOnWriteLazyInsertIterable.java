@@ -18,12 +18,6 @@
 
 package org.apache.hudi.func;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.function.Function;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -35,6 +29,14 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
@@ -120,7 +122,7 @@ public class CopyOnWriteLazyInsertIterable<T extends HoodieRecordPayload>
   }
 
   /**
-   * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles
+   * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
    */
   protected class CopyOnWriteInsertHandler
       extends BoundedInMemoryQueueConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {

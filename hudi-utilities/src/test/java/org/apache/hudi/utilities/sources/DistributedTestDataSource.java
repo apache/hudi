@@ -18,22 +18,28 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.util.Iterator;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.config.TestSourceConfig;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.Iterator;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * A Test DataSource which scales test-data generation by using spark parallelism.
  */
 public class DistributedTestDataSource extends AbstractBaseTestSource {
+
+  private static final Logger LOG = LogManager.getLogger(DistributedTestDataSource.class);
 
   private final int numTestSourcePartitions;
 
@@ -48,7 +54,7 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     int nextCommitNum = lastCkptStr.map(s -> Integer.parseInt(s) + 1).orElse(0);
     String commitTime = String.format("%05d", nextCommitNum);
-    log.info("Source Limit is set to " + sourceLimit);
+    LOG.info("Source Limit is set to " + sourceLimit);
 
     // No new data.
     if (sourceLimit <= 0) {
@@ -67,7 +73,7 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
     JavaRDD<GenericRecord> avroRDD =
         sparkContext.parallelize(IntStream.range(0, numTestSourcePartitions).boxed().collect(Collectors.toList()),
             numTestSourcePartitions).mapPartitionsWithIndex((p, idx) -> {
-              log.info("Initializing source with newProps=" + newProps);
+              LOG.info("Initializing source with newProps=" + newProps);
               if (!dataGeneratorMap.containsKey(p)) {
                 initDataGen(newProps, p);
               }

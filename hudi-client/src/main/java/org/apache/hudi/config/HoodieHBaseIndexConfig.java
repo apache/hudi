@@ -18,11 +18,12 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
 
 public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
 
@@ -33,17 +34,17 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
   public static final String HBASE_ZK_ZNODEPARENT = "hoodie.index.hbase.zknode.path";
   /**
    * Note that if HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP is set to true, this batch size will not be honored for HBase
-   * Puts
+   * Puts.
    */
   public static final String HBASE_PUT_BATCH_SIZE_PROP = "hoodie.index.hbase.put.batch.size";
 
   /**
-   * Property to set which implementation of HBase QPS resource allocator to be used
+   * Property to set which implementation of HBase QPS resource allocator to be used.
    */
   public static final String HBASE_INDEX_QPS_ALLOCATOR_CLASS = "hoodie.index.hbase.qps.allocator.class";
   public static final String DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS = DefaultHBaseQPSResourceAllocator.class.getName();
   /**
-   * Property to set to enable auto computation of put batch size
+   * Property to set to enable auto computation of put batch size.
    */
   public static final String HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE_PROP = "hoodie.index.hbase.put.batch.size.autocompute";
   public static final String DEFAULT_HBASE_PUT_BATCH_SIZE_AUTO_COMPUTE = "false";
@@ -61,7 +62,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    */
   public static String HBASE_MAX_QPS_PER_REGION_SERVER_PROP = "hoodie.index.hbase.max.qps.per.region.server";
   /**
-   * Default batch size, used only for Get, but computed for Put
+   * Default batch size, used only for Get, but computed for Put.
    */
   public static final int DEFAULT_HBASE_BATCH_SIZE = 100;
   /**
@@ -69,17 +70,17 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    */
   public static final int DEFAULT_HBASE_MAX_QPS_PER_REGION_SERVER = 1000;
   /**
-   * Default is 50%, which means a total of 2 jobs can run using HbaseIndex without overwhelming Region Servers
+   * Default is 50%, which means a total of 2 jobs can run using HbaseIndex without overwhelming Region Servers.
    */
   public static final float DEFAULT_HBASE_QPS_FRACTION = 0.5f;
 
   /**
-   * Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on volume
+   * Property to decide if HBASE_QPS_FRACTION_PROP is dynamically calculated based on volume.
    */
   public static final String HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = "hoodie.index.hbase.dynamic_qps";
   public static final boolean DEFAULT_HOODIE_INDEX_COMPUTE_QPS_DYNAMICALLY = false;
   /**
-   * Min and Max for HBASE_QPS_FRACTION_PROP to stabilize skewed volume workloads
+   * Min and Max for HBASE_QPS_FRACTION_PROP to stabilize skewed volume workloads.
    */
   public static final String HBASE_MIN_QPS_FRACTION_PROP = "hoodie.index.hbase.min.qps.fraction";
   public static final String DEFAULT_HBASE_MIN_QPS_FRACTION_PROP = "0.002";
@@ -87,7 +88,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
   public static final String HBASE_MAX_QPS_FRACTION_PROP = "hoodie.index.hbase.max.qps.fraction";
   public static final String DEFAULT_HBASE_MAX_QPS_FRACTION_PROP = "0.06";
   /**
-   * Hoodie index desired puts operation time in seconds
+   * Hoodie index desired puts operation time in seconds.
    */
   public static final String HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = "hoodie.index.hbase.desired_puts_time_in_secs";
   public static final int DEFAULT_HOODIE_INDEX_DESIRED_PUTS_TIME_IN_SECS = 600;

@@ -18,18 +18,13 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.storage.SizeAwareDataInputStream;
+import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
+
 import com.google.common.annotations.VisibleForTesting;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import javax.annotation.Nonnull;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -41,11 +36,19 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.storage.SizeAwareDataInputStream;
-import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
+
+import javax.annotation.Nonnull;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * DataBlock contains a list of records serialized using Avro. The Datablock contains 1. Data Block version 2. Total
@@ -208,25 +211,27 @@ public class HoodieAvroDataBlock extends HoodieLogBlock {
     deflate();
   }
 
-  /********************************* DEPRECATED METHODS ***********************************/
+  //----------------------------------------------------------------------------------------
+  //                                  DEPRECATED METHODS
+  //----------------------------------------------------------------------------------------
 
-  @Deprecated
-  @VisibleForTesting
   /**
    * This constructor is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
-   * HoodieLogFormat V1
+   * HoodieLogFormat V1.
    */
+  @Deprecated
+  @VisibleForTesting
   public HoodieAvroDataBlock(List<IndexedRecord> records, Schema schema) {
     super(new HashMap<>(), new HashMap<>(), Option.empty(), Option.empty(), null, false);
     this.records = records;
     this.schema = schema;
   }
 
-  @Deprecated
   /**
    * This method is retained to provide backwards compatibility to HoodieArchivedLogs which were written using
-   * HoodieLogFormat V1
+   * HoodieLogFormat V1.
    */
+  @Deprecated
   public static HoodieLogBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));

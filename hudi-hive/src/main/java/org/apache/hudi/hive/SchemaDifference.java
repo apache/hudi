@@ -23,12 +23,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import java.util.List;
-import java.util.Map;
 import org.apache.parquet.schema.MessageType;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * Represents the schema difference between the storage schema and hive table schema
+ * Represents the schema difference between the storage schema and hive table schema.
  */
 public class SchemaDifference {
 

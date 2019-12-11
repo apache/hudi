@@ -18,12 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -33,8 +27,16 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Scans through all the blocks in a list of HoodieLogFile and builds up a compacted/merged list of records which will
@@ -52,7 +54,7 @@ import org.apache.log4j.Logger;
 public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     implements Iterable<HoodieRecord<? extends HoodieRecordPayload>> {
 
-  private static final Logger log = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieMergedLogRecordScanner.class);
 
   // Final map of compacted/merged records
   private final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
@@ -79,12 +81,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       scan();
       this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
       this.numMergedRecordsInLog = records.size();
-      log.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
-      log.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
-      log.info(
+      LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
+      LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
+      LOG.info(
           "Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
-      log.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
-      log.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
+      LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
+      LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when reading log file ");
     }

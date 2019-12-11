@@ -17,17 +17,6 @@
 
 package org.apache.hudi;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieCommonTestHarness;
 import org.apache.hudi.common.HoodieTestDataGenerator;
@@ -35,17 +24,30 @@ import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The test harness for resource initialization and cleanup.
  */
 public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
-  private static final Logger logger = LoggerFactory.getLogger(HoodieClientTestHarness.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieClientTestHarness.class);
 
   protected transient JavaSparkContext jsc = null;
   protected transient SQLContext sqlContext;
@@ -117,13 +119,13 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void cleanupSparkContexts() {
     if (sqlContext != null) {
-      logger.info("Clearing sql context cache of spark-session used in previous test-case");
+      LOG.info("Clearing sql context cache of spark-session used in previous test-case");
       sqlContext.clearCache();
       sqlContext = null;
     }
 
     if (jsc != null) {
-      logger.info("Closing spark context used in previous test-case");
+      LOG.info("Closing spark context used in previous test-case");
       jsc.close();
       jsc.stop();
       jsc = null;
@@ -155,7 +157,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    */
   protected void cleanupFileSystem() throws IOException {
     if (fs != null) {
-      logger.warn("Closing file-system instance used in previous test-run");
+      LOG.warn("Closing file-system instance used in previous test-run");
       fs.close();
     }
   }

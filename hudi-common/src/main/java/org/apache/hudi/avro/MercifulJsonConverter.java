@@ -18,28 +18,30 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 
 /**
- * Converts Json record to Avro Generic Record
+ * Converts Json record to Avro Generic Record.
  */
 public class MercifulJsonConverter {
 
-  private static final Map<Schema.Type, JsonToAvroFieldProcessor> fieldTypeProcessors = getFieldTypeProcessors();
+  private static final Map<Schema.Type, JsonToAvroFieldProcessor> FIELD_TYPE_PROCESSORS = getFieldTypeProcessors();
 
   private final ObjectMapper mapper;
 
@@ -59,21 +61,21 @@ public class MercifulJsonConverter {
   }
 
   /**
-   * Uses a default objectMapper to deserialize a json string
+   * Uses a default objectMapper to deserialize a json string.
    */
   public MercifulJsonConverter() {
     this(new ObjectMapper());
   }
 
   /**
-   * Allows a configured ObjectMapper to be passed for converting json records to avro record
+   * Allows a configured ObjectMapper to be passed for converting json records to avro record.
    */
   public MercifulJsonConverter(ObjectMapper mapper) {
     this.mapper = mapper;
   }
 
   /**
-   * Converts json to Avro generic record
+   * Converts json to Avro generic record.
    *
    * @param json Json record
    * @param schema Schema
@@ -123,7 +125,7 @@ public class MercifulJsonConverter {
       throw new HoodieJsonToAvroConversionException(null, name, schema);
     }
 
-    JsonToAvroFieldProcessor processor = fieldTypeProcessors.get(schema.getType());
+    JsonToAvroFieldProcessor processor = FIELD_TYPE_PROCESSORS.get(schema.getType());
     if (null != processor) {
       return processor.convertToAvro(value, name, schema);
     }
@@ -131,7 +133,7 @@ public class MercifulJsonConverter {
   }
 
   /**
-   * Base Class for converting json to avro fields
+   * Base Class for converting json to avro fields.
    */
   private abstract static class JsonToAvroFieldProcessor implements Serializable {
 
@@ -309,7 +311,7 @@ public class MercifulJsonConverter {
   }
 
   /**
-   * Exception Class for any schema conversion issue
+   * Exception Class for any schema conversion issue.
    */
   public static class HoodieJsonToAvroConversionException extends HoodieException {
 

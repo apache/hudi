@@ -20,6 +20,9 @@ package org.apache.hudi.exception;
 
 import java.io.IOException;
 
+/**
+ * Hoodie remote exception.
+ */
 public class HoodieRemoteException extends RuntimeException {
 
   public HoodieRemoteException(IOException t) {

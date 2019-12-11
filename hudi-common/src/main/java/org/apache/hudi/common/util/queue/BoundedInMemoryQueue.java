@@ -18,8 +18,16 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.util.Iterator;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
@@ -28,12 +36,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Used for enqueueing input records. Queue limit is controlled by {@link #memoryLimit}. Unlike standard bounded queue
@@ -56,7 +58,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   public static final int RECORD_SAMPLING_RATE = 64;
   // maximum records that will be cached
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
-  private static Logger logger = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
   // It indicates number of records to cache. We will be using sampled record's average size to
   // determine how many
   // records we should cache and will change (increase/decrease) permits accordingly.
@@ -93,7 +95,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   private long numSamples = 0;
 
   /**
-   * Construct BoundedInMemoryQueue with default SizeEstimator
+   * Construct BoundedInMemoryQueue with default SizeEstimator.
    *
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
@@ -103,7 +105,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Construct BoundedInMemoryQueue with passed in size estimator
+   * Construct BoundedInMemoryQueue with passed in size estimator.
    *
    * @param memoryLimit MemoryLimit in bytes
    * @param transformFunction Transformer Function to convert input payload type to stored payload type
@@ -153,7 +155,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Inserts record into queue after applying transformation
+   * Inserts record into queue after applying transformation.
    *
    * @param t Item to be queueed
    */
@@ -176,7 +178,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Checks if records are either available in the queue or expected to be written in future
+   * Checks if records are either available in the queue or expected to be written in future.
    */
   private boolean expectMoreRecords() {
     return !isWriteDone.get() || (isWriteDone.get() && !queue.isEmpty());
@@ -201,7 +203,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
           break;
         }
       } catch (InterruptedException e) {
-        logger.error("error reading records from queue", e);
+        LOG.error("error reading records from queue", e);
         throw new HoodieException(e);
       }
     }
@@ -218,7 +220,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Puts an empty entry to queue to denote termination
+   * Puts an empty entry to queue to denote termination.
    */
   public void close() throws InterruptedException {
     // done queueing records notifying queue-reader.
@@ -232,7 +234,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * API to allow producers and consumer to communicate termination due to failure
+   * API to allow producers and consumer to communicate termination due to failure.
    */
   public void markAsFailed(Exception e) {
     this.hasFailed.set(e);
@@ -247,7 +249,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   }
 
   /**
-   * Iterator for the memory bounded queue
+   * Iterator for the memory bounded queue.
    */
   private final class QueueIterator implements Iterator<O> {
 

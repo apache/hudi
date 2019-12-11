@@ -65,6 +65,7 @@ local.properties
 *.ipr
 *.iws
 *.iml
+*.log
 
 #######################################
 # Maven

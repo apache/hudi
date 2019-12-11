@@ -20,6 +20,9 @@ package org.apache.hudi.exception;
 
 import org.apache.hadoop.fs.Path;
 
+/**
+ * An exception thrown when hoodie path is invalid.
+ */
 public class InvalidHoodiePathException extends HoodieException {
 
   public InvalidHoodiePathException(Path path, String type) {

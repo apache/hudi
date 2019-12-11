@@ -18,33 +18,37 @@
 
 package org.apache.hudi;
 
-import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.util.List;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
+
+import com.codahale.metrics.Timer;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.util.List;
+
 public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
-  private static Logger logger = LogManager.getLogger(HoodieCleanClient.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieCleanClient.class);
   private final transient HoodieMetrics metrics;
 
   public HoodieCleanClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, HoodieMetrics metrics) {
@@ -81,7 +85,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
 
     // If there are inflight(failed) or previously requested clean operation, first perform them
     table.getCleanTimeline().filterInflightsAndRequested().getInstants().forEach(hoodieInstant -> {
-      logger.info("There were previously unfinished cleaner operations. Finishing Instant=" + hoodieInstant);
+      LOG.info("There were previously unfinished cleaner operations. Finishing Instant=" + hoodieInstant);
       runClean(table, hoodieInstant.getTimestamp());
     });
 
@@ -99,7 +103,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file
+   * Creates a Cleaner plan if there are files to be cleaned and stores them in instant file.
    *
    * @param startCleanTime Cleaner Instant Time
    * @return Cleaner Plan if generated
@@ -118,9 +122,9 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
       // Save to both aux and timeline folder
       try {
         table.getActiveTimeline().saveToCleanRequested(cleanInstant, AvroUtils.serializeCleanerPlan(cleanerPlan));
-        logger.info("Requesting Cleaning with instant time " + cleanInstant);
+        LOG.info("Requesting Cleaning with instant time " + cleanInstant);
       } catch (IOException e) {
-        logger.error("Got exception when saving cleaner requested file", e);
+        LOG.error("Got exception when saving cleaner requested file", e);
         throw new HoodieIOException(e.getMessage(), e);
       }
       return Option.of(cleanerPlan);
@@ -129,7 +133,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Executes the Cleaner plan stored in the instant metadata
+   * Executes the Cleaner plan stored in the instant metadata.
    *
    * @param table Hoodie Table
    * @param cleanInstantTs Cleaner Instant Timestamp
@@ -143,7 +147,7 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
         cleanInstant.getState().equals(State.REQUESTED) || cleanInstant.getState().equals(State.INFLIGHT));
 
     try {
-      logger.info("Cleaner started");
+      LOG.info("Cleaner started");
       final Timer.Context context = metrics.getCleanCtx();
 
       if (!cleanInstant.isInflight()) {
@@ -161,19 +165,20 @@ public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHo
       Option<Long> durationInMs = Option.empty();
       if (context != null) {
         durationInMs = Option.of(metrics.getDurationInMs(context.stop()));
-        logger.info("cleanerElaspsedTime (Minutes): " + durationInMs.get() / (1000 * 60));
+        LOG.info("cleanerElaspsedTime (Minutes): " + durationInMs.get() / (1000 * 60));
       }
 
+      HoodieTableMetaClient metaClient = createMetaClient(true);
       // Create the metadata and save it
       HoodieCleanMetadata metadata =
-          AvroUtils.convertCleanMetadata(cleanInstant.getTimestamp(), durationInMs, cleanStats);
-      logger.info("Cleaned " + metadata.getTotalFilesDeleted() + " files. Earliest Retained :" + metadata.getEarliestCommitToRetain());
+          CleanerUtils.convertCleanMetadata(metaClient, cleanInstant.getTimestamp(), durationInMs, cleanStats);
+      LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files. Earliest Retained :" + metadata.getEarliestCommitToRetain());
       metrics.updateCleanMetrics(durationInMs.orElseGet(() -> -1L), metadata.getTotalFilesDeleted());
 
       table.getActiveTimeline().transitionCleanInflightToComplete(
           new HoodieInstant(true, HoodieTimeline.CLEAN_ACTION, cleanInstant.getTimestamp()),
           AvroUtils.serializeCleanMetadata(metadata));
-      logger.info("Marked clean started on " + cleanInstant.getTimestamp() + " as complete");
+      LOG.info("Marked clean started on " + cleanInstant.getTimestamp() + " as complete");
       return metadata;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to clean up after commit", e);

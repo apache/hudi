@@ -18,24 +18,26 @@
 
 package org.apache.hudi.utilities.schema;
 
-import java.io.IOException;
-import java.util.Collections;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.util.Collections;
+
 /**
- * A simple schema provider, that reads off files on DFS
+ * A simple schema provider, that reads off files on DFS.
  */
 public class FilebasedSchemaProvider extends SchemaProvider {
 
   /**
-   * Configs supported
+   * Configs supported.
    */
   public static class Config {
     private static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider" + ".source.schema.file";

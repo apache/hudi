@@ -18,31 +18,34 @@
 
 package org.apache.hudi.table;
 
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
+
 import org.apache.spark.api.java.JavaRDD;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
 import scala.Tuple2;
 
 /**
- * Information about incoming records for upsert/insert obtained either via sampling or introspecting the data fully
+ * Information about incoming records for upsert/insert obtained either via sampling or introspecting the data fully.
  * <p>
  * TODO(vc): Think about obtaining this directly from index.tagLocation
  */
 public class WorkloadProfile<T extends HoodieRecordPayload> implements Serializable {
 
   /**
-   * Input workload
+   * Input workload.
    */
   private final JavaRDD<HoodieRecord<T>> taggedRecords;
 
   /**
-   * Computed workload profile
+   * Computed workload profile.
    */
   private final HashMap<String, WorkloadStat> partitionPathStatMap;
 

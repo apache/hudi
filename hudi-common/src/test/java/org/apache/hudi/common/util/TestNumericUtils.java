@@ -18,10 +18,13 @@
 
 package org.apache.hudi.common.util;
 
-import static org.junit.Assert.assertTrue;
-
 import org.junit.Test;
 
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Tests numeric utils.
+ */
 public class TestNumericUtils {
 
   @Test

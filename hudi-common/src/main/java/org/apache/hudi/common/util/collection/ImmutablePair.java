@@ -40,16 +40,17 @@ package org.apache.hudi.common.util.collection;
 public final class ImmutablePair<L, R> extends Pair<L, R> {
 
   /**
-   * Serialization version
+   * Serialization version.
    */
   private static final long serialVersionUID = 4954918890077093841L;
 
   /**
-   * Left object
+   * Left object.
    */
   public final L left;
+
   /**
-   * Right object
+   * Right object.
    */
   public final R right;
 

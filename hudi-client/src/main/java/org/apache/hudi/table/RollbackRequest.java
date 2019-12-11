@@ -22,39 +22,39 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
 /**
- * Request for performing one rollback action
+ * Request for performing one rollback action.
  */
 public class RollbackRequest {
 
   /**
-   * Rollback Action Types
+   * Rollback Action Types.
    */
   public enum RollbackAction {
     DELETE_DATA_FILES_ONLY, DELETE_DATA_AND_LOG_FILES, APPEND_ROLLBACK_BLOCK
   }
 
   /**
-   * Partition path that needs to be rolled-back
+   * Partition path that needs to be rolled-back.
    */
   private final String partitionPath;
 
   /**
-   * Rollback Instant
+   * Rollback Instant.
    */
   private final HoodieInstant rollbackInstant;
 
   /**
-   * FileId in case of appending rollback block
+   * FileId in case of appending rollback block.
    */
   private final Option<String> fileId;
 
   /**
-   * Latest base instant needed for appending rollback block instant
+   * Latest base instant needed for appending rollback block instant.
    */
   private final Option<String> latestBaseInstant;
 
   /**
-   * Rollback Action
+   * Rollback Action.
    */
   private final RollbackAction rollbackAction;
 

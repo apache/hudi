@@ -18,18 +18,19 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.Iterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.Iterator;
+
 /**
- * Iterator based producer which pulls entry from iterator and produces items for the queue
+ * Iterator based producer which pulls entry from iterator and produces items for the queue.
  *
  * @param <I> Item type produced for the buffer.
  */
 public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
 
-  private static final Logger logger = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
 
   // input iterator for producing items in the buffer.
   private final Iterator<I> inputIterator;
@@ -40,10 +41,10 @@ public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProduc
 
   @Override
   public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
-    logger.info("starting to buffer records");
+    LOG.info("starting to buffer records");
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
-    logger.info("finished buffering records");
+    LOG.info("finished buffering records");
   }
 }

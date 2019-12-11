@@ -18,20 +18,22 @@
 
 package org.apache.hudi.io.storage;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-
-import java.io.IOException;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
+
+import java.io.IOException;
+
+import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class HoodieStorageWriterFactory {
 

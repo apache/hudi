@@ -18,20 +18,6 @@
 
 package org.apache.hudi.io;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import com.google.common.collect.Sets;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.HoodieClientTestHarness;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.common.HoodieTestDataGenerator;
@@ -47,9 +33,25 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import com.google.common.collect.Sets;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
@@ -139,13 +141,13 @@ public class TestHoodieCommitArchiveLog extends HoodieClientTestHarness {
 
     assertEquals("Loaded 6 commits and the count should match", 6, timeline.countInstants());
 
-    HoodieTestUtils.createCleanFiles(basePath, "100", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "100", dfs.getConf());
     HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "101");
-    HoodieTestUtils.createCleanFiles(basePath, "101", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "102", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "103", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "104", dfs.getConf());
-    HoodieTestUtils.createCleanFiles(basePath, "105", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "101", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "102", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", dfs.getConf());
+    HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", dfs.getConf());
     HoodieTestUtils.createInflightCleanFiles(basePath, dfs.getConf(), "106", "107");
 
     // reload the timeline and get all the commmits before archive

@@ -18,13 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import com.google.common.annotations.VisibleForTesting;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.stream.Collectors;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -35,9 +28,19 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
+
 import scala.Tuple2;
 
 /**
@@ -103,7 +106,7 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
 
 
   /**
-   * Tagging for global index should only consider the record key
+   * Tagging for global index should only consider the record key.
    */
   @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(

@@ -18,16 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.toList;
-
-import com.google.common.annotations.VisibleForTesting;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -42,6 +32,8 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
+
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -49,7 +41,18 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import scala.Tuple2;
+
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
@@ -60,7 +63,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   private static final int SPARK_MAXIMUM_BYTES_PER_PARTITION = 1500 * 1024 * 1024;
   // this is how much a triplet of (partitionPath, fileId, recordKey) costs.
   private static final int BYTES_PER_PARTITION_FILE_KEY_TRIPLET = 300;
-  private static Logger logger = LogManager.getLogger(HoodieBloomIndex.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
   private static int MAX_ITEMS_PER_SHUFFLE_PARTITION =
       SPARK_MAXIMUM_BYTES_PER_PARTITION / BYTES_PER_PARTITION_FILE_KEY_TRIPLET;
 
@@ -89,9 +92,9 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     if (config.getBloomIndexUseCaching()) {
       keyFilenamePairRDD.persist(StorageLevel.MEMORY_AND_DISK_SER());
     }
-    if (logger.isDebugEnabled()) {
+    if (LOG.isDebugEnabled()) {
       long totalTaggedRecords = keyFilenamePairRDD.count();
-      logger.debug("Number of update records (ones tagged with a fileID): " + totalTaggedRecords);
+      LOG.debug("Number of update records (ones tagged with a fileID): " + totalTaggedRecords);
     }
 
     // Step 4: Tag the incoming records, as inserts or updates, by joining with existing record keys
@@ -138,7 +141,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
 
   /**
    * Lookup the location for each record key and return the pair<record_key,location> for all record keys already
-   * present and drop the record keys if not present
+   * present and drop the record keys if not present.
    */
   private JavaPairRDD<HoodieKey, HoodieRecordLocation> lookupIndex(
       JavaPairRDD<String, String> partitionRecordKeyPairRDD, final JavaSparkContext jsc,
@@ -164,7 +167,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   /**
-   * Compute the estimated number of bloom filter comparisons to be performed on each file group
+   * Compute the estimated number of bloom filter comparisons to be performed on each file group.
    */
   private Map<String, Long> computeComparisonsPerFileGroup(final Map<String, Long> recordsPerPartition,
       final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
@@ -203,7 +206,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     long totalFiles = comparisonsPerFileGroup.size();
     long totalRecords = recordsPerPartition.values().stream().mapToLong(Long::longValue).sum();
     int parallelism = (int) (totalComparisons / MAX_ITEMS_PER_SHUFFLE_PARTITION + 1);
-    logger.info(String.format(
+    LOG.info(String.format(
         "TotalRecords %d, TotalFiles %d, TotalAffectedPartitions %d, TotalComparisons %d, " + "SafeParallelism %d",
         totalRecords, totalFiles, recordsPerPartition.size(), totalComparisons, parallelism));
     return parallelism;
@@ -223,7 +226,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
     // take the max
     int indexParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     int joinParallelism = Math.max(totalSubPartitions, indexParallelism);
-    logger.info("InputParallelism: ${" + inputParallelism + "}, " + "IndexParallelism: ${"
+    LOG.info("InputParallelism: ${" + inputParallelism + "}, " + "IndexParallelism: ${"
         + config.getBloomIndexParallelism() + "}, " + "TotalSubParts: ${" + totalSubPartitions + "}, "
         + "Join Parallelism set to : " + joinParallelism);
     return joinParallelism;
@@ -258,7 +261,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
           String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
           return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
         } catch (MetadataNotFoundException me) {
-          logger.warn("Unable to find range metadata in file :" + pf);
+          LOG.warn("Unable to find range metadata in file :" + pf);
           return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
         }
       }).collect();
@@ -275,7 +278,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   }
 
   /**
-   * This is not global, since we depend on the partitionPath to do the lookup
+   * This is not global, since we depend on the partitionPath to do the lookup.
    */
   @Override
   public boolean isGlobal() {

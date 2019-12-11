@@ -23,6 +23,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.shell.plugin.support.DefaultHistoryFileNameProvider;
 import org.springframework.stereotype.Component;
 
+/**
+ * CLI history file provider.
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class HoodieHistoryFileNameProvider extends DefaultHistoryFileNameProvider {

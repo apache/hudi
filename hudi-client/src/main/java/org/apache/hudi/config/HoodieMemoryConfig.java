@@ -18,16 +18,18 @@
 
 package org.apache.hudi.config;
 
+import org.apache.spark.SparkEnv;
+import org.apache.spark.util.Utils;
+
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
-import org.apache.spark.SparkEnv;
-import org.apache.spark.util.Utils;
 
 /**
- * Memory related config
+ * Memory related config.
  */
 @Immutable
 public class HoodieMemoryConfig extends DefaultHoodieConfig {

@@ -18,22 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
-import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
-import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
-import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
-import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
-
-import com.google.common.collect.ImmutableMap;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.HoodieCommonTestHarness;
@@ -46,17 +30,38 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CompactionTestUtils.TestHoodieDataFile;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.versioning.compaction.CompactionPlanMigrator;
+
+import com.google.common.collect.ImmutableMap;
+import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.util.CompactionTestUtils.createCompactionPlan;
+import static org.apache.hudi.common.util.CompactionTestUtils.scheduleCompaction;
+import static org.apache.hudi.common.util.CompactionTestUtils.setupAndValidateCompactionOperations;
+import static org.apache.hudi.common.util.CompactionUtils.COMPACTION_METADATA_VERSION_1;
+import static org.apache.hudi.common.util.CompactionUtils.LATEST_COMPACTION_METADATA_VERSION;
+
+/**
+ * The utility class for testing compaction.
+ */
 public class TestCompactionUtils extends HoodieCommonTestHarness {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
 
-  private static final Map<String, Double> metrics =
+  private static final Map<String, Double> METRICS =
       new ImmutableMap.Builder<String, Double>().put("key1", 1.0).put("key2", 3.0).build();
-  private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> metrics;
+  private Function<Pair<String, FileSlice>, Map<String, Double>> metricsCaptureFn = (partitionFileSlice) -> METRICS;
 
   @Before
   public void init() throws IOException {
@@ -118,7 +123,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   }
 
   /**
-   * Generate input for compaction plan tests
+   * Generate input for compaction plan tests.
    */
   private Pair<List<Pair<String, FileSlice>>, HoodieCompactionPlan> buildCompactionPlan() {
     Path fullPartitionPath = new Path(new Path(metaClient.getBasePath()), DEFAULT_PARTITION_PATHS[0]);
@@ -213,7 +218,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   }
 
   /**
-   * Validates if generated compaction plan matches with input file-slices
+   * Validates if generated compaction plan matches with input file-slices.
    *
    * @param input File Slices with partition-path
    * @param plan Compaction Plan
@@ -225,7 +230,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
   }
 
   /**
-   * Validates if generated compaction operation matches with input file slice and partition path
+   * Validates if generated compaction operation matches with input file slice and partition path.
    *
    * @param slice File Slice
    * @param op HoodieCompactionOperation
@@ -247,7 +252,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
           version == COMPACTION_METADATA_VERSION_1 ? paths.get(idx) : new Path(paths.get(idx)).getName(),
           op.getDeltaFilePaths().get(idx));
     });
-    Assert.assertEquals("Metrics set", metrics, op.getMetrics());
+    Assert.assertEquals("Metrics set", METRICS, op.getMetrics());
   }
 
   @Override

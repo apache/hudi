@@ -20,12 +20,13 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class ClientUtils {
 
   /**
-   * Create Consistency Aware MetaClient
+   * Create Consistency Aware MetaClient.
    *
    * @param jsc JavaSparkContext
    * @param config HoodieWriteConfig

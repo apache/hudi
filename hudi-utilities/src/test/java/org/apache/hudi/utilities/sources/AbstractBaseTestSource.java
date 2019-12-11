@@ -18,13 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Stream;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -33,10 +26,23 @@ import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.config.TestSourceConfig;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Stream;
+
 public abstract class AbstractBaseTestSource extends AvroSource {
+
+  private static final Logger LOG = LogManager.getLogger(AbstractBaseTestSource.class);
 
   static final int DEFAULT_PARTITION_NUM = 0;
 
@@ -54,7 +60,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
           TestSourceConfig.DEFAULT_USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS);
       String baseStoreDir = props.getString(TestSourceConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS,
           File.createTempFile("test_data_gen", ".keys").getParent()) + "/" + partition;
-      log.info("useRocksForTestDataGenKeys=" + useRocksForTestDataGenKeys + ", BaseStoreDir=" + baseStoreDir);
+      LOG.info("useRocksForTestDataGenKeys=" + useRocksForTestDataGenKeys + ", BaseStoreDir=" + baseStoreDir);
       dataGeneratorMap.put(partition, new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS,
           useRocksForTestDataGenKeys ? new RocksDBBasedMap<>(baseStoreDir) : new HashMap<>()));
     } catch (IOException e) {
@@ -83,11 +89,11 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
     // generate `sourceLimit` number of upserts each time.
     int numExistingKeys = dataGenerator.getNumExistingKeys();
-    log.info("NumExistingKeys=" + numExistingKeys);
+    LOG.info("NumExistingKeys=" + numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
     int numInserts = sourceLimit - numUpdates;
-    log.info("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
+    LOG.info("Before adjustments => numInserts=" + numInserts + ", numUpdates=" + numUpdates);
 
     if (numInserts + numExistingKeys > maxUniqueKeys) {
       // Limit inserts so that maxUniqueRecords is maintained
@@ -99,9 +105,9 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       numUpdates = Math.min(numExistingKeys, sourceLimit - numInserts);
     }
 
-    log.info("NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
+    LOG.info("NumInserts=" + numInserts + ", NumUpdates=" + numUpdates + ", maxUniqueRecords=" + maxUniqueKeys);
     long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    log.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
+    LOG.info("Before DataGen. Memory Usage=" + memoryUsage1 + ", Total Memory=" + Runtime.getRuntime().totalMemory()
         + ", Free Memory=" + Runtime.getRuntime().freeMemory());
 
     Stream<GenericRecord> updateStream = dataGenerator.generateUniqueUpdatesStream(commitTime, numUpdates)

@@ -18,14 +18,16 @@
 
 package org.apache.hudi.common.model;
 
-import com.google.common.base.Objects;
-import com.google.common.collect.ImmutableList;
-import java.io.Serializable;
-import java.util.List;
 import org.apache.hudi.common.util.Option;
 
+import com.google.common.base.Objects;
+import com.google.common.collect.ImmutableList;
+
+import java.io.Serializable;
+import java.util.List;
+
 /**
- * A Single Record managed by Hoodie TODO - Make this generic
+ * A Single Record managed by Hoodie.
  */
 public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable {
 
@@ -40,12 +42,12 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
           .add(RECORD_KEY_METADATA_FIELD).add(PARTITION_PATH_METADATA_FIELD).add(FILENAME_METADATA_FIELD).build();
 
   /**
-   * Identifies the record across the table
+   * Identifies the record across the table.
    */
   private HoodieKey key;
 
   /**
-   * Actual payload of the record
+   * Actual payload of the record.
    */
   private T data;
 
@@ -55,7 +57,7 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   private HoodieRecordLocation currentLocation;
 
   /**
-   * New location of record on storage, after written
+   * New location of record on storage, after written.
    */
   private HoodieRecordLocation newLocation;
 

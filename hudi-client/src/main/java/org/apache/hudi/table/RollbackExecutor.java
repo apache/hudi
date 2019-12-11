@@ -18,18 +18,6 @@
 
 package org.apache.hudi.table;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
-import java.io.IOException;
-import java.io.Serializable;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,17 +30,32 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
+
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import scala.Tuple2;
 
 /**
- * Performs Rollback of Hoodie Tables
+ * Performs Rollback of Hoodie Tables.
  */
 public class RollbackExecutor implements Serializable {
 
-  private static Logger logger = LogManager.getLogger(RollbackExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(RollbackExecutor.class);
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;
@@ -140,7 +143,7 @@ public class RollbackExecutor implements Serializable {
   }
 
   /**
-   * Helper to merge 2 rollback-stats for a given partition
+   * Helper to merge 2 rollback-stats for a given partition.
    *
    * @param stat1 HoodieRollbackStat
    * @param stat2 HoodieRollbackStat
@@ -174,27 +177,27 @@ public class RollbackExecutor implements Serializable {
   }
 
   /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
+   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
       Map<FileStatus, Boolean> results, String partitionPath, PathFilter filter) throws IOException {
-    logger.info("Cleaning path " + partitionPath);
+    LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
     FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
-      logger.info("Delete file " + file.getPath() + "\t" + success);
+      LOG.info("Delete file " + file.getPath() + "\t" + success);
     }
     return results;
   }
 
   /**
-   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits
+   * Common method used for cleaning out parquet files under a partition path during rollback of a set of commits.
    */
   private Map<FileStatus, Boolean> deleteCleanedFiles(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
       Map<FileStatus, Boolean> results, String commit, String partitionPath) throws IOException {
-    logger.info("Cleaning path " + partitionPath);
+    LOG.info("Cleaning path " + partitionPath);
     FileSystem fs = metaClient.getFs();
     PathFilter filter = (path) -> {
       if (path.toString().contains(".parquet")) {
@@ -207,7 +210,7 @@ public class RollbackExecutor implements Serializable {
     for (FileStatus file : toBeDeleted) {
       boolean success = fs.delete(file.getPath(), false);
       results.put(file, success);
-      logger.info("Delete file " + file.getPath() + "\t" + success);
+      LOG.info("Delete file " + file.getPath() + "\t" + success);
     }
     return results;
   }

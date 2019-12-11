@@ -44,7 +44,7 @@ import java.io.Serializable;
 public abstract class Triple<L, M, R> implements Comparable<Triple<L, M, R>>, Serializable {
 
   /**
-   * Serialization version
+   * Serialization version.
    */
   private static final long serialVersionUID = 1L;
 

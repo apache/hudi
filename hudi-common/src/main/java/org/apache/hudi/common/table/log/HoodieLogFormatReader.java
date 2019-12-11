@@ -18,17 +18,22 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Hoodie log format reader.
+ */
 public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
   private final List<HoodieLogFile> logFiles;
@@ -41,7 +46,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
   private final boolean reverseLogReader;
   private int bufferSize;
 
-  private static final Logger log = LogManager.getLogger(HoodieLogFormatReader.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatReader.class);
 
   HoodieLogFormatReader(FileSystem fs, List<HoodieLogFile> logFiles, Schema readerSchema, boolean readBlocksLazily,
       boolean reverseLogReader, int bufferSize) throws IOException {
@@ -98,7 +103,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);
       }
-      log.info("Moving to the next reader for logfile " + currentReader.getLogFile());
+      LOG.info("Moving to the next reader for logfile " + currentReader.getLogFile());
       return this.currentReader.hasNext();
     }
     return false;

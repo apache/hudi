@@ -18,6 +18,21 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTestUtils;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.HoodieAvroUtils;
+import org.apache.hudi.common.util.SchemaTestUtil;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.junit.rules.TemporaryFolder;
+
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -26,19 +41,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.HoodieAvroUtils;
-import org.apache.hudi.common.util.SchemaTestUtil;
-import org.apache.parquet.avro.AvroParquetWriter;
-import org.junit.rules.TemporaryFolder;
 
 public class InputFormatTestUtil {
 

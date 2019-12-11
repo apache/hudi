@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.Arrays;
-import java.util.List;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Helper class to generate Key and column names for rocksdb based view

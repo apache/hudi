@@ -18,6 +18,14 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 import java.io.File;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -28,13 +36,10 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.util.collection.Pair;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
+/**
+ * Tests RocksDB manager {@link RocksDBDAO}.
+ */
 public class TestRocksDBManager {
 
   private static RocksDBDAO dbManager;
@@ -131,6 +136,9 @@ public class TestRocksDBManager {
     Assert.assertFalse(new File(rocksDBBasePath).exists());
   }
 
+  /**
+   * A payload definition for {@link TestRocksDBManager}.
+   */
   public static class Payload implements Serializable {
 
     private final String prefix;

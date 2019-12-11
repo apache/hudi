@@ -19,10 +19,11 @@
 package org.apache.hudi.index.bloom;
 
 import com.google.common.base.Objects;
+
 import java.io.Serializable;
 
 /**
- * Metadata about a given file group, useful for index lookup
+ * Metadata about a given file group, useful for index lookup.
  */
 public class BloomIndexFileInfo implements Serializable {
 
@@ -61,7 +62,7 @@ public class BloomIndexFileInfo implements Serializable {
   }
 
   /**
-   * Does the given key fall within the range (inclusive)
+   * Does the given key fall within the range (inclusive).
    */
   public boolean isKeyInRange(String recordKey) {
     return minRecordKey.compareTo(recordKey) <= 0 && maxRecordKey.compareTo(recordKey) >= 0;

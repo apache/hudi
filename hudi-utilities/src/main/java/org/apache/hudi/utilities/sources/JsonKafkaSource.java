@@ -18,12 +18,13 @@
 
 package org.apache.hudi.utilities.sources;
 
-import kafka.serializer.StringDecoder;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
+
+import kafka.serializer.StringDecoder;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -33,11 +34,11 @@ import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.apache.spark.streaming.kafka.OffsetRange;
 
 /**
- * Read json kafka data
+ * Read json kafka data.
  */
 public class JsonKafkaSource extends JsonSource {
 
-  private static Logger log = LogManager.getLogger(JsonKafkaSource.class);
+  private static final Logger LOG = LogManager.getLogger(JsonKafkaSource.class);
 
   private final KafkaOffsetGen offsetGen;
 
@@ -54,7 +55,7 @@ public class JsonKafkaSource extends JsonSource {
     if (totalNewMsgs <= 0) {
       return new InputBatch<>(Option.empty(), lastCheckpointStr.isPresent() ? lastCheckpointStr.get() : "");
     }
-    log.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
     JavaRDD<String> newDataRDD = toRDD(offsetRanges);
     return new InputBatch<>(Option.of(newDataRDD), CheckpointUtils.offsetsToStr(offsetRanges));
   }

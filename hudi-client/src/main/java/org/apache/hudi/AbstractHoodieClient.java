@@ -18,18 +18,20 @@
 
 package org.apache.hudi;
 
-import java.io.IOException;
-import java.io.Serializable;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -37,7 +39,7 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public abstract class AbstractHoodieClient implements Serializable, AutoCloseable {
 
-  private static final Logger logger = LogManager.getLogger(AbstractHoodieClient.class);
+  private static final Logger LOG = LogManager.getLogger(AbstractHoodieClient.class);
 
   protected final transient FileSystem fs;
   protected final transient JavaSparkContext jsc;
@@ -77,7 +79,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {
     if (timelineServer.isPresent() && shouldStopTimelineServer) {
       // Stop only if owner
-      logger.info("Stopping Timeline service !!");
+      LOG.info("Stopping Timeline service !!");
       timelineServer.get().stop();
     }
 
@@ -92,7 +94,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     if (config.isEmbeddedTimelineServerEnabled()) {
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
-        logger.info("Starting Timeline service !!");
+        LOG.info("Starting Timeline service !!");
         timelineServer = Option.of(new EmbeddedTimelineService(jsc.hadoopConfiguration(), jsc.getConf(),
             config.getClientSpecifiedViewStorageConfig()));
         try {
@@ -100,14 +102,14 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
           // Allow executor to find this newly instantiated timeline service
           config.setViewStorageConfig(timelineServer.get().getRemoteFileSystemViewConfig());
         } catch (IOException e) {
-          logger.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
+          LOG.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
           stopEmbeddedServerView(false);
         }
       } else {
-        logger.info("Timeline Server already running. Not restarting the service");
+        LOG.info("Timeline Server already running. Not restarting the service");
       }
     } else {
-      logger.info("Embedded Timeline Server is disabled. Not starting timeline service");
+      LOG.info("Embedded Timeline Server is disabled. Not starting timeline service");
     }
   }
 

@@ -18,10 +18,14 @@
 
 package org.apache.hudi.common.util;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import org.apache.hudi.exception.HoodieException;
 
+import java.io.IOException;
+import java.net.ServerSocket;
+
+/**
+ * A utility class for network.
+ */
 public class NetworkUtils {
 
   public static synchronized String getHostname() {

@@ -18,27 +18,29 @@
 
 package org.apache.hudi.timeline.service;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import io.javalin.Javalin;
-import java.io.IOException;
-import java.io.Serializable;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.SerializableConfiguration;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.FSUtils;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import io.javalin.Javalin;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.io.Serializable;
+
 /**
- * A stand alone timeline service exposing File-System View interfaces to clients
+ * A stand alone timeline service exposing File-System View interfaces to clients.
  */
 public class TimelineService {
 
-  private static volatile Logger log = LogManager.getLogger(TimelineService.class);
+  private static final Logger LOG = LogManager.getLogger(TimelineService.class);
 
   private int serverPort;
   private Configuration conf;
@@ -104,7 +106,7 @@ public class TimelineService {
     app.start(serverPort);
     // If port = 0, a dynamic port is assigned. Store it.
     serverPort = app.port();
-    log.info("Starting Timeline server on port :" + serverPort);
+    LOG.info("Starting Timeline server on port :" + serverPort);
     return serverPort;
   }
 
@@ -138,11 +140,11 @@ public class TimelineService {
   }
 
   public void close() {
-    log.info("Closing Timeline Service");
+    LOG.info("Closing Timeline Service");
     this.app.stop();
     this.app = null;
     this.fsViewsManager.close();
-    log.info("Closed Timeline Service");
+    LOG.info("Closed Timeline Service");
   }
 
   public Configuration getConf() {

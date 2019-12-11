@@ -18,14 +18,6 @@
 
 package org.apache.hudi;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -43,13 +35,34 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex;
+
+import org.apache.avro.Schema.Field;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
- * Utilities used throughout the data source
+ * Utilities used throughout the data source.
  */
 public class DataSourceUtils {
+
+  /**
+   * Obtain value of the provided nullable field as string, denoted by dot notation. e.g: a.b.c
+   */
+  public static String getNullableNestedFieldValAsString(GenericRecord record, String fieldName) {
+    try {
+      return getNestedFieldValAsString(record, fieldName);
+    } catch (HoodieException e) {
+      return null;
+    }
+  }
 
   /**
    * Obtain value of the provided field as string, denoted by dot notation. e.g: a.b.c
@@ -107,7 +120,7 @@ public class DataSourceUtils {
   }
 
   /**
-   * Create a partition value extractor class via reflection, passing in any configs needed
+   * Create a partition value extractor class via reflection, passing in any configs needed.
    */
   public static PartitionValueExtractor createPartitionExtractor(String partitionExtractorClass) {
     try {

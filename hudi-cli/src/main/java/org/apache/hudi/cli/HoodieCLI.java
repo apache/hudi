@@ -18,13 +18,18 @@
 
 package org.apache.hudi.cli;
 
-import java.io.IOException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+
+import java.io.IOException;
+
+/**
+ * This class is responsible to load table metadata and hoodie related configs.
+ */
 public class HoodieCLI {
 
   public static Configuration conf;
@@ -35,6 +40,9 @@ public class HoodieCLI {
   public static HoodieTableMetaClient tableMetadata;
   public static HoodieTableMetaClient syncTableMetadata;
 
+  /**
+   * Enum for CLI state.
+   */
   public enum CLIState {
     INIT, DATASET, SYNC
   }

@@ -18,8 +18,30 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.InvalidHoodiePathException;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,29 +54,9 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidHoodiePathException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
- * Utility functions related to accessing the file storage
+ * Utility functions related to accessing the file storage.
  */
 public class FSUtils {
 
@@ -103,7 +105,7 @@ public class FSUtils {
   }
 
   /**
-   * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append)
+   * A write token uniquely identifies an attempt at one of the IOHandle operations (Merge/Create/Append).
    */
   public static String makeWriteToken(int taskPartitionId, int stageId, long taskAttemptId) {
     return String.format("%d-%d-%d", taskPartitionId, stageId, taskAttemptId);
@@ -166,7 +168,7 @@ public class FSUtils {
   }
 
   /**
-   * Given a base partition and a partition path, return relative path of partition path to the base path
+   * Given a base partition and a partition path, return relative path of partition path to the base path.
    */
   public static String getRelativePartitionPath(Path basePath, Path partitionPath) {
     basePath = Path.getPathWithoutSchemeAndAuthority(basePath);
@@ -181,7 +183,7 @@ public class FSUtils {
 
   /**
    * Obtain all the partition paths, that are present in this table, denoted by presence of
-   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}
+   * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}.
    */
   public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
     final Path basePath = new Path(basePathStr);
@@ -282,7 +284,7 @@ public class FSUtils {
   }
 
   /**
-   * Get the file extension from the log file
+   * Get the file extension from the log file.
    */
   public static String getFileExtensionFromLog(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
@@ -327,7 +329,7 @@ public class FSUtils {
   }
 
   /**
-   * Get TaskId used in log-path
+   * Get TaskPartitionId used in log-path.
    */
   public static Integer getTaskPartitionIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -339,7 +341,7 @@ public class FSUtils {
   }
 
   /**
-   * Get Write-Token used in log-path
+   * Get Write-Token used in log-path.
    */
   public static String getWriteTokenFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -350,7 +352,7 @@ public class FSUtils {
   }
 
   /**
-   * Get StageId used in log-path
+   * Get StageId used in log-path.
    */
   public static Integer getStageIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -362,7 +364,7 @@ public class FSUtils {
   }
 
   /**
-   * Get Task Attempt Id used in log-path
+   * Get Task Attempt Id used in log-path.
    */
   public static Integer getTaskAttemptIdFromLogPath(Path path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
@@ -401,14 +403,14 @@ public class FSUtils {
   }
 
   /**
-   * Get the latest log file written from the list of log files passed in
+   * Get the latest log file written from the list of log files passed in.
    */
   public static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.sorted(HoodieLogFile.getReverseLogFileComparator()).findFirst());
   }
 
   /**
-   * Get all the log files for the passed in FileId in the partition path
+   * Get all the log files for the passed in FileId in the partition path.
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
@@ -419,7 +421,7 @@ public class FSUtils {
   }
 
   /**
-   * Get the latest log version for the fileId in the partition path
+   * Get the latest log version for the fileId in the partition path.
    */
   public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
       final String fileId, final String logFileExtension, final String baseCommitTime) throws IOException {
@@ -433,7 +435,7 @@ public class FSUtils {
   }
 
   /**
-   * computes the next log version for the specified fileId in the partition path
+   * computes the next log version for the specified fileId in the partition path.
    */
   public static int computeNextLogVersion(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
@@ -528,6 +530,13 @@ public class FSUtils {
   public static Path getPartitionPath(Path basePath, String partitionPath) {
     // FOr non-partitioned table, return only base-path
     return ((partitionPath == null) || (partitionPath.isEmpty())) ? basePath : new Path(basePath, partitionPath);
+  }
+
+  /**
+   * Get DFS full partition path (e.g. hdfs://ip-address:8020:/<absolute path>)
+   */
+  public static String getDFSFullPartitionPath(FileSystem fs, Path partitionPath) {
+    return fs.getUri() + partitionPath.toUri().getRawPath();
   }
 
   /**

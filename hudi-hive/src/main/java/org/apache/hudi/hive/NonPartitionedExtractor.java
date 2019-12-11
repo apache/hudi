@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Extractor for Non-partitioned hive tables
+ * Extractor for Non-partitioned hive tables.
  */
 public class NonPartitionedExtractor implements PartitionValueExtractor {
 

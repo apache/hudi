@@ -18,16 +18,18 @@
 
 package org.apache.hudi.index.bloom;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.hudi.common.util.collection.Pair;
-import org.junit.Test;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 public class TestBucketizedBloomCheckPartitioner {
 

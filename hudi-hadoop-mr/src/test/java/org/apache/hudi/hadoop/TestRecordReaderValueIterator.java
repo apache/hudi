@@ -18,16 +18,18 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.RecordReader;
+import org.junit.Assert;
+import org.junit.Test;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hudi.common.util.collection.Pair;
-import org.junit.Assert;
-import org.junit.Test;
 
 public class TestRecordReaderValueIterator {
 
@@ -47,7 +49,7 @@ public class TestRecordReaderValueIterator {
   }
 
   /**
-   * Simple replay record reader for unit-testing
+   * Simple replay record reader for unit-testing.
    */
   private static class TestRecordReader implements RecordReader<IntWritable, Text> {
 

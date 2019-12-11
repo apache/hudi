@@ -18,10 +18,6 @@
 
 package org.apache.hudi;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -38,6 +34,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -48,6 +45,12 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.StructType;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import scala.Tuple2;
 
 /**
@@ -55,7 +58,7 @@ import scala.Tuple2;
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
-  private static final Logger logger = LogManager.getLogger(HoodieReadClient.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
 
   /**
    * TODO: We need to persist the index type into hoodie.properties and be able to access the index just with a simple
@@ -142,7 +145,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoo
   }
 
   /**
-   * Given a bunch of hoodie keys, fetches all the individual records out as a data frame
+   * Given a bunch of hoodie keys, fetches all the individual records out as a data frame.
    *
    * @return a dataframe
    */

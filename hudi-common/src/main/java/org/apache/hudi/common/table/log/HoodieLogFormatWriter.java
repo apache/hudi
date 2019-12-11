@@ -18,14 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.io.IOException;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
-import org.apache.hadoop.hdfs.protocol.RecoveryInProgressException;
-import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.storage.StorageSchemes;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -34,15 +26,25 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
+import org.apache.hadoop.hdfs.protocol.RecoveryInProgressException;
+import org.apache.hadoop.ipc.RemoteException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+
 /**
- * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct
+ * HoodieLogFormatWriter can be used to append blocks to a log file Use HoodieLogFormat.WriterBuilder to construct.
  */
 public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
-  private static final Logger log = LogManager.getLogger(HoodieLogFormatWriter.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieLogFormatWriter.class);
 
   private HoodieLogFile logFile;
   private final FileSystem fs;
@@ -74,11 +76,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (fs.exists(path)) {
       boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
       if (isAppendSupported) {
-        log.info(logFile + " exists. Appending to existing file");
+        LOG.info(logFile + " exists. Appending to existing file");
         try {
           this.output = fs.append(path, bufferSize);
         } catch (RemoteException e) {
-          log.warn("Remote Exception, attempting to handle or recover lease", e);
+          LOG.warn("Remote Exception, attempting to handle or recover lease", e);
           handleAppendExceptionOrRecoverLease(path, e);
         } catch (IOException ioe) {
           if (ioe.getMessage().toLowerCase().contains("not supported")) {
@@ -91,11 +93,11 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
       if (!isAppendSupported) {
         this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
-        log.info("Append not supported.. Rolling over to " + logFile);
+        LOG.info("Append not supported.. Rolling over to " + logFile);
         createNewFile();
       }
     } else {
-      log.info(logFile + " does not exist. Create a new file");
+      LOG.info(logFile + " does not exist. Create a new file");
       // Block size does not matter as we will always manually autoflush
       createNewFile();
     }
@@ -118,7 +120,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
     // Find current version
     HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
-        new HoodieLogFormatVersion(HoodieLogFormat.currentVersion);
+        new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
     long currentSize = this.output.size();
 
     // 1. Write the magic header for the start of the block
@@ -177,7 +179,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     if (getCurrentSize() > sizeThreshold) {
       // TODO - make an end marker which seals the old log file (no more appends possible to that
       // file).
-      log.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
+      LOG.info("CurrentSize " + getCurrentSize() + " has reached threshold " + sizeThreshold
           + ". Rolling over to the next version");
       HoodieLogFile newLogFile = logFile.rollOver(fs, rolloverLogWriteToken);
       // close this writer and return the new writer
@@ -228,12 +230,12 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // hours). During this time, if a fs.append() API is invoked for a file whose last block is eligible to be
       // appended to, then the NN will throw an exception saying that it couldn't find any active replica with the
       // last block. Find more information here : https://issues.apache.org/jira/browse/HDFS-6325
-      log.warn("Failed to open an append stream to the log file. Opening a new log file..", e);
+      LOG.warn("Failed to open an append stream to the log file. Opening a new log file..", e);
       // Rollover the current log file (since cannot get a stream handle) and create new one
       this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
       createNewFile();
     } else if (e.getClassName().contentEquals(AlreadyBeingCreatedException.class.getName())) {
-      log.warn("Another task executor writing to the same log file(" + logFile + ". Rolling over");
+      LOG.warn("Another task executor writing to the same log file(" + logFile + ". Rolling over");
       // Rollover the current log file (since cannot get a stream handle) and create new one
       this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
       createNewFile();
@@ -242,13 +244,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // this happens when either another task executor writing to this file died or
       // data node is going down. Note that we can only try to recover lease for a DistributedFileSystem.
       // ViewFileSystem unfortunately does not support this operation
-      log.warn("Trying to recover log on path " + path);
+      LOG.warn("Trying to recover log on path " + path);
       if (FSUtils.recoverDFSFileLease((DistributedFileSystem) fs, path)) {
-        log.warn("Recovered lease on path " + path);
+        LOG.warn("Recovered lease on path " + path);
         // try again
         this.output = fs.append(path, bufferSize);
       } else {
-        log.warn("Failed to recover lease on path " + path);
+        LOG.warn("Failed to recover lease on path " + path);
         throw new HoodieException(e);
       }
     } else {

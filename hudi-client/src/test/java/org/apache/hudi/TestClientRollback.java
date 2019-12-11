@@ -18,14 +18,6 @@
 
 package org.apache.hudi;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.io.File;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -41,16 +33,26 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Test;
 
+import java.io.File;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 /**
- * Test Cases for rollback of snapshots and commits
+ * Test Cases for rollback of snapshots and commits.
  */
 public class TestClientRollback extends TestHoodieClientBase {
 
   /**
-   * Test case for rollback-savepoint interaction
+   * Test case for rollback-savepoint interaction.
    */
   @Test
   public void testSavepointAndRollback() throws Exception {
@@ -163,7 +165,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   }
 
   /**
-   * Test Cases for effects of rollbacking completed/inflight commits
+   * Test Cases for effects of rollbacking completed/inflight commits.
    */
   @Test
   public void testRollbackCommit() throws Exception {
@@ -253,7 +255,7 @@ public class TestClientRollback extends TestHoodieClientBase {
   }
 
   /**
-   * Test auto-rollback of commits which are in flight
+   * Test auto-rollback of commits which are in flight.
    */
   @Test
   public void testAutoRollbackInflightCommit() throws Exception {

@@ -21,7 +21,7 @@ package org.apache.hudi.hadoop.realtime;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 
 /**
- * Simply extends ParquetHiveSerDe
+ * Simply extends ParquetHiveSerDe.
  */
 public class HoodieParquetSerde extends ParquetHiveSerDe {
 

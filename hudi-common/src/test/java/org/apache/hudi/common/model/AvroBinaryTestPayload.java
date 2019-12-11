@@ -18,14 +18,19 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.IOException;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.util.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+
+import java.io.IOException;
+
+/**
+ * The implementation of {@link HoodieRecordPayload} base on avro for testing.
+ */
 public class AvroBinaryTestPayload implements HoodieRecordPayload {
 
   private final byte[] recordBytes;

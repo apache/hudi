@@ -18,19 +18,22 @@
 
 package org.apache.hudi.config;
 
-import com.google.common.base.Preconditions;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.io.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
+import com.google.common.base.Preconditions;
+
+import javax.annotation.concurrent.Immutable;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Properties;
+
 /**
- * Compaction related config
+ * Compaction related config.
  */
 @Immutable
 public class HoodieCompactionConfig extends DefaultHoodieConfig {
@@ -52,8 +55,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // By default, treat any file <= 100MB as a small file.
   public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(104857600);
   /**
-   * Configs related to specific table types
-   **/
+   * Configs related to specific table types.
+   */
   // Number of inserts, that will be put each partition/bucket for writing
   public static final String COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE = "hoodie.copyonwrite.insert" + ".split.size";
   // The rationale to pick the insert parallelism is the following. Writing out 100MB files,

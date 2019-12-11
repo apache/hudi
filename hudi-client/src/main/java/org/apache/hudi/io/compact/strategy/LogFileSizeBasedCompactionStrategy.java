@@ -18,10 +18,6 @@
 
 package org.apache.hudi.io.compact.strategy;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -29,9 +25,14 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * LogFileSizeBasedCompactionStrategy orders the compactions based on the total log files size and limits the
- * compactions within a configured IO bound
+ * compactions within a configured IO bound.
  *
  * @see BoundedIOCompactionStrategy
  * @see CompactionStrategy

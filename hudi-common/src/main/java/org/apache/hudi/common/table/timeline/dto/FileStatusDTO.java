@@ -18,12 +18,17 @@
 
 package org.apache.hudi.common.table.timeline.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.io.IOException;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.exception.HoodieException;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.hadoop.fs.FileStatus;
+
+import java.io.IOException;
+
+/**
+ * The data transfer object of file status.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FileStatusDTO {
 

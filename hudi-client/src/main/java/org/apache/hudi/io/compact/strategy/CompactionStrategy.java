@@ -18,10 +18,6 @@
 
 package org.apache.hudi.io.compact.strategy;
 
-import com.google.common.collect.Maps;
-import java.io.Serializable;
-import java.util.List;
-import java.util.Map;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -31,6 +27,12 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.compact.HoodieRealtimeTableCompactor;
+
+import com.google.common.collect.Maps;
+
+import java.io.Serializable;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Strategy for compaction. Pluggable implementation to define how compaction should be done. The over-ridden
@@ -114,7 +116,7 @@ public abstract class CompactionStrategy implements Serializable {
   }
 
   /**
-   * Filter the partition paths based on compaction strategy
+   * Filter the partition paths based on compaction strategy.
    * 
    * @param writeConfig
    * @param allPartitionPaths

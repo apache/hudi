@@ -18,19 +18,21 @@
 
 package org.apache.hudi.common.table.log;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Iterator;
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.Iterator;
 
 /**
  * File Format for Hoodie Log Files. The File Format consists of blocks each separated with a MAGIC sync marker. A Block
@@ -49,12 +51,12 @@ public interface HoodieLogFormat {
    * The current version of the log format. Anytime the log format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogFormatVersion}
    */
-  int currentVersion = 1;
+  int CURRENT_VERSION = 1;
 
   String UNKNOWN_WRITE_TOKEN = "1-0-1";
 
   /**
-   * Writer interface to allow appending block to this file format
+   * Writer interface to allow appending block to this file format.
    */
   interface Writer extends Closeable {
 
@@ -64,7 +66,7 @@ public interface HoodieLogFormat {
     HoodieLogFile getLogFile();
 
     /**
-     * Append Block returns a new Writer if the log is rolled
+     * Append Block returns a new Writer if the log is rolled.
      */
     Writer appendBlock(HoodieLogBlock block) throws IOException, InterruptedException;
 
@@ -72,7 +74,7 @@ public interface HoodieLogFormat {
   }
 
   /**
-   * Reader interface which is an Iterator of HoodieLogBlock
+   * Reader interface which is an Iterator of HoodieLogBlock.
    */
   interface Reader extends Closeable, Iterator<HoodieLogBlock> {
 
@@ -82,14 +84,14 @@ public interface HoodieLogFormat {
     HoodieLogFile getLogFile();
 
     /**
-     * Read log file in reverse order and check if prev block is present
+     * Read log file in reverse order and check if prev block is present.
      * 
      * @return
      */
     public boolean hasPrev();
 
     /**
-     * Read log file in reverse order and return prev block if present
+     * Read log file in reverse order and return prev block if present.
      * 
      * @return
      * @throws IOException
@@ -98,11 +100,11 @@ public interface HoodieLogFormat {
   }
 
   /**
-   * Builder class to construct the default log format writer
+   * Builder class to construct the default log format writer.
    */
   class WriterBuilder {
 
-    private static final Logger log = LogManager.getLogger(WriterBuilder.class);
+    private static final Logger LOG = LogManager.getLogger(WriterBuilder.class);
     // Default max log file size 512 MB
     public static final long DEFAULT_SIZE_THRESHOLD = 512 * 1024 * 1024L;
 
@@ -186,7 +188,7 @@ public interface HoodieLogFormat {
     }
 
     public Writer build() throws IOException, InterruptedException {
-      log.info("Building HoodieLogFormat Writer");
+      LOG.info("Building HoodieLogFormat Writer");
       if (fs == null) {
         throw new IllegalArgumentException("fs is not specified");
       }
@@ -208,7 +210,7 @@ public interface HoodieLogFormat {
       }
 
       if (logVersion == null) {
-        log.info("Computing the next log version for " + logFileId + " in " + parentPath);
+        LOG.info("Computing the next log version for " + logFileId + " in " + parentPath);
         Option<Pair<Integer, String>> versionAndWriteToken =
             FSUtils.getLatestLogVersion(fs, parentPath, logFileId, fileExtension, commitTime);
         if (versionAndWriteToken.isPresent()) {
@@ -220,7 +222,7 @@ public interface HoodieLogFormat {
           // Use rollover write token as write token to create new log file with tokens
           logWriteToken = rolloverLogWriteToken;
         }
-        log.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
+        LOG.info("Computed the next log version for " + logFileId + " in " + parentPath + " as " + logVersion
             + " with write-token " + logWriteToken);
       }
 
@@ -232,7 +234,7 @@ public interface HoodieLogFormat {
 
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, commitTime, logVersion, logWriteToken));
-      log.info("HoodieLogFile on path " + logPath);
+      LOG.info("HoodieLogFile on path " + logPath);
       HoodieLogFile logFile = new HoodieLogFile(logPath);
 
       if (bufferSize == null) {

@@ -18,23 +18,28 @@
 
 package org.apache.hudi.cli.utils;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+
+import org.joda.time.DateTime;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.joda.time.DateTime;
 
+/**
+ * Hive connection related utilities.
+ */
 public class HiveUtil {
 
-  private static final String driverName = "org.apache.hive.jdbc.HiveDriver";
+  private static final String DRIVER_NAME = "org.apache.hive.jdbc.HiveDriver";
 
   static {
     try {
-      Class.forName(driverName);
+      Class.forName(DRIVER_NAME);
     } catch (ClassNotFoundException e) {
-      throw new IllegalStateException("Could not find " + driverName + " in classpath. ", e);
+      throw new IllegalStateException("Could not find " + DRIVER_NAME + " in classpath. ", e);
     }
   }
 

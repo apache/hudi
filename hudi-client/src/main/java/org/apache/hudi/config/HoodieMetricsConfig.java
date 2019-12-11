@@ -18,12 +18,14 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.metrics.MetricsReporterType;
+
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
-import org.apache.hudi.metrics.MetricsReporterType;
 
 /**
  * Fetch the configurations used by the Metrics system.
@@ -44,6 +46,14 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
   public static final String GRAPHITE_SERVER_PORT = GRAPHITE_PREFIX + ".port";
   public static final int DEFAULT_GRAPHITE_SERVER_PORT = 4756;
+
+  // Jmx
+  public static final String JMX_PREFIX = METRIC_PREFIX + ".jmx";
+  public static final String JMX_HOST = JMX_PREFIX + ".host";
+  public static final String DEFAULT_JMX_HOST = "localhost";
+
+  public static final String JMX_PORT = JMX_PREFIX + ".port";
+  public static final int DEFAULT_JMX_PORT = 9889;
 
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 

@@ -18,18 +18,20 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.hash.Hashing;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.Partitioner;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.Partitioner;
 
 /**
  * Partitions bloom filter checks by spreading out comparisons across buckets of work.
@@ -56,7 +58,7 @@ import org.apache.spark.Partitioner;
  */
 public class BucketizedBloomCheckPartitioner extends Partitioner {
 
-  private static Logger logger = LogManager.getLogger(BucketizedBloomCheckPartitioner.class);
+  private static final Logger LOG = LogManager.getLogger(BucketizedBloomCheckPartitioner.class);
 
   private int partitions;
 
@@ -88,7 +90,7 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     // of buckets and assigns buckets in the same order as file groups. If we were to simply round robin, then buckets
     // for a file group is more or less guaranteed to be placed on different partitions all the time.
     int minBucketsPerPartition = Math.max((int) Math.floor((1.0 * totalBuckets) / partitions), 1);
-    logger.info(String.format("TotalBuckets %d, min_buckets/partition %d", totalBuckets, minBucketsPerPartition));
+    LOG.info(String.format("TotalBuckets %d, min_buckets/partition %d", totalBuckets, minBucketsPerPartition));
     int[] bucketsFilled = new int[partitions];
     Map<String, AtomicInteger> bucketsFilledPerFileGroup = new HashMap<>();
     int partitionIndex = 0;
@@ -125,13 +127,13 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
       }
     }
 
-    if (logger.isDebugEnabled()) {
-      logger.debug("Partitions assigned per file groups :" + fileGroupToPartitions);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Partitions assigned per file groups :" + fileGroupToPartitions);
       StringBuilder str = new StringBuilder();
       for (int i = 0; i < bucketsFilled.length; i++) {
         str.append("p" + i + " : " + bucketsFilled[i] + ",");
       }
-      logger.debug("Num buckets assigned per file group :" + str);
+      LOG.debug("Num buckets assigned per file group :" + str);
     }
   }
 

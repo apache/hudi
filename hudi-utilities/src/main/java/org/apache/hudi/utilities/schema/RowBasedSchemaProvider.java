@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
+
+import org.apache.avro.Schema;
 import org.apache.spark.sql.types.StructType;
 
 public class RowBasedSchemaProvider extends SchemaProvider {

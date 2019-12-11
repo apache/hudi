@@ -18,13 +18,18 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
+import org.apache.hudi.common.HoodieRollbackStat;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.FileReader;
@@ -34,41 +39,19 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.avro.model.HoodieRestoreMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
-import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
-import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.common.HoodieRollbackStat;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * A utility class for avro.
+ */
 public class AvroUtils {
 
   private static final Integer DEFAULT_VERSION = 1;
-
-  public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime, Option<Long> durationInMs,
-      List<HoodieCleanStat> cleanStats) {
-    ImmutableMap.Builder<String, HoodieCleanPartitionMetadata> partitionMetadataBuilder = ImmutableMap.builder();
-    int totalDeleted = 0;
-    String earliestCommitToRetain = null;
-    for (HoodieCleanStat stat : cleanStats) {
-      HoodieCleanPartitionMetadata metadata =
-          new HoodieCleanPartitionMetadata(stat.getPartitionPath(), stat.getPolicy().name(),
-              stat.getDeletePathPatterns(), stat.getSuccessDeleteFiles(), stat.getDeletePathPatterns());
-      partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
-      totalDeleted += stat.getSuccessDeleteFiles().size();
-      if (earliestCommitToRetain == null) {
-        // This will be the same for all partitions
-        earliestCommitToRetain = stat.getEarliestCommitToRetain();
-      }
-    }
-    return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-        earliestCommitToRetain, partitionMetadataBuilder.build(), DEFAULT_VERSION);
-  }
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime, Option<Long> durationInMs,
       List<String> commits, Map<String, List<HoodieRollbackStat>> commitToStats) {

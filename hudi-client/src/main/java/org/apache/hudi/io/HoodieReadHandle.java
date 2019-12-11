@@ -18,12 +18,13 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.model.HoodieDataFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.hadoop.fs.FileSystem;
 
 /**
  * Base class for read operations done logically on the file group.

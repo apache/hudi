@@ -18,21 +18,23 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.util.List;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.CompactionAdminClient;
 import org.apache.hudi.CompactionAdminClient.RenameOpResult;
 import org.apache.hudi.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FSUtils;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.List;
 
 public class HoodieCompactionAdminTool {
 
@@ -54,7 +56,7 @@ public class HoodieCompactionAdminTool {
   }
 
   /**
-   * Executes one of compaction admin operations
+   * Executes one of compaction admin operations.
    */
   public void run(JavaSparkContext jsc) throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath);
@@ -116,7 +118,7 @@ public class HoodieCompactionAdminTool {
   }
 
   /**
-   * Print Operation Result
+   * Print Operation Result.
    *
    * @param initialLine Initial Line
    * @param result Result
@@ -129,14 +131,14 @@ public class HoodieCompactionAdminTool {
   }
 
   /**
-   * Operation Types
+   * Operation Types.
    */
   public enum Operation {
     VALIDATE, UNSCHEDULE_PLAN, UNSCHEDULE_FILE, REPAIR
   }
 
   /**
-   * Admin Configuration Options
+   * Admin Configuration Options.
    */
   public static class Config implements Serializable {
 

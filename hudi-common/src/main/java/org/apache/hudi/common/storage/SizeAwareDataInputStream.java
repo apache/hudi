@@ -23,7 +23,7 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Keeps track of how many bytes were read from a DataInputStream
+ * Keeps track of how many bytes were read from a DataInputStream.
  */
 public class SizeAwareDataInputStream {
 

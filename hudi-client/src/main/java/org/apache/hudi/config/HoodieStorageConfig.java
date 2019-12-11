@@ -18,14 +18,15 @@
 
 package org.apache.hudi.config;
 
+import javax.annotation.concurrent.Immutable;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 
 /**
- * Storage related config
+ * Storage related config.
  */
 @Immutable
 public class HoodieStorageConfig extends DefaultHoodieConfig {

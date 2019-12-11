@@ -18,16 +18,21 @@
 
 package org.apache.hudi.common;
 
-import java.io.IOException;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.IOException;
+
+/**
+ * The common hoodie test harness to provide the basic infrastructure.
+ */
 public class HoodieCommonTestHarness {
 
   protected String basePath = null;

@@ -18,18 +18,19 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Stream;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
 
 /**
- * A set of data/base files + set of log files, that make up an unit for all operations
+ * A set of data/base files + set of log files, that make up an unit for all operations.
  */
 public class HoodieFileGroup implements Serializable {
 
@@ -38,7 +39,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * file group id
+   * file group id.
    */
   private final HoodieFileGroupId fileGroupId;
 
@@ -48,12 +49,12 @@ public class HoodieFileGroup implements Serializable {
   private final TreeMap<String, FileSlice> fileSlices;
 
   /**
-   * Timeline, based on which all getter work
+   * Timeline, based on which all getter work.
    */
   private final HoodieTimeline timeline;
 
   /**
-   * The last completed instant, that acts as a high watermark for all getters
+   * The last completed instant, that acts as a high watermark for all getters.
    */
   private final Option<HoodieInstant> lastInstant;
 
@@ -70,7 +71,7 @@ public class HoodieFileGroup implements Serializable {
 
   /**
    * Potentially add a new file-slice by adding base-instant time A file-slice without any data-file and log-files can
-   * exist (if a compaction just got requested)
+   * exist (if a compaction just got requested).
    */
   public void addNewFileSliceAtInstant(String baseInstantTime) {
     if (!fileSlices.containsKey(baseInstantTime)) {
@@ -79,7 +80,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Add a new datafile into the file group
+   * Add a new datafile into the file group.
    */
   public void addDataFile(HoodieDataFile dataFile) {
     if (!fileSlices.containsKey(dataFile.getCommitTime())) {
@@ -89,7 +90,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Add a new log file into the group
+   * Add a new log file into the group.
    */
   public void addLogFile(HoodieLogFile logFile) {
     if (!fileSlices.containsKey(logFile.getBaseCommitTime())) {
@@ -108,7 +109,7 @@ public class HoodieFileGroup implements Serializable {
 
   /**
    * A FileSlice is considered committed, if one of the following is true - There is a committed data file - There are
-   * some log files, that are based off a commit or delta commit
+   * some log files, that are based off a commit or delta commit.
    */
   private boolean isFileSliceCommitted(FileSlice slice) {
     String maxCommitTime = lastInstant.get().getTimestamp();
@@ -118,14 +119,14 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Get all the the file slices including in-flight ones as seen in underlying file-system
+   * Get all the the file slices including in-flight ones as seen in underlying file-system.
    */
   public Stream<FileSlice> getAllFileSlicesIncludingInflight() {
     return fileSlices.entrySet().stream().map(Map.Entry::getValue);
   }
 
   /**
-   * Get latest file slices including in-flight ones
+   * Get latest file slices including in-flight ones.
    */
   public Option<FileSlice> getLatestFileSlicesIncludingInflight() {
     return Option.fromJavaOptional(getAllFileSlicesIncludingInflight().findFirst());
@@ -142,7 +143,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Gets the latest slice - this can contain either
+   * Gets the latest slice - this can contain either.
    * <p>
    * - just the log files without data file - (or) data file with 0 or more log files
    */
@@ -152,14 +153,14 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Gets the latest data file
+   * Gets the latest data file.
    */
   public Option<HoodieDataFile> getLatestDataFile() {
     return Option.fromJavaOptional(getAllDataFiles().findFirst());
   }
 
   /**
-   * Obtain the latest file slice, upto a commitTime i.e <= maxCommitTime
+   * Obtain the latest file slice, upto a commitTime i.e <= maxCommitTime.
    */
   public Option<FileSlice> getLatestFileSliceBeforeOrOn(String maxCommitTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(slice -> HoodieTimeline
@@ -167,7 +168,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Obtain the latest file slice, upto a commitTime i.e < maxInstantTime
+   * Obtain the latest file slice, upto a commitTime i.e < maxInstantTime.
    * 
    * @param maxInstantTime Max Instant Time
    * @return
@@ -184,7 +185,7 @@ public class HoodieFileGroup implements Serializable {
   }
 
   /**
-   * Stream of committed data files, sorted reverse commit time
+   * Stream of committed data files, sorted reverse commit time.
    */
   public Stream<HoodieDataFile> getAllDataFiles() {
     return getAllFileSlices().filter(slice -> slice.getDataFile().isPresent()).map(slice -> slice.getDataFile().get());

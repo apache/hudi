@@ -18,18 +18,20 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.IOException;
-import java.util.Properties;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.util.Properties;
+
 /**
- * The metadata that goes into the meta file in each partition
+ * The metadata that goes into the meta file in each partition.
  */
 public class HoodiePartitionMetadata {
 
@@ -38,21 +40,21 @@ public class HoodiePartitionMetadata {
   public static final String COMMIT_TIME_KEY = "commitTime";
 
   /**
-   * Contents of the metadata
+   * Contents of the metadata.
    */
   private final Properties props;
 
   /**
-   * Path to the partition, about which we have the metadata
+   * Path to the partition, about which we have the metadata.
    */
   private final Path partitionPath;
 
   private final FileSystem fs;
 
-  private static Logger log = LogManager.getLogger(HoodiePartitionMetadata.class);
+  private static final Logger LOG = LogManager.getLogger(HoodiePartitionMetadata.class);
 
   /**
-   * Construct metadata from existing partition
+   * Construct metadata from existing partition.
    */
   public HoodiePartitionMetadata(FileSystem fs, Path partitionPath) {
     this.fs = fs;
@@ -99,7 +101,7 @@ public class HoodiePartitionMetadata {
         fs.rename(tmpMetaPath, metaPath);
       }
     } catch (IOException ioe) {
-      log.warn("Error trying to save partition metadata (this is okay, as long as " + "atleast 1 of these succced), "
+      LOG.warn("Error trying to save partition metadata (this is okay, as long as " + "atleast 1 of these succced), "
           + partitionPath, ioe);
     } finally {
       if (!metafileExists) {
@@ -109,14 +111,14 @@ public class HoodiePartitionMetadata {
             fs.delete(tmpMetaPath, false);
           }
         } catch (IOException ioe) {
-          log.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
+          LOG.warn("Error trying to clean up temporary files for " + partitionPath, ioe);
         }
       }
     }
   }
 
   /**
-   * Read out the metadata for this partition
+   * Read out the metadata for this partition.
    */
   public void readFromFS() throws IOException {
     FSDataInputStream is = null;

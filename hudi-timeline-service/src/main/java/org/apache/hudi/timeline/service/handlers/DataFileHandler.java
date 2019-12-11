@@ -18,17 +18,19 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
+import org.apache.hudi.common.table.timeline.dto.DataFileDTO;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+
+import org.apache.hadoop.conf.Configuration;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.common.table.timeline.dto.DataFileDTO;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
 
 /**
- * REST Handler servicing data-file requests
+ * REST Handler servicing data-file requests.
  */
 public class DataFileHandler extends Handler {
 

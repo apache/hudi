@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.util.queue;
 
-import java.util.function.Function;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.util.function.Function;
 
 /**
  * Buffer producer which allows custom functions to insert entries to queue.
@@ -29,7 +30,7 @@ import org.apache.log4j.Logger;
  */
 public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
 
-  private static final Logger logger = LogManager.getLogger(FunctionBasedQueueProducer.class);
+  private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
 
   private final Function<BoundedInMemoryQueue<I, ?>, Boolean> producerFunction;
 
@@ -39,8 +40,8 @@ public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProduc
 
   @Override
   public void produce(BoundedInMemoryQueue<I, ?> queue) {
-    logger.info("starting function which will enqueue records");
+    LOG.info("starting function which will enqueue records");
     producerFunction.apply(queue);
-    logger.info("finished function which will enqueue records");
+    LOG.info("finished function which will enqueue records");
   }
 }

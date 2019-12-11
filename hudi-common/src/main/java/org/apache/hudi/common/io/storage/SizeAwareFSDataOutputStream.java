@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.io.storage;
 
+import org.apache.hudi.common.util.ConsistencyGuard;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
+
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.util.ConsistencyGuard;
-import org.apache.hudi.exception.HoodieException;
 
 /**
  * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This gives a cheap way

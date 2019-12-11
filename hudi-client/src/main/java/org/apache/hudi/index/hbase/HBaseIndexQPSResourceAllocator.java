@@ -21,7 +21,7 @@ package org.apache.hudi.index.hbase;
 import java.io.Serializable;
 
 /**
- * <code>HBaseIndexQPSResourceAllocator</code> defines methods to manage resource allocation for HBase index operations
+ * <code>HBaseIndexQPSResourceAllocator</code> defines methods to manage resource allocation for HBase index operations.
  */
 public interface HBaseIndexQPSResourceAllocator extends Serializable {
 
@@ -45,7 +45,7 @@ public interface HBaseIndexQPSResourceAllocator extends Serializable {
   float acquireQPSResources(final float desiredQPSFraction, final long numPuts);
 
   /**
-   * This method releases the acquired QPS Fraction
+   * This method releases the acquired QPS Fraction.
    */
   void releaseQPSResources();
 }

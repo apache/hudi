@@ -18,18 +18,20 @@
 
 package org.apache.hudi;
 
-import static org.junit.Assert.assertTrue;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+
+import org.apache.spark.api.java.JavaRDD;
+import org.junit.Assert;
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.spark.api.java.JavaRDD;
-import org.junit.Assert;
-import org.junit.Test;
+
+import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
 /**
@@ -38,7 +40,7 @@ import org.junit.Test;
 public class TestHoodieReadClient extends TestHoodieClientBase {
 
   /**
-   * Test ReadFilter API after writing new records using HoodieWriteClient.insert
+   * Test ReadFilter API after writing new records using HoodieWriteClient.insert.
    */
   @Test
   public void testReadFilterExistAfterInsert() throws Exception {
@@ -46,7 +48,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test ReadFilter API after writing new records using HoodieWriteClient.insertPrepped
+   * Test ReadFilter API after writing new records using HoodieWriteClient.insertPrepped.
    */
   @Test
   public void testReadFilterExistAfterInsertPrepped() throws Exception {
@@ -54,7 +56,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test ReadFilter API after writing new records using HoodieWriteClient.bulkInsert
+   * Test ReadFilter API after writing new records using HoodieWriteClient.bulkInsert.
    */
   @Test
   public void testReadFilterExistAfterBulkInsert() throws Exception {
@@ -62,7 +64,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test ReadFilter API after writing new records using HoodieWriteClient.bulkInsertPrepped
+   * Test ReadFilter API after writing new records using HoodieWriteClient.bulkInsertPrepped.
    */
   @Test
   public void testReadFilterExistAfterBulkInsertPrepped() throws Exception {
@@ -74,7 +76,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
 
   /**
    * Helper to write new records using one of HoodieWriteClient's write API and use ReadClient to test filterExists()
-   * API works correctly
+   * API works correctly.
    *
    * @param config Hoodie Write Config
    * @param writeFn Write Function for writing records
@@ -109,7 +111,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test tagLocation API after insert()
+   * Test tagLocation API after insert().
    */
   @Test
   public void testTagLocationAfterInsert() throws Exception {
@@ -117,7 +119,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test tagLocation API after insertPrepped()
+   * Test tagLocation API after insertPrepped().
    */
   @Test
   public void testTagLocationAfterInsertPrepped() throws Exception {
@@ -126,7 +128,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test tagLocation API after bulk-insert()
+   * Test tagLocation API after bulk-insert().
    */
   @Test
   public void testTagLocationAfterBulkInsert() throws Exception {
@@ -135,7 +137,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Test tagLocation API after bulkInsertPrepped()
+   * Test tagLocation API after bulkInsertPrepped().
    */
   @Test
   public void testTagLocationAfterBulkInsertPrepped() throws Exception {
@@ -146,7 +148,7 @@ public class TestHoodieReadClient extends TestHoodieClientBase {
   }
 
   /**
-   * Helper method to test tagLocation after using different HoodieWriteClient write APIS
+   * Helper method to test tagLocation after using different HoodieWriteClient write APIS.
    *
    * @param hoodieWriteConfig Write Config
    * @param insertFn Hoodie Write Client first Insert API

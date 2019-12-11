@@ -18,29 +18,6 @@
 
 package org.apache.hudi;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -63,31 +40,62 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import scala.Tuple3;
+
+import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 /**
- * Test Cleaning related logic
+ * Test Cleaning related logic.
  */
 public class TestCleaner extends TestHoodieClientBase {
 
   private static final int BIG_BATCH_INSERT_SIZE = 500;
-  private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
+  private static final Logger LOG = LogManager.getLogger(TestHoodieClientBase.class);
 
   /**
-   * Helper method to do first batch of insert for clean by versions/commits tests
+   * Helper method to do first batch of insert for clean by versions/commits tests.
    *
    * @param cfg Hoodie Write Config
    * @param client Hoodie Client
@@ -132,7 +140,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using insert/upsert API
+   * Test Clean-By-Versions using insert/upsert API.
    */
   @Test
   public void testInsertAndCleanByVersions() throws Exception {
@@ -140,7 +148,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of insert/upsert API
+   * Test Clean-By-Versions using prepped versions of insert/upsert API.
    */
   @Test
   public void testInsertPreppedAndCleanByVersions() throws Exception {
@@ -149,7 +157,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using bulk-insert/upsert API
+   * Test Clean-By-Versions using bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertAndCleanByVersions() throws Exception {
@@ -157,7 +165,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API
+   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertPreppedAndCleanByVersions() throws Exception {
@@ -167,7 +175,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective
+   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective.
    *
    * @param insertFn Insert API to be tested
    * @param upsertFn Upsert API to be tested
@@ -293,7 +301,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using insert/upsert API
+   * Test Clean-By-Versions using insert/upsert API.
    */
   @Test
   public void testInsertAndCleanByCommits() throws Exception {
@@ -301,7 +309,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped version of insert/upsert API
+   * Test Clean-By-Versions using prepped version of insert/upsert API.
    */
   @Test
   public void testInsertPreppedAndCleanByCommits() throws Exception {
@@ -309,7 +317,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API
+   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
@@ -319,7 +327,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Clean-By-Versions using bulk-insert/upsert API
+   * Test Clean-By-Versions using bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertAndCleanByCommits() throws Exception {
@@ -327,7 +335,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective
+   * Test Helper for Cleaning by versions logic from HoodieWriteClient API perspective.
    *
    * @param insertFn Insert API to be tested
    * @param upsertFn Upsert API to be tested
@@ -385,7 +393,7 @@ public class TestCleaner extends TestHoodieClientBase {
           for (HoodieFileGroup fileGroup : fileGroups) {
             Set<String> commitTimes = new HashSet<>();
             fileGroup.getAllDataFiles().forEach(value -> {
-              logger.debug("Data File - " + value);
+              LOG.debug("Data File - " + value);
               commitTimes.add(value.getCommitTime());
             });
             assertEquals("Only contain acceptable versions of file should be present",
@@ -399,7 +407,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Helper to run cleaner and collect Clean Stats
+   * Helper to run cleaner and collect Clean Stats.
    *
    * @param config HoodieWriteConfig
    */
@@ -408,7 +416,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Helper to run cleaner and collect Clean Stats
+   * Helper to run cleaner and collect Clean Stats.
    *
    * @param config HoodieWriteConfig
    */
@@ -455,7 +463,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by versions logic
+   * Test HoodieTable.clean() Cleaning by versions logic.
    */
   @Test
   public void testKeepLatestFileVersions() throws IOException {
@@ -547,7 +555,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by versions logic for MOR table with Log files
+   * Test HoodieTable.clean() Cleaning by versions logic for MOR table with Log files.
    */
   @Test
   public void testKeepLatestFileVersionsMOR() throws IOException {
@@ -595,8 +603,105 @@ public class TestCleaner extends TestHoodieClientBase {
         file2P0L0, Option.of(2)));
   }
 
+  @Test
+  public void testUpgradeDowngrade() {
+    String commitTime = "000";
+
+    String partition1 = DEFAULT_PARTITION_PATHS[0];
+    String partition2 = DEFAULT_PARTITION_PATHS[1];
+
+    String fileName1 = "data1_1_000.parquet";
+    String fileName2 = "data2_1_000.parquet";
+
+    String filePath1 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName1;
+    String filePath2 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName2;
+
+    List<String> deletePathPatterns1 = Arrays.asList(filePath1, filePath2);
+    List<String> successDeleteFiles1 = Arrays.asList(filePath1);
+    List<String> failedDeleteFiles1 = Arrays.asList(filePath2);
+
+    // create partition1 clean stat.
+    HoodieCleanStat cleanStat1 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
+        partition1, deletePathPatterns1, successDeleteFiles1,
+        failedDeleteFiles1, commitTime);
+
+    List<String> deletePathPatterns2 = new ArrayList<>();
+    List<String> successDeleteFiles2 = new ArrayList<>();
+    List<String> failedDeleteFiles2 = new ArrayList<>();
+
+    // create partition2 empty clean stat.
+    HoodieCleanStat cleanStat2 = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
+        partition2, deletePathPatterns2, successDeleteFiles2,
+        failedDeleteFiles2, commitTime);
+
+    // map with absolute file path.
+    Map<String, Tuple3> oldExpected = new HashMap<>();
+    oldExpected.put(partition1, new Tuple3<>(deletePathPatterns1, successDeleteFiles1, failedDeleteFiles1));
+    oldExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
+
+    // map with relative path.
+    Map<String, Tuple3> newExpected = new HashMap<>();
+    newExpected.put(partition1, new Tuple3<>(Arrays.asList(fileName1, fileName2), Arrays.asList(fileName1), Arrays.asList(fileName2)));
+    newExpected.put(partition2, new Tuple3<>(deletePathPatterns2, successDeleteFiles2, failedDeleteFiles2));
+
+    HoodieCleanMetadata metadata =
+        CleanerUtils.convertCleanMetadata(metaClient, commitTime, Option.of(0L), Arrays.asList(cleanStat1, cleanStat2));
+
+    Assert.assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, metadata.getVersion());
+    testCleanMetadataPathEquality(metadata, newExpected);
+
+    CleanMetadataMigrator migrator = new CleanMetadataMigrator(metaClient);
+    HoodieCleanMetadata oldMetadata =
+        migrator.migrateToVersion(metadata, metadata.getVersion(), CleanerUtils.CLEAN_METADATA_VERSION_1);
+    Assert.assertEquals(CleanerUtils.CLEAN_METADATA_VERSION_1, oldMetadata.getVersion());
+    testCleanMetadataEquality(metadata, oldMetadata);
+    testCleanMetadataPathEquality(oldMetadata, oldExpected);
+
+    HoodieCleanMetadata newMetadata = migrator.upgradeToLatest(oldMetadata, oldMetadata.getVersion());
+    Assert.assertEquals(CleanerUtils.LATEST_CLEAN_METADATA_VERSION, newMetadata.getVersion());
+    testCleanMetadataEquality(oldMetadata, newMetadata);
+    testCleanMetadataPathEquality(newMetadata, newExpected);
+    testCleanMetadataPathEquality(oldMetadata, oldExpected);
+  }
+
+  public void testCleanMetadataEquality(HoodieCleanMetadata input1, HoodieCleanMetadata input2) {
+    Assert.assertEquals(input1.getEarliestCommitToRetain(), input2.getEarliestCommitToRetain());
+    Assert.assertEquals(input1.getStartCleanTime(), input2.getStartCleanTime());
+    Assert.assertEquals(input1.getTimeTakenInMillis(), input2.getTimeTakenInMillis());
+    Assert.assertEquals(input1.getTotalFilesDeleted(), input2.getTotalFilesDeleted());
+
+    Map<String, HoodieCleanPartitionMetadata> map1 = input1.getPartitionMetadata();
+    Map<String, HoodieCleanPartitionMetadata> map2 = input2.getPartitionMetadata();
+
+    Assert.assertEquals(map1.keySet(), map2.keySet());
+
+    List<String> partitions1 = map1.values().stream().map(m -> m.getPartitionPath()).collect(
+        Collectors.toList());
+    List<String> partitions2 = map2.values().stream().map(m -> m.getPartitionPath()).collect(
+        Collectors.toList());
+    Assert.assertEquals(partitions1, partitions2);
+
+    List<String> policies1 = map1.values().stream().map(m -> m.getPolicy()).collect(Collectors.toList());
+    List<String> policies2 = map2.values().stream().map(m -> m.getPolicy()).collect(Collectors.toList());
+    Assert.assertEquals(policies1, policies2);
+  }
+
+  private void testCleanMetadataPathEquality(HoodieCleanMetadata metadata, Map<String, Tuple3> expected) {
+
+    Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = metadata.getPartitionMetadata();
+
+    for (Map.Entry<String, HoodieCleanPartitionMetadata> entry : partitionMetadataMap.entrySet()) {
+      String partitionPath = entry.getKey();
+      HoodieCleanPartitionMetadata partitionMetadata = entry.getValue();
+
+      Assert.assertEquals(expected.get(partitionPath)._1(), partitionMetadata.getDeletePathPatterns());
+      Assert.assertEquals(expected.get(partitionPath)._2(), partitionMetadata.getSuccessDeleteFiles());
+      Assert.assertEquals(expected.get(partitionPath)._3(), partitionMetadata.getFailedDeleteFiles());
+    }
+  }
+
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files
+   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
    */
   @Test
   public void testKeepLatestCommits() throws IOException {
@@ -613,7 +718,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files
+   * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
    */
   @Test
   public void testKeepLatestCommitsIncrMode() throws IOException {
@@ -831,7 +936,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Test Keep Latest Commits when there are pending compactions
+   * Test Keep Latest Commits when there are pending compactions.
    */
   @Test
   public void testKeepLatestCommitsWithPendingCompactions() throws IOException {
@@ -862,7 +967,7 @@ public class TestCleaner extends TestHoodieClientBase {
 
 
   /**
-   * Test Keep Latest Versions when there are pending compactions
+   * Test Keep Latest Versions when there are pending compactions.
    */
   @Test
   public void testKeepLatestVersionsWithPendingCompactionsAndFailureRetry() throws IOException {
@@ -888,7 +993,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Common test method for validating pending compactions
+   * Common test method for validating pending compactions.
    *
    * @param config Hoodie Write Config
    * @param expNumFilesDeleted Number of files deleted
@@ -1006,7 +1111,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /**
-   * Utility method to create temporary data files
+   * Utility method to create temporary data files.
    *
    * @param commitTime Commit Timestamp
    * @param numFiles Number for files to be generated
@@ -1022,7 +1127,7 @@ public class TestCleaner extends TestHoodieClientBase {
   }
 
   /***
-   * Helper method to return temporary files count
+   * Helper method to return temporary files count.
    * 
    * @return Number of temporary files found
    * @throws IOException in case of error

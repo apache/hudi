@@ -20,7 +20,7 @@ package org.apache.hudi.exception;
 
 /**
  * <p>
- * Exception thrown when dependent system is not available
+ * Exception thrown when dependent system is not available.
  * </p>
  */
 public class HoodieDependentSystemUnavailableException extends HoodieException {

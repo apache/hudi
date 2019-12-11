@@ -18,22 +18,24 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Map;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Every Hoodie dataset has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which
- * depend on record specific logic
+ * depend on record specific logic.
  */
 public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {
 
   /**
    * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to
-   * insert/upsert (if combining turned on in HoodieClientConfig)
+   * insert/upsert (if combining turned on in HoodieClientConfig).
    */
   T preCombine(T another);
 

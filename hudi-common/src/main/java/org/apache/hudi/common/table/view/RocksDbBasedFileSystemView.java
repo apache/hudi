@@ -18,16 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import com.google.common.base.Preconditions;
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -40,8 +30,20 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RocksDBDAO;
 import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.collection.Pair;
+
+import com.google.common.base.Preconditions;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A file-system view implementation on top of embedded Rocks DB store. For each DataSet : 3 column Family is added for
@@ -56,7 +58,7 @@ import org.apache.log4j.Logger;
  */
 public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static Logger log = LogManager.getLogger(RocksDbBasedFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(RocksDbBasedFileSystemView.class);
 
   private final FileSystemViewStorageConfig config;
 
@@ -85,7 +87,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     schemaHelper.getAllColumnFamilies().stream().forEach(rocksDB::addColumnFamily);
     super.init(metaClient, visibleActiveTimeline);
-    log.info("Created ROCKSDB based file-system view at " + config.getRocksdbBasePath());
+    LOG.info("Created ROCKSDB based file-system view at " + config.getRocksdbBasePath());
   }
 
   @Override
@@ -100,7 +102,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         rocksDB.putInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
             schemaHelper.getKeyForPendingCompactionLookup(opPair.getValue().getFileGroupId()), opPair);
       });
-      log.info("Initializing pending compaction operations. Count=" + batch.count());
+      LOG.info("Initializing pending compaction operations. Count=" + batch.count());
     });
   }
 
@@ -133,7 +135,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void resetViewState() {
-    log.info("Deleting all rocksdb data associated with dataset filesystem view");
+    LOG.info("Deleting all rocksdb data associated with dataset filesystem view");
     rocksDB.close();
     rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
   }
@@ -155,7 +157,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   protected void storePartitionView(String partitionPath, List<HoodieFileGroup> fileGroups) {
-    log.info("Resetting and adding new partition (" + partitionPath + ") to ROCKSDB based file-system view at "
+    LOG.info("Resetting and adding new partition (" + partitionPath + ") to ROCKSDB based file-system view at "
         + config.getRocksdbBasePath() + ", Total file-groups=" + fileGroups.size());
 
     String lookupKey = schemaHelper.getKeyForPartitionLookup(partitionPath);
@@ -182,7 +184,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
     // record that partition is loaded.
     rocksDB.put(schemaHelper.getColFamilyForStoredPartitions(), lookupKey, Boolean.TRUE);
-    log.info("Finished adding new partition (" + partitionPath + ") to ROCKSDB based file-system view at "
+    LOG.info("Finished adding new partition (" + partitionPath + ") to ROCKSDB based file-system view at "
         + config.getRocksdbBasePath() + ", Total file-groups=" + fileGroups.size());
   }
 
@@ -200,7 +202,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
             return fs;
           } else {
             // First remove the file-slice
-            log.info("Removing old Slice in DB. FS=" + oldSlice);
+            LOG.info("Removing old Slice in DB. FS=" + oldSlice);
             rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(),
                 schemaHelper.getKeyForSliceView(fg, oldSlice));
             rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(),
@@ -222,11 +224,11 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
                 deltaLogFiles.entrySet().stream().filter(e -> !logFiles.containsKey(e.getKey()))
                     .forEach(p -> newLogFiles.put(p.getKey(), p.getValue()));
                 newLogFiles.values().stream().forEach(lf -> newFileSlice.addLogFile(lf));
-                log.info("Adding back new File Slice after add FS=" + newFileSlice);
+                LOG.info("Adding back new File Slice after add FS=" + newFileSlice);
                 return newFileSlice;
               }
               case REMOVE: {
-                log.info("Removing old File Slice =" + fs);
+                LOG.info("Removing old File Slice =" + fs);
                 FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
                 fs.getDataFile().orElseGet(() -> {
                   oldSlice.getDataFile().ifPresent(df -> newFileSlice.setDataFile(df));
@@ -237,7 +239,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
                 // Add remaining log files back
                 logFiles.values().stream().forEach(lf -> newFileSlice.addLogFile(lf));
                 if (newFileSlice.getDataFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
-                  log.info("Adding back new file-slice after remove FS=" + newFileSlice);
+                  LOG.info("Adding back new file-slice after remove FS=" + newFileSlice);
                   return newFileSlice;
                 }
                 return null;
@@ -333,10 +335,10 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
 
   @Override
   public void close() {
-    log.info("Closing Rocksdb !!");
+    LOG.info("Closing Rocksdb !!");
     closed = true;
     rocksDB.close();
-    log.info("Closed Rocksdb !!");
+    LOG.info("Closed Rocksdb !!");
   }
 
   @Override

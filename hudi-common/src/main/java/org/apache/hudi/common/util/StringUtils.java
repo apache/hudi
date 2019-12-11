@@ -19,7 +19,7 @@
 package org.apache.hudi.common.util;
 
 /**
- * Simple utility for operations on strings
+ * Simple utility for operations on strings.
  */
 public class StringUtils {
 

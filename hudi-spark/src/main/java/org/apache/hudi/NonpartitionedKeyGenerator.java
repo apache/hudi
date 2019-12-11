@@ -18,12 +18,14 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.exception.HoodieKeyException;
+
+import org.apache.avro.generic.GenericRecord;
 
 /**
- * Simple Key generator for unpartitioned Hive Tables
+ * Simple Key generator for unpartitioned Hive Tables.
  */
 public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 
@@ -35,7 +37,10 @@ public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 
   @Override
   public HoodieKey getKey(GenericRecord record) {
-    String recordKey = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField);
+    String recordKey = DataSourceUtils.getNullableNestedFieldValAsString(record, recordKeyField);
+    if (recordKey == null || recordKey.isEmpty()) {
+      throw new HoodieKeyException("recordKey value: \"" + recordKey + "\" for field: \"" + recordKeyField + "\" cannot be null or empty.");
+    }
     return new HoodieKey(recordKey, EMPTY_PARTITION);
   }
 }

@@ -18,18 +18,6 @@
 
 package org.apache.hudi.common.table.view;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Stream;
-import org.apache.http.client.fluent.Request;
-import org.apache.http.client.fluent.Response;
-import org.apache.http.client.utils.URIBuilder;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDataFile;
@@ -48,11 +36,25 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieRemoteException;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Preconditions;
+import org.apache.http.client.fluent.Request;
+import org.apache.http.client.fluent.Response;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
+
 /**
- * A proxy for table file-system view which translates local View API calls to REST calls to remote timeline service
+ * A proxy for table file-system view which translates local View API calls to REST calls to remote timeline service.
  */
 public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, Serializable {
 
@@ -106,7 +108,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
 
-  private static Logger log = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
+  private static final Logger LOG = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
 
   private final String serverHost;
   private final int serverPort;
@@ -146,7 +148,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
 
     String url = builder.toString();
-    log.info("Sending request : (" + url + ")");
+    LOG.info("Sending request : (" + url + ")");
     Response response = null;
     int timeout = 1000 * 300; // 5 min timeout
     switch (method) {

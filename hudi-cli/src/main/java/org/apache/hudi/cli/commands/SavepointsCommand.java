@@ -18,9 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -32,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
@@ -40,6 +38,13 @@ import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * CLI command to display savepoint options.
+ */
 @Component
 public class SavepointsCommand implements CommandMarker {
 
@@ -79,8 +84,8 @@ public class SavepointsCommand implements CommandMarker {
 
   @CliCommand(value = "savepoint create", help = "Savepoint a commit")
   public String savepoint(@CliOption(key = {"commit"}, help = "Commit to savepoint") final String commitTime,
-      @CliOption(key = {"user"}, help = "User who is creating the savepoint") final String user,
-      @CliOption(key = {"comments"}, help = "Comments for creating the savepoint") final String comments)
+      @CliOption(key = {"user"}, unspecifiedDefaultValue = "default", help = "User who is creating the savepoint") final String user,
+      @CliOption(key = {"comments"}, unspecifiedDefaultValue = "default", help = "Comments for creating the savepoint") final String comments)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
@@ -90,13 +95,18 @@ public class SavepointsCommand implements CommandMarker {
       return "Commit " + commitTime + " not found in Commits " + timeline;
     }
 
-    HoodieWriteClient client = createHoodieClient(null, HoodieCLI.tableMetadata.getBasePath());
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Create Savepoint");
+    HoodieWriteClient client = createHoodieClient(jsc, HoodieCLI.tableMetadata.getBasePath());
+    String result;
     if (client.savepoint(commitTime, user, comments)) {
       // Refresh the current
       refreshMetaClient();
-      return String.format("The commit \"%s\" has been savepointed.", commitTime);
+      result = String.format("The commit \"%s\" has been savepointed.", commitTime);
+    } else {
+      result = String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
     }
-    return String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
+    jsc.close();
+    return result;
   }
 
   @CliCommand(value = "savepoint rollback", help = "Savepoint a commit")

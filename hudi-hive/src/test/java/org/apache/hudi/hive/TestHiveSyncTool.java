@@ -18,22 +18,14 @@
 
 package org.apache.hudi.hive;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import com.google.common.collect.Lists;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SchemaTestUtil;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent;
 import org.apache.hudi.hive.HoodieHiveClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.hive.util.SchemaUtil;
+
+import com.google.common.collect.Lists;
+import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -44,6 +36,16 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("ConstantConditions")
 @RunWith(Parameterized.class)
@@ -72,7 +74,7 @@ public class TestHiveSyncTool {
   }
 
   /**
-   * Testing converting array types to Hive field declaration strings, according to the Parquet-113 spec:
+   * Testing converting array types to Hive field declaration strings. According to the Parquet-113 spec:
    * https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
    */
   @Test

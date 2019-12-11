@@ -19,18 +19,19 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.util.TypedProperties;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 /**
- * Transform source to target dataset before writing
+ * Transform source to target dataset before writing.
  */
 public interface Transformer {
 
   /**
-   * Transform source RDD to target RDD
+   * Transform source RDD to target RDD.
    *
    * @param jsc JavaSparkContext
    * @param sparkSession Spark Session

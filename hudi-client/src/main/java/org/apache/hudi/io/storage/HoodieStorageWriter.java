@@ -18,9 +18,11 @@
 
 package org.apache.hudi.io.storage;
 
-import java.io.IOException;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+
+import org.apache.avro.generic.IndexedRecord;
+
+import java.io.IOException;
 
 public interface HoodieStorageWriter<R extends IndexedRecord> {
 

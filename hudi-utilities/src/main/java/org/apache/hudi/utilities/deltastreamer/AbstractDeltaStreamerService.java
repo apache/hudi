@@ -18,6 +18,11 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -25,16 +30,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
- * Base Class for running delta-sync/compaction in separate thread and controlling their life-cyle
+ * Base Class for running delta-sync/compaction in separate thread and controlling their life-cyle.
  */
 public abstract class AbstractDeltaStreamerService implements Serializable {
 
-  protected static volatile Logger log = LogManager.getLogger(AbstractDeltaStreamerService.class);
+  private static final Logger LOG = LogManager.getLogger(AbstractDeltaStreamerService.class);
 
   // Flag to track if the service is started.
   private boolean started;
@@ -69,7 +71,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
     try {
       future.get();
     } catch (ExecutionException ex) {
-      log.error("Service shutdown with error", ex);
+      LOG.error("Service shutdown with error", ex);
       throw ex;
     }
   }
@@ -92,7 +94,7 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
             // Wait for some max time after requesting shutdown
             executor.awaitTermination(24, TimeUnit.HOURS);
           } catch (InterruptedException ie) {
-            log.error("Interrupted while waiting for shutdown", ie);
+            LOG.error("Interrupted while waiting for shutdown", ie);
           }
         }
       }
@@ -114,30 +116,30 @@ public abstract class AbstractDeltaStreamerService implements Serializable {
   }
 
   /**
-   * Service implementation
+   * Service implementation.
    * 
    * @return
    */
   protected abstract Pair<CompletableFuture, ExecutorService> startService();
 
   /**
-   * A monitor thread is started which would trigger a callback if the service is shutdown
+   * A monitor thread is started which would trigger a callback if the service is shutdown.
    * 
    * @param onShutdownCallback
    */
   private void monitorThreads(Function<Boolean, Boolean> onShutdownCallback) {
-    log.info("Submitting monitor thread !!");
+    LOG.info("Submitting monitor thread !!");
     Executors.newSingleThreadExecutor().submit(() -> {
       boolean error = false;
       try {
-        log.info("Monitoring thread(s) !!");
+        LOG.info("Monitoring thread(s) !!");
         future.get();
       } catch (ExecutionException ex) {
-        log.error("Monitor noticed one or more threads failed." + " Requesting graceful shutdown of other threads", ex);
+        LOG.error("Monitor noticed one or more threads failed." + " Requesting graceful shutdown of other threads", ex);
         error = true;
         shutdown(false);
       } catch (InterruptedException ie) {
-        log.error("Got interrupted Monitoring threads", ie);
+        LOG.error("Got interrupted Monitoring threads", ie);
         error = true;
         shutdown(false);
       } finally {

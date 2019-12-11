@@ -18,9 +18,22 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
@@ -31,17 +44,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Represents the Active Timeline for the HoodieDataset. Instants for the last 12 hours (configurable) is in the
@@ -65,7 +67,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           INFLIGHT_CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_COMPACTION_EXTENSION,
           REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION}));
 
-  private static final transient Logger log = LogManager.getLogger(HoodieActiveTimeline.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
 
@@ -90,7 +92,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     try {
       this.setInstants(HoodieTableMetaClient.scanHoodieInstantsFromFileSystem(metaClient.getFs(),
           new Path(metaClient.getMetaPath()), includedExtensions));
-      log.info("Loaded instants " + getInstants());
+      LOG.info("Loaded instants " + getInstants());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
@@ -122,7 +124,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get all instants (commits, delta commits) that produce new data, in the active timeline *
+   * Get all instants (commits, delta commits) that produce new data, in the active timeline.
    */
   public HoodieTimeline getCommitsTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION));
@@ -139,7 +141,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   /**
    * Get all instants (commits, delta commits, clean, savepoint, rollback) that result in actions, in the active
-   * timeline *
+   * timeline.
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION, COMPACTION_ACTION,
@@ -147,14 +149,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only pure commits (inflight and completed) in the active timeline
+   * Get only pure commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCommitTimeline() {
     return getTimelineOfActions(Sets.newHashSet(COMMIT_ACTION));
   }
 
   /**
-   * Get only the delta commits (inflight and completed) in the active timeline
+   * Get only the delta commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getDeltaCommitTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(DELTA_COMMIT_ACTION),
@@ -162,7 +164,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions
+   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions.
    *
    * @param actions actions allowed in the timeline
    */
@@ -172,7 +174,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the cleaner action (inflight and completed) in the active timeline
+   * Get only the cleaner action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCleanerTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(CLEAN_ACTION),
@@ -180,7 +182,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the rollback action (inflight and completed) in the active timeline
+   * Get only the rollback action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getRollbackTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(ROLLBACK_ACTION),
@@ -188,7 +190,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the save point action (inflight and completed) in the active timeline
+   * Get only the save point action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getSavePointTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(SAVEPOINT_ACTION),
@@ -196,7 +198,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Get only the restore action (inflight and completed) in the active timeline
+   * Get only the restore action (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getRestoreTimeline() {
     return new HoodieDefaultTimeline(filterInstantsByAction(RESTORE_ACTION),
@@ -208,30 +210,30 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void createInflight(HoodieInstant instant) {
-    log.info("Creating a new in-flight instant " + instant);
+    LOG.info("Creating a new in-flight instant " + instant);
     // Create the in-flight file
     createFileInMetaPath(instant.getFileName(), Option.empty());
   }
 
   public void saveAsComplete(HoodieInstant instant, Option<byte[]> data) {
-    log.info("Marking instant complete " + instant);
+    LOG.info("Marking instant complete " + instant);
     Preconditions.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     transitionState(instant, HoodieTimeline.getCompletedInstant(instant), data);
-    log.info("Completed " + instant);
+    LOG.info("Completed " + instant);
   }
 
   public void revertToInflight(HoodieInstant instant) {
-    log.info("Reverting " + instant + " to inflight ");
+    LOG.info("Reverting " + instant + " to inflight ");
     revertStateTransition(instant, HoodieTimeline.getInflightInstant(instant));
-    log.info("Reverted " + instant + " to inflight");
+    LOG.info("Reverted " + instant + " to inflight");
   }
 
   public HoodieInstant revertToRequested(HoodieInstant instant) {
-    log.warn("Reverting " + instant + " to requested ");
+    LOG.warn("Reverting " + instant + " to requested ");
     HoodieInstant requestedInstant = HoodieTimeline.getRequestedInstant(instant);
     revertStateTransition(instant, HoodieTimeline.getRequestedInstant(instant));
-    log.warn("Reverted " + instant + " to requested");
+    LOG.warn("Reverted " + instant + " to requested");
     return requestedInstant;
   }
 
@@ -247,12 +249,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   private void deleteInstantFile(HoodieInstant instant) {
-    log.info("Deleting instant " + instant);
+    LOG.info("Deleting instant " + instant);
     Path inFlightCommitFilePath = new Path(metaClient.getMetaPath(), instant.getFileName());
     try {
       boolean result = metaClient.getFs().delete(inFlightCommitFilePath, false);
       if (result) {
-        log.info("Removed in-flight " + instant);
+        LOG.info("Removed in-flight " + instant);
       } else {
         throw new HoodieIOException("Could not delete in-flight instant " + instant);
       }
@@ -267,9 +269,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return readDataFromPath(detailPath);
   }
 
-  /**
-   * BEGIN - COMPACTION RELATED META-DATA MANAGEMENT
-   **/
+  //-----------------------------------------------------------------
+  //      BEGIN - COMPACTION RELATED META-DATA MANAGEMENT.
+  //-----------------------------------------------------------------
 
   public Option<byte[]> getInstantAuxiliaryDetails(HoodieInstant instant) {
     Path detailPath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
@@ -277,7 +279,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Revert compaction State from inflight to requested
+   * Revert compaction State from inflight to requested.
    *
    * @param inflightInstant Inflight Instant
    * @return requested instant
@@ -293,7 +295,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Compaction State from requested to inflight
+   * Transition Compaction State from requested to inflight.
    *
    * @param requestedInstant Requested instant
    * @return inflight instant
@@ -308,7 +310,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Compaction State from inflight to Committed
+   * Transition Compaction State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
    * @param data Extra Metadata
@@ -327,12 +329,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInPath(fullPath, data);
   }
 
-  /**
-   * END - COMPACTION RELATED META-DATA MANAGEMENT
-   **/
+  //-----------------------------------------------------------------
+  //      END - COMPACTION RELATED META-DATA MANAGEMENT
+  //-----------------------------------------------------------------
 
   /**
-   * Transition Clean State from inflight to Committed
+   * Transition Clean State from inflight to Committed.
    *
    * @param inflightInstant Inflight instant
    * @param data Extra Metadata
@@ -350,7 +352,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Clean State from requested to inflight
+   * Transition Clean State from requested to inflight.
    *
    * @param requestedInstant requested instant
    * @return commit instant
@@ -389,7 +391,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         if (!success) {
           throw new HoodieIOException("Could not rename " + currFilePath + " to " + revertFilePath);
         }
-        log.info("Renamed " + currFilePath + " to " + revertFilePath);
+        LOG.info("Renamed " + currFilePath + " to " + revertFilePath);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete revert " + curr, e);
@@ -427,7 +429,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       // If the path does not exist, create it first
       if (!metaClient.getFs().exists(fullPath)) {
         if (metaClient.getFs().createNewFile(fullPath)) {
-          log.info("Created a new file in meta path: " + fullPath);
+          LOG.info("Created a new file in meta path: " + fullPath);
         } else {
           throw new HoodieIOException("Failed to create file " + fullPath);
         }

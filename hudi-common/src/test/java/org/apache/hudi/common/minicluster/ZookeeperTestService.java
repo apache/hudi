@@ -20,6 +20,14 @@ package org.apache.hudi.common.minicluster;
 
 import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileUtil;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.zookeeper.server.NIOServerCnxnFactory;
+import org.apache.zookeeper.server.ZooKeeperServer;
+import org.apache.zookeeper.server.persistence.FileTxnLog;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -28,13 +36,6 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.zookeeper.server.NIOServerCnxnFactory;
-import org.apache.zookeeper.server.ZooKeeperServer;
-import org.apache.zookeeper.server.persistence.FileTxnLog;
 
 /**
  * A Zookeeper minicluster service implementation.
@@ -52,13 +53,13 @@ import org.apache.zookeeper.server.persistence.FileTxnLog;
  */
 public class ZookeeperTestService {
 
-  private static final Logger logger = LogManager.getLogger(ZookeeperTestService.class);
+  private static final Logger LOG = LogManager.getLogger(ZookeeperTestService.class);
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;
 
   /**
-   * Configuration settings
+   * Configuration settings.
    */
   private Configuration hadoopConf;
   private String workDir;
@@ -68,7 +69,7 @@ public class ZookeeperTestService {
   private int tickTime = 0;
 
   /**
-   * Embedded ZooKeeper cluster
+   * Embedded ZooKeeper cluster.
    */
   private NIOServerCnxnFactory standaloneServerFactory;
   private ZooKeeperServer zooKeeperServer;
@@ -102,7 +103,7 @@ public class ZookeeperTestService {
 
     // NOTE: Changed from the original, where InetSocketAddress was
     // originally created to bind to the wildcard IP, we now configure it.
-    logger.info("Zookeeper force binding to: " + this.bindIP);
+    LOG.info("Zookeeper force binding to: " + this.bindIP);
     standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
 
     // Start up this ZK server
@@ -119,7 +120,7 @@ public class ZookeeperTestService {
     }
 
     started = true;
-    logger.info("Zookeeper Minicluster service started on client port: " + clientPort);
+    LOG.info("Zookeeper Minicluster service started on client port: " + clientPort);
     return zooKeeperServer;
   }
 
@@ -138,7 +139,7 @@ public class ZookeeperTestService {
     standaloneServerFactory = null;
     zooKeeperServer = null;
 
-    logger.info("Zookeeper Minicluster service shut down.");
+    LOG.info("Zookeeper Minicluster service shut down.");
   }
 
   private void recreateDir(File dir, boolean clean) throws IOException {
@@ -220,7 +221,7 @@ public class ZookeeperTestService {
         }
       } catch (IOException e) {
         // ignore as this is expected
-        logger.info("server " + hostname + ":" + port + " not up " + e);
+        LOG.info("server " + hostname + ":" + port + " not up " + e);
       }
 
       if (System.currentTimeMillis() > start + timeout) {

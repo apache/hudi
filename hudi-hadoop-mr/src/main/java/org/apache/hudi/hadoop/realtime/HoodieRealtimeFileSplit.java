@@ -18,13 +18,14 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hadoop.mapred.FileSplit;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.hadoop.mapred.FileSplit;
 
 /**
  * Filesplit that wraps the base split and a list of log files to merge deltas from.

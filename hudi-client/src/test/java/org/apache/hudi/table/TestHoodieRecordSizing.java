@@ -18,12 +18,13 @@
 
 package org.apache.hudi.table;
 
-import static org.apache.hudi.common.model.HoodieTestUtils.generateFakeHoodieWriteStat;
-import static org.apache.hudi.table.HoodieCopyOnWriteTable.averageBytesPerRecord;
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
+
+import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -31,12 +32,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
-import org.junit.Test;
+
+import static org.apache.hudi.common.model.HoodieTestUtils.generateFakeHoodieWriteStat;
+import static org.apache.hudi.table.HoodieCopyOnWriteTable.averageBytesPerRecord;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieRecordSizing {
 

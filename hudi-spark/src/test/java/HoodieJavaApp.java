@@ -16,11 +16,6 @@
  * limitations under the License.
  */
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import java.util.ArrayList;
-import java.util.List;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
@@ -33,6 +28,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -42,8 +41,11 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Sample program that writes & reads hoodie datasets via the Spark datasource
+ * Sample program that writes & reads hoodie datasets via the Spark datasource.
  */
 public class HoodieJavaApp {
 
@@ -83,7 +85,7 @@ public class HoodieJavaApp {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
-  private static Logger logger = LogManager.getLogger(HoodieJavaApp.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieJavaApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaApp cli = new HoodieJavaApp();
@@ -152,7 +154,7 @@ public class HoodieJavaApp {
     // new dataset if needed
     writer.save(tablePath); // ultimately where the dataset will be placed
     String commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("First commit at instant time :" + commitInstantTime1);
+    LOG.info("First commit at instant time :" + commitInstantTime1);
 
     /**
      * Commit that updates records
@@ -175,7 +177,7 @@ public class HoodieJavaApp {
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
     String commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("Second commit at instant time :" + commitInstantTime2);
+    LOG.info("Second commit at instant time :" + commitInstantTime2);
 
     /**
      * Commit that Deletes some records
@@ -199,7 +201,7 @@ public class HoodieJavaApp {
     updateHiveSyncConfig(writer);
     writer.save(tablePath);
     String commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, tablePath);
-    logger.info("Third commit at instant time :" + commitInstantTime3);
+    LOG.info("Third commit at instant time :" + commitInstantTime3);
 
     /**
      * Read & do some queries
@@ -224,17 +226,17 @@ public class HoodieJavaApp {
           // For incremental view, pass in the root/base path of dataset
           .load(tablePath);
 
-      logger.info("You will only see records from : " + commitInstantTime2);
+      LOG.info("You will only see records from : " + commitInstantTime2);
       hoodieIncViewDF.groupBy(hoodieIncViewDF.col("_hoodie_commit_time")).count().show();
     }
   }
 
   /**
-   * Setup configs for syncing to hive
+   * Setup configs for syncing to hive.
    */
   private DataFrameWriter<Row> updateHiveSyncConfig(DataFrameWriter<Row> writer) {
     if (enableHiveSync) {
-      logger.info("Enabling Hive sync to " + hiveJdbcUrl);
+      LOG.info("Enabling Hive sync to " + hiveJdbcUrl);
       writer = writer.option(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), hiveTable)
           .option(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), hiveDB)
           .option(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), hiveJdbcUrl)

@@ -18,30 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.beust.jcommander.IStringConverter;
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import com.beust.jcommander.ParameterException;
-import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -60,10 +36,36 @@ import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
+
+import com.beust.jcommander.IStringConverter;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
+import com.google.common.base.Preconditions;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * An Utility which can incrementally take the output from {@link HiveIncrementalPuller} and apply it to the target
@@ -76,7 +78,7 @@ import org.apache.spark.sql.SparkSession;
  */
 public class HoodieDeltaStreamer implements Serializable {
 
-  private static volatile Logger log = LogManager.getLogger(HoodieDeltaStreamer.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
 
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
 
@@ -105,7 +107,7 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   /**
-   * Main method to start syncing
+   * Main method to start syncing.
    * 
    * @throws Exception
    */
@@ -113,23 +115,23 @@ public class HoodieDeltaStreamer implements Serializable {
     if (cfg.continuousMode) {
       deltaSyncService.start(this::onDeltaSyncShutdown);
       deltaSyncService.waitForShutdown();
-      log.info("Delta Sync shutting down");
+      LOG.info("Delta Sync shutting down");
     } else {
-      log.info("Delta Streamer running only single round");
+      LOG.info("Delta Streamer running only single round");
       try {
         deltaSyncService.getDeltaSync().syncOnce();
       } catch (Exception ex) {
-        log.error("Got error running delta sync once. Shutting down", ex);
+        LOG.error("Got error running delta sync once. Shutting down", ex);
         throw ex;
       } finally {
         deltaSyncService.close();
-        log.info("Shut down deltastreamer");
+        LOG.info("Shut down deltastreamer");
       }
     }
   }
 
   private boolean onDeltaSyncShutdown(boolean error) {
-    log.info("DeltaSync shutdown. Closing write client. Error?" + error);
+    LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
     deltaSyncService.close();
     return true;
   }
@@ -304,7 +306,7 @@ public class HoodieDeltaStreamer implements Serializable {
   public static class DeltaSyncService extends AbstractDeltaStreamerService {
 
     /**
-     * Delta Sync Config
+     * Delta Sync Config.
      */
     private final HoodieDeltaStreamer.Config cfg;
 
@@ -314,12 +316,12 @@ public class HoodieDeltaStreamer implements Serializable {
     private transient SchemaProvider schemaProvider;
 
     /**
-     * Spark Session
+     * Spark Session.
      */
     private transient SparkSession sparkSession;
 
     /**
-     * Spark context
+     * Spark context.
      */
     private transient JavaSparkContext jssc;
 
@@ -329,17 +331,17 @@ public class HoodieDeltaStreamer implements Serializable {
     TypedProperties props;
 
     /**
-     * Async Compactor Service
+     * Async Compactor Service.
      */
     private AsyncCompactService asyncCompactService;
 
     /**
-     * Table Type
+     * Table Type.
      */
     private final HoodieTableType tableType;
 
     /**
-     * Delta Sync
+     * Delta Sync.
      */
     private transient DeltaSync deltaSync;
 
@@ -361,7 +363,7 @@ public class HoodieDeltaStreamer implements Serializable {
       }
 
       this.props = UtilHelpers.readConfig(fs, new Path(cfg.propsFilePath), cfg.configs).getConfig();
-      log.info("Creating delta streamer with configs : " + props.toString());
+      LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
 
       if (cfg.filterDupes) {
@@ -383,7 +385,7 @@ public class HoodieDeltaStreamer implements Serializable {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
-          log.info("Setting Spark Pool name for delta-sync to " + SchedulerConfGenerator.DELTASYNC_POOL_NAME);
+          LOG.info("Setting Spark Pool name for delta-sync to " + SchedulerConfGenerator.DELTASYNC_POOL_NAME);
           jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.DELTASYNC_POOL_NAME);
         }
         try {
@@ -392,19 +394,19 @@ public class HoodieDeltaStreamer implements Serializable {
               long start = System.currentTimeMillis();
               Option<String> scheduledCompactionInstant = deltaSync.syncOnce();
               if (scheduledCompactionInstant.isPresent()) {
-                log.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
+                LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstant + ")");
                 asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstant.get()));
                 asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
               if (toSleepMs > 0) {
-                log.info("Last sync ran less than min sync interval: " + cfg.minSyncIntervalSeconds + " s, sleep: "
+                LOG.info("Last sync ran less than min sync interval: " + cfg.minSyncIntervalSeconds + " s, sleep: "
                     + toSleepMs + " ms.");
                 Thread.sleep(toSleepMs);
               }
             } catch (Exception e) {
-              log.error("Shutting down delta-sync due to exception", e);
+              LOG.error("Shutting down delta-sync due to exception", e);
               error = true;
               throw new HoodieException(e.getMessage(), e);
             }
@@ -417,18 +419,18 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Shutdown compactor as DeltaSync is shutdown
+     * Shutdown compactor as DeltaSync is shutdown.
      */
     private void shutdownCompactor(boolean error) {
-      log.info("Delta Sync shutdown. Error ?" + error);
+      LOG.info("Delta Sync shutdown. Error ?" + error);
       if (asyncCompactService != null) {
-        log.warn("Gracefully shutting down compactor");
+        LOG.warn("Gracefully shutting down compactor");
         asyncCompactService.shutdown(false);
       }
     }
 
     /**
-     * Callback to initialize write client and start compaction service if required
+     * Callback to initialize write client and start compaction service if required.
      * 
      * @param writeClient HoodieWriteClient
      * @return
@@ -456,7 +458,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Close all resources
+     * Close all resources.
      */
     public void close() {
       if (null != deltaSync) {
@@ -505,14 +507,14 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Enqueues new Pending compaction
+     * Enqueues new Pending compaction.
      */
     public void enqueuePendingCompaction(HoodieInstant instant) {
       pendingCompactions.add(instant);
     }
 
     /**
-     * Wait till outstanding pending compactions reduces to the passed in value
+     * Wait till outstanding pending compactions reduces to the passed in value.
      * 
      * @param numPendingCompactions Maximum pending compactions allowed
      * @throws InterruptedException
@@ -529,13 +531,13 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Fetch Next pending compaction if available
+     * Fetch Next pending compaction if available.
      * 
      * @return
      * @throws InterruptedException
      */
     private HoodieInstant fetchNextCompactionInstant() throws InterruptedException {
-      log.info("Compactor waiting for next instant for compaction upto 60 seconds");
+      LOG.info("Compactor waiting for next instant for compaction upto 60 seconds");
       HoodieInstant instant = pendingCompactions.poll(60, TimeUnit.SECONDS);
       if (instant != null) {
         try {
@@ -550,7 +552,7 @@ public class HoodieDeltaStreamer implements Serializable {
     }
 
     /**
-     * Start Compaction Service
+     * Start Compaction Service.
      */
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(maxConcurrentCompaction);
@@ -558,7 +560,7 @@ public class HoodieDeltaStreamer implements Serializable {
           IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
             try {
               // Set Compactor Pool Name for allowing users to prioritize compaction
-              log.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
+              LOG.info("Setting Spark Pool name for compaction to " + SchedulerConfGenerator.COMPACT_POOL_NAME);
               jssc.setLocalProperty("spark.scheduler.pool", SchedulerConfGenerator.COMPACT_POOL_NAME);
 
               while (!isShutdownRequested()) {
@@ -567,11 +569,11 @@ public class HoodieDeltaStreamer implements Serializable {
                   compactor.compact(instant);
                 }
               }
-              log.info("Compactor shutting down properly!!");
+              LOG.info("Compactor shutting down properly!!");
             } catch (InterruptedException ie) {
-              log.warn("Compactor executor thread got interrupted exception. Stopping", ie);
+              LOG.warn("Compactor executor thread got interrupted exception. Stopping", ie);
             } catch (IOException e) {
-              log.error("Compactor executor failed", e);
+              LOG.error("Compactor executor failed", e);
               throw new HoodieIOException(e.getMessage(), e);
             }
             return true;

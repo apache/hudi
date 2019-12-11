@@ -18,17 +18,22 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
+
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.exception.HoodieException;
 
+/**
+ * A utility class for reflection.
+ */
 public class ReflectionUtils {
 
   private static Map<String, Class<?>> clazzCache = new HashMap<>();
@@ -54,7 +59,7 @@ public class ReflectionUtils {
   }
 
   /**
-   * Instantiate a given class with a generic record payload
+   * Instantiate a given class with a generic record payload.
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, Object[] payloadArgs,
       Class<?>... constructorArgTypes) {
@@ -85,7 +90,7 @@ public class ReflectionUtils {
   }
 
   /**
-   * Return stream of top level class names in the same class path as passed-in class
+   * Return stream of top level class names in the same class path as passed-in class.
    * 
    * @param clazz
    */

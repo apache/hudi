@@ -18,6 +18,12 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.model.HoodieCompactionOperation;
+import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.util.Option;
+
+import org.apache.hadoop.fs.Path;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,15 +31,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.model.HoodieCompactionOperation;
-import org.apache.hudi.common.util.FSUtils;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Encapsulates all the needed information about a compaction and make a decision whether this compaction is effective
- * or not
- *
+ * or not.
  */
 public class CompactionOperation implements Serializable {
 
@@ -116,7 +117,7 @@ public class CompactionOperation implements Serializable {
   }
 
   /**
-   * Convert Avro generated Compaction operation to POJO for Spark RDD operation
+   * Convert Avro generated Compaction operation to POJO for Spark RDD operation.
    * 
    * @param operation Hoodie Compaction Operation
    * @return

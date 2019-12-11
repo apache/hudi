@@ -18,19 +18,23 @@
 
 package org.apache.hudi.common.util;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.apache.hudi.common.HoodieCommonTestHarness;
+
+import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import org.apache.hudi.common.HoodieCommonTestHarness;
-import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+/**
+ * Tests file I/O utils.
+ */
 public class TestFileIOUtils extends HoodieCommonTestHarness {
 
   @Test

@@ -18,23 +18,26 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TypedProperties;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
+
+import kafka.common.TopicAndPartition;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.spark.streaming.kafka.KafkaCluster;
+import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset;
+import org.apache.spark.streaming.kafka.OffsetRange;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.stream.Collectors;
-import kafka.common.TopicAndPartition;
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import org.apache.spark.streaming.kafka.KafkaCluster;
-import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset;
-import org.apache.spark.streaming.kafka.OffsetRange;
+
 import scala.Predef;
 import scala.collection.JavaConverters;
 import scala.collection.immutable.Map;
@@ -44,13 +47,11 @@ import scala.collection.mutable.StringBuilder;
 import scala.util.Either;
 
 /**
- * Source to read data from Kafka, incrementally
+ * Source to read data from Kafka, incrementally.
  */
 public class KafkaOffsetGen {
 
-  private static volatile Logger log = LogManager.getLogger(KafkaOffsetGen.class);
-
-  private static long DEFAULT_MAX_EVENTS_TO_READ = 1000000; // 1M events max
+  private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
 
   public static class CheckpointUtils {
 
@@ -161,7 +162,7 @@ public class KafkaOffsetGen {
   }
 
   /**
-   * Kafka reset offset strategies
+   * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
     LARGEST, SMALLEST
@@ -170,10 +171,13 @@ public class KafkaOffsetGen {
   /**
    * Configs to be passed for this source. All standard Kafka consumer configs are also respected
    */
-  static class Config {
+  public static class Config {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
+    private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
     private static final KafkaResetOffsetStrategies DEFAULT_AUTO_RESET_OFFSET = KafkaResetOffsetStrategies.LARGEST;
+    public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
+    public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
 
   private final HashMap<String, String> kafkaParams;
@@ -229,7 +233,11 @@ public class KafkaOffsetGen {
         new HashMap(ScalaHelpers.toJavaMap(cluster.getLatestLeaderOffsets(topicPartitions).right().get()));
 
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
-    long numEvents = Math.min(DEFAULT_MAX_EVENTS_TO_READ, sourceLimit);
+    long maxEventsToReadFromKafka = props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP,
+        Config.maxEventsFromKafkaSource);
+    maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
+        ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
+    long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
     OffsetRange[] offsetRanges = CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
 
     return offsetRanges;

@@ -18,14 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import static org.apache.hudi.common.table.HoodieTimeline.ROLLBACK_ACTION;
-
-import com.google.common.collect.ImmutableSet;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.stream.Stream;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
@@ -37,11 +29,24 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
+import com.google.common.collect.ImmutableSet;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.table.HoodieTimeline.ROLLBACK_ACTION;
+
+/**
+ * CLI command to display rollback options.
+ */
 @Component
 public class RollbacksCommand implements CommandMarker {
 
@@ -115,7 +120,7 @@ public class RollbacksCommand implements CommandMarker {
   }
 
   /**
-   * An Active timeline containing only rollbacks
+   * An Active timeline containing only rollbacks.
    */
   class RollbackTimeline extends HoodieActiveTimeline {
 

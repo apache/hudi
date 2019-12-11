@@ -18,30 +18,31 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.stream.Stream;
-import org.apache.hudi.common.util.Option;
 
 /**
  * Within a file group, a slice is a combination of data file written at a commit time and list of log files, containing
- * changes to the data file from that commit time
+ * changes to the data file from that commit time.
  */
 public class FileSlice implements Serializable {
 
   /**
-   * File Group Id of the Slice
+   * File Group Id of the Slice.
    */
   private HoodieFileGroupId fileGroupId;
 
   /**
-   * Point in the timeline, at which the slice was created
+   * Point in the timeline, at which the slice was created.
    */
   private String baseInstantTime;
 
   /**
-   * data file, with the compacted data, for this slice
+   * data file, with the compacted data, for this slice.
    */
   private HoodieDataFile dataFile;
 

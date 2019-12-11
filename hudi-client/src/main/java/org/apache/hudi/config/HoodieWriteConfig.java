@@ -18,14 +18,6 @@
 
 package org.apache.hudi.config;
 
-import com.google.common.base.Preconditions;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Map;
-import java.util.Properties;
-import javax.annotation.concurrent.Immutable;
 import org.apache.hudi.HoodieWriteClient;
 import org.apache.hudi.WriteStatus;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -35,11 +27,22 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.compact.strategy.CompactionStrategy;
 import org.apache.hudi.metrics.MetricsReporterType;
+
+import com.google.common.base.Preconditions;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.storage.StorageLevel;
 
+import javax.annotation.concurrent.Immutable;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.Properties;
+
 /**
- * Class storing configs for the {@link HoodieWriteClient}
+ * Class storing configs for the {@link HoodieWriteClient}.
  */
 @Immutable
 public class HoodieWriteConfig extends DefaultHoodieConfig {
@@ -112,8 +115,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * base properties
-   **/
+   * base properties.
+   */
   public String getBasePath() {
     return props.getProperty(BASE_PATH_PROP);
   }
@@ -207,8 +210,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * compaction properties
-   **/
+   * compaction properties.
+   */
   public HoodieCleaningPolicy getCleanerPolicy() {
     return HoodieCleaningPolicy.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_POLICY_PROP));
   }
@@ -294,8 +297,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * index properties
-   **/
+   * index properties.
+   */
   public HoodieIndex.IndexType getIndexType() {
     return HoodieIndex.IndexType.valueOf(props.getProperty(HoodieIndexConfig.INDEX_TYPE_PROP));
   }
@@ -414,8 +417,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * storage properties
-   **/
+   * storage properties.
+   */
   public long getParquetMaxFileSize() {
     return Long.parseLong(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
   }
@@ -449,8 +452,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
-   * metrics properties
-   **/
+   * metrics properties.
+   */
   public boolean isMetricsOn() {
     return Boolean.parseBoolean(props.getProperty(HoodieMetricsConfig.METRICS_ON));
   }
@@ -471,8 +474,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX);
   }
 
+  public String getJmxHost() {
+    return props.getProperty(HoodieMetricsConfig.JMX_HOST);
+  }
+
+  public int getJmxPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.JMX_PORT));
+  }
+
   /**
-   * memory configs
+   * memory configs.
    */
   public Double getMaxMemoryFractionPerPartitionMerge() {
     return Double.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP));

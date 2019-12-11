@@ -18,10 +18,6 @@
 
 package org.apache.hudi.cli.commands;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
@@ -29,12 +25,21 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.exception.DatasetNotFoundException;
+
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+/**
+ * CLI command to display hudi dataset options.
+ */
 @Component
 public class DatasetsCommand implements CommandMarker {
 
@@ -67,7 +72,7 @@ public class DatasetsCommand implements CommandMarker {
   }
 
   /**
-   * Create a Hoodie Table if it does not exist
+   * Create a Hoodie Table if it does not exist.
    *
    * @param path Base Path
    * @param name Hoodie Table Name
@@ -113,7 +118,7 @@ public class DatasetsCommand implements CommandMarker {
   }
 
   /**
-   * Describes table properties
+   * Describes table properties.
    */
   @CliCommand(value = "desc", help = "Describle Hoodie Table properties")
   public String descTable() {

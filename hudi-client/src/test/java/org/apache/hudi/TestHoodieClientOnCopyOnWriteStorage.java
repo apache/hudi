@@ -18,29 +18,6 @@
 
 package org.apache.hudi;
 
-import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
-import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -67,15 +44,44 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.HoodieTestDataGenerator.NULL_SCHEMA;
+import static org.apache.hudi.common.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 @SuppressWarnings("unchecked")
 public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
+  private static final Logger LOG = LogManager.getLogger(TestHoodieClientOnCopyOnWriteStorage.class);
+
   /**
-   * Test Auto Commit behavior for HoodieWriteClient insert API
+   * Test Auto Commit behavior for HoodieWriteClient insert API.
    */
   @Test
   public void testAutoCommitOnInsert() throws Exception {
@@ -83,7 +89,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Auto Commit behavior for HoodieWriteClient insertPrepped API
+   * Test Auto Commit behavior for HoodieWriteClient insertPrepped API.
    */
   @Test
   public void testAutoCommitOnInsertPrepped() throws Exception {
@@ -91,7 +97,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Auto Commit behavior for HoodieWriteClient upsert API
+   * Test Auto Commit behavior for HoodieWriteClient upsert API.
    */
   @Test
   public void testAutoCommitOnUpsert() throws Exception {
@@ -99,7 +105,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Auto Commit behavior for HoodieWriteClient upsert Prepped API
+   * Test Auto Commit behavior for HoodieWriteClient upsert Prepped API.
    */
   @Test
   public void testAutoCommitOnUpsertPrepped() throws Exception {
@@ -107,7 +113,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Auto Commit behavior for HoodieWriteClient bulk-insert API
+   * Test Auto Commit behavior for HoodieWriteClient bulk-insert API.
    */
   @Test
   public void testAutoCommitOnBulkInsert() throws Exception {
@@ -115,7 +121,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Auto Commit behavior for HoodieWriteClient bulk-insert prepped API
+   * Test Auto Commit behavior for HoodieWriteClient bulk-insert prepped API.
    */
   @Test
   public void testAutoCommitOnBulkInsertPrepped() throws Exception {
@@ -124,7 +130,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test auto-commit by applying write function
+   * Test auto-commit by applying write function.
    *
    * @param writeFn One of HoodieWriteClient Write API
    * @throws Exception in case of failure
@@ -150,7 +156,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test De-duplication behavior for HoodieWriteClient insert API
+   * Test De-duplication behavior for HoodieWriteClient insert API.
    */
   @Test
   public void testDeduplicationOnInsert() throws Exception {
@@ -158,7 +164,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test De-duplication behavior for HoodieWriteClient bulk-insert API
+   * Test De-duplication behavior for HoodieWriteClient bulk-insert API.
    */
   @Test
   public void testDeduplicationOnBulkInsert() throws Exception {
@@ -166,7 +172,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test De-duplication behavior for HoodieWriteClient upsert API
+   * Test De-duplication behavior for HoodieWriteClient upsert API.
    */
   @Test
   public void testDeduplicationOnUpsert() throws Exception {
@@ -174,7 +180,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Deduplication Logic for write function
+   * Test Deduplication Logic for write function.
    *
    * @param writeFn One of HoddieWriteClient non-prepped write APIs
    * @throws Exception in case of failure
@@ -222,7 +228,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Build a test Hoodie WriteClient with dummy index to configure isGlobal flag
+   * Build a test Hoodie WriteClient with dummy index to configure isGlobal flag.
    *
    * @param isGlobal Flag to control HoodieIndex.isGlobal
    * @return Hoodie Write Client
@@ -235,7 +241,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test Upsert API
+   * Test Upsert API.
    */
   @Test
   public void testUpserts() throws Exception {
@@ -243,7 +249,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test UpsertPrepped API
+   * Test UpsertPrepped API.
    */
   @Test
   public void testUpsertsPrepped() throws Exception {
@@ -251,7 +257,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test one of HoodieWriteClient upsert(Prepped) APIs
+   * Test one of HoodieWriteClient upsert(Prepped) APIs.
    *
    * @param hoodieWriteConfig Write Config
    * @param writeFn One of Hoodie Write Function API
@@ -289,7 +295,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Tesst deletion of records
+   * Tesst deletion of records.
    */
   @Test
   public void testDeletes() throws Exception {
@@ -316,7 +322,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
         -1, recordGenFunction, HoodieWriteClient::upsert, true, 200, 200, 1);
 
     /**
-     * Write 2 (deletes+writes)
+     * Write 2 (deletes+writes).
      */
     String prevCommitTime = newCommitTime;
     newCommitTime = "004";
@@ -334,7 +340,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test scenario of new file-group getting added during upsert()
+   * Test scenario of new file-group getting added during upsert().
    */
   @Test
   public void testSmallInsertHandlingForUpserts() throws Exception {
@@ -446,7 +452,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test scenario of new file-group getting added during insert()
+   * Test scenario of new file-group getting added during insert().
    */
   @Test
   public void testSmallInsertHandlingForInserts() throws Exception {
@@ -528,7 +534,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test delete with delete api
+   * Test delete with delete api.
    */
   @Test
   public void testDeletesWithDeleteApi() throws Exception {
@@ -657,7 +663,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test delete with delete api
+   * Test delete with delete api.
    */
   @Test
   public void testDeletesWithoutInserts() throws Exception {
@@ -686,7 +692,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test to ensure commit metadata points to valid files
+   * Test to ensure commit metadata points to valid files.
    */
   @Test
   public void testCommitWritesRelativePaths() throws Exception {
@@ -733,7 +739,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Test to ensure commit metadata points to valid files
+   * Test to ensure commit metadata points to valid files.
    */
   @Test
   public void testRollingStatsInMetadata() throws Exception {
@@ -808,7 +814,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Tests behavior of committing only when consistency is verified
+   * Tests behavior of committing only when consistency is verified.
    */
   @Test
   public void testConsistencyCheckDuringFinalize() throws Exception {
@@ -865,7 +871,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     Path markerFilePath = new Path(String.format("%s/%s", partitionPath,
         FSUtils.makeMarkerFile(commitTime, "1-0-1", UUID.randomUUID().toString())));
     metaClient.getFs().create(markerFilePath);
-    logger.info("Created a dummy marker path=" + markerFilePath);
+    LOG.info("Created a dummy marker path=" + markerFilePath);
 
     try {
       client.commit(commitTime, result);
@@ -877,14 +883,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
   }
 
   /**
-   * Build Hoodie Write Config for small data file sizes
+   * Build Hoodie Write Config for small data file sizes.
    */
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize) {
     return getSmallInsertWriteConfig(insertSplitSize, false);
   }
 
   /**
-   * Build Hoodie Write Config for small data file sizes
+   * Build Hoodie Write Config for small data file sizes.
    */
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA);

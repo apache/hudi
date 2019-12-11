@@ -18,6 +18,14 @@
 
 package org.apache.hudi.common.util.queue;
 
+import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -28,12 +36,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory queue. This
@@ -42,7 +44,7 @@ import org.apache.log4j.Logger;
  */
 public class BoundedInMemoryExecutor<I, O, E> {
 
-  private static Logger logger = LogManager.getLogger(BoundedInMemoryExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryExecutor.class);
 
   // Executor service used for launching writer thread.
   private final ExecutorService executorService;
@@ -76,7 +78,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Start all Producers
+   * Start all Producers.
    */
   public ExecutorCompletionService<Boolean> startProducers() {
     // Latch to control when and which producer thread will close the queue
@@ -89,7 +91,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
           preExecute();
           producer.produce(queue);
         } catch (Exception e) {
-          logger.error("error producing records", e);
+          LOG.error("error producing records", e);
           queue.markAsFailed(e);
           throw e;
         } finally {
@@ -108,19 +110,19 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Start only consumer
+   * Start only consumer.
    */
   private Future<E> startConsumer() {
     return consumer.map(consumer -> {
       return executorService.submit(() -> {
-        logger.info("starting consumer thread");
+        LOG.info("starting consumer thread");
         preExecute();
         try {
           E result = consumer.consume(queue);
-          logger.info("Queue Consumption is done; notifying producer threads");
+          LOG.info("Queue Consumption is done; notifying producer threads");
           return result;
         } catch (Exception e) {
-          logger.error("error consuming records", e);
+          LOG.error("error consuming records", e);
           queue.markAsFailed(e);
           throw e;
         }
@@ -129,7 +131,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
   }
 
   /**
-   * Main API to run both production and consumption
+   * Main API to run both production and consumption.
    */
   public E execute() {
     try {

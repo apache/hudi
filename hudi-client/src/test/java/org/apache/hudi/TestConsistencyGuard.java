@@ -18,16 +18,18 @@
 
 package org.apache.hudi;
 
-import java.util.Arrays;
-import java.util.concurrent.TimeoutException;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.util.ConsistencyGuard;
 import org.apache.hudi.common.util.ConsistencyGuardConfig;
 import org.apache.hudi.common.util.FailSafeConsistencyGuard;
+
+import org.apache.hadoop.fs.Path;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.concurrent.TimeoutException;
 
 public class TestConsistencyGuard extends HoodieClientTestHarness {
 

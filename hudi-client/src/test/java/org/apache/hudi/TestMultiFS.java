@@ -18,10 +18,6 @@
 
 package org.apache.hudi;
 
-import static org.junit.Assert.assertEquals;
-
-import java.util.List;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.HoodieClientTestUtils;
 import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -35,6 +31,8 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -44,9 +42,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+
 public class TestMultiFS extends HoodieClientTestHarness {
 
-  private static Logger logger = LogManager.getLogger(TestMultiFS.class);
+  private static final Logger LOG = LogManager.getLogger(TestMultiFS.class);
   private String tablePath = "file:///tmp/hoodie/sample-table";
   protected String tableName = "hoodie_rt";
   private String tableType = HoodieTableType.COPY_ON_WRITE.name();
@@ -90,7 +92,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       // Write generated data to hdfs (only inserts)
       String readCommitTime = hdfsWriteClient.startCommit();
-      logger.info("Starting commit " + readCommitTime);
+      LOG.info("Starting commit " + readCommitTime);
       List<HoodieRecord> records = dataGen.generateInserts(readCommitTime, 100);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
       hdfsWriteClient.upsert(writeRecords, readCommitTime);
@@ -107,13 +109,13 @@ public class TestMultiFS extends HoodieClientTestHarness {
           tableName, HoodieAvroPayload.class.getName());
 
       String writeCommitTime = localWriteClient.startCommit();
-      logger.info("Starting write commit " + writeCommitTime);
+      LOG.info("Starting write commit " + writeCommitTime);
       List<HoodieRecord> localRecords = dataGen.generateInserts(writeCommitTime, 100);
       JavaRDD<HoodieRecord> localWriteRecords = jsc.parallelize(localRecords, 1);
-      logger.info("Writing to path: " + tablePath);
+      LOG.info("Writing to path: " + tablePath);
       localWriteClient.upsert(localWriteRecords, writeCommitTime);
 
-      logger.info("Reading from path: " + tablePath);
+      LOG.info("Reading from path: " + tablePath);
       fs = FSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
       metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath);
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();

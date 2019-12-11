@@ -20,6 +20,9 @@ package org.apache.hudi.exception;
 
 import java.io.IOException;
 
+/**
+ * An exception throws when meet serialization problems.
+ */
 public class HoodieSerializationException extends HoodieException {
 
   private IOException ioException;

@@ -18,22 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.HoodieTimeline.DELTA_COMMIT_ACTION;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.FileSlice;
@@ -46,8 +30,29 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import static org.apache.hudi.common.model.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.HoodieTimeline.DELTA_COMMIT_ACTION;
+
+/**
+ * The utility class to support testing compaction.
+ */
 public class CompactionTestUtils {
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
@@ -175,6 +180,9 @@ public class CompactionTestUtils {
         CompactionUtils.LATEST_COMPACTION_METADATA_VERSION);
   }
 
+  /**
+   * The hoodie data file for testing.
+   */
   public static class TestHoodieDataFile extends HoodieDataFile {
 
     private final String path;

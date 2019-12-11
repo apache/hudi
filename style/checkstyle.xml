@@ -34,7 +34,7 @@
 <module name = "Checker">
     <property name="charset" value="UTF-8"/>
 
-    <property name="severity" value="warning"/>
+    <property name="severity" value="error"/>
 
     <property name="fileExtensions" value="java, properties, xml"/>
     <!-- Checks for whitespace                               -->
@@ -271,9 +271,8 @@
         <module name="EmptyStatement" />
 
         <!-- Checks for Java Docs. -->
-        <module name="JavadocStyle">
-            <property name="severity" value="info"/>
-        </module>
+        <module name="JavadocStyle"/>
+
         <module name="JavadocType">
             <property name="severity" value="info"/>
             <property name="scope" value="protected"/>
@@ -282,7 +281,6 @@
 
         <!-- Checks for out of order import statements. -->
         <module name="ImportOrder">
-            <property name="severity" value="info"/>
             <property name="groups" value="org.apache.hudi,*,javax,java,scala"/>
             <property name="separated" value="true"/>
             <property name="sortStaticImportsAlphabetically" value="true"/>
@@ -294,6 +292,12 @@
 
         <!-- Checks for star import. -->
         <module name="AvoidStarImport" />
+
+        <!-- Checks for constant name. -->
+        <module name="ConstantName" />
+
+        <!-- Checks for simple boolean expressions. -->
+        <module name="SimplifyBooleanExpression"/>
 
     </module>
 </module>

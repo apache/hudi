@@ -18,12 +18,16 @@
 
 package org.apache.hudi.common.minicluster;
 
-import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.zookeeper.server.ZooKeeperServer;
 
+import java.io.IOException;
+
+/**
+ * A utility class about mini cluster.
+ */
 public class MiniClusterUtil {
 
   private static MiniDFSCluster dfsCluster;
