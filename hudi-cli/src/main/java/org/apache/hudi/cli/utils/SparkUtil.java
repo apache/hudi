@@ -19,6 +19,7 @@
 package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.HoodieWriteClient;
+import org.apache.hudi.cli.commands.SetSparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -30,6 +31,7 @@ import org.apache.spark.launcher.SparkLauncher;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import java.util.Map;
 
 /**
  * Utility functions dealing with Spark.
@@ -45,13 +47,13 @@ public class SparkUtil {
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
     String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
         .getAbsolutePath();
+    Map<String, String> env = SetSparkEnvCommand.env;
     SparkLauncher sparkLauncher =
-        new SparkLauncher().setAppResource(currentJar).setMainClass(SparkMain.class.getName());
+        new SparkLauncher(env).setAppResource(currentJar).setMainClass(SparkMain.class.getName());
 
     if (!StringUtils.isNullOrEmpty(propertiesFile)) {
       sparkLauncher.setPropertiesFile(propertiesFile);
     }
-
     File libDirectory = new File(new File(currentJar).getParent(), "lib");
     for (String library : libDirectory.list()) {
       sparkLauncher.addJar(new File(libDirectory, library).getAbsolutePath());
