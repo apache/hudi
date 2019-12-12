@@ -18,12 +18,11 @@
 
 package org.apache.hudi.common.bloom.filter;
 
-import org.apache.hadoop.util.bloom.BloomFilter;
-import org.apache.hadoop.util.bloom.Key;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import org.apache.hadoop.util.bloom.BloomFilter;
+import org.apache.hadoop.util.bloom.Key;
 
 /**
  * Hoodie's internal dynamic Bloom Filter. This is largely based of {@link org.apache.hadoop.util.bloom.DynamicBloomFilter}

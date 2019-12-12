@@ -18,16 +18,15 @@
 
 package org.apache.hudi.common.bloom.filter;
 
-import org.apache.hadoop.util.bloom.Key;
-import org.apache.hudi.exception.HoodieIndexException;
-import javax.xml.bind.DatatypeConverter;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import javax.xml.bind.DatatypeConverter;
+import org.apache.hadoop.util.bloom.Key;
+import org.apache.hudi.exception.HoodieIndexException;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
