@@ -46,7 +46,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   protected final transient JavaSparkContext jsc;
   protected final HoodieWriteConfig config;
   protected final String basePath;
-  protected Configuration hadoopConf = new Configuration();
+  protected transient Configuration hadoopConf = new Configuration();
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
