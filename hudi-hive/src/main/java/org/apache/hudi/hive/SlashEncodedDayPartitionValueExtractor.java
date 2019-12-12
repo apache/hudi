@@ -18,11 +18,11 @@
 
 package org.apache.hudi.hive;
 
-import com.google.common.collect.Lists;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -58,6 +58,7 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
     int mm = Integer.parseInt(splits[1].contains("=") ? splits[1].split("=")[1] : splits[1]);
     int dd = Integer.parseInt(splits[2].contains("=") ? splits[2].split("=")[1] : splits[2]);
     DateTime dateTime = new DateTime(year, mm, dd, 0, 0);
-    return Lists.newArrayList(getDtfOut().print(dateTime));
+
+    return Collections.singletonList(getDtfOut().print(dateTime));
   }
 }
