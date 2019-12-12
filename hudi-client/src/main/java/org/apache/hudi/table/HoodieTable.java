@@ -91,6 +91,15 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
     this.index = HoodieIndex.createIndex(config, jsc);
   }
 
+  protected HoodieTable(HoodieWriteConfig config, Configuration hadoopConf) {
+    this.config = config;
+    this.hadoopConfiguration = new SerializableConfiguration(hadoopConf);
+    this.viewManager = FileSystemViewManager.createViewManager(new SerializableConfiguration(hadoopConf),
+      config.getViewStorageConfig());
+    this.metaClient = ClientUtils.createMetaClient(hadoopConf, config, true);
+    this.index = HoodieIndex.createIndex(config, null);
+  }
+
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
       viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration, config.getViewStorageConfig());
@@ -105,6 +114,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
         return new HoodieCopyOnWriteTable<>(config, jsc);
       case MERGE_ON_READ:
         return new HoodieMergeOnReadTable<>(config, jsc);
+      default:
+        throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
+    }
+  }
+
+  public static <T extends HoodieRecordPayload> HoodieTable<T> getHoodieTable(HoodieTableMetaClient metaClient,
+                                                                              HoodieWriteConfig config,
+                                                                              Configuration hadoopConf) {
+    switch (metaClient.getTableType()) {
+      case COPY_ON_WRITE:
+        return new HoodieCopyOnWriteTable<>(config, hadoopConf);
+      case MERGE_ON_READ:
+        return new HoodieMergeOnReadTable<>(config, hadoopConf);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }

@@ -21,9 +21,23 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class ClientUtils {
+
+  /**
+   * Create Consistency Aware MetaClient.
+   *
+   * @param hadoopConf Configuration
+   * @param config HoodieWriteConfig
+   * @param loadActiveTimelineOnLoad early loading of timeline
+   */
+  public static HoodieTableMetaClient createMetaClient(Configuration hadoopConf, HoodieWriteConfig config,
+                                                       boolean loadActiveTimelineOnLoad) {
+    return new HoodieTableMetaClient(hadoopConf, config.getBasePath(), loadActiveTimelineOnLoad,
+      config.getConsistencyGuardConfig());
+  }
 
   /**
    * Create Consistency Aware MetaClient.

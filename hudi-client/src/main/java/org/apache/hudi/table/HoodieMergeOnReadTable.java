@@ -45,6 +45,7 @@ import org.apache.hudi.io.compact.HoodieRealtimeTableCompactor;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
@@ -85,6 +86,10 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   public HoodieMergeOnReadTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     super(config, jsc);
+  }
+
+  public HoodieMergeOnReadTable(HoodieWriteConfig config, Configuration hadoopConf) {
+    super(config, hadoopConf);
   }
 
   @Override

@@ -56,6 +56,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import com.google.common.hash.Hashing;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -96,6 +97,10 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   public HoodieCopyOnWriteTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     super(config, jsc);
+  }
+
+  public HoodieCopyOnWriteTable(HoodieWriteConfig config, Configuration hadoopConf) {
+    super(config, hadoopConf);
   }
 
   private static PairFlatMapFunction<Iterator<Tuple2<String, String>>, String, PartitionCleanStat> deleteFilesFunc(

@@ -67,13 +67,13 @@ import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
@@ -135,6 +135,19 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackInFlight = rollbackInFlight;
     this.cleanClient = new HoodieCleanClient<>(jsc, config, metrics, timelineService);
+  }
+
+  public HoodieWriteClient(Configuration hadoopConf, HoodieWriteConfig clientConfig, boolean rollbackInFlight) {
+    this(hadoopConf, clientConfig, rollbackInFlight, HoodieIndex.createIndex(clientConfig, null), Option.empty());
+  }
+
+  public HoodieWriteClient(Configuration hadoopConf, HoodieWriteConfig clientConfig, boolean rollbackInFlight,
+                           HoodieIndex index, Option<EmbeddedTimelineService> timelineService) {
+    super(hadoopConf, clientConfig, timelineService);
+    this.index = index;
+    this.metrics = new HoodieMetrics(config, config.getTableName());
+    this.rollbackInFlight = rollbackInFlight;
+    this.cleanClient = new HoodieCleanClient<>(hadoopConf, config, metrics, timelineService);
   }
 
   public static SparkConf registerClasses(SparkConf conf) {
@@ -623,7 +636,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return true if the savepoint was created successfully
    */
   public boolean savepoint(String commitTime, String user, String comment) {
-    HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true), config, jsc);
+    HoodieTable<T> table = HoodieTable.getHoodieTable(createMetaClient(true, hadoopConf), config, hadoopConf);
     if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
       throw new UnsupportedOperationException("Savepointing is not supported or MergeOnRead table types");
     }
@@ -650,17 +663,18 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
           HoodieTimeline.compareTimestamps(commitTime, lastCommitRetained, HoodieTimeline.GREATER_OR_EQUAL),
           "Could not savepoint commit " + commitTime + " as this is beyond the lookup window " + lastCommitRetained);
 
-      Map<String, List<String>> latestFilesMap = jsc
-          .parallelize(FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath(),
-              config.shouldAssumeDatePartitioning()))
-          .mapToPair((PairFunction<String, String, List<String>>) partitionPath -> {
+      Map<String, List<String>> latestFilesMap = new HashMap<>();
+      FSUtils.getAllPartitionPaths(fs, table.getMetaClient().getBasePath(),
+          config.shouldAssumeDatePartitioning())
+          .stream()
+          .forEach(path -> {
             // Scan all partitions files with this commit time
-            LOG.info("Collecting latest files in partition path " + partitionPath);
+            LOG.info("Collecting latest files in partition path " + path);
             ReadOptimizedView view = table.getROFileSystemView();
-            List<String> latestFiles = view.getLatestDataFilesBeforeOrOn(partitionPath, commitTime)
+            List<String> latestFiles = view.getLatestDataFilesBeforeOrOn(path, commitTime)
                 .map(HoodieDataFile::getFileName).collect(Collectors.toList());
-            return new Tuple2<>(partitionPath, latestFiles);
-          }).collectAsMap();
+            latestFilesMap.put(path, latestFiles);
+          });
 
       HoodieSavepointMetadata metadata = AvroUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint

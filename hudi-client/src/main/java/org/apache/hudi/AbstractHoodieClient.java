@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -45,6 +46,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   protected final transient JavaSparkContext jsc;
   protected final HoodieWriteConfig config;
   protected final String basePath;
+  protected Configuration hadoopConf = new Configuration();
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -62,6 +64,18 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
       Option<EmbeddedTimelineService> timelineServer) {
     this.fs = FSUtils.getFs(clientConfig.getBasePath(), jsc.hadoopConfiguration());
     this.jsc = jsc;
+    this.basePath = clientConfig.getBasePath();
+    this.config = clientConfig;
+    this.timelineServer = timelineServer;
+    shouldStopTimelineServer = !timelineServer.isPresent();
+    startEmbeddedServerView();
+  }
+
+  protected AbstractHoodieClient(Configuration hadoopConf, HoodieWriteConfig clientConfig,
+                       Option<EmbeddedTimelineService> timelineServer) {
+    this.fs = FSUtils.getFs(clientConfig.getBasePath(), hadoopConf);
+    this.hadoopConf = hadoopConf;
+    this.jsc = null;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
     this.timelineServer = timelineServer;
@@ -124,4 +138,9 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return ClientUtils.createMetaClient(jsc, config, loadActiveTimelineOnLoad);
   }
+
+  protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad, Configuration hadoopConf) {
+    return ClientUtils.createMetaClient(hadoopConf, config, loadActiveTimelineOnLoad);
+  }
+
 }

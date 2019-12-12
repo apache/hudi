@@ -30,7 +30,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 
-import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
@@ -95,8 +95,7 @@ public class SavepointsCommand implements CommandMarker {
       return "Commit " + commitTime + " not found in Commits " + timeline;
     }
 
-    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("Create Savepoint");
-    HoodieWriteClient client = createHoodieClient(jsc, HoodieCLI.tableMetadata.getBasePath());
+    HoodieWriteClient client = createHoodieClient(new Configuration(), HoodieCLI.tableMetadata.getBasePath());
     String result;
     if (client.savepoint(commitTime, user, comments)) {
       // Refresh the current
@@ -105,7 +104,6 @@ public class SavepointsCommand implements CommandMarker {
     } else {
       result = String.format("Failed: Could not savepoint commit \"%s\".", commitTime);
     }
-    jsc.close();
     return result;
   }
 
@@ -142,10 +140,10 @@ public class SavepointsCommand implements CommandMarker {
     return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " refreshed.";
   }
 
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+  private static HoodieWriteClient createHoodieClient(Configuration conf, String basePath) throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
-    return new HoodieWriteClient(jsc, config, false);
+    return new HoodieWriteClient(conf, config, false);
   }
 
 }
