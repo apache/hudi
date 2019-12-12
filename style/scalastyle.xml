@@ -33,7 +33,7 @@
  <check level="error" class="org.scalastyle.scalariform.SpacesAfterPlusChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.WhitespaceEndOfLineChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.SpacesBeforePlusChecker" enabled="true"/>
- <check level="warning" class="org.scalastyle.file.FileLineLengthChecker" enabled="true">
+ <check level="error" class="org.scalastyle.file.FileLineLengthChecker" enabled="false">
   <parameters>
    <parameter name="maxLineLength"><![CDATA[160]]></parameter>
    <parameter name="tabSize"><![CDATA[4]]></parameter>
@@ -65,20 +65,20 @@
    <parameter name="maxParameters"><![CDATA[8]]></parameter>
   </parameters>
  </check>
- <check level="warning" class="org.scalastyle.scalariform.MagicNumberChecker" enabled="true">
+ <check level="error" class="org.scalastyle.scalariform.MagicNumberChecker" enabled="false">
   <parameters>
    <parameter name="ignore"><![CDATA[-1,0,1,2,3]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceBeforeLeftBracketChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoWhitespaceAfterLeftBracketChecker" enabled="true"/>
- <check level="warning" class="org.scalastyle.scalariform.ReturnChecker" enabled="true"/>
- <check level="warning" class="org.scalastyle.scalariform.NullChecker" enabled="true"/>
+ <check level="error" class="org.scalastyle.scalariform.ReturnChecker" enabled="false"/>
+ <check level="error" class="org.scalastyle.scalariform.NullChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.NoCloneChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.NoFinalizeChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.CovariantEqualsChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.StructuralTypeChecker" enabled="true"/>
- <check level="warning" class="org.scalastyle.file.RegexChecker" enabled="true">
+ <check level="error" class="org.scalastyle.file.RegexChecker" enabled="false">
   <parameters>
    <parameter name="regex"><![CDATA[println]]></parameter>
   </parameters>
@@ -88,20 +88,20 @@
    <parameter name="maxTypes"><![CDATA[30]]></parameter>
   </parameters>
  </check>
- <check level="warning" class="org.scalastyle.scalariform.CyclomaticComplexityChecker" enabled="true">
+ <check level="error" class="org.scalastyle.scalariform.CyclomaticComplexityChecker" enabled="false">
   <parameters>
    <parameter name="maximum"><![CDATA[10]]></parameter>
   </parameters>
  </check>
  <check level="error" class="org.scalastyle.scalariform.UppercaseLChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.SimplifyBooleanExpressionChecker" enabled="true"/>
- <check level="warning" class="org.scalastyle.scalariform.IfBraceChecker" enabled="true">
+ <check level="error" class="org.scalastyle.scalariform.IfBraceChecker" enabled="false">
   <parameters>
    <parameter name="singleLineAllowed"><![CDATA[true]]></parameter>
    <parameter name="doubleLineAllowed"><![CDATA[false]]></parameter>
   </parameters>
  </check>
- <check level="warning" class="org.scalastyle.scalariform.MethodLengthChecker" enabled="true">
+ <check level="error" class="org.scalastyle.scalariform.MethodLengthChecker" enabled="false">
   <parameters>
    <parameter name="maxLength"><![CDATA[50]]></parameter>
   </parameters>
@@ -116,7 +116,7 @@
    <parameter name="maxMethods"><![CDATA[30]]></parameter>
   </parameters>
  </check>
- <check level="warning" class="org.scalastyle.scalariform.PublicMethodsHaveTypeChecker" enabled="true"/>
+ <check level="error" class="org.scalastyle.scalariform.PublicMethodsHaveTypeChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.file.NewLineAtEofChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.NoNewLineAtEofChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.scalariform.BlockImportChecker" enabled="false"/>
