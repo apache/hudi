@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive;
 
-import com.beust.jcommander.internal.Lists;
+import com.google.common.collect.Lists;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
