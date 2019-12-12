@@ -18,6 +18,8 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.cli.HoodiePrintHelper;
+
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -32,7 +34,7 @@ import java.util.Map;
 @Component
 public class SetSparkEnvCommand implements CommandMarker {
 
-  public static Map env = new HashMap<String, String>();
+  public static Map<String, String> env = new HashMap<String, String>();
 
   @CliCommand(value = "set", help = "Set spark launcher env to cli")
   public void setEnv(@CliOption(key = {"conf"}, help = "Env config to be set") final String confMap)
@@ -42,5 +44,25 @@ public class SetSparkEnvCommand implements CommandMarker {
       throw new IllegalArgumentException("Illegal set parameter, please use like [set --conf SPARK_HOME=/usr/etc/spark]");
     }
     env.put(map[0].trim(), map[1].trim());
+  }
+
+  @CliCommand(value = "show env all", help = "Show spark launcher envs")
+  public String showAllEnv() {
+    String[][] rows = new String[env.size()][2];
+    int i = 0;
+    for (String key: env.keySet()) {
+      rows[i] = new String[]{key, env.get(key)};
+      i++;
+    }
+    return HoodiePrintHelper.print(new String[] {"key", "value"}, rows);
+  }
+
+  @CliCommand(value = "show env", help = "Show spark launcher env by key")
+  public String showEnvByKey(@CliOption(key = {"key"}, help = "Which env conf want to show") final String key) {
+    if (key == null || key.isEmpty()) {
+      return showAllEnv();
+    } else {
+      return HoodiePrintHelper.print(new String[] {"key", "value"}, new String[][]{new String[]{key, env.get(key)}});
+    }
   }
 }
