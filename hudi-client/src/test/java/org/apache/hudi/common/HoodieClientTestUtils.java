@@ -221,7 +221,7 @@ public class HoodieClientTestUtils {
 
     if (filter == null) {
       filter = BloomFilterFactory
-          .createBloomFilter(10000, 0.0000001, -1, Integer.toString(BloomFilterTypeCode.SIMPLE.ordinal()));
+          .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     }
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);

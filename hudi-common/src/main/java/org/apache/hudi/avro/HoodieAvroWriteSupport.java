@@ -58,7 +58,7 @@ public class HoodieAvroWriteSupport extends AvroWriteSupport {
         extraMetaData.put(HOODIE_MAX_RECORD_KEY_FOOTER, maxRecordKey);
       }
       if (bloomFilter.getBloomFilterTypeCode().name().contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
-        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, Integer.toString(bloomFilter.getBloomFilterTypeCode().ordinal()));
+        extraMetaData.put(HOODIE_BLOOM_FILTER_TYPE_CODE, bloomFilter.getBloomFilterTypeCode().name());
       }
     }
     return new WriteSupport.FinalizedWriteContext(extraMetaData);

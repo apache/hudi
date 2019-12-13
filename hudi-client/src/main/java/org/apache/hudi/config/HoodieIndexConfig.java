@@ -55,7 +55,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = "hoodie.bloom.index.bucketized.checking";
   public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
   public static final String BLOOM_INDEX_FILTER_TYPE = "hoodie.bloom.index.filter.type";
-  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = Integer.toString(BloomFilterTypeCode.SIMPLE.ordinal());
+  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = BloomFilterTypeCode.SIMPLE.name();
   public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "hoodie.bloom.index.filter.dynamic.max.entries";
   public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "100000";
 
@@ -202,7 +202,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_FILTER_TYPE),
           BLOOM_INDEX_FILTER_TYPE, DEFAULT_BLOOM_INDEX_FILTER_TYPE);
       setDefaultOnCondition(props, !props.contains(HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
-          BLOOM_INDEX_FILTER_TYPE, DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES);
+          HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES, DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

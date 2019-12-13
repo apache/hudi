@@ -58,18 +58,18 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 public class TestParquetUtils extends HoodieCommonTestHarness {
 
-  int bloomFilterTypeOrdinalToTest;
+  String bloomFilterTypeToTest;
 
   @Parameters()
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][] {
-        {BloomFilterTypeCode.SIMPLE.ordinal()},
-        {BloomFilterTypeCode.DYNAMIC_V0.ordinal()}
+        {BloomFilterTypeCode.SIMPLE.name()},
+        {BloomFilterTypeCode.DYNAMIC_V0.name()}
     });
   }
 
-  public TestParquetUtils(int bloomFilterTypeOrdinalToTest) {
-    this.bloomFilterTypeOrdinalToTest = bloomFilterTypeOrdinalToTest;
+  public TestParquetUtils(String bloomFilterTypeToTest) {
+    this.bloomFilterTypeToTest = bloomFilterTypeToTest;
   }
 
   @Before
@@ -102,7 +102,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   private Configuration getConfiguration() {
-    if (bloomFilterTypeOrdinalToTest == BloomFilterTypeCode.SIMPLE.ordinal()) {
+    if (bloomFilterTypeToTest.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
       return HoodieTestUtils.getDefaultHadoopConf();
     } else {
       org.apache.hadoop.conf.Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
@@ -141,7 +141,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     // Write out a parquet file
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
     BloomFilter filter = BloomFilterFactory
-        .createBloomFilter(1000, 0.0001, 10000, Integer.toString(bloomFilterTypeOrdinalToTest));
+        .createBloomFilter(1000, 0.0001, 10000, bloomFilterTypeToTest);
     HoodieAvroWriteSupport writeSupport =
         new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,

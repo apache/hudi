@@ -161,7 +161,7 @@ public class ParquetUtils {
         toReturn = BloomFilterFactory.fromString(footerVal,
             footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE));
       } else {
-        toReturn = BloomFilterFactory.fromString(footerVal, Integer.toString(BloomFilterTypeCode.SIMPLE.ordinal()));
+        toReturn = BloomFilterFactory.fromString(footerVal, BloomFilterTypeCode.SIMPLE.name());
       }
     }
     return toReturn;

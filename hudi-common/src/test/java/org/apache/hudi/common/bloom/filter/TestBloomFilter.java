@@ -36,19 +36,19 @@ import java.util.List;
 public class TestBloomFilter {
 
   private final int keySize = 50;
-  private final int versionToTest;
+  private final String versionToTest;
 
   // name attribute is optional, provide an unique name for test
   // multiple parameters, uses Collection<Object[]>
   @Parameters()
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][] {
-        {BloomFilterTypeCode.SIMPLE.ordinal()},
-        {BloomFilterTypeCode.DYNAMIC_V0.ordinal()}
+        {BloomFilterTypeCode.SIMPLE.name()},
+        {BloomFilterTypeCode.DYNAMIC_V0.name()}
     });
   }
 
-  public TestBloomFilter(int versionToTest) {
+  public TestBloomFilter(String versionToTest) {
     this.versionToTest = versionToTest;
   }
 
@@ -92,18 +92,18 @@ public class TestBloomFilter {
 
       String serString = filter.serializeToString();
       BloomFilter recreatedBloomFilter = BloomFilterFactory
-          .fromString(serString, Integer.toString(versionToTest));
+          .fromString(serString, versionToTest);
       for (String key : inputs) {
         assert (recreatedBloomFilter.mightContain(key));
       }
     }
   }
 
-  BloomFilter getBloomFilter(int typeCodeOrdinal, int numEntries, double errorRate, int maxEntries) {
-    if (typeCodeOrdinal == BloomFilterTypeCode.SIMPLE.ordinal()) {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, Integer.toString(typeCodeOrdinal));
+  BloomFilter getBloomFilter(String typeCode, int numEntries, double errorRate, int maxEntries) {
+    if (typeCode.equalsIgnoreCase(BloomFilterTypeCode.SIMPLE.name())) {
+      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, -1, typeCode);
     } else {
-      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, Integer.toString(typeCodeOrdinal));
+      return BloomFilterFactory.createBloomFilter(numEntries, errorRate, maxEntries, typeCode);
     }
   }
 }
