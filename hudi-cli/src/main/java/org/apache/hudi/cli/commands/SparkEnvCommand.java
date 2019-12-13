@@ -29,10 +29,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * CLI command to set env.
+ * CLI command to set and show spark launcher init env.
  */
 @Component
-public class SetSparkEnvCommand implements CommandMarker {
+public class SparkEnvCommand implements CommandMarker {
 
   public static Map<String, String> env = new HashMap<String, String>();
 
