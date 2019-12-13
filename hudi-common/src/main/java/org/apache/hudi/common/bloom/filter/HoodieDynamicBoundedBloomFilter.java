@@ -18,15 +18,18 @@
 
 package org.apache.hudi.common.bloom.filter;
 
+import org.apache.hudi.exception.HoodieIndexException;
+
+import org.apache.hadoop.util.bloom.Key;
+
+import javax.xml.bind.DatatypeConverter;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import javax.xml.bind.DatatypeConverter;
-import org.apache.hadoop.util.bloom.Key;
-import org.apache.hudi.exception.HoodieIndexException;
 
 /**
  * Hoodie's dynamic bloom bounded bloom filter. This is based largely on Hadoop's DynamicBloomFilter, but with a bound
@@ -39,11 +42,11 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   private InternalDynamicBloomFilter internalDynamicBloomFilter;
 
   /**
-   * Instantiates {@link HoodieDynamicBoundedBloomFilter} with the given args
+   * Instantiates {@link HoodieDynamicBoundedBloomFilter} with the given args.
    *
    * @param numEntries The total number of entries.
-   * @param errorRate maximum allowable error rate.
-   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param errorRate  maximum allowable error rate.
+   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
    * @return the {@link HoodieDynamicBoundedBloomFilter} thus created
    */
   HoodieDynamicBoundedBloomFilter(int numEntries, double errorRate, int hashType, int maxNoOfEntries) {
@@ -56,10 +59,10 @@ public class HoodieDynamicBoundedBloomFilter implements BloomFilter {
   }
 
   /**
-   * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized string
+   * Generate {@link HoodieDynamicBoundedBloomFilter} from the given {@code serString} serialized string.
    *
    * @param serString the serialized string which represents the {@link HoodieDynamicBoundedBloomFilter}
-   * @param typeCode type code of the bloom filter
+   * @param typeCode  type code of the bloom filter
    */
   HoodieDynamicBoundedBloomFilter(String serString, BloomFilterTypeCode typeCode) {
     // ignoring the type code for now, since we have just one version

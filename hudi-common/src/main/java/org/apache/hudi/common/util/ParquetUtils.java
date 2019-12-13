@@ -18,18 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
@@ -38,6 +26,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -45,6 +38,15 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Utility functions involving with parquet.
@@ -54,7 +56,7 @@ public class ParquetUtils {
   /**
    * Read the rowKey list from the given parquet file.
    *
-   * @param filePath The parquet file path.
+   * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
    * @return Set Set of row keys
    */
@@ -66,9 +68,9 @@ public class ParquetUtils {
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
    * return all the rowkeys.
    *
-   * @param filePath The parquet file path.
+   * @param filePath      The parquet file path.
    * @param configuration configuration to build fs object
-   * @param filter record keys filter
+   * @param filter        record keys filter
    * @return Set Set of row keys matching candidateRecordKeys
    */
   public static Set<String> filterParquetRowKeys(Configuration configuration, Path filePath, Set<String> filter) {
@@ -120,7 +122,7 @@ public class ParquetUtils {
   }
 
   private static Map<String, String> readParquetFooter(Configuration configuration, boolean required,
-      Path parquetFilePath, String... footerNames) {
+                                                       Path parquetFilePath, String... footerNames) {
     Map<String, String> footerVals = new HashMap<>();
     ParquetMetadata footer = readMetadata(configuration, parquetFilePath);
     Map<String, String> metadata = footer.getFileMetaData().getKeyValueMetaData();
@@ -173,7 +175,7 @@ public class ParquetUtils {
           String.format("Could not read min/max record key out of footer correctly from %s. read) : %s",
               parquetFilePath, minMaxKeys));
     }
-    return new String[]{minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
+    return new String[] {minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
         minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
   }
 

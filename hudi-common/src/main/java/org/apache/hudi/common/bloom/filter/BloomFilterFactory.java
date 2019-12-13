@@ -21,20 +21,20 @@ package org.apache.hudi.common.bloom.filter;
 import org.apache.hadoop.util.hash.Hash;
 
 /**
- * A Factory class to generate different versions of {@link BloomFilter}
+ * A Factory class to generate different versions of {@link BloomFilter}.
  */
 public class BloomFilterFactory {
 
   /**
-   * Creates a new {@link BloomFilter} with the given args
+   * Creates a new {@link BloomFilter} with the given args.
    *
-   * @param numEntries total number of entries
-   * @param errorRate max allowed error rate
+   * @param numEntries                 total number of entries
+   * @param errorRate                  max allowed error rate
    * @param bloomFilterTypeCodeOrdinal bloom filter type code ordinal as string
    * @return the {@link BloomFilter} thus created
    */
   public static BloomFilter createBloomFilter(int numEntries, double errorRate, int maxNumberOfEntries,
-      String bloomFilterTypeCodeOrdinal) {
+                                              String bloomFilterTypeCodeOrdinal) {
     int ordinal = Integer.parseInt(bloomFilterTypeCodeOrdinal);
     if (ordinal < BloomFilterTypeCode.values().length) {
       BloomFilterTypeCode typeCode = BloomFilterTypeCode.values()[ordinal];
@@ -51,9 +51,9 @@ public class BloomFilterFactory {
   }
 
   /**
-   * Generate {@link BloomFilter} from serialized String
+   * Generate {@link BloomFilter} from serialized String.
    *
-   * @param serString the serialized string of the {@link BloomFilter}
+   * @param serString                  the serialized string of the {@link BloomFilter}
    * @param bloomFilterTypeCodeOrdinal bloom filter type code ordinal as string
    * @return the {@link BloomFilter} thus generated from the passed in serialized string
    */

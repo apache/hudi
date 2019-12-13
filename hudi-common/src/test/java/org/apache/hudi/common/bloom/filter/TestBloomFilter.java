@@ -18,18 +18,19 @@
 
 package org.apache.hudi.common.bloom.filter;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+
 /**
- * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBoundedBloomFilter}
+ * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBoundedBloomFilter}.
  */
 @RunWith(Parameterized.class)
 public class TestBloomFilter {
@@ -41,7 +42,7 @@ public class TestBloomFilter {
   // multiple parameters, uses Collection<Object[]>
   @Parameters()
   public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][]{
+    return Arrays.asList(new Object[][] {
         {BloomFilterTypeCode.SIMPLE.ordinal()},
         {BloomFilterTypeCode.DYNAMIC_V0.ordinal()}
     });

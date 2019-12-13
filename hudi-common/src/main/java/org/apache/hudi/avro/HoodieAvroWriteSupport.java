@@ -18,13 +18,15 @@
 
 package org.apache.hudi.avro;
 
-import java.util.HashMap;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.bloom.filter.BloomFilter;
 import org.apache.hudi.common.bloom.filter.HoodieDynamicBoundedBloomFilter;
+
+import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
+
+import java.util.HashMap;
 
 /**
  * Wrap AvroWriterSupport for plugging in the bloom filter.

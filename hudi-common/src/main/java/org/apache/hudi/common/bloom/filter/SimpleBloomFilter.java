@@ -18,6 +18,12 @@
 
 package org.apache.hudi.common.bloom.filter;
 
+import org.apache.hudi.exception.HoodieIndexException;
+
+import org.apache.hadoop.util.bloom.Key;
+
+import javax.xml.bind.DatatypeConverter;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
@@ -28,9 +34,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
-import javax.xml.bind.DatatypeConverter;
-import org.apache.hadoop.util.bloom.Key;
-import org.apache.hudi.exception.HoodieIndexException;
 
 /**
  * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
@@ -44,8 +47,8 @@ public class SimpleBloomFilter implements BloomFilter {
    * Create a new Bloom filter with the given configurations.
    *
    * @param numEntries The total number of entries.
-   * @param errorRate maximum allowable error rate.
-   * @param hashType type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
+   * @param errorRate  maximum allowable error rate.
+   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
    */
   public SimpleBloomFilter(int numEntries, double errorRate, int hashType) {
     // Bit size

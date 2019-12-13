@@ -19,7 +19,7 @@
 package org.apache.hudi.common.bloom.filter;
 
 /**
- * Bloom filter utils
+ * Bloom filter utils.
  */
 class BloomFilterUtils {
 
@@ -29,14 +29,14 @@ class BloomFilterUtils {
   private static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
 
   /**
-   * @return the bitsize given the total number of entries and error rate
+   * @return the bitsize given the total number of entries and error rate.
    */
   static int getBitSize(int numEntries, double errorRate) {
     return (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
   }
 
   /**
-   * @return the number of hashes given the bitsize and total number of entries
+   * @return the number of hashes given the bitsize and total number of entries.
    */
   static int getNumHashes(int bitSize, int numEntries) {
     // Number of the hash functions

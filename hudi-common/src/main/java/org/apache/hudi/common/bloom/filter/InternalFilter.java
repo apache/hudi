@@ -18,15 +18,16 @@
 
 package org.apache.hudi.common.bloom.filter;
 
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.util.bloom.HashFunction;
+import org.apache.hadoop.util.bloom.Key;
+import org.apache.hadoop.util.hash.Hash;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
-import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.util.bloom.HashFunction;
-import org.apache.hadoop.util.bloom.Key;
-import org.apache.hadoop.util.hash.Hash;
 
 /**
  * Copied from {@link org.apache.hadoop.util.bloom.Filter}. {@link InternalDynamicBloomFilter} needs access to some of
@@ -47,8 +48,8 @@ abstract class InternalFilter implements Writable {
    * Constructor.
    *
    * @param vectorSize The vector size of <i>this</i> filter.
-   * @param nbHash The number of hash functions to consider.
-   * @param hashType type of the hashing function (see {@link Hash}).
+   * @param nbHash     The number of hash functions to consider.
+   * @param hashType   type of the hashing function (see {@link Hash}).
    */
   protected InternalFilter(int vectorSize, int nbHash, int hashType) {
     this.vectorSize = vectorSize;

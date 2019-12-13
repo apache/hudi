@@ -18,8 +18,27 @@
 
 package org.apache.hudi.common.util;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.common.HoodieCommonTestHarness;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
+import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTestUtils;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,26 +48,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.HoodieCommonTestHarness;
-import org.apache.hudi.common.bloom.filter.BloomFilter;
-import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
-import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTestUtils;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests parquet utils.
@@ -60,7 +62,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
   @Parameters()
   public static Collection<Object[]> data() {
-    return Arrays.asList(new Object[][]{
+    return Arrays.asList(new Object[][] {
         {BloomFilterTypeCode.SIMPLE.ordinal()},
         {BloomFilterTypeCode.DYNAMIC_V0.ordinal()}
     });

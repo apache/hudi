@@ -19,7 +19,7 @@
 package org.apache.hudi.common.bloom.filter;
 
 /**
- * Bloom filter type codes
+ * Bloom filter type codes.
  */
 public enum BloomFilterTypeCode {
   SIMPLE,
