@@ -399,7 +399,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(inserts1, 1);
-    System.out.println("Records to be inserted " + writeRecords.collect());
 
     JavaRDD<WriteStatus> result = client.insert(writeRecords, newCommitTime);
     List<WriteStatus> statuses = result.collect();
@@ -419,8 +418,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     List<HoodieRecord> updates1 = dataGen.generateUpdatesWithDiffPartition(newCommitTime, inserts1);
     JavaRDD<HoodieRecord> updateRecords = jsc.parallelize(updates1, 1);
-
-    System.out.println("Records to be updated " + updateRecords.collect());
 
     JavaRDD<WriteStatus> result1 = client.upsert(updateRecords, newCommitTime);
     List<WriteStatus> statuses1 = result1.collect();

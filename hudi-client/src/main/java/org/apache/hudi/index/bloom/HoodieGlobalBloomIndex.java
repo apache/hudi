@@ -34,6 +34,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.Optional;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -87,11 +88,6 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
 
-    Map<String, String> indexToPartitionMap = new HashMap<>();
-    for (Entry<String, List<BloomIndexFileInfo>> entry : partitionToFileIndexInfo.entrySet()) {
-      entry.getValue().forEach(indexFile -> indexToPartitionMap.put(indexFile.getFileId(), entry.getKey()));
-    }
-
     IndexFileFilter indexFileFilter =
         config.getBloomIndexPruneByRanges() ? new IntervalTreeBasedGlobalIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedGlobalIndexFileFilter(partitionToFileIndexInfo);
@@ -114,20 +110,20 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
   protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
       JavaPairRDD<HoodieKey, HoodieRecordLocation> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
 
-    Map<String, Pair<HoodieKey, HoodieRecordLocation>> keyMap = keyFilenamePairRDD
-        .mapToPair(e -> new Tuple2<>(e._1.getRecordKey(), Pair.of(e._1, e._2))).collectAsMap();
+    JavaPairRDD<String, HoodieRecord<T>> incomingRowKeyRecordPairRDD =
+        recordRDD.mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 
-    JavaRDD<HoodieRecord<T>> toReturn = recordRDD.map(rec -> {
-      if (keyMap.containsKey(rec.getRecordKey())) {
-        Pair<HoodieKey, HoodieRecordLocation> value = keyMap.get(rec.getRecordKey());
-        return getTaggedRecord(new HoodieRecord(value.getLeft(), rec.getData()), Option.of(value
-            .getRight()));
+    JavaPairRDD<String, Tuple2<HoodieRecordLocation, HoodieKey>> existingRecordKeyToRecordLocationHoodieKeyMap =
+        keyFilenamePairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), new Tuple2<>(p._2, p._1)));
+
+    return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().map(record -> {
+      if (record._2().isPresent()) {
+        // Record key matched to file
+        return getTaggedRecord(new HoodieRecord<>(record._2.get()._2, record._1.getData()), Option.ofNullable(record._2.get()._1));
       } else {
-        return getTaggedRecord(rec, Option.empty());
+        return getTaggedRecord(record._1, Option.empty());
       }
     });
-
-    return toReturn;
   }
 
   @Override
