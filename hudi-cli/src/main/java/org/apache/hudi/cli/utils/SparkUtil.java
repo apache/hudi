@@ -19,7 +19,7 @@
 package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.HoodieWriteClient;
-import org.apache.hudi.cli.commands.SetSparkEnvCommand;
+import org.apache.hudi.cli.commands.SparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
 import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -47,7 +47,7 @@ public class SparkUtil {
   public static SparkLauncher initLauncher(String propertiesFile) throws URISyntaxException {
     String currentJar = new File(SparkUtil.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath())
         .getAbsolutePath();
-    Map<String, String> env = SetSparkEnvCommand.env;
+    Map<String, String> env = SparkEnvCommand.env;
     SparkLauncher sparkLauncher =
         new SparkLauncher(env).setAppResource(currentJar).setMainClass(SparkMain.class.getName());
 
