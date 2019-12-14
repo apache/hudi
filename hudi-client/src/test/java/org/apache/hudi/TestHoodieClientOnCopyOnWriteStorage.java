@@ -387,7 +387,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
    * Test update of a record to different partition with Global Index.
    */
   @Test
-  public void testUpsertToDiffPartitionGlobaIndex() throws Exception {
+  public void testUpsertToDiffPartitionGlobalIndex() throws Exception {
     HoodieWriteClient client = getHoodieWriteClient(getConfig(IndexType.GLOBAL_BLOOM), false);
     /**
      * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
