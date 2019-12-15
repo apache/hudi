@@ -18,7 +18,13 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.hudi.exception.HoodieException;
+
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sun.net.util.IPAddressUtil;
+
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -31,10 +37,6 @@ import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import org.apache.hudi.exception.HoodieException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import sun.net.util.IPAddressUtil;
 
 /**
  * Utility for various network related tasks (such as finding free ports).
@@ -132,9 +134,9 @@ public class NetUtils {
           return port;
         }
       } catch (IOException ignored) {
+        LOG.debug(ignored.getMessage());
       }
     }
-
     throw new RuntimeException("Could not find a free permitted port on the machine.");
   }
 
@@ -348,23 +350,23 @@ public class NetUtils {
       int dashIdx = range.indexOf('-');
       if (dashIdx == -1) {
         // only one port in range:
-        final int port = Integer.valueOf(range);
+        final int port = Integer.parseInt(range);
         if (!isValidHostPort(port)) {
-          throw new HoodieException("Invalid port configuration. Port must be between 0" +
-              "and 65535, but was " + port + ".");
+          throw new HoodieException("Invalid port configuration. Port must be between 0"
+              + "and 65535, but was " + port + ".");
         }
         rangeIterator = Collections.singleton(Integer.valueOf(range)).iterator();
       } else {
         // evaluate range
-        final int start = Integer.valueOf(range.substring(0, dashIdx));
+        final int start = Integer.parseInt(range.substring(0, dashIdx));
         if (!isValidHostPort(start)) {
-          throw new HoodieException("Invalid port configuration. Port must be between 0" +
-              "and 65535, but was " + start + ".");
+          throw new HoodieException("Invalid port configuration. Port must be between 0"
+              + "and 65535, but was " + start + ".");
         }
-        final int end = Integer.valueOf(range.substring(dashIdx + 1, range.length()));
+        final int end = Integer.parseInt(range.substring(dashIdx + 1, range.length()));
         if (!isValidHostPort(end)) {
-          throw new HoodieException("Invalid port configuration. Port must be between 0" +
-              "and 65535, but was " + end + ".");
+          throw new HoodieException("Invalid port configuration. Port must be between 0"
+              + "and 65535, but was " + end + ".");
         }
         rangeIterator = new Iterator<Integer>() {
           int i = start;

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.Test;
@@ -38,8 +37,8 @@ public class TestHoodieJmxMetrics extends TestHoodieMetrics {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.JMX);
-    when(config.getJmxHost()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_HOST);
-    when(config.getJmxPort()).thenReturn(HoodieMetricsConfig.DEFAULT_JMX_PORT);
+    when(config.getJmxHost()).thenReturn("localhost");
+    when(config.getJmxPorts()).thenReturn("9889");
     new HoodieMetrics(config, "raw_table");
   }
 
