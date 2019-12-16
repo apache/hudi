@@ -43,14 +43,14 @@
     <module>hudi-spark</module>
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
-    <module>hudi-bench</module>
+    <module>hudi-test-suite</module>
     <module>packaging/hudi-hadoop-mr-bundle</module>
     <module>packaging/hudi-hive-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>packaging/hudi-bench-bundle</module>
+    <module>packaging/hudi-test-suite-bundle</module>
     <module>docker/hoodie/hadoop</module>
     <module>hudi-integ-test</module>
   </modules>
