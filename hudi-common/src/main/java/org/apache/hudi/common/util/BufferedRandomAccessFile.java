@@ -27,6 +27,12 @@ import java.util.Arrays;
 import org.apache.log4j.Logger;
 
 /**
+ * This product includes code from Apache Casendra.
+ *   - adopted from org.apache.cassandra.io.BufferedRandomAccessFile
+ *     Copyright: 2015-2019 The Apache Software Foundation
+ *     Home page: http://cassandra.apache.org/
+ *     License: http://www.apache.org/licenses/LICENSE-2.0
+ * -----------
  * A <code>BufferedRandomAccessFile</code> is like a
  * <code>RandomAccessFile</code>, but it uses a private buffer so that most
  * operations do not require a disk access.
