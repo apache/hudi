@@ -24,6 +24,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -46,7 +47,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
@@ -68,11 +68,6 @@ import scala.Tuple3;
 @Component
 public class HoodieLogFileCommand implements CommandMarker {
 
-  @CliAvailabilityIndicator({"show logfiles"})
-  public boolean isShowArchivedLogFileAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "show logfile metadata", help = "Read commit metadata from log files")
   public String showLogFileCommits(
       @CliOption(key = "logFilePathPattern", mandatory = true,
@@ -84,7 +79,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    FileSystem fs = HoodieCLI.tableMetadata.getFs();
+    FileSystem fs = HoodieCLI.getTableMetaClient().getFs();
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
@@ -96,7 +91,7 @@ public class HoodieLogFileCommand implements CommandMarker {
     for (String logFilePath : logFilePaths) {
       FileStatus[] fsStatus = fs.listStatus(new Path(logFilePath));
       Schema writerSchema = new AvroSchemaConverter()
-          .convert(SchemaUtil.readSchemaFromLogFile(HoodieCLI.tableMetadata.getFs(), new Path(logFilePath)));
+          .convert(SchemaUtil.readSchemaFromLogFile(fs, new Path(logFilePath)));
       Reader reader = HoodieLogFormat.newReader(fs, new HoodieLogFile(fsStatus[0].getPath()), writerSchema);
 
       // read the avro blocks
@@ -178,7 +173,8 @@ public class HoodieLogFileCommand implements CommandMarker {
 
     System.out.println("===============> Showing only " + limit + " records <===============");
 
-    FileSystem fs = HoodieCLI.tableMetadata.getFs();
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    FileSystem fs = client.getFs();
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
 
@@ -193,8 +189,8 @@ public class HoodieLogFileCommand implements CommandMarker {
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
       HoodieMergedLogRecordScanner scanner =
-          new HoodieMergedLogRecordScanner(fs, HoodieCLI.tableMetadata.getBasePath(), logFilePaths, readerSchema,
-              HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp(),
+          new HoodieMergedLogRecordScanner(fs, client.getBasePath(), logFilePaths, readerSchema,
+              client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp(),
               Long.valueOf(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES),
               Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
               Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
@@ -210,7 +206,7 @@ public class HoodieLogFileCommand implements CommandMarker {
     } else {
       for (String logFile : logFilePaths) {
         Schema writerSchema = new AvroSchemaConverter()
-            .convert(SchemaUtil.readSchemaFromLogFile(HoodieCLI.tableMetadata.getFs(), new Path(logFile)));
+            .convert(SchemaUtil.readSchemaFromLogFile(client.getFs(), new Path(logFile)));
         HoodieLogFormat.Reader reader =
             HoodieLogFormat.newReader(fs, new HoodieLogFile(new Path(logFile)), writerSchema);
         // read the avro blocks

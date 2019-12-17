@@ -69,7 +69,7 @@ public class DatasetsCommand implements CommandMarker {
     HoodieCLI.connectTo(path, layoutVersion);
     HoodieCLI.initFS(true);
     HoodieCLI.state = HoodieCLI.CLIState.DATASET;
-    return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " loaded";
+    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " loaded";
   }
 
   /**
@@ -118,7 +118,7 @@ public class DatasetsCommand implements CommandMarker {
 
   @CliAvailabilityIndicator({"desc"})
   public boolean isDescAvailable() {
-    return HoodieCLI.tableMetadata != null;
+    return HoodieCLI.getTableMetaClient() != null;
   }
 
   /**
@@ -126,12 +126,13 @@ public class DatasetsCommand implements CommandMarker {
    */
   @CliCommand(value = "desc", help = "Describle Hoodie Table properties")
   public String descTable() {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     TableHeader header = new TableHeader().addTableHeaderField("Property").addTableHeaderField("Value");
     List<Comparable[]> rows = new ArrayList<>();
-    rows.add(new Comparable[] {"basePath", HoodieCLI.tableMetadata.getBasePath()});
-    rows.add(new Comparable[] {"metaPath", HoodieCLI.tableMetadata.getMetaPath()});
-    rows.add(new Comparable[] {"fileSystem", HoodieCLI.tableMetadata.getFs().getScheme()});
-    HoodieCLI.tableMetadata.getTableConfig().getProps().entrySet().forEach(e -> {
+    rows.add(new Comparable[] {"basePath", client.getBasePath()});
+    rows.add(new Comparable[] {"metaPath", client.getMetaPath()});
+    rows.add(new Comparable[] {"fileSystem", client.getFs().getScheme()});
+    client.getTableConfig().getProps().entrySet().forEach(e -> {
       rows.add(new Comparable[] {e.getKey(), e.getValue()});
     });
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
