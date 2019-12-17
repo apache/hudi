@@ -31,6 +31,9 @@ import org.apache.hadoop.fs.Path;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * V1 Clean Metadata migrator. Keeps absolute file paths for files cleaned.
+ */
 public class CleanV1MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 
   public static final Integer VERSION = 1;

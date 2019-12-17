@@ -20,6 +20,9 @@ package org.apache.hudi.common.model;
 
 import java.io.Serializable;
 
+/**
+ * POJO storing (partitionPath, hoodieFileId) -> external data file path.
+ */
 public class ExternalDataFile implements Serializable {
 
   private final HoodieFileGroupId fileGroupId;

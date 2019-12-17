@@ -22,8 +22,8 @@ import org.apache.hudi.AbstractHoodieClient;
 import org.apache.hudi.bootstrap.BootstrapWriteStatus.BootstrapSourceInfo;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.SerializableConfiguration;
-import org.apache.hudi.common.consolidated.VersionedIndexedStorage;
-import org.apache.hudi.common.consolidated.VersionedIndexedStorage.DataPayloadWriter;
+import org.apache.hudi.common.consolidated.CompositeMapFile;
+import org.apache.hudi.common.consolidated.CompositeMapFile.DataPayloadWriter;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieExternalFileIdMapping;
 import org.apache.hudi.common.model.HoodiePartitionExternalDataFiles;
@@ -107,13 +107,13 @@ public class HoodieBootstrapClient extends AbstractHoodieClient {
             sourceStatPair)).collect(Collectors.groupingBy(Pair::getKey,
             Collectors.mapping(x -> x.getValue(), Collectors.toList()))).values());
 
-    final VersionedIndexedStorage bootstrapMetadataStorage = new VersionedIndexedStorage("bootstrap",
+    final CompositeMapFile bootstrapMetadataStorage = new CompositeMapFile("bootstrap",
         new SerializableConfiguration(metaClient.getHadoopConf()), metaClient.getConsistencyGuardConfig(),
         metaClient.getMetaBootstrapPath(), metaClient.getMetaBootstrapIndexPath());
-    List<Pair<String, Pair<Integer, Long>>> partitionToFileOfssets = jsc.parallelize(sourceStatsByPartition,
+    List<Pair<String, Pair<String, Long>>> partitionToFileOfssets = jsc.parallelize(sourceStatsByPartition,
         config.getBootstrapMetadataWriterParallelism()).mapPartitions(
         (FlatMapFunction<Iterator<List<Pair<BootstrapSourceInfo, HoodieWriteStat>>>,
-            Pair<String, Pair<Integer, Long>>>) listIterator -> {
+            Pair<String, Pair<String, Long>>>) listIterator -> {
             DataPayloadWriter writer = bootstrapMetadataStorage.getDataPayloadWriter(
                 HoodieTimeline.BOOTSTRAP_INSTANT_TS, config.getBootstrapMetadataWriterMaxFileSizeInBytes());
             try {
@@ -133,7 +133,7 @@ public class HoodieBootstrapClient extends AbstractHoodieClient {
             }, true).collect();
 
     // Write Index to bootstrap metadata
-    final VersionedIndexedStorage.IndexWriter indexWriter = bootstrapMetadataStorage.getIndexWriter(null,
+    final CompositeMapFile.IndexWriter indexWriter = bootstrapMetadataStorage.getIndexWriter(null,
         HoodieTimeline.BOOTSTRAP_INSTANT_TS);
     indexWriter.addIndexEntries(partitionToFileOfssets.stream());
     indexWriter.commit();

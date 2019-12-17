@@ -44,9 +44,13 @@ import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class VersionedIndexedStorage implements Serializable {
+/**
+ * Storage Structure similar to org.apache.hadoop.io.MapFile but in this case,
+ * there are multiple data files (written in parallel) backed by an indexed storage.
+ */
+public class CompositeMapFile implements Serializable {
 
-  private static Logger log = LogManager.getLogger(VersionedIndexedStorage.class);
+  private static Logger log = LogManager.getLogger(CompositeMapFile.class);
 
   private final String namespace;
   private final SerializableConfiguration conf;
@@ -56,7 +60,7 @@ public class VersionedIndexedStorage implements Serializable {
 
   private transient FileSystem fileSystem;
 
-  public VersionedIndexedStorage(String namespace, SerializableConfiguration conf,
+  public CompositeMapFile(String namespace, SerializableConfiguration conf,
       ConsistencyGuardConfig consistencyGuardConfig, String rootDir, String rootIndexDir) {
     this.namespace = namespace;
     this.rootMetadataDir = rootDir;
@@ -103,7 +107,7 @@ public class VersionedIndexedStorage implements Serializable {
   }
 
   /**
-   * Random Access Reader
+   * Random Access Reader.
    */
   public class RandomAccessReader {
 
@@ -151,7 +155,7 @@ public class VersionedIndexedStorage implements Serializable {
   }
 
   /**
-   * Responsible for writing index to payload
+   * Responsible for writing index to payload.
    */
   public class IndexWriter {
 
@@ -191,11 +195,11 @@ public class VersionedIndexedStorage implements Serializable {
       }
     }
 
-    public void addIndexEntries(Stream<Pair<String, Pair<Integer, Long>>> partitionToFileOffsetEntries)
+    public void addIndexEntries(Stream<Pair<String, Pair<String, Long>>> partitionToFileOffsetEntries)
         throws IOException {
       partitionToFileOffsetEntries.forEach(e -> {
         String key = e.getKey();
-        String fileName = getNextOutputFilePath(currVersion, e.getValue().getKey()).getName();
+        String fileName = e.getValue().getKey();
         Long offset = e.getValue().getValue();
         mergedKeyToFileOffsetIdx.put(key, Pair.of(fileName, offset));
       });
@@ -240,7 +244,7 @@ public class VersionedIndexedStorage implements Serializable {
   }
 
   /**
-   * Responsible for Writing payload
+   * Responsible for Writing payload.
    */
   public class DataPayloadWriter {
 
@@ -251,7 +255,7 @@ public class VersionedIndexedStorage implements Serializable {
     private FSDataOutputStream currOuputStream;
     private Path currOutputFilePath;
     private int idGen;
-    private Map<String, Pair<Integer, Long>> keyToFileAndOffsetPair = new HashMap<>();
+    private Map<String, Pair<String, Long>> keyToFileAndOffsetPair = new HashMap<>();
 
     public DataPayloadWriter(long maxFileSizeInBytes, String currVersion) {
       this.maxFileSizeInBytes = maxFileSizeInBytes;
@@ -306,7 +310,8 @@ public class VersionedIndexedStorage implements Serializable {
       Text key = new Text(keyStr);
       BytesWritable bytesWritable = new BytesWritable(payload);
       try {
-        keyToFileAndOffsetPair.put(keyStr, Pair.of(idGen, currWriter.getLength()));
+        keyToFileAndOffsetPair.put(keyStr, Pair.of(getNextOutputFilePath(currVersion, idGen).toString(),
+            currWriter.getLength()));
         this.currWriter.append(key, bytesWritable);
         if (currWriter.getLength() >= maxFileSizeInBytes) {
           rollover();
@@ -316,7 +321,7 @@ public class VersionedIndexedStorage implements Serializable {
       }
     }
 
-    public List<Pair<String, Pair<Integer, Long>>> getWrittenFileNameOffsets() {
+    public List<Pair<String, Pair<String, Long>>> getWrittenFileNameOffsets() {
       return keyToFileAndOffsetPair.entrySet().stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())).collect(
           Collectors.toList());
     }

@@ -31,6 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * V2 Clean Metadata Migration handler. Uses relative paths.
+ */
 public class CleanV2MigrationHandler extends AbstractMigratorBase<HoodieCleanMetadata> {
 
   public static final Integer VERSION = 2;

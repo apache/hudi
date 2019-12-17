@@ -21,6 +21,9 @@ package org.apache.hudi.common.model;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * Bootstrap Index information for a single partition.
+ */
 public class HoodiePartitionExternalDataFiles implements Serializable {
 
   private final String externalBasePath;

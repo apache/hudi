@@ -245,7 +245,7 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Generate a reader schema off the provided writeSchema, to just project out the provided columns
+   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
    */
   public static Schema generateProjectionSchema(Schema originalSchema, List<String> fieldNames) {
     Map<String, Field> schemaFieldsMap = originalSchema.getFields().stream()

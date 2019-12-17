@@ -35,7 +35,7 @@ public abstract class BootstrapPartitionSelector implements Serializable {
   }
 
   /**
-   * Classify partitions for the purpose of bootstrapping
+   * Classify partitions for the purpose of bootstrapping.
    * @param partitions List of partitions with files present in each partitions
    * @return a partitions grouped by bootstrap mode
    */

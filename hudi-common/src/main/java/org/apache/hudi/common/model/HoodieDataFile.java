@@ -37,7 +37,7 @@ public class HoodieDataFile implements Serializable {
   private long fileLen;
 
   /**
-   * In case of index-only bootstrap, this file points to the actual data
+   * In case of index-only bootstrap, this file points to the actual data.
    */
   private Option<String> externalDataFile;
 

@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.Serializable;
 
 /**
- * WriteStatus for Bootstrap
+ * WriteStatus for Bootstrap.
  */
 public class BootstrapWriteStatus extends WriteStatus {
 

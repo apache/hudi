@@ -49,7 +49,7 @@ public class HoodieColumnProjectionUtils {
   /**
    * the nested column path is the string from the root to the leaf
    * e.g.
-   * c:struct<a:string,b:string>
+   * c:struct_of (a:string,b:string).
    * the column a's path is c.a and b's path is c.b
    */
   public static final String READ_NESTED_COLUMN_PATH_CONF_STR =

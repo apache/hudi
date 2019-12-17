@@ -216,7 +216,7 @@ public class DeltaSync implements Serializable {
 
     if ((cfg.operation == Operation.BOOTSTRAP) || (!commitTimelineOpt.isPresent()
         || (commitTimelineOpt.get().filterCompletedInstants().empty() && cfg.enableBootstrap))) {
-      log.info("Bootstrap is enabled. Running it");
+      LOG.info("Bootstrap is enabled. Running it");
       HoodieBootstrapClient bootstrapClient = new HoodieBootstrapClient(jssc, getHoodieClientConfig(null));
       bootstrapClient.bootstrap();
     } else {

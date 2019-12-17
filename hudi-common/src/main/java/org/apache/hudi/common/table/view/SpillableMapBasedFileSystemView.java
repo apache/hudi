@@ -97,7 +97,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   protected Map<HoodieFileGroupId, ExternalDataFile> createFileIdToExternalDataFileMap(
       Map<HoodieFileGroupId, ExternalDataFile> fileGroupIdExternalDataFileMap) {
     try {
-      log.info("Creating External Data File Map using external spillable Map. Max Mem=" + maxMemoryForExternalDataFile
+      LOG.info("Creating External Data File Map using external spillable Map. Max Mem=" + maxMemoryForExternalDataFile
           + ", BaseDir=" + baseStoreDir);
       new File(baseStoreDir).mkdirs();
       Map<HoodieFileGroupId, ExternalDataFile> pendingMap = new ExternalSpillableMap<>(

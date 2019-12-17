@@ -20,6 +20,9 @@ package org.apache.hudi.common.model;
 
 import java.io.Serializable;
 
+/**
+ * Hoodie File Name to external file name mapping.
+ */
 public class HoodieExternalFileIdMapping implements Serializable {
 
   private final String externalFileName;

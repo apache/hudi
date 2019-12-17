@@ -29,6 +29,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Timeline Layout Tests.
+ */
 public class TestTimelineLayout  {
 
   @Test

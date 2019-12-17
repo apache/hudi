@@ -33,6 +33,9 @@ import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * Utility functions for Cleaner.
+ */
 public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanV2MigrationHandler.VERSION;

@@ -184,7 +184,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       Schema avroSchema = new AvroSchemaConverter().convert(parquetSchema);
       Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema,
           keyGenerator.getTopLevelKeyColumns());
-      logger.info("Schema to be used for reading record Keys :" + recordKeySchema);
+      LOG.info("Schema to be used for reading record Keys :" + recordKeySchema);
       AvroReadSupport.setAvroReadSchema(getHadoopConf(), recordKeySchema);
       AvroReadSupport.setRequestedProjection(getHadoopConf(), recordKeySchema);
 
@@ -503,7 +503,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   /**
-   * Consumer that dequeues records from queue and sends to Merge Handle
+   * Consumer that dequeues records from queue and sends to Merge Handle.
    */
   private static class BootstrapHandler extends BoundedInMemoryQueueConsumer<HoodieRecord, Void> {
 

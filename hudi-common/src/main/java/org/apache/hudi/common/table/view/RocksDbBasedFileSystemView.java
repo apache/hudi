@@ -278,7 +278,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         rocksDB.putInBatch(batch, schemaHelper.getColFamilyForExternalDataFile(),
             schemaHelper.getKeyForExternalDataFile(externalDataFile.getFileGroupId()), externalDataFile);
       });
-      log.info("Initializing external data file mapping. Count=" + batch.count());
+      LOG.info("Initializing external data file mapping. Count=" + batch.count());
     });
   }
 

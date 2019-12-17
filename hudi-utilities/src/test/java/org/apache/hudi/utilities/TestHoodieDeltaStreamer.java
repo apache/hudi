@@ -369,7 +369,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     cfg.targetBasePath = newDatasetBasePath;
     new HoodieDeltaStreamer(cfg, jsc).sync();
     Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath + "/*/*.parquet");
-    log.info("Schema :");
+    LOG.info("Schema :");
     res.printSchema();
 
     // 3000 because original source is treated as non-hoodie source when in fact it was a hoodie source

@@ -24,6 +24,9 @@ import org.apache.hudi.common.versioning.MetadataMigrator;
 
 import java.util.Arrays;
 
+/**
+ * Migrator for migrating clean metadata.
+ */
 public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata> {
 
   public CleanMetadataMigrator(HoodieTableMetaClient metaClient) {

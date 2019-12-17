@@ -19,7 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.SerializableConfiguration;
-import org.apache.hudi.common.consolidated.VersionedIndexedStorage;
+import org.apache.hudi.common.consolidated.CompositeMapFile;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.ExternalDataFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -89,8 +89,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private final ReadLock readLock = globalLock.readLock();
   private final WriteLock writeLock = globalLock.writeLock();
 
-  private transient VersionedIndexedStorage bootstrapMetadataStorage;
-  private transient VersionedIndexedStorage.RandomAccessReader bootstrapMetadataReader;
+  private CompositeMapFile bootstrapMetadataStorage;
+  private transient CompositeMapFile.RandomAccessReader bootstrapMetadataReader;
 
   private String getPartitionPathFromFilePath(String fullPath) {
     return FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), new Path(fullPath).getParent());
@@ -102,14 +102,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     refreshTimeline(visibleActiveTimeline);
-    bootstrapMetadataStorage = new VersionedIndexedStorage("bootstrap",
+    bootstrapMetadataStorage = new CompositeMapFile("bootstrap",
         new SerializableConfiguration(metaClient.getHadoopConf()), metaClient.getConsistencyGuardConfig(),
         metaClient.getMetaBootstrapPath(), metaClient.getMetaBootstrapIndexPath());
     if (bootstrapMetadataStorage.isIndexExists(BOOTSTRAP_INSTANT_TS)) {
       try {
         bootstrapMetadataReader = bootstrapMetadataStorage.getRandomAccessReader(BOOTSTRAP_INSTANT_TS);
       } catch (IOException e) {
-        log.error("Unable to open random access reader", e);
+        LOG.error("Unable to open random access reader", e);
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
@@ -145,7 +145,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           if (null != serializedPartitionDataFiles) {
             HoodiePartitionExternalDataFiles partitionExternalDataFiles =
                 SerializationUtils.deserialize(serializedPartitionDataFiles);
-            log.info("Found index bootstrapped files in the partition=" + partition);
+            LOG.info("Found index bootstrapped files in the partition=" + partition);
             Preconditions.checkArgument(partition.equals(partitionExternalDataFiles.getHoodiePartitionPath()));
             addExternalDataFileMapping(partitionExternalDataFiles.getExternalFileIdMappings().stream().map(e -> {
               return new ExternalDataFile(new HoodieFileGroupId(partitionExternalDataFiles.getHoodiePartitionPath(),
@@ -682,42 +682,41 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected abstract boolean isExternalDataFilePresentForFileId(HoodieFileGroupId fgId);
 
   /**
-   * resets the external data file stream and overwrite with the new list
+   * Resets the external data file stream and overwrite with the new list.
    *
    * @param externalDataFileStream External Data File Stream
    */
   abstract void resetExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream);
 
   /**
-   * Add external data file stream to store
+   * Add external data file stream to store.
    *
    * @param externalDataFileStream External Data File Stream to be added
    */
   abstract void addExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream);
 
   /**
-   * Remove external data file stream from store
+   * Remove external data file stream from store.
    *
    * @param externalDataFileStream External Data File Stream to be removed
    */
   abstract void removeExternalDataFileMapping(Stream<ExternalDataFile> externalDataFileStream);
 
   /**
-   * Return pending compaction operation for a file-group
+   * Return pending compaction operation for a file-group.
    *
    * @param fileGroupId File-Group Id
    */
   protected abstract Option<ExternalDataFile> getExternalDataFile(HoodieFileGroupId fileGroupId);
 
   /**
-   * Fetch all external data files
+   * Fetch all external data files.
    */
   abstract Stream<ExternalDataFile> fetchExternalDataFiles();
 
 
   /**
-   * Checks if partition is pre-loaded and available in store
->>>>>>> 6fd0d663... Bootstrap Support Partial Changes
+   * Checks if partition is pre-loaded and available in store.
    *
    * @param partitionPath Partition Path
    */
