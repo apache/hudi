@@ -19,7 +19,10 @@
 package org.apache.hudi.common.bloom.filter;
 
 import org.apache.hadoop.util.hash.Hash;
+import org.junit.Assert;
 import org.junit.Test;
+
+import java.util.UUID;
 
 /**
  * Unit tests {@link InternalDynamicBloomFilter} for size bounding.
@@ -37,7 +40,7 @@ public class TestInternalDynamicBloomFilter {
     int lastKnownBloomSize = 0;
     while (index < batchSizes.length) {
       for (int i = 0; i < batchSizes[index]; i++) {
-        String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(50);
+        String key = UUID.randomUUID().toString();
         filter.add(key);
       }
 
@@ -45,9 +48,9 @@ public class TestInternalDynamicBloomFilter {
       if (index != 0) {
         int curLength = serString.length();
         if (index > indexForMaxGrowth) {
-          assert curLength == lastKnownBloomSize;
+          Assert.assertEquals("Length should not increase after hitting max entries", curLength, lastKnownBloomSize);
         } else {
-          assert curLength > lastKnownBloomSize;
+          Assert.assertTrue("Length should increase until max entries are reached", curLength > lastKnownBloomSize);
         }
       }
       lastKnownBloomSize = serString.length();

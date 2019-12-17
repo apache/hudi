@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.bloom.filter;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Unit tests {@link SimpleBloomFilter} and {@link HoodieDynamicBoundedBloomFilter}.
@@ -35,7 +37,6 @@ import java.util.List;
 @RunWith(Parameterized.class)
 public class TestBloomFilter {
 
-  private final int keySize = 50;
   private final String versionToTest;
 
   // name attribute is optional, provide an unique name for test
@@ -60,17 +61,17 @@ public class TestBloomFilter {
       inputs = new ArrayList<>();
       BloomFilter filter = getBloomFilter(versionToTest, size, 0.000001, size * 10);
       for (int i = 0; i < size; i++) {
-        String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
+        String key = UUID.randomUUID().toString();
         inputs.add(key);
         filter.add(key);
       }
       for (java.lang.String key : inputs) {
-        assert (filter.mightContain(key));
+        Assert.assertTrue("Filter should have returned true for " + key, filter.mightContain(key));
       }
       for (int i = 0; i < 100; i++) {
-        String randomKey = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
+        String randomKey = UUID.randomUUID().toString();
         if (inputs.contains(randomKey)) {
-          assert filter.mightContain(randomKey);
+          Assert.assertTrue("Filter should have returned true for " + randomKey, filter.mightContain(randomKey));
         }
       }
     }
@@ -85,7 +86,7 @@ public class TestBloomFilter {
       inputs = new ArrayList<>();
       BloomFilter filter = getBloomFilter(versionToTest, size, 0.000001, size * 10);
       for (int i = 0; i < size; i++) {
-        String key = org.apache.commons.lang.RandomStringUtils.randomAlphanumeric(keySize);
+        String key = UUID.randomUUID().toString();
         inputs.add(key);
         filter.add(key);
       }
@@ -94,7 +95,7 @@ public class TestBloomFilter {
       BloomFilter recreatedBloomFilter = BloomFilterFactory
           .fromString(serString, versionToTest);
       for (String key : inputs) {
-        assert (recreatedBloomFilter.mightContain(key));
+        Assert.assertTrue("Filter should have returned true for " + key, recreatedBloomFilter.mightContain(key));
       }
     }
   }
