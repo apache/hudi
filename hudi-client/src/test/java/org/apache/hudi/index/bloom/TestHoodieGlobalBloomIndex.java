@@ -267,20 +267,19 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       if (record.getRecordKey().equals("000")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename0)));
-        System.out.println("Record data " + record.getData().toString() + " rowChage 1 " + rowChange1.toString());
-        // assertTrue(record.getData().toString().equalsIgnoreCase(rowChange1.toString()));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange1.getJsonData());
       } else if (record.getRecordKey().equals("001")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
-        // assertTrue(record.getData().toString().equalsIgnoreCase(rowChange2.toString()));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange2.getJsonData());
       } else if (record.getRecordKey().equals("002")) {
         assertTrue(!record.isCurrentLocationKnown());
-        // assertTrue(record.getData().toString().equalsIgnoreCase(rowChange3.toString()));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange3.getJsonData());
       } else if (record.getRecordKey().equals("003")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
-        // assertTrue(record.getData().toString().equalsIgnoreCase(rowChange5.toString()));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange5.getJsonData());
       } else if (record.getRecordKey().equals("004")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
-        // assertTrue(record.getData().toString().equalsIgnoreCase(rowChange4.toString()));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange4.getJsonData());
       }
     }
   }

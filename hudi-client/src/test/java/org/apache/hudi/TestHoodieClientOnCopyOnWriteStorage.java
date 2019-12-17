@@ -392,7 +392,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
     /**
      * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
      */
-    String initCommitTime = "000";
     String newCommitTime = "001";
     List<HoodieRecord> inserts1 = dataGen.generateInserts(newCommitTime, 10);
 
@@ -406,14 +405,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     // check the partition metadata is written out
     assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+    String[] fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+    }
+    assertEquals("Must contain " + 10 + " records", 10,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
 
     /**
-     * Write 2 updates
+     * Write 2. Updates with different partition
      */
-    String prevCommitTime = newCommitTime;
     newCommitTime = "004";
-
-    // Write 1 (only inserts)
     client.startCommitWithTime(newCommitTime);
 
     List<HoodieRecord> updates1 = dataGen.generateUpdatesWithDiffPartition(newCommitTime, inserts1);
@@ -425,6 +427,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends TestHoodieClientBase {
 
     // check the partition metadata is written out
     assertPartitionMetadata(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, fs);
+    // Check the entire dataset has all records still
+    fullPartitionPaths = new String[dataGen.getPartitionPaths().length];
+    for (int i = 0; i < fullPartitionPaths.length; i++) {
+      fullPartitionPaths[i] = String.format("%s/%s/*", basePath, dataGen.getPartitionPaths()[i]);
+    }
+    assertEquals("Must contain " + 10 + " records", 10,
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths).count());
   }
 
   /**
