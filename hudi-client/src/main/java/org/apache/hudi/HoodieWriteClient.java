@@ -108,14 +108,17 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private transient Timer.Context indexTimer = null;
 
   /**
-   *
+   * @param jsc Java Spark Context
+   * @param clientConfig instance of HoodieWriteConfig
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) throws Exception {
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig) {
     this(jsc, clientConfig, false);
   }
 
   /**
-   *
+   * @param jsc Java Spark Context
+   * @param clientConfig instance of HoodieWriteConfig
+   * @param rollbackPending whether need to cleanup pending commits
    */
   public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending) {
     this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig, jsc));
@@ -135,6 +138,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this.cleanClient = new HoodieCleanClient<>(jsc, config, metrics, timelineService);
   }
 
+  /**
+   * Register hudi classes with Kryo serialization
+   *
+   * @param conf instance of SparkConf
+   * @return SparkConf
+   */
   public static SparkConf registerClasses(SparkConf conf) {
     conf.registerKryoClasses(new Class[]{HoodieWriteConfig.class, HoodieRecord.class, HoodieKey.class});
     return conf;
@@ -158,6 +167,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Upserts a bunch of new records into the Hoodie table, at the supplied commitTime.
+   *
+   * @param records hoodieRecords to upsert
+   * @param commitTime Commit Time handle
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
     HoodieTable<T> table = getTableAndInitCtx(OperationType.UPSERT);
@@ -509,6 +522,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Commit changes performed at the given commitTime marker.
+   *
+   * @param commitTime Commit Time handle
+   * @param writeStatuses RDD of WriteStatus to inspect errors and counts
+   * @return true if commit successfully
    */
   public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses) {
     return commit(commitTime, writeStatuses, Option.empty());
@@ -516,6 +533,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Commit changes performed at the given commitTime marker.
+   * @param commitTime Commit Time handle
+   * @param writeStatuses RDD of WriteStatus to inspect errors and counts
+   * @param extraMetadata Extra Metadata to be stored
+   * @return true if commit successfully
    */
   public boolean commit(String commitTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) {
@@ -775,7 +796,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    * Rollback the (inflight/committed) record changes with the given commit time. Three steps: (1) Atomically unpublish
    * this commit (2) clean indexing data, (3) clean new generated parquet files. (4) Finally delete .commit or .inflight
-   * file,
+   * file.
+   *
+   * @param commitTime Commit Time handle
+   * @return true if commit was rollback to successfully
    */
   public boolean rollback(final String commitTime) throws HoodieRollbackException {
     rollbackInternal(commitTime);
@@ -784,9 +808,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * NOTE : This action requires all writers (ingest and compact) to a dataset to be stopped before proceeding. Revert
-   * the (inflight/committed) record changes for all commits after the provided @param. Three steps: (1) Atomically
+   * the (inflight/committed) record changes for all commits after the provided @param. Four steps: (1) Atomically
    * unpublish this commit (2) clean indexing data, (3) clean new generated parquet/log files and/or append rollback to
    * existing log files. (4) Finally delete .commit, .inflight, .compaction.inflight or .compaction.requested file
+   *
+   * @param instantTime Instant time
    */
   public void restoreToInstant(final String instantTime) throws HoodieRollbackException {
 
@@ -1017,6 +1043,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     return commitTime;
   }
 
+  /**
+   * Provides a new commit time for a write operation (insert/update).
+   *
+   * @param instantTime Instant time to be generated
+   */
   public void startCommitWithTime(String instantTime) {
     // NOTE : Need to ensure that rollback is done before a new commit is started
     if (rollbackPending) {
@@ -1044,6 +1075,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Schedules a new compaction instant.
+   *
+   * @param extraMetadata Extra Metadata to be stored
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws IOException {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
@@ -1093,6 +1126,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
+   * @return RDD of WriteStatus
    */
   public JavaRDD<WriteStatus> compact(String compactionInstantTime) throws IOException {
     return compact(compactionInstantTime, config.shouldAutoCommit());
@@ -1100,6 +1134,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
+   *
+   * @param compactionInstantTime Compaction Instant Time
+   * @param writeStatuses RDD of WriteStatus to inspect errors and counts
+   * @param extraMetadata Extra Metadata to be stored
    */
   public void commitCompaction(String compactionInstantTime, JavaRDD<WriteStatus> writeStatuses,
       Option<Map<String, String>> extraMetadata) throws IOException {
@@ -1124,6 +1162,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Deduplicate Hoodie records, using the given deduplication funciton.
+   *
+   * @param records hoodieRecords to deduplicate
+   * @param parallelism partitions of RDD
+   * @return RDD of HoodieRecord already be deduplicated
    */
   JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
@@ -1144,6 +1186,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Deduplicate Hoodie records, using the given deduplication funciton.
+   *
+   * @param keys RDD of HoodieKey to deduplicate
+   * @param parallelism partitions of RDD
+   * @return RDD of HoodieKey already be deduplicated
    */
   JavaRDD<HoodieKey> deduplicateKeys(JavaRDD<HoodieKey> keys, int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
@@ -1216,6 +1262,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Ensures compaction instant is in expected state and performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
+   * @return RDD of Write Status
    */
   private JavaRDD<WriteStatus> compact(String compactionInstantTime, boolean autoCommit) throws IOException {
     // Create a Hoodie table which encapsulated the commits and files visible
