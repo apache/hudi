@@ -49,6 +49,24 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
  - Great citizenship in helping with all peripheral (but very critical) work like site maintenance, wiki/jira cleanups and so on.
  - Proven commitment to the project by way of upholding all agreed upon processes, conventions and principles of the community.
 
+### The Committers
+
+| Image                                                        | Name                                                         | Role            | Apache ID    |
+| ------------------------------------------------------------ | ------------------------------------------------------------ | --------------- | ------------ |
+| <img src="https://avatars.githubusercontent.com/alunarbeach" width = "100" height = "100" alt="alunarbeach" align=center /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PPMC, Committer | anchee       |
+| <img src="https://avatars.githubusercontent.com/bhasudha" width = "100" height = "100" alt="bhasudha" align=center /> | [Bhavani Sudha](https://github.com/bhasudha)                 | Committer       | bhavanisudha |
+| <img src="https://avatars.githubusercontent.com/bvaradar" width = "100" height = "100" alt="bvaradar" align=center /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PPMC, Committer | vbalaji      |
+| <img src="https://avatars.githubusercontent.com/kishoreg" width = "100" height = "100" alt="kishoreg" align=center /> | [Kishore Gopalakrishna](https://github.com/kishoreg)         | PPMC, Committer | kishoreg     |
+| <img src="https://avatars.githubusercontent.com/leesf" width = "100" height = "100" alt="leesf" align=center /> | [Shaofeng Li](https://github.com/leesf)                      | Committer       | leesf        |
+| <img src="https://avatars.githubusercontent.com/lresende" width = "100" height = "100" alt="lresende" align=center /> | [Luciano Resende](https://github.com/lresende)               | PPMC, Committer | lresende     |
+| <img src="https://avatars.githubusercontent.com/n3nash" width = "100" height = "100" alt="n3nash" align=center /> | [Nishith Agarwal](https://github.com/n3nash)                 | PPMC, Committer | nagarwal     |
+| <img src="https://avatars.githubusercontent.com/prasannarajaperumal" width = "100" height = "100" alt="prasannarajaperumal" align=center /> | [Prasanna Rajaperumal](https://github.com/prasannarajaperumal) | PPMC, Committer | prasanna     |
+| <img src="https://avatars.githubusercontent.com/smarthi" width = "100" height = "100" alt="smarthi" align=center /> | [Suneel Marthi](https://github.com/smarthi)                  | PPMC, Committer | smarthi      |
+| <img src="https://avatars.githubusercontent.com/tweise" width = "100" height = "100" alt="tweise" align=center /> | [Thomas Weise](https://github.com/tweise)                    | PPMC, Committer | thw          |
+| <img src="https://avatars.githubusercontent.com/vinothchandar" width = "100" height = "100" alt="vinothchandar" align=center /> | [vinoth chandar](https://github.com/vinothchandar)           | PPMC, Committer | vinoth       |
+| <img src="https://avatars.githubusercontent.com/yanghua" width = "100" height = "100" alt="yanghua" align=center /> | [vinoyang](https://github.com/yanghua)                       | Committer       | vinoyang     |
+| <img src="https://avatars.githubusercontent.com/zqureshi" width = "100" height = "100" alt="zqureshi" align=center /> | [Zeeshan Qureshi](https://github.com/zqureshi)               | PPMC, Committer | zqureshi     |
+
 
 ### Code Contributions
 
