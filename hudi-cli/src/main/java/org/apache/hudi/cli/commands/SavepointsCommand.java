@@ -97,7 +97,7 @@ public class SavepointsCommand implements CommandMarker {
       throws Exception {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     if (metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().empty()) {
-      throw new HoodieException("There is no completed instants to run rollback");
+      throw new HoodieException("There are no completed instants to run rollback");
     }
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
