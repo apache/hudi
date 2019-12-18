@@ -116,11 +116,6 @@ public class DatasetsCommand implements CommandMarker {
     return connect(path, layoutVersion, false, 0, 0, 0);
   }
 
-  @CliAvailabilityIndicator({"desc"})
-  public boolean isDescAvailable() {
-    return HoodieCLI.getTableMetaClient() != null;
-  }
-
   /**
    * Describes table properties.
    */
