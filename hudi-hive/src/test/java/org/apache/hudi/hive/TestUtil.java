@@ -19,7 +19,9 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilter;
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory;
+import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
 import org.apache.hudi.common.minicluster.HdfsTestService;
 import org.apache.hudi.common.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -188,7 +190,7 @@ public class TestUtil {
   }
 
   static void addCOWPartitions(int numberOfPartitions, boolean isParquetSchemaSimple, DateTime startFrom,
-      String commitTime) throws IOException, URISyntaxException, InterruptedException {
+                               String commitTime) throws IOException, URISyntaxException, InterruptedException {
     HoodieCommitMetadata commitMetadata =
         createPartitions(numberOfPartitions, isParquetSchemaSimple, startFrom, commitTime);
     createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
@@ -196,7 +198,7 @@ public class TestUtil {
   }
 
   static void addMORPartitions(int numberOfPartitions, boolean isParquetSchemaSimple, boolean isLogSchemaSimple,
-      DateTime startFrom, String commitTime, String deltaCommitTime)
+                               DateTime startFrom, String commitTime, String deltaCommitTime)
       throws IOException, URISyntaxException, InterruptedException {
     HoodieCommitMetadata commitMetadata =
         createPartitions(numberOfPartitions, isParquetSchemaSimple, startFrom, commitTime);
@@ -212,7 +214,7 @@ public class TestUtil {
   }
 
   private static HoodieCommitMetadata createLogFiles(Map<String, List<HoodieWriteStat>> partitionWriteStats,
-      boolean isLogSchemaSimple) throws InterruptedException, IOException, URISyntaxException {
+                                                     boolean isLogSchemaSimple) throws InterruptedException, IOException, URISyntaxException {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     for (Entry<String, List<HoodieWriteStat>> wEntry : partitionWriteStats.entrySet()) {
       String partitionPath = wEntry.getKey();
@@ -230,7 +232,7 @@ public class TestUtil {
   }
 
   private static HoodieCommitMetadata createPartitions(int numberOfPartitions, boolean isParquetSchemaSimple,
-      DateTime startFrom, String commitTime) throws IOException, URISyntaxException, InterruptedException {
+                                                       DateTime startFrom, String commitTime) throws IOException, URISyntaxException, InterruptedException {
     startFrom = startFrom.withTimeAtStartOfDay();
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -267,7 +269,8 @@ public class TestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = (isParquetSchemaSimple ? SchemaTestUtil.getSimpleSchema() : SchemaTestUtil.getEvolvedSchema());
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
-    BloomFilter filter = new BloomFilter(1000, 0.0001);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
+        BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, filter);
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,

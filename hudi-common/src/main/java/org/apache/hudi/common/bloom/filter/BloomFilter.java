@@ -16,34 +16,35 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
-
-import org.junit.Test;
-
-import java.io.IOException;
+package org.apache.hudi.common.bloom.filter;
 
 /**
- * Tests bloom filter {@link BloomFilter}.
+ * A Bloom filter interface.
  */
-public class TestBloomFilter {
+public interface BloomFilter {
 
-  @Test
-  public void testAddKey() {
-    BloomFilter filter = new BloomFilter(100, 0.0000001);
-    filter.add("key1");
-    assert (filter.mightContain("key1"));
-  }
+  /**
+   * Add a key to the {@link BloomFilter}.
+   *
+   * @param key the key to the added to the {@link BloomFilter}
+   */
+  void add(String key);
 
-  @Test
-  public void testSerialize() throws IOException, ClassNotFoundException {
-    BloomFilter filter = new BloomFilter(1000, 0.0000001);
-    filter.add("key1");
-    filter.add("key2");
-    String filterStr = filter.serializeToString();
+  /**
+   * Tests for key membership.
+   *
+   * @param key the key to be checked for membership
+   * @return {@code true} if key may be found, {@code false} if key is not found for sure.
+   */
+  boolean mightContain(String key);
 
-    // Rebuild
-    BloomFilter newFilter = new BloomFilter(filterStr);
-    assert (newFilter.mightContain("key1"));
-    assert (newFilter.mightContain("key2"));
-  }
+  /**
+   * Serialize the bloom filter as a string.
+   */
+  String serializeToString();
+
+  /**
+   * @return the bloom index type code.
+   **/
+  BloomFilterTypeCode getBloomFilterTypeCode();
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.bloom.filter.BloomFilterTypeCode;
 import org.apache.hudi.index.HoodieIndex;
 
 import javax.annotation.concurrent.Immutable;
@@ -26,7 +27,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-
 
 /**
  * Indexing related config.
@@ -54,6 +54,11 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   // TODO: On by default. Once stable, we will remove the other mode.
   public static final String BLOOM_INDEX_BUCKETIZED_CHECKING_PROP = "hoodie.bloom.index.bucketized.checking";
   public static final String DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING = "true";
+  public static final String BLOOM_INDEX_FILTER_TYPE = "hoodie.bloom.index.filter.type";
+  public static final String DEFAULT_BLOOM_INDEX_FILTER_TYPE = BloomFilterTypeCode.SIMPLE.name();
+  public static final String HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "hoodie.bloom.index.filter.dynamic.max.entries";
+  public static final String DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES = "100000";
+
   // 1B bloom filter checks happen in 250 seconds. 500ms to read a bloom filter.
   // 10M checks in 2500ms, thus amortizing the cost of reading bloom filter across partitions.
   public static final String BLOOM_INDEX_KEYS_PER_BUCKET_PROP = "hoodie.bloom.index.keys.per.bucket";
@@ -194,6 +199,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           BLOOM_INDEX_BUCKETIZED_CHECKING_PROP, DEFAULT_BLOOM_INDEX_BUCKETIZED_CHECKING);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_INDEX_KEYS_PER_BUCKET_PROP),
           BLOOM_INDEX_KEYS_PER_BUCKET_PROP, DEFAULT_BLOOM_INDEX_KEYS_PER_BUCKET);
+      setDefaultOnCondition(props, !props.contains(BLOOM_INDEX_FILTER_TYPE),
+          BLOOM_INDEX_FILTER_TYPE, DEFAULT_BLOOM_INDEX_FILTER_TYPE);
+      setDefaultOnCondition(props, !props.contains(HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES),
+          HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES, DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

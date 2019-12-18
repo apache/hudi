@@ -16,56 +16,57 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.common.bloom.filter;
 
 import org.apache.hudi.exception.HoodieIndexException;
 
 import org.apache.hadoop.util.bloom.Key;
-import org.apache.hadoop.util.hash.Hash;
 
 import javax.xml.bind.DatatypeConverter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInput;
 import java.io.DataInputStream;
+import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * A Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
+ * A Simple Bloom filter implementation built on top of {@link org.apache.hadoop.util.bloom.BloomFilter}.
  */
-public class BloomFilter {
 
-  /**
-   * Used in computing the optimal Bloom filter size. This approximately equals 0.480453.
-   */
-  public static final double LOG2_SQUARED = Math.log(2) * Math.log(2);
+public class SimpleBloomFilter implements BloomFilter {
 
   private org.apache.hadoop.util.bloom.BloomFilter filter = null;
 
-  public BloomFilter(int numEntries, double errorRate) {
-    this(numEntries, errorRate, Hash.MURMUR_HASH);
-  }
-
   /**
    * Create a new Bloom filter with the given configurations.
+   *
+   * @param numEntries The total number of entries.
+   * @param errorRate  maximum allowable error rate.
+   * @param hashType   type of the hashing function (see {@link org.apache.hadoop.util.hash.Hash}).
    */
-  public BloomFilter(int numEntries, double errorRate, int hashType) {
+  public SimpleBloomFilter(int numEntries, double errorRate, int hashType) {
     // Bit size
-    int bitSize = (int) Math.ceil(numEntries * (-Math.log(errorRate) / LOG2_SQUARED));
+    int bitSize = BloomFilterUtils.getBitSize(numEntries, errorRate);
     // Number of the hash functions
-    int numHashs = (int) Math.ceil(Math.log(2) * bitSize / numEntries);
+    int numHashs = BloomFilterUtils.getNumHashes(bitSize, numEntries);
     // The filter
     this.filter = new org.apache.hadoop.util.bloom.BloomFilter(bitSize, numHashs, hashType);
   }
 
   /**
    * Create the bloom filter from serialized string.
+   *
+   * @param serString serialized string which represents the {@link SimpleBloomFilter}
    */
-  public BloomFilter(String filterStr) {
+  public SimpleBloomFilter(String serString) {
     this.filter = new org.apache.hadoop.util.bloom.BloomFilter();
-    byte[] bytes = DatatypeConverter.parseBase64Binary(filterStr);
+    byte[] bytes = DatatypeConverter.parseBase64Binary(serString);
     DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
     try {
       this.filter.readFields(dis);
@@ -75,6 +76,7 @@ public class BloomFilter {
     }
   }
 
+  @Override
   public void add(String key) {
     if (key == null) {
       throw new NullPointerException("Key cannot by null");
@@ -82,6 +84,7 @@ public class BloomFilter {
     filter.add(new Key(key.getBytes(StandardCharsets.UTF_8)));
   }
 
+  @Override
   public boolean mightContain(String key) {
     if (key == null) {
       throw new NullPointerException("Key cannot by null");
@@ -92,6 +95,7 @@ public class BloomFilter {
   /**
    * Serialize the bloom filter as a string.
    */
+  @Override
   public String serializeToString() {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DataOutputStream dos = new DataOutputStream(baos);
@@ -104,4 +108,32 @@ public class BloomFilter {
       throw new HoodieIndexException("Could not serialize BloomFilter instance", e);
     }
   }
+
+  private void writeObject(ObjectOutputStream os)
+      throws IOException {
+    filter.write(os);
+  }
+
+  private void readObject(ObjectInputStream is)
+      throws IOException, ClassNotFoundException {
+    filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    filter.readFields(is);
+  }
+
+  // @Override
+  public void write(DataOutput out) throws IOException {
+    out.write(filter.toString().getBytes());
+  }
+
+  //@Override
+  public void readFields(DataInput in) throws IOException {
+    filter = new org.apache.hadoop.util.bloom.BloomFilter();
+    filter.readFields(in);
+  }
+
+  @Override
+  public BloomFilterTypeCode getBloomFilterTypeCode() {
+    return BloomFilterTypeCode.SIMPLE;
+  }
+
 }
