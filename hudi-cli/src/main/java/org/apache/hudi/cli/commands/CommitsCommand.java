@@ -215,9 +215,9 @@ public class CommitsCommand implements CommandMarker {
   public String compareCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path)
       throws Exception {
 
+    HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
         targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get().getTimestamp();
