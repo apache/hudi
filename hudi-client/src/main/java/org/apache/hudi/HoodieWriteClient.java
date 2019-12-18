@@ -139,7 +139,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Register hudi classes with Kryo serialization
+   * Register hudi classes with Kryo serialization.
    *
    * @param conf instance of SparkConf
    * @return SparkConf
