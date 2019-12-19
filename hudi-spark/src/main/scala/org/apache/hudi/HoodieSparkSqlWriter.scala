@@ -73,7 +73,6 @@ private[hudi] object HoodieSparkSqlWriter {
         parameters(OPERATION_OPT_KEY)
       }
 
-    var writeSuccessful: Boolean = false
     var commitTime: String = null
     var writeStatuses: JavaRDD[WriteStatus] = null
 
@@ -85,7 +84,7 @@ private[hudi] object HoodieSparkSqlWriter {
     // Running into issues wrt generic type conversion from Java to Scala.  Couldn't make common code paths for
     // write and deletes. Specifically, instantiating client of type HoodieWriteClient<T extends HoodieRecordPayload>
     // is having issues. Hence some codes blocks are same in both if and else blocks.
-    if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+    val writeSuccessful = if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName.get}_record"
       val nameSpace = s"hoodie.${tblName.get}"
@@ -148,52 +147,7 @@ private[hudi] object HoodieSparkSqlWriter {
       commitTime = client.startCommit()
       writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
       // Check for errors and commit the write.
-      val errorCount = writeStatuses.rdd.filter(ws => ws.hasErrors).count()
-      writeSuccessful =
-        if (errorCount == 0) {
-          log.info("No errors. Proceeding to commit the write.")
-          val metaMap = parameters.filter(kv =>
-            kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX_OPT_KEY)))
-          val commitSuccess = if (metaMap.isEmpty) {
-            client.commit(commitTime, writeStatuses)
-          } else {
-            client.commit(commitTime, writeStatuses,
-              common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
-          }
-
-          if (commitSuccess) {
-            log.info("Commit " + commitTime + " successful!")
-          }
-          else {
-            log.info("Commit " + commitTime + " failed!")
-          }
-
-          val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-          val syncHiveSucess = if (hiveSyncEnabled) {
-            log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
-            val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
-            syncHive(basePath, fs, parameters)
-          } else {
-            true
-          }
-          client.close()
-          commitSuccess && syncHiveSucess
-        } else {
-          log.error(s"$operation failed with ${errorCount} errors :");
-          if (log.isTraceEnabled) {
-            log.trace("Printing out the top 100 errors")
-            writeStatuses.rdd.filter(ws => ws.hasErrors)
-              .take(100)
-              .foreach(ws => {
-                log.trace("Global error :", ws.getGlobalError)
-                if (ws.getErrors.size() > 0) {
-                  ws.getErrors.foreach(kt =>
-                    log.trace(s"Error for key: ${kt._1}", kt._2))
-                }
-              })
-          }
-          false
-        }
+      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
     } else {
 
       // Handle save modes
@@ -225,52 +179,7 @@ private[hudi] object HoodieSparkSqlWriter {
       // Issue deletes
       commitTime = client.startCommit()
       writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
-      val errorCount = writeStatuses.rdd.filter(ws => ws.hasErrors).count()
-      writeSuccessful =
-        if (errorCount == 0) {
-          log.info("No errors. Proceeding to commit the write.")
-          val metaMap = parameters.filter(kv =>
-            kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX_OPT_KEY)))
-          val commitSuccess = if (metaMap.isEmpty) {
-            client.commit(commitTime, writeStatuses)
-          } else {
-            client.commit(commitTime, writeStatuses,
-              common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
-          }
-
-          if (commitSuccess) {
-            log.info("Commit " + commitTime + " successful!")
-          }
-          else {
-            log.info("Commit " + commitTime + " failed!")
-          }
-
-          val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-          val syncHiveSucess = if (hiveSyncEnabled) {
-            log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
-            val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
-            syncHive(basePath, fs, parameters)
-          } else {
-            true
-          }
-          client.close()
-          commitSuccess && syncHiveSucess
-        } else {
-          log.error(s"$operation failed with ${errorCount} errors :");
-          if (log.isTraceEnabled) {
-            log.trace("Printing out the top 100 errors")
-            writeStatuses.rdd.filter(ws => ws.hasErrors)
-              .take(100)
-              .foreach(ws => {
-                log.trace("Global error :", ws.getGlobalError)
-                if (ws.getErrors.size() > 0) {
-                  ws.getErrors.foreach(kt =>
-                    log.trace(s"Error for key: ${kt._1}", kt._2))
-                }
-              })
-          }
-          false
-        }
+      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
     }
 
     (writeSuccessful, common.util.Option.ofNullable(commitTime))
@@ -338,5 +247,59 @@ private[hudi] object HoodieSparkSqlWriter {
       ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
     hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
     hiveSyncConfig
+  }
+
+  private def checkWriteStatus(writeStatuses: JavaRDD[WriteStatus],
+                               parameters: Map[String, String],
+                               client: HoodieWriteClient[_],
+                               commitTime: String,
+                               basePath: Path,
+                               operation: String,
+                               jsc: JavaSparkContext): Boolean = {
+    val errorCount = writeStatuses.rdd.filter(ws => ws.hasErrors).count()
+    if (errorCount == 0) {
+      log.info("No errors. Proceeding to commit the write.")
+      val metaMap = parameters.filter(kv =>
+        kv._1.startsWith(parameters(COMMIT_METADATA_KEYPREFIX_OPT_KEY)))
+      val commitSuccess = if (metaMap.isEmpty) {
+        client.commit(commitTime, writeStatuses)
+      } else {
+        client.commit(commitTime, writeStatuses,
+          common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+      }
+
+      if (commitSuccess) {
+        log.info("Commit " + commitTime + " successful!")
+      }
+      else {
+        log.info("Commit " + commitTime + " failed!")
+      }
+
+      val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+      val syncHiveSucess = if (hiveSyncEnabled) {
+        log.info("Syncing to Hive Metastore (URL: " + parameters(HIVE_URL_OPT_KEY) + ")")
+        val fs = FSUtils.getFs(basePath.toString, jsc.hadoopConfiguration)
+        syncHive(basePath, fs, parameters)
+      } else {
+        true
+      }
+      client.close()
+      commitSuccess && syncHiveSucess
+    } else {
+      log.error(s"$operation failed with ${errorCount} errors :");
+      if (log.isTraceEnabled) {
+        log.trace("Printing out the top 100 errors")
+        writeStatuses.rdd.filter(ws => ws.hasErrors)
+          .take(100)
+          .foreach(ws => {
+            log.trace("Global error :", ws.getGlobalError)
+            if (ws.getErrors.size() > 0) {
+              ws.getErrors.foreach(kt =>
+                log.trace(s"Error for key: ${kt._1}", kt._2))
+            }
+          })
+      }
+      false
+    }
   }
 }
