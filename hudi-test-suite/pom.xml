@@ -287,7 +287,6 @@
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
-      <scope>test</scope>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>

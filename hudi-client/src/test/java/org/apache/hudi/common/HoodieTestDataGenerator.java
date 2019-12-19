@@ -75,7 +75,7 @@ public class HoodieTestDataGenerator {
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
   public static String TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
-      + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"rider\", \"type\": \"string\"},{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"},{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"},{\"name\": \"end_lon\", \"type\": \"double\"},"
@@ -114,7 +114,7 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
   public static TestRawTripPayload generateRandomValue(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new TestRawTripPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
@@ -122,12 +122,12 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
   public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new HoodieAvroPayload(Option.of(rec));
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-      double timestamp) {
+      long timestamp) {
     GenericRecord rec = new GenericData.Record(avroSchema);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
@@ -418,7 +418,7 @@ public class HoodieTestDataGenerator {
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> {
       list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
-          .toString(), rand.nextDouble()));
+          .toString(), rand.nextLong()));
     });
     return list;
   }

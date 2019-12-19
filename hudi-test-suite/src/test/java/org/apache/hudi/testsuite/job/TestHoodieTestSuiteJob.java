@@ -26,6 +26,7 @@ import org.apache.hudi.testsuite.DeltaOutputType;
 import org.apache.hudi.testsuite.dag.TestHiveSyncDag;
 import org.apache.hudi.testsuite.dag.TestInsertOnlyDag;
 import org.apache.hudi.testsuite.dag.TestInsertUpsertDag;
+import org.apache.hudi.testsuite.dag.TestDistributedUpsertDag;
 import org.apache.hudi.testsuite.dag.WorkflowDagGenerator;
 import org.apache.hudi.testsuite.job.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.utilities.UtilitiesTestBase;
@@ -135,6 +136,20 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     String outputBasePath = dfsBasePath + "/result";
     HoodieTestSuiteConfig cfg = makeConfig(inputBasePath, outputBasePath);
     cfg.workloadDagGenerator = TestInsertOnlyDag.class.getName();
+    HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
+    hoodieTestSuiteJob.runTestSuite();
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
+    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 2);
+  }
+
+  @Test
+  public void testDistributedUpsert() throws Exception {
+    dfs.delete(new Path(dfsBasePath + "/input"), true);
+    dfs.delete(new Path(dfsBasePath + "/result"), true);
+    String inputBasePath = dfsBasePath + "/input";
+    String outputBasePath = dfsBasePath + "/result";
+    HoodieTestSuiteConfig cfg = makeConfig(inputBasePath, outputBasePath);
+    cfg.workloadDagGenerator = TestDistributedUpsertDag.class.getName();
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);

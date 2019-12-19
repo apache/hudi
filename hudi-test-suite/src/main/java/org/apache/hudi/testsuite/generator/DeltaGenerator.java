@@ -20,6 +20,7 @@ package org.apache.hudi.testsuite.generator;
 
 import org.apache.hudi.KeyGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.testsuite.DeltaOutputType;
 import org.apache.hudi.testsuite.DeltaWriterAdapter;
 import org.apache.hudi.testsuite.DeltaWriterFactory;
@@ -32,6 +33,10 @@ import org.apache.hudi.testsuite.reader.DFSHoodieDatasetInputReader;
 import org.apache.hudi.testsuite.reader.DeltaInputReader;
 import org.apache.hudi.testsuite.writer.WriteStats;
 import org.apache.hudi.utilities.converter.Converter;
+import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.DistributedTestDataSource;
+import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.config.TestSourceConfig;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.avro.generic.GenericRecord;
@@ -67,17 +72,18 @@ public class DeltaGenerator implements Serializable {
   private transient JavaSparkContext jsc;
   private transient SparkSession sparkSession;
   private String schemaStr;
+  private transient SchemaProvider schemaProvider;
   private List<String> recordRowKeyFieldNames;
   private List<String> partitionPathFieldNames;
   private int batchId;
 
   public DeltaGenerator(DeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
-      String schemaStr,
-      KeyGenerator keyGenerator) {
+      String schemaStr, KeyGenerator keyGenerator, SchemaProvider schemaProvider) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
     this.sparkSession = sparkSession;
     this.schemaStr = schemaStr;
+    this.schemaProvider = schemaProvider;
     this.recordRowKeyFieldNames = keyGenerator.getRecordKeyFields();
     this.partitionPathFieldNames = keyGenerator.getPartitionPathFields();
   }
@@ -106,6 +112,17 @@ public class DeltaGenerator implements Serializable {
               minPayloadSize, schemaStr, partitionPathFieldNames));
         });
     return inputBatch;
+  }
+
+  public JavaRDD<GenericRecord> generateUpsertsWithDistributedSource(Config operation) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(TestSourceConfig.MAX_UNIQUE_RECORDS_PROP, String.valueOf(operation.getNumRecordsInsert()));
+    props.setProperty(TestSourceConfig.NUM_SOURCE_PARTITIONS_PROP, String.valueOf(operation.getNumInsertPartitions()));
+    props.setProperty(TestSourceConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS, "true");
+    DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(
+        props, jsc, sparkSession, schemaProvider);
+    InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
+    return batch.getBatch().get();
   }
 
   public JavaRDD<GenericRecord> generateUpdates(Config config) throws IOException {

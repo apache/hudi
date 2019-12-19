@@ -134,8 +134,8 @@ public class HoodieTestSuiteJob {
       final DeltaGenerator deltaGenerator = new DeltaGenerator(
           new DFSDeltaConfig(DeltaOutputType.valueOf(cfg.outputTypeName), DeltaInputFormat.valueOf(cfg.inputFormatName),
               new SerializableConfiguration(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
-              schemaStr, cfg.limitFileSize), jsc, sparkSession, schemaStr, keyGenerator);
-      DagScheduler dagScheduler = new DagScheduler(workflowDag, writer, deltaGenerator);
+              schemaStr, cfg.limitFileSize), jsc, sparkSession, schemaStr, keyGenerator, schemaProvider);
+      DagScheduler dagScheduler = new DagScheduler(workflowDag, writer, deltaGenerator, jsc);
       dagScheduler.schedule();
       log.info("Finished scheduling all tasks");
     } catch (Exception e) {

@@ -27,6 +27,7 @@ import org.apache.hudi.testsuite.writer.DeltaWriter;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -45,9 +46,10 @@ public class DagScheduler {
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
 
-  public DagScheduler(WorkflowDag workflowDag, DeltaWriter deltaWriter, DeltaGenerator deltaGenerator) {
+  public DagScheduler(WorkflowDag workflowDag, DeltaWriter deltaWriter,
+      DeltaGenerator deltaGenerator, JavaSparkContext jsc) {
     this.workflowDag = workflowDag;
-    this.executionContext = new ExecutionContext(null, deltaWriter, deltaGenerator);
+    this.executionContext = new ExecutionContext(jsc, deltaWriter, deltaGenerator);
   }
 
   public void schedule() throws Exception {
