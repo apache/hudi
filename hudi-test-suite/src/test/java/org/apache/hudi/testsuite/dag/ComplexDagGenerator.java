@@ -31,7 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-public class TestComplexDag extends WorkflowDagGenerator {
+public class ComplexDagGenerator implements WorkflowDagGenerator {
 
   @Override
   public WorkflowDag build() {

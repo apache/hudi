@@ -32,7 +32,7 @@ public class TestDagUtils {
 
   @Test
   public void testConvertDagToYaml() throws Exception {
-    ComplexDag dag = new ComplexDag();
+    ComplexDagGenerator dag = new ComplexDagGenerator();
     String yaml = DagUtils.convertDagToYaml(dag.build());
     System.out.println(yaml);
   }
@@ -50,7 +50,7 @@ public class TestDagUtils {
     Assert.assertEquals(((DagNode) firstChild.getChildNodes().get(0)).getChildNodes().size(), 1);
   }
 
-  public static class ComplexDag extends WorkflowDagGenerator {
+  public static class ComplexDagGenerator implements WorkflowDagGenerator {
 
     @Override
     public WorkflowDag build() {

@@ -26,7 +26,7 @@ import org.apache.hudi.testsuite.dag.nodes.UpsertNode;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TestInsertUpsertDag extends WorkflowDagGenerator {
+public class InsertUpsertDagGenerator implements WorkflowDagGenerator {
 
   @Override
   public WorkflowDag build() {

@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class TestHiveSyncDag extends WorkflowDagGenerator {
+public class HiveSyncDagGenerator implements WorkflowDagGenerator {
 
   @Override
   public WorkflowDag build() {
