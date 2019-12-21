@@ -370,7 +370,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieKey> dedupedKeys =
-          config.shouldCombineBeforeDelete() ? deduplicateKeys(keys, config.getDeleteShuffleParallelism()) : keys;
+          config.shouldCombineBeforeDelete() ? deduplicateKeys(keys) : keys;
 
       JavaRDD<HoodieRecord<T>> dedupedRecords =
           dedupedKeys.map(key -> new HoodieRecord(key, new EmptyHoodieRecordPayload()));
