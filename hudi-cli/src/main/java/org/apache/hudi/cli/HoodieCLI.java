@@ -93,6 +93,11 @@ public class HoodieCLI {
     refreshTableMetadata();
   }
 
+  /**
+   * Get tableMetadata, throw NullPointerException when it is null.
+   *
+   * @return tableMetadata which is instance of HoodieTableMetaClient
+   */
   public static HoodieTableMetaClient getTableMetaClient() {
     if (tableMetadata == null) {
       throw new NullPointerException("There is no hudi dataset. Please use connect command to set dataset first");
