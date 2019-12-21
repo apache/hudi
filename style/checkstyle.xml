@@ -24,7 +24,7 @@
     that can be found at https://google.github.io/styleguide/javaguide.html.
 
     Checkstyle is very configurable. Be sure to read the documentation at
-    http://checkstyle.sf.net (or in your downloaded distribution).
+    https://checkstyle.sourceforge.io/checks.html.
 
     To completely disable a check, just comment it out or delete it from the file.
 
