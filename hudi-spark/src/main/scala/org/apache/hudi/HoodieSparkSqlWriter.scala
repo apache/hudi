@@ -80,7 +80,7 @@ private[hudi] object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
-    val (writeStatuses, client) = if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+    val writeSuccessful = if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName.get}_record"
       val nameSpace = s"hoodie.${tblName.get}"
@@ -142,7 +142,8 @@ private[hudi] object HoodieSparkSqlWriter {
       }
       client.startCommitWithTime(commitTime)
       val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
-      (writeStatuses, client)
+      // Check for errors and commit the write.
+      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
     } else {
 
       // Handle save modes
@@ -174,11 +175,9 @@ private[hudi] object HoodieSparkSqlWriter {
       // Issue deletes
       client.startCommitWithTime(commitTime)
       val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
-      (writeStatuses, client)
+      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
     }
 
-    // Check for errors and commit the write.
-    val writeSuccessful = checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
     (writeSuccessful, common.util.Option.ofNullable(commitTime))
   }
 
