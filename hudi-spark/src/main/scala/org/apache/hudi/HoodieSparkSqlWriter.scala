@@ -143,7 +143,6 @@ private[hudi] object HoodieSparkSqlWriter {
       client.startCommitWithTime(commitTime)
       val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
       (writeStatuses, client)
-
     } else {
 
       // Handle save modes
