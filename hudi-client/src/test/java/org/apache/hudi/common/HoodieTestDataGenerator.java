@@ -120,7 +120,7 @@ public class HoodieTestDataGenerator {
   }
 
   /**
-   * Generates a new avro record of the above schema format for a delete
+   * Generates a new avro record of the above schema format for a delete.
    */
   public static TestRawTripPayload generateRandomDeleteValue(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0,
