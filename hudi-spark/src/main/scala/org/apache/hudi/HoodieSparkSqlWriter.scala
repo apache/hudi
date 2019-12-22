@@ -74,17 +74,13 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
     var commitTime: String = null
-    var writeStatuses: JavaRDD[WriteStatus] = null
 
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(parameters("path"))
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
-    // Running into issues wrt generic type conversion from Java to Scala.  Couldn't make common code paths for
-    // write and deletes. Specifically, instantiating client of type HoodieWriteClient<T extends HoodieRecordPayload>
-    // is having issues. Hence some codes blocks are same in both if and else blocks.
-    val writeSuccessful = if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+    val (writeStatuses, client) = if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName.get}_record"
       val nameSpace = s"hoodie.${tblName.get}"
@@ -145,9 +141,8 @@ private[hudi] object HoodieSparkSqlWriter {
         return (true, common.util.Option.empty())
       }
       commitTime = client.startCommit()
-      writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
-      // Check for errors and commit the write.
-      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
+      val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
+      (writeStatuses, client)
     } else {
 
       // Handle save modes
@@ -178,10 +173,12 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // Issue deletes
       commitTime = client.startCommit()
-      writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
-      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
+      val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
+      (writeStatuses, client)
     }
 
+    // Check for errors and commit the write.
+    val writeSuccessful = checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
     (writeSuccessful, common.util.Option.ofNullable(commitTime))
   }
 
@@ -249,6 +246,20 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig
   }
 
+  /**
+   * Running into issues wrt generic type conversion from Java to Scala.  Couldn't make common code paths for
+   * write and deletes. Specifically, instantiating client of type HoodieWriteClient<T extends HoodieRecordPayload>
+   * is having issues. Hence some codes blocks are same in both if and else blocks.
+   *
+   * @param writeStatuses RDDs of WriteStatus
+   * @param parameters parameters which is specified by user
+   * @param client Instance of HoodieWriteClient
+   * @param commitTime the start time of commit this write
+   * @param basePath base path of dataset
+   * @param operation operation type (insert/upsert/delete/bulk_insert)
+   * @param jsc Java Spark Context
+   * @return {@code true} if write successfully. {@code false} otherwise
+   */
   private def checkWriteStatus(writeStatuses: JavaRDD[WriteStatus],
                                parameters: Map[String, String],
                                client: HoodieWriteClient[_],
