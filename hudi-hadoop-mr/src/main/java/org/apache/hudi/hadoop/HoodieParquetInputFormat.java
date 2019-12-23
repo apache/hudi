@@ -25,9 +25,11 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.TableFileSystemView.ReadOptimizedView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.FSUtils;
 import org.apache.hudi.exception.DatasetNotFoundException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidDatasetException;
+import org.apache.hudi.hadoop.hive.NoneParquetRecordReaderWrapper;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
@@ -37,6 +39,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
@@ -196,7 +199,58 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // ParquetInputFormat.setFilterPredicate(job, predicate);
     // clearOutExistingPredicate(job);
     // }
-    return super.getRecordReader(split, job, reporter);
+
+    final Path finalPath = ((FileSplit) split).getPath();
+    FileSystem fileSystem = finalPath.getFileSystem(conf);
+    FileStatus curFileStatus = fileSystem.getFileStatus(finalPath);
+
+    HoodieTableMetaClient metadata;
+    try {
+      metadata = getTableMetaClient(finalPath.getFileSystem(conf),
+              curFileStatus.getPath().getParent());
+    } catch (DatasetNotFoundException | InvalidDatasetException e) {
+      LOG.info("Handling a non-hoodie path " + curFileStatus.getPath());
+      return super.getRecordReader(split, job, reporter);
+    }
+
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
+    }
+    String tableName = metadata.getTableConfig().getTableName();
+    String mode = HoodieHiveUtil.readMode(Job.getInstance(job), tableName);
+
+    if (HoodieHiveUtil.INCREMENTAL_SCAN_MODE.equals(mode)) {
+      return super.getRecordReader(split, job, reporter);
+    } else {
+      List<String> partitions = FSUtils.getAllFoldersWithPartitionMetaFile(metadata.getFs(), metadata.getBasePath());
+      String fileId = FSUtils.getFileId(finalPath.getName());
+      List<FileStatus> fileStatuses = new ArrayList<>();
+
+      for (String partition : partitions) {
+        FileStatus[] fileStatus = metadata.getFs().listStatus(new Path(metadata.getBasePath() + "/" + partition));
+        for (FileStatus fileStatu : fileStatus) {
+          String fileName = fileStatu.getPath().getName();
+          if (fileStatu.isFile() && fileName.endsWith(".parquet") && FSUtils.getFileId(fileName).equals(fileId)) {
+            fileStatuses.add(fileStatu);
+          }
+        }
+      }
+
+      // add file to view
+      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadata,
+              metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+              fileStatuses.toArray(new FileStatus[fileStatuses.size()]));
+      // get lastest files
+      List<HoodieDataFile> latestFiles = fsView.getLatestDataFiles().collect(Collectors.toList());
+
+      for (HoodieDataFile latestFile : latestFiles) {
+        if (latestFile.getFileName().equals(finalPath.getName())) {
+          return super.getRecordReader(split, job, reporter);
+        }
+      }
+
+      return new NoneParquetRecordReaderWrapper();
+    }
   }
 
   /**
