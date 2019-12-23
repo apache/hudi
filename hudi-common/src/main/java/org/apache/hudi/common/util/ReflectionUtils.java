@@ -71,7 +71,7 @@ public class ReflectionUtils {
   }
 
   /**
-   * Creates an instnace of the given class. Use this version when dealing with interface types as constructor args.
+   * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
    */
   public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
     try {
