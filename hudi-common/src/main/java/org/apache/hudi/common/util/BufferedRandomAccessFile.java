@@ -18,17 +18,17 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.log4j.Logger;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
 
-import org.apache.log4j.Logger;
-
 /**
- * This product includes code from Apache Cassendra.
- *   - adopted from org.apache.cassandra.io.BufferedRandomAccessFile
+ * This product includes code from Apache Cassandra.
+ *   - adopted from org.apache.cassandra.io
  *     Copyright: 2015-2019 The Apache Software Foundation
  *     Home page: http://cassandra.apache.org/
  *     License: http://www.apache.org/licenses/LICENSE-2.0
@@ -46,10 +46,10 @@ import org.apache.log4j.Logger;
  */
 
 public final class BufferedRandomAccessFile extends RandomAccessFile {
-  private static final Logger logger = Logger.getLogger(BufferedRandomAccessFile.class);
-  static final int LogBuffSz = 13; // 8K buffer
-  public static final int BuffSz = (1 << LogBuffSz);
-  static final long BuffMask = ~(((long) BuffSz) - 1L);
+  private static final Logger LOGGER = Logger.getLogger(BufferedRandomAccessFile.class);
+  static final int LOG_BUFF_SZ = 13; // 8K buffer
+  public static final int BUFF_SZ = (1 << LOG_BUFF_SZ);
+  static final long BUFF_MASK = ~(((long) BUFF_SZ) - 1L);
 
   /*
    * This implementation is based on the buffer implementation in Modula-3's
@@ -151,8 +151,8 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
   private void init(int size) {
     this.dirty = this.closed = false;
     this.lo = this.curr = this.hi = 0;
-    this.buff = (size > BuffSz) ? new byte[size] : new byte[BuffSz];
-    this.maxHi = (long) BuffSz;
+    this.buff = (size > BUFF_SZ) ? new byte[size] : new byte[BUFF_SZ];
+    this.maxHi = (long) BUFF_SZ;
     this.hitEOF = false;
     this.diskPos = 0L;
   }
@@ -221,7 +221,7 @@ public final class BufferedRandomAccessFile extends RandomAccessFile {
     if (pos >= this.hi || pos < this.lo) {
       // seeking outside of current buffer -- flush and read
       this.flushBuffer();
-      this.lo = pos & BuffMask; // start at BuffSz boundary
+      this.lo = pos & BUFF_MASK; // start at BUFF_SZ boundary
       this.maxHi = this.lo + (long) this.buff.length;
       if (this.diskPos != this.lo) {
         super.seek(this.lo);

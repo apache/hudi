@@ -305,9 +305,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
   public WriteStatus close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
-      for (String key : keyToNewRecords.keySet()) {
-        if (!writtenRecordKeys.contains(key)) {
-          HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
+      Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
+          ? ((ExternalSpillableMap)keyToNewRecords).iterator() : keyToNewRecords.values().iterator();
+      while (newRecordsItr.hasNext()) {
+        HoodieRecord<T> hoodieRecord = newRecordsItr.next();
+        if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
             writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
           } else {

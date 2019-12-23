@@ -56,7 +56,7 @@ import java.util.stream.Stream;
 public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
 
   public static int BUFFER_SIZE = 128 * 1024;  // 128 KB
-  private static final Logger log = LogManager.getLogger(DiskBasedMap.class);
+  private static final Logger LOG = LogManager.getLogger(DiskBasedMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
   // Write only file
