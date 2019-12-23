@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.AvroSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JsonSource;
-import org.apache.hudi.utilities.sources.ParquetSource;
 import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
@@ -60,8 +59,6 @@ public final class SourceFormatAdapter {
     switch (source.getSourceType()) {
       case AVRO:
         return ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
-      case PARQUET:
-        return ((ParquetSource) source).fetchNext(lastCkptStr, sourceLimit);
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
@@ -92,18 +89,6 @@ public final class SourceFormatAdapter {
         return ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
       case AVRO: {
         InputBatch<JavaRDD<GenericRecord>> r = ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
-        Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
-        return new InputBatch<>(
-            Option
-                .ofNullable(
-                    r.getBatch()
-                        .map(rdd -> AvroConversionUtils.createDataFrame(JavaRDD.toRDD(rdd), sourceSchema.toString(),
-                            source.getSparkSession()))
-                        .orElse(null)),
-            r.getCheckpointForNextBatch(), r.getSchemaProvider());
-      }
-      case PARQUET: {
-        InputBatch<JavaRDD<GenericRecord>> r = ((ParquetSource) source).fetchNext(lastCkptStr, sourceLimit);
         Schema sourceSchema = r.getSchemaProvider().getSourceSchema();
         return new InputBatch<>(
             Option

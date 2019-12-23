@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
@@ -92,16 +92,24 @@ public class UtilHelpers {
   /**
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf;
     try {
-      DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
+      conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
+    } catch (Exception e) {
+      conf = new DFSPropertiesConfiguration();
+      LOG.warn("Unexpected error read props file at :" + cfgPath, e);
+    }
+
+    try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
         conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
       }
-      return conf;
-    } catch (Exception e) {
-      throw new HoodieException("Unable to read props file at :" + cfgPath, e);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Unexpected error adding config overrides", ioe);
     }
+
+    return conf;
   }
 
   public static TypedProperties buildProperties(List<String> props) {

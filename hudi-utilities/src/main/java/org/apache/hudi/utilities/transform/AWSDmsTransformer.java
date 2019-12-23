@@ -16,20 +16,36 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.sources;
+package org.apache.hudi.utilities.transform;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
-import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.payload.AWSDmsAvroPayload;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
-public abstract class ParquetSource extends Source<JavaRDD<GenericRecord>> {
+import java.util.Arrays;
 
-  public ParquetSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
-    super(props, sparkContext, sparkSession, schemaProvider, SourceType.PARQUET);
+import static org.apache.spark.sql.functions.lit;
+
+/**
+ * A Simple transformer that adds `Op` field with value `I`, for AWS DMS data, if the field is not
+ * present.
+ */
+public class AWSDmsTransformer implements Transformer {
+
+  @Override
+  public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+      TypedProperties properties) {
+    Option<String> opColumnOpt = Option.fromJavaOptional(
+        Arrays.stream(rowDataset.columns()).filter(c -> c.equals(AWSDmsAvroPayload.OP_FIELD)).findFirst());
+    if (opColumnOpt.isPresent()) {
+      return rowDataset;
+    } else {
+      return rowDataset.withColumn(AWSDmsAvroPayload.OP_FIELD, lit(""));
+    }
   }
 }

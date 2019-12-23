@@ -60,6 +60,17 @@ public class DFSPropertiesConfiguration {
     visitFile(rootFile);
   }
 
+  public DFSPropertiesConfiguration(FileSystem fs, Path rootFile) {
+    this(fs, rootFile, new TypedProperties());
+  }
+
+  public DFSPropertiesConfiguration() {
+    this.fs = null;
+    this.rootFile = null;
+    this.props = new TypedProperties();
+    this.visitedFiles = new HashSet<>();
+  }
+
   private String[] splitProperty(String line) {
     int ind = line.indexOf('=');
     String k = line.substring(0, ind).trim();
@@ -104,10 +115,6 @@ public class DFSPropertiesConfiguration {
     } finally {
       reader.close();
     }
-  }
-
-  public DFSPropertiesConfiguration(FileSystem fs, Path rootFile) {
-    this(fs, rootFile, new TypedProperties());
   }
 
   public TypedProperties getConfig() {

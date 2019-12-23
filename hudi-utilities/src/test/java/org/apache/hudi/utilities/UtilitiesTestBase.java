@@ -61,7 +61,6 @@ import java.util.List;
 /**
  * Abstract test that provides a dfs & spark contexts.
  *
- * TODO(vc): this needs to be done across the board.
  */
 public class UtilitiesTestBase {
 
