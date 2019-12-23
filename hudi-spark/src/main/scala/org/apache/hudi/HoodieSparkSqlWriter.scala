@@ -113,7 +113,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
       if (mode == SaveMode.Ignore && exists) {
         log.warn(s"hoodie dataset at $basePath already exists. Ignoring & not performing actual writes.")
-        return (true, common.util.Option.empty())
+        (true, common.util.Option.empty())
       }
       if (mode == SaveMode.Overwrite && exists) {
         log.warn(s"hoodie dataset at $basePath already exists. Deleting existing data & overwriting with new data.")
@@ -144,7 +144,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       if (hoodieRecords.isEmpty()) {
         log.info("new batch has no new records, skipping...")
-        return (true, common.util.Option.empty())
+        (true, common.util.Option.empty())
       }
       client.startCommitWithTime(commitTime)
       writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
