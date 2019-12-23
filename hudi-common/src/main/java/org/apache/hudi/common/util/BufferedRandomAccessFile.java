@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.uber.hoodie.common.util;
+package org.apache.hudi.common.util;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -27,7 +27,7 @@ import java.util.Arrays;
 import org.apache.log4j.Logger;
 
 /**
- * This product includes code from Apache Casendra.
+ * This product includes code from Apache Cassendra.
  *   - adopted from org.apache.cassandra.io.BufferedRandomAccessFile
  *     Copyright: 2015-2019 The Apache Software Foundation
  *     Home page: http://cassandra.apache.org/
