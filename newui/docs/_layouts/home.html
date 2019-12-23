@@ -1,0 +1,102 @@
+---
+layout: home
+---
+
+<!doctype html>
+<!--
+  Minimal Mistakes Jekyll Theme 4.17.2 by Michael Rose
+  Copyright 2013-2019 Michael Rose - mademistakes.com | @mmistakes
+  Free for personal and commercial use under the MIT license
+  https://github.com/mmistakes/minimal-mistakes/blob/master/LICENSE
+-->
+<html lang="{{ site.locale | slice: 0,2 | default: "en" }}" class="no-js">
+  <head>
+    {% include head.html %}
+  </head>
+
+  <body class="layout--home">
+    {% include browser-upgrade.html %}
+    {% include masthead.html %}
+
+    <div class="page__hero--overlay" style="background-color: #079fca !important;">
+      <div class="wrapper" style="background-size: 480px;background-repeat: no-repeat; background-position: right center;  background-image: url('/assets/images/logo-big.png');">
+        <h1 id="page-title" class="page__title" itemprop="headline">
+          {{ page.title }}
+        </h1>
+
+        <p class="page__lead">{{ page.excerpt }}</p>
+        <p>
+          <a href="/docs/quick-start-guide/" class="btn btn--light-outline btn--large"><i class="fa fa-paper-plane"></i> Get Starting</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="page__hero--overlay">
+      <div class="wrapper">
+        <h1 style="font-size: 1.953em">
+          Hudi Data Lakes
+        </h1>
+        <div class="archive__item-excerpt" style="font-size: 0.9em">
+          <p>Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing.</p>
+        </div>
+        <div class="archive__item-teaser">
+          <img src="/assets/images/hudi-delta-lake.png" style="display:block;margin-left:auto;margin-right:auto;width: auto">
+        </div>
+      </div>
+    </div>
+
+    <div class="page__hero--overlay" style="background-color: #f7f7f9">
+      <div class="wrapper">
+        <h1 style="font-size: 1.953em">
+          Hudi Features
+        </h1>
+        <div class="home-feature-item">
+          <table style="display: inline-table">
+            <tr>
+              <td><p>Upsert support with fast, pluggable indexing.</p></td>
+              <td><p>Atomically publish data with rollback support.</p></td>
+            </tr>
+            <tr>
+              <td><p>Snapshot isolation between writer & queries.</p></td>
+              <td><p>Savepoints for data recovery.</p></td>
+            </tr>
+            <tr>
+              <td><p>Manages file sizes, layout using statistics.</p></td>
+              <td><p>Async compaction of row & columnar data.</p></td>
+            </tr>
+            <tr>
+              <td><p>Timeline metadata to track lineage.</p></td>
+              <td></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="page__hero--overlay">
+      <div class="wrapper">
+        <h1 style="font-size: 1.953em">
+          Hudi Users
+        </h1>
+        <div class="home-power-items">
+
+          {% for pi in page.power_items %}
+            <div class="power-item"><img src="{{ pi.img_path }}"></div>
+          {% endfor %}
+
+        </div>
+        <p style="padding: 0 !important; margin: 0 !important;">
+          <a href="/docs/quick-start-guide/" class="btn btn--light-outline btn--large" style="background-color: #55abce"><i class="fa fa-paper-plane"></i> Get Starting</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="page__footer" style="margin-top: 0px !important;">
+      <footer>
+        {% include footer.html %}
+      </footer>
+    </div>
+    {% include scripts.html %}
+
+  </body>
+</html>
