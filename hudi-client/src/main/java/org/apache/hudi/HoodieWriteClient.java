@@ -108,9 +108,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private transient Timer.Context indexTimer = null;
 
   /**
-   * Constructor function.
-   * <p>
-   * This implementation create new index, with empty timelineService and not need to cleanup all pending commits.
+   * Create a wirte client, without cleaning up failed/inflight commits.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
@@ -120,7 +118,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Constructor function.
+   * Create a wirte client, with new index.
    * <p>
    * This implementation create new index, with empty timelineService.
    *
@@ -138,9 +136,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   *  Constructor function.
-   *  <p>
-   *  This implementation allows users to specify all parameters.
+   *  Create a wirte client, allows to specify all parameters.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
@@ -157,7 +153,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Register hudi classes with Kryo serialization.
+   * Register hudi classes for Kryo serialization.
    *
    * @param conf instance of SparkConf
    * @return SparkConf
@@ -187,7 +183,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Upsert a batch of new records into Hoodie table at the supplied commitTime.
    *
    * @param RDD of hoodieRecords to upsert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
@@ -217,7 +213,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation requires that the input records are already tagged, and de-duped if needed.
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
@@ -239,7 +235,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * alignment, as with upsert(), by profiling the workload
    *
    * @param records HoodieRecords to insert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
@@ -266,7 +262,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * de-duped if needed.
    *
    * @param preppedRecords HoodieRecords to insert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String commitTime) {
@@ -289,7 +285,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}
    *
    * @param records HoodieRecords to insert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String commitTime) {
@@ -306,7 +302,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * {@link UserDefinedBulkInsertPartitioner}.
    *
    * @param records HoodieRecords to insert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
@@ -339,7 +335,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * {@link UserDefinedBulkInsertPartitioner}.
    *
    * @param preppedRecords HoodieRecords to insert
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
@@ -541,7 +537,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   /**
    * Commit changes performed at the given commitTime marker.
    *
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @param writeStatuses RDD of WriteStatus to inspect errors and counts
    * @return {@code true} if commit is successful. {@code false} otherwise
    */
@@ -551,7 +547,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Commit changes performed at the given commitTime marker.
-   * @param commitTime Commit Time handle
+   * @param commitTime Instant time of the commit
    * @param writeStatuses RDD of WriteStatus to inspect errors and counts
    * @param extraMetadata Extra Metadata to be stored
    * @return {@code true} if commit is successful. {@code false} otherwise
@@ -816,8 +812,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * this commit (2) clean indexing data, (3) clean new generated parquet files. (4) Finally delete .commit or .inflight
    * file.
    *
-   * @param commitTime Commit Time handle
-   * @return {@code true} if commit was rollback to successfully. {@code false} otherwise
+   * @param commitTime Instant time of the commit
+   * @return {@code true} If rollback the record changes successfully. {@code false} otherwise
    */
   public boolean rollback(final String commitTime) throws HoodieRollbackException {
     rollbackInternal(commitTime);
@@ -1144,7 +1140,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
-   * @return RDD of WriteStatus
+   * @return RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> compact(String compactionInstantTime) throws IOException {
     return compact(compactionInstantTime, config.shouldAutoCommit());
@@ -1179,7 +1175,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Deduplicate Hoodie records, using the given deduplication funciton.
+   * Deduplicate Hoodie records, using the given deduplication function.
    *
    * @param records hoodieRecords to deduplicate
    * @param parallelism parallelism or partitions to be used while reducing/deduplicating
@@ -1203,7 +1199,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
-   * Deduplicate Hoodie records, using the given deduplication funciton.
+   * Deduplicate Hoodie records, using the given deduplication function.
    *
    * @param keys RDD of HoodieKey to deduplicate
    * @return RDD of HoodieKey already be deduplicated
