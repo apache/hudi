@@ -16,15 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.logger;
+package org.apache.hudi.utilities.inline.fs;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.ReadOption;
+import org.apache.hadoop.io.ByteBufferPool;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.EnumSet;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.ReadOption;
-import org.apache.hadoop.io.ByteBufferPool;
 
 public class InlineFsDataInputStream extends FSDataInputStream {
 

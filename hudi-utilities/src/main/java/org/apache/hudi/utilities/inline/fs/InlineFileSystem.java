@@ -16,12 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.logger;
+package org.apache.hudi.utilities.inline.fs;
 
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.net.URI;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -31,13 +27,18 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.util.Progressable;
 
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.URI;
+
 /**
  * Enables storing any file (something that is written using using FileSystem apis) "inline" into another file
- *
- * - Writing an inlined file at a given path, simply writes it to an in-memory buffer and returns it as byte[] - Reading
- * an inlined file at a given offset, length, read it out as if it were an independent file of that length Inlined path
- * is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/<start_offset>/<length>
- *
+ * <p>
+ * - Writing an inlined file at a given path, simply writes it to an in-memory buffer and returns it as byte[]
+ * - Reading an inlined file at a given offset, length, read it out as if it were an independent file of that length
+ * - Inlined path is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/inline_file/?start_offset=<start_offset>&length=<length>
+ * <p>
  * TODO: The reader/writer may try to use relative paths based on the inlinepath and it may not work. Need to handle
  * this gracefully eg. the parquet summary metadata reading. TODO: If this shows promise, also support directly writing
  * the inlined file to the underneath file without buffer
@@ -47,38 +48,17 @@ public class InlineFileSystem extends FileSystem {
   public static final String SCHEME = "inlinefs";
 
   // TODO: this needs to be per path to support num_cores > 1, and we should release the buffer once done
-  ByteArrayOutputStream bos;
-
-  // TODO: Should probably be ThreadLocal.
-  static Configuration CONF = null;
+  private ByteArrayOutputStream bos;
+  private Configuration conf = null;
 
   InlineFileSystem() {
     bos = new ByteArrayOutputStream();
   }
 
-  private FileSystem getOuterFileSystem(Path inlinePath) throws IOException {
-    Path outerPath = outerPath(inlinePath);
-    System.out.println("Getting outer Path for " + inlinePath + " as " + outerPath);
-    return outerPath.getFileSystem(CONF);
-  }
-
-  private Path outerPath(Path inlinePath) {
-    String scheme = inlinePath.getParent().getParent().getName();
-    Path basePath = inlinePath.getParent().getParent().getParent();
-    System.out.println("Scheme " + scheme + " basepath " + basePath);
-    System.out.println(" new path  for inline path " + inlinePath + " :: " + new Path(
-        basePath.toString().replaceFirst(getScheme() + ":", scheme + ":")));
-    return new Path(basePath.toString().replaceFirst(getScheme() + ":", scheme + ":"));
-  }
-
-  private int startOffset(Path inlinePath) {
-    System.out.println("Getting startOffset " + inlinePath.getParent().getName());
-    return Integer.parseInt(inlinePath.getParent().getName());
-  }
-
-  private int length(Path inlinePath) {
-    System.out.println("Getting length " + inlinePath.getName());
-    return Integer.parseInt(inlinePath.getName());
+  @Override
+  public void initialize(URI name, Configuration conf) throws IOException {
+    super.initialize(name, conf);
+    this.conf = conf;
   }
 
   @Override
@@ -90,22 +70,22 @@ public class InlineFileSystem extends FileSystem {
     return SCHEME;
   }
 
-  public byte[] getFileAsBytes() {
-    return bos.toByteArray();
-  }
-
   @Override
   public FSDataInputStream open(Path inlinePath, int bufferSize) throws IOException {
-    FileSystem outerFs = getOuterFileSystem(inlinePath);
-    FSDataInputStream outerStream = outerFs.open(outerPath(inlinePath), bufferSize);
-    return new InlineFsDataInputStream(startOffset(inlinePath), outerStream, length(inlinePath));
+    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath, getScheme());
+    FileSystem outerFs = outerPath.getFileSystem(conf);
+    FSDataInputStream outerStream = outerFs.open(outerPath, bufferSize);
+    return new InlineFsDataInputStream(InLineFSUtils.startOffset(inlinePath), outerStream, InLineFSUtils.length(inlinePath));
   }
 
   @Override
   public FSDataOutputStream create(Path path, FsPermission fsPermission, boolean b, int i, short i1, long l,
-      Progressable progressable) throws IOException {
-    System.out.println("Creating Inline FileSystem for " + path);
+                                   Progressable progressable) throws IOException {
     return new FSDataOutputStream(bos, new Statistics(getScheme()));
+  }
+
+  public byte[] getFileAsBytes() {
+    return bos.toByteArray();
   }
 
   @Override
@@ -125,7 +105,7 @@ public class InlineFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path inlinePath) throws FileNotFoundException, IOException {
-    return new FileStatus[]{getFileStatus(inlinePath)};
+    return new FileStatus[] {getFileStatus(inlinePath)};
   }
 
   @Override
@@ -154,10 +134,12 @@ public class InlineFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
-    FileSystem outerFs = getOuterFileSystem(inlinePath);
-    FileStatus status = outerFs.getFileStatus(outerPath(inlinePath));
-    return new FileStatus(length(inlinePath), status.isDirectory(), status.getReplication(), status.getBlockSize(),
+    Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath, getScheme());
+    FileSystem outerFs = outerPath.getFileSystem(conf);
+    FileStatus status = outerFs.getFileStatus(outerPath);
+    FileStatus toReturn = new FileStatus(InLineFSUtils.length(inlinePath), status.isDirectory(), status.getReplication(), status.getBlockSize(),
         status.getModificationTime(), status.getAccessTime(), status.getPermission(), status.getOwner(),
         status.getGroup(), inlinePath);
+    return toReturn;
   }
 }
