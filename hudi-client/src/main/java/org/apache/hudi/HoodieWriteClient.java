@@ -119,8 +119,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
 
   /**
    * Create a wirte client, with new index.
-   * <p>
-   * This implementation create new index, with empty timelineService.
    *
    * @param jsc Java Spark Context
    * @param clientConfig instance of HoodieWriteConfig
