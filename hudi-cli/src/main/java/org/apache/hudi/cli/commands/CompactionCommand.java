@@ -36,8 +36,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.AvroUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidTableTypeException;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -75,7 +75,7 @@ public class CompactionCommand implements CommandMarker {
   private HoodieTableMetaClient checkAndGetMetaClient() {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     if (client.getTableType() != HoodieTableType.MERGE_ON_READ) {
-      throw new InvalidTableTypeException("Compactions can only be run for table type : MERGE_ON_READ");
+      throw new HoodieException("Compactions can only be run for table type : MERGE_ON_READ");
     }
     return client;
   }
