@@ -72,18 +72,6 @@ public class DataSourceUtils {
   }
 
   /**
-   * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c. Return null if not found
-   */
-  public static Object getNestedFieldValOrNull(GenericRecord record, String fieldName) {
-    try {
-      return getNestedFieldVal(record, fieldName);
-    } catch (HoodieException e) {
-      // ignore if not found
-      return null;
-    }
-  }
-
-  /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
    */
   public static Object getNestedFieldVal(GenericRecord record, String fieldName) {

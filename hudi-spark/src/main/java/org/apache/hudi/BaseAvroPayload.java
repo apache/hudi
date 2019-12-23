@@ -42,7 +42,10 @@ public abstract class BaseAvroPayload implements Serializable {
   protected final Comparable orderingVal;
 
   /**
+   * Instantiate {@link BaseAvroPayload}.
    *
+   * @param record      Generic record for the payload.
+   * @param orderingVal {@link Comparable} to be used in pre combine.
    */
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
     try {

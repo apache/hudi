@@ -63,9 +63,8 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
     GenericRecord genericRecord = (GenericRecord) getInsertValue(schema).get();
     // combining strategy here trivially ignores currentValue on disk and writes this record
-    Object deleteMarker = DataSourceUtils.getNestedFieldValOrNull(
-        genericRecord, "_hoodie_delete_marker");
-    if (deleteMarker != null && (boolean) deleteMarker) {
+    Object deleteMarker = genericRecord.get("_hoodie_delete_marker");
+    if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
       return Option.empty();
     } else {
       return Option.of(genericRecord);
