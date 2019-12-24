@@ -249,6 +249,13 @@ public class HoodieCommitArchiveLog {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
+
+        // filter empty instant, like *.commit.requested
+        byte[] instantDetails = commitTimeline.getInstantDetails(hoodieInstant).get();
+        if (instantDetails == null || instantDetails.length == 0 ) {
+          continue;
+        }
+
         try {
           records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
