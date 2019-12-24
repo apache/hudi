@@ -95,7 +95,7 @@ public class DeltaWriter {
 
   public Option<String> startCommit() {
     if (cfg.useDeltaStreamer) {
-      return Option.of(HoodieActiveTimeline.createNewCommitTime());
+      return Option.of(HoodieActiveTimeline.createNewInstantTime());
     } else {
       return Option.of(writeClient.startCommit());
     }
