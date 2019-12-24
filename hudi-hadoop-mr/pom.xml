@@ -79,6 +79,7 @@
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
+      <classifier>${hive.exec.classifier}</classifier>
     </dependency>
 
     <!-- Hoodie - Test -->
