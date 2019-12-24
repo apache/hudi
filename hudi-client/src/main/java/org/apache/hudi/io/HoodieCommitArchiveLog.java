@@ -252,7 +252,7 @@ public class HoodieCommitArchiveLog {
 
         // filter empty instant, like *.commit.requested
         byte[] instantDetails = commitTimeline.getInstantDetails(hoodieInstant).get();
-        if (instantDetails == null || instantDetails.length == 0 ) {
+        if (instantDetails == null || instantDetails.length == 0) {
           continue;
         }
 
