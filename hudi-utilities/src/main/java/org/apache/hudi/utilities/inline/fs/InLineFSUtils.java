@@ -45,7 +45,7 @@ public class InLineFSUtils {
    * @param inLineLength
    * @return
    */
-  public static Path getEmbeddedInLineFilePath(Path outerPath, String origScheme, long inLineStartOffset, int inLineLength) {
+  public static Path getEmbeddedInLineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
     String subPath = outerPath.toString().substring(outerPath.toString().indexOf(":") + 1);
     return new Path(
         InlineFileSystem.SCHEME + "://" + subPath + "/" + origScheme + "/" + INLINE_FILE_STR + "/"

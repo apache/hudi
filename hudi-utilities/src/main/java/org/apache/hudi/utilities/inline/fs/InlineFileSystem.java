@@ -33,9 +33,8 @@ import java.io.IOException;
 import java.net.URI;
 
 /**
- * Enables storing any file (something that is written using using FileSystem apis) "inline" into another file
+ * Enables reading any inline file at a given offset and length
  * <p>
- * - Writing an inlined file at a given path, simply writes it to an in-memory buffer and returns it as byte[]
  * - Reading an inlined file at a given offset, length, read it out as if it were an independent file of that length
  * - Inlined path is of the form "inlinefs:///path/to/outer/file/<outer_file_scheme>/inline_file/?start_offset=<start_offset>&length=<length>
  * <p>
@@ -45,15 +44,8 @@ import java.net.URI;
  */
 public class InlineFileSystem extends FileSystem {
 
-  public static final String SCHEME = "inlinefs";
-
-  // TODO: this needs to be per path to support num_cores > 1, and we should release the buffer once done
-  private ByteArrayOutputStream bos;
+  static final String SCHEME = "inlinefs";
   private Configuration conf = null;
-
-  InlineFileSystem() {
-    bos = new ByteArrayOutputStream();
-  }
 
   @Override
   public void initialize(URI name, Configuration conf) throws IOException {
@@ -79,52 +71,7 @@ public class InlineFileSystem extends FileSystem {
   }
 
   @Override
-  public FSDataOutputStream create(Path path, FsPermission fsPermission, boolean b, int i, short i1, long l,
-                                   Progressable progressable) throws IOException {
-    return new FSDataOutputStream(bos, new Statistics(getScheme()));
-  }
-
-  public byte[] getFileAsBytes() {
-    return bos.toByteArray();
-  }
-
-  @Override
-  public FSDataOutputStream append(Path path, int i, Progressable progressable) throws IOException {
-    return null;
-  }
-
-  @Override
-  public boolean rename(Path path, Path path1) throws IOException {
-    throw new UnsupportedOperationException("Can't rename files");
-  }
-
-  @Override
-  public boolean delete(Path path, boolean b) throws IOException {
-    throw new UnsupportedOperationException("Can't delete files");
-  }
-
-  @Override
-  public FileStatus[] listStatus(Path inlinePath) throws FileNotFoundException, IOException {
-    return new FileStatus[] {getFileStatus(inlinePath)};
-  }
-
-  @Override
-  public void setWorkingDirectory(Path path) {
-    throw new UnsupportedOperationException("Can't set working directory");
-  }
-
-  @Override
-  public Path getWorkingDirectory() {
-    return null;
-  }
-
-  @Override
-  public boolean mkdirs(Path path, FsPermission fsPermission) throws IOException {
-    return false;
-  }
-
-  @Override
-  public boolean exists(Path f) throws IOException {
+  public boolean exists(Path f) {
     try {
       return getFileStatus(f) != null;
     } catch (Exception e) {
@@ -142,4 +89,46 @@ public class InlineFileSystem extends FileSystem {
         status.getGroup(), inlinePath);
     return toReturn;
   }
+
+  @Override
+  public FSDataOutputStream create(Path path, FsPermission fsPermission, boolean b, int i, short i1, long l,
+                                   Progressable progressable) throws IOException {
+    throw new UnsupportedOperationException("Can't rename files");
+  }
+
+  @Override
+  public FSDataOutputStream append(Path path, int i, Progressable progressable) throws IOException {
+    throw new UnsupportedOperationException("Can't rename files");
+  }
+
+  @Override
+  public boolean rename(Path path, Path path1) throws IOException {
+    throw new UnsupportedOperationException("Can't rename files");
+  }
+
+  @Override
+  public boolean delete(Path path, boolean b) throws IOException {
+    throw new UnsupportedOperationException("Can't delete files");
+  }
+
+  @Override
+  public FileStatus[] listStatus(Path inlinePath) throws IOException {
+    return new FileStatus[] {getFileStatus(inlinePath)};
+  }
+
+  @Override
+  public void setWorkingDirectory(Path path) {
+    throw new UnsupportedOperationException("Can't set working directory");
+  }
+
+  @Override
+  public Path getWorkingDirectory() {
+    throw new UnsupportedOperationException("Can't get working directory");
+  }
+
+  @Override
+  public boolean mkdirs(Path path, FsPermission fsPermission) throws IOException {
+    throw new UnsupportedOperationException("Can't set working directory");
+  }
+
 }
