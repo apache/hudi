@@ -20,9 +20,13 @@ import org.apache.hudi.exception.HoodieCorruptedDataException
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.streaming.OutputMode
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.SaveMode
 
-import scala.util.{Failure, Success, Try}
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 class HoodieStreamingSink(sqlContext: SQLContext,
                           options: Map[String, String],

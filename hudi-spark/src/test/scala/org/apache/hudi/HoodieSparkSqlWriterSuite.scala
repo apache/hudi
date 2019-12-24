@@ -20,8 +20,10 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.scalatest.{FunSuite, Matchers}
+import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.SparkSession
+import org.scalatest.FunSuite
+import org.scalatest.Matchers
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 

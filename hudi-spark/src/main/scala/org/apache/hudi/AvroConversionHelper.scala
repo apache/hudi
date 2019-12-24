@@ -19,15 +19,19 @@
 package org.apache.hudi
 
 import java.nio.ByteBuffer
-import java.sql.{Date, Timestamp}
+import java.sql.Date
+import java.sql.Timestamp
 import java.util
 
 import com.databricks.spark.avro.SchemaConverters
 import com.databricks.spark.avro.SchemaConverters.IncompatibleSchemaException
-import org.apache.avro.{Schema, SchemaBuilder}
+import org.apache.avro.Schema
+import org.apache.avro.SchemaBuilder
 import org.apache.avro.Schema.Type._
-import org.apache.avro.generic.GenericData.{Fixed, Record}
-import org.apache.avro.generic.{GenericData, GenericRecord}
+import org.apache.avro.generic.GenericData.Fixed
+import org.apache.avro.generic.GenericData.Record
+import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.getNewRecordNamespace
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRow

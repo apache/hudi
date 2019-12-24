@@ -20,17 +20,22 @@ package org.apache.hudi.cli
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.avro.HoodieAvroWriteSupport
 import org.apache.hudi.common.HoodieJsonPayload
-import org.apache.hudi.common.bloom.filter.{BloomFilter, BloomFilterFactory}
+import org.apache.hudi.common.bloom.filter.BloomFilter
+import org.apache.hudi.common.bloom.filter.BloomFilterFactory
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.config.{HoodieIndexConfig, HoodieStorageConfig}
-import org.apache.hudi.io.storage.{HoodieParquetConfig, HoodieParquetWriter}
+import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.config.HoodieStorageConfig
+import org.apache.hudi.io.storage.HoodieParquetConfig
+import org.apache.hudi.io.storage.HoodieParquetWriter
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SQLContext
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable._

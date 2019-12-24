@@ -15,22 +15,28 @@
  * limitations under the License.
  */
 
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.HoodieTestDataGenerator
 import org.apache.hudi.common.util.FSUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.HoodieDataSourceHelpers
 import org.apache.spark.sql._
-import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime}
+import org.apache.spark.sql.streaming.OutputMode
+import org.apache.spark.sql.streaming.ProcessingTime
 import org.junit.Assert._
 import org.junit.rules.TemporaryFolder
-import org.junit.{Before, Test}
+import org.junit.Before
+import org.junit.Test
 import org.scalatest.junit.AssertionsForJUnit
 
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
+import scala.concurrent.Future
 
 /**
   * Basic tests on the spark datasource

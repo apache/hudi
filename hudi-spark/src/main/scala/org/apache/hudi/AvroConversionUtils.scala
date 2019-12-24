@@ -19,12 +19,17 @@ package org.apache.hudi
 
 import com.databricks.spark.avro.SchemaConverters
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{Schema, SchemaBuilder}
+import org.apache.avro.Schema
+import org.apache.avro.SchemaBuilder
 import org.apache.hudi.common.model.HoodieKey
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.SparkSession
 
 
 object AvroConversionUtils {

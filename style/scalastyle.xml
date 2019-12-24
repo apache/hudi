@@ -119,7 +119,7 @@
  <check level="error" class="org.scalastyle.scalariform.PublicMethodsHaveTypeChecker" enabled="false"/>
  <check level="error" class="org.scalastyle.file.NewLineAtEofChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.file.NoNewLineAtEofChecker" enabled="false"/>
- <check level="error" class="org.scalastyle.scalariform.BlockImportChecker" enabled="false"/>
+ <check level="error" class="org.scalastyle.scalariform.BlockImportChecker" enabled="true"/>
  <check level="error" class="org.scalastyle.scalariform.ImportOrderChecker" enabled="false">
   <parameters>
    <parameter name="groups">hudi,3rdParty,javax,java,scala</parameter>

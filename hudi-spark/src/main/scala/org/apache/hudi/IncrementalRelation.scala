@@ -18,7 +18,9 @@
 package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.HoodieCommitMetadata
+import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -26,9 +28,11 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.table.HoodieTable
 import org.apache.log4j.LogManager
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.sources.{BaseRelation, TableScan}
+import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.sources.TableScan
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.SQLContext
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable

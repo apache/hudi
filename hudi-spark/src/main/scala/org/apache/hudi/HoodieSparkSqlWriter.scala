@@ -21,19 +21,25 @@ import java.util
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-import org.apache.hudi.common.util.{FSUtils, TypedProperties}
+import org.apache.hudi.common.util.FSUtils
+import org.apache.hudi.common.util.TypedProperties
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.hive.HiveSyncConfig
+import org.apache.hudi.hive.HiveSyncTool
 import org.apache.log4j.LogManager
-import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
+import org.apache.spark.api.java.JavaRDD
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.SaveMode
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
