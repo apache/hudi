@@ -33,6 +33,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.Optional;
 
 import java.io.IOException;
 import java.util.List;
@@ -104,20 +105,23 @@ public class HoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends Hoodi
    */
   @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationBacktoRecords(
-      JavaPairRDD<HoodieKey, HoodieRecordLocation> keyFilenamePairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
+      JavaPairRDD<HoodieKey, HoodieRecordLocation> keyLocationPairRDD, JavaRDD<HoodieRecord<T>> recordRDD) {
 
     JavaPairRDD<String, HoodieRecord<T>> incomingRowKeyRecordPairRDD =
         recordRDD.mapToPair(record -> new Tuple2<>(record.getRecordKey(), record));
 
     JavaPairRDD<String, Tuple2<HoodieRecordLocation, HoodieKey>> existingRecordKeyToRecordLocationHoodieKeyMap =
-        keyFilenamePairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), new Tuple2<>(p._2, p._1)));
+        keyLocationPairRDD.mapToPair(p -> new Tuple2<>(p._1.getRecordKey(), new Tuple2<>(p._2, p._1)));
 
+    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null), so we do left outer join.
     return incomingRowKeyRecordPairRDD.leftOuterJoin(existingRecordKeyToRecordLocationHoodieKeyMap).values().map(record -> {
-      if (record._2().isPresent()) {
+      final HoodieRecord<T> hoodieRecord = record._1;
+      final Optional<Tuple2<HoodieRecordLocation, HoodieKey>> recordLocationHoodieKeyPair = record._2;
+      if (recordLocationHoodieKeyPair.isPresent()) {
         // Record key matched to file
-        return getTaggedRecord(new HoodieRecord<>(record._2.get()._2, record._1.getData()), Option.ofNullable(record._2.get()._1));
+        return getTaggedRecord(new HoodieRecord<>(recordLocationHoodieKeyPair.get()._2, hoodieRecord.getData()), Option.ofNullable(recordLocationHoodieKeyPair.get()._1));
       } else {
-        return getTaggedRecord(record._1, Option.empty());
+        return getTaggedRecord(hoodieRecord, Option.empty());
       }
     });
   }

@@ -36,7 +36,7 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
 
   private final KeyRangeLookupTree indexLookUpTree = new KeyRangeLookupTree();
   private final Set<String> filesWithNoRanges = new HashSet<>();
-  private final Map<String, String> fileToPartitionPathMap = new HashMap<>();
+  private final Map<String, String> fileIdToPartitionPathMap = new HashMap<>();
 
   /**
    * Instantiates {@link IntervalTreeBasedGlobalIndexFileFilter}.
@@ -48,7 +48,7 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
 
     partitionToFileIndexInfo.forEach((parition, bloomIndexFileInfoList) -> {
       bloomIndexFileInfoList.forEach(file -> {
-        fileToPartitionPathMap.put(file.getFileId(), parition);
+        fileIdToPartitionPathMap.put(file.getFileId(), parition);
         allIndexFiles.add(file);
       });
     });
@@ -73,7 +73,7 @@ class IntervalTreeBasedGlobalIndexFileFilter implements IndexFileFilter {
     matchingFiles.addAll(indexLookUpTree.getMatchingIndexFiles(recordKey));
     matchingFiles.addAll(filesWithNoRanges);
     Set<Pair<String, String>> toReturn = new HashSet<>();
-    matchingFiles.forEach(file -> toReturn.add(Pair.of(fileToPartitionPathMap.get(file), file)));
+    matchingFiles.forEach(file -> toReturn.add(Pair.of(fileIdToPartitionPathMap.get(file), file)));
     return toReturn;
   }
 }

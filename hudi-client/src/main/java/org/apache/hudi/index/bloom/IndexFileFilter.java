@@ -29,7 +29,7 @@ import java.util.Set;
 public interface IndexFileFilter extends Serializable {
 
   /**
-   * Fetches all matching files and partition pair for a given record key and partition.
+   * Fetches all matching files and partition pair for a given record key and partition path.
    *
    * @param partitionPath the partition path of interest
    * @param recordKey     the record key to be looked up
