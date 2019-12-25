@@ -35,7 +35,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
@@ -57,11 +56,6 @@ public class StatsCommand implements CommandMarker {
 
   private static final int MAX_FILES = 1000000;
 
-  @CliAvailabilityIndicator({"stats wa"})
-  public boolean isWriteAmpAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "stats wa", help = "Write Amplification. Ratio of how many records were upserted to how many "
       + "records were actually written")
   public String writeAmplificationStats(
@@ -75,7 +69,7 @@ public class StatsCommand implements CommandMarker {
     long totalRecordsUpserted = 0;
     long totalRecordsWritten = 0;
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
 
     List<Comparable[]> rows = new ArrayList<>();
@@ -121,7 +115,7 @@ public class StatsCommand implements CommandMarker {
       throws IOException {
 
     FileSystem fs = HoodieCLI.fs;
-    String globPath = String.format("%s/%s/*", HoodieCLI.tableMetadata.getBasePath(), globRegex);
+    String globPath = String.format("%s/%s/*", HoodieCLI.getTableMetaClient().getBasePath(), globRegex);
     FileStatus[] statuses = fs.globStatus(new Path(globPath));
 
     // max, min, #small files < 10MB, 50th, avg, 95th

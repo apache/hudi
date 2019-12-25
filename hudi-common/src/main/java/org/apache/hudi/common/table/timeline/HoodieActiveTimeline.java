@@ -77,14 +77,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
   public static String createNewInstantTime() {
-    lastInstantTime.updateAndGet((oldVal) -> {
+    return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime = null;
       do {
         newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
       } while (HoodieTimeline.compareTimestamps(newCommitTime, oldVal, LESSER_OR_EQUAL));
       return newCommitTime;
     });
-    return lastInstantTime.get();
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
