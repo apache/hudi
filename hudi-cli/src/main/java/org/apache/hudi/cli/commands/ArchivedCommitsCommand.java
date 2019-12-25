@@ -36,7 +36,6 @@ import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
@@ -53,11 +52,6 @@ import java.util.stream.Collectors;
 @Component
 public class ArchivedCommitsCommand implements CommandMarker {
 
-  @CliAvailabilityIndicator({"show archived commits"})
-  public boolean isShowArchivedCommitAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "show archived commit stats", help = "Read commits from archived files and show details")
   public String showArchivedCommits(
       @CliOption(key = {"archiveFolderPattern"}, help = "Archive Folder", unspecifiedDefaultValue = "") String folder,
@@ -68,7 +62,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
-    String basePath = HoodieCLI.tableMetadata.getBasePath();
+    String basePath = HoodieCLI.getTableMetaClient().getBasePath();
     Path archivePath = new Path(basePath + "/.hoodie/.commits_.archive*");
     if (folder != null && !folder.isEmpty()) {
       archivePath = new Path(basePath + "/.hoodie/" + folder);
@@ -144,7 +138,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
       throws IOException {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
-    String basePath = HoodieCLI.tableMetadata.getBasePath();
+    String basePath = HoodieCLI.getTableMetaClient().getBasePath();
     FileStatus[] fsStatuses =
         FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(new Path(basePath + "/.hoodie/.commits_.archive*"));
     List<Comparable[]> allCommits = new ArrayList<>();

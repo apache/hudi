@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.AvroUtils;
 
 import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
@@ -47,21 +46,6 @@ import java.util.stream.Collectors;
 @Component
 public class CleansCommand implements CommandMarker {
 
-  @CliAvailabilityIndicator({"cleans show"})
-  public boolean isShowAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliAvailabilityIndicator({"cleans refresh"})
-  public boolean isRefreshAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliAvailabilityIndicator({"clean showpartitions"})
-  public boolean isCommitShowAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "cleans show", help = "Show the cleans")
   public String showCleans(
       @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
@@ -71,7 +55,7 @@ public class CleansCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
@@ -91,7 +75,7 @@ public class CleansCommand implements CommandMarker {
   @CliCommand(value = "cleans refresh", help = "Refresh the commits")
   public String refreshCleans() throws IOException {
     HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " refreshed.";
+    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 
   @CliCommand(value = "clean showpartitions", help = "Show partition level details of a clean")
@@ -103,7 +87,7 @@ public class CleansCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws Exception {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     HoodieInstant cleanInstant = new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, commitTime);
 

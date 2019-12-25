@@ -56,8 +56,9 @@ public class RollbacksCommand implements CommandMarker {
       @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
       @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
-          unspecifiedDefaultValue = "false") final boolean headerOnly) {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.tableMetadata);
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      throws IOException {
+    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
     HoodieTimeline rollback = activeTimeline.getRollbackTimeline().filterCompletedInstants();
 
     final List<Comparable[]> rows = new ArrayList<>();
@@ -93,7 +94,7 @@ public class RollbacksCommand implements CommandMarker {
       @CliOption(key = {"headeronly"}, help = "Print Header Only",
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
-    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.tableMetadata);
+    HoodieActiveTimeline activeTimeline = new RollbackTimeline(HoodieCLI.getTableMetaClient());
     final List<Comparable[]> rows = new ArrayList<>();
     HoodieRollbackMetadata metadata = AvroUtils.deserializeAvroMetadata(
         activeTimeline.getInstantDetails(new HoodieInstant(State.COMPLETED, ROLLBACK_ACTION, rollbackInstant)).get(),

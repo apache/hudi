@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.NumericUtils;
 
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.core.CommandMarker;
-import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
@@ -52,26 +51,6 @@ import java.util.stream.Collectors;
 @Component
 public class CommitsCommand implements CommandMarker {
 
-  @CliAvailabilityIndicator({"commits show"})
-  public boolean isShowAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliAvailabilityIndicator({"commits refresh"})
-  public boolean isRefreshAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliAvailabilityIndicator({"commit rollback"})
-  public boolean isRollbackAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
-  @CliAvailabilityIndicator({"commit show"})
-  public boolean isCommitShowAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "commits show", help = "Show the commits")
   public String showCommits(
       @CliOption(key = {"limit"}, help = "Limit commits",
@@ -82,7 +61,7 @@ public class CommitsCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> commits = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
@@ -108,14 +87,14 @@ public class CommitsCommand implements CommandMarker {
   @CliCommand(value = "commits refresh", help = "Refresh the commits")
   public String refreshCommits() throws IOException {
     HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " refreshed.";
+    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 
   @CliCommand(value = "commit rollback", help = "Rollback a commit")
   public String rollbackCommit(@CliOption(key = {"commit"}, help = "Commit to rollback") final String commitTime,
       @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
       throws Exception {
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
 
@@ -125,7 +104,7 @@ public class CommitsCommand implements CommandMarker {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), commitTime,
-        HoodieCLI.tableMetadata.getBasePath());
+        HoodieCLI.getTableMetaClient().getBasePath());
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -146,7 +125,7 @@ public class CommitsCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws Exception {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
 
@@ -200,7 +179,7 @@ public class CommitsCommand implements CommandMarker {
           unspecifiedDefaultValue = "false") final boolean headerOnly)
       throws Exception {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.tableMetadata.getActiveTimeline();
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commitTime);
 
@@ -227,18 +206,13 @@ public class CommitsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
-  @CliAvailabilityIndicator({"commits compare"})
-  public boolean isCompareCommitsAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie dataset")
   public String compareCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path)
       throws Exception {
 
+    HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieTableMetaClient source = HoodieCLI.tableMetadata;
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
         targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get().getTimestamp();
@@ -260,16 +234,11 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliAvailabilityIndicator({"commits sync"})
-  public boolean isSyncCommitsAvailable() {
-    return HoodieCLI.tableMetadata != null;
-  }
-
   @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie dataset")
   public String syncCommits(@CliOption(key = {"path"}, help = "Path of the dataset to compare to") final String path) {
     HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
-    return "Load sync state between " + HoodieCLI.tableMetadata.getTableConfig().getTableName() + " and "
+    return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "
         + HoodieCLI.syncTableMetadata.getTableConfig().getTableName();
   }
 

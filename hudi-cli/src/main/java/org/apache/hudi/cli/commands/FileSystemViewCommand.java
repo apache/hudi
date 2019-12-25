@@ -142,7 +142,7 @@ public class FileSystemViewCommand implements CommandMarker {
       fileSliceStream = fsView.getLatestFileSlices(partition);
     } else {
       if (maxInstant.isEmpty()) {
-        maxInstant = HoodieCLI.tableMetadata.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
+        maxInstant = HoodieCLI.getTableMetaClient().getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
             .get().getTimestamp();
       }
       fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, maxInstant);
@@ -225,10 +225,11 @@ public class FileSystemViewCommand implements CommandMarker {
    */
   private HoodieTableFileSystemView buildFileSystemView(String globRegex, String maxInstant, boolean readOptimizedOnly,
       boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient =
-        new HoodieTableMetaClient(HoodieCLI.tableMetadata.getHadoopConf(), HoodieCLI.tableMetadata.getBasePath(), true);
+        new HoodieTableMetaClient(client.getHadoopConf(), client.getBasePath(), true);
     FileSystem fs = HoodieCLI.fs;
-    String globPath = String.format("%s/%s/*", HoodieCLI.tableMetadata.getBasePath(), globRegex);
+    String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
     FileStatus[] statuses = fs.globStatus(new Path(globPath));
     Stream<HoodieInstant> instantsStream;
 
