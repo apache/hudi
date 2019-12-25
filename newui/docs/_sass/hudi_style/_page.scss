@@ -40,12 +40,12 @@ body {
     float: left;
     width: calc(100% - #{$right-sidebar-width-narrow} + 20px);
     padding-left: 30px;
-    //padding-right: $right-sidebar-width-narrow;
+    padding-right: $right-tocbar-width;
   }
 
   @include breakpoint($x-large) {
     width: calc(100% - #{$right-sidebar-width});
-    //padding-right: $right-sidebar-width;
+    padding-right: $right-tocbar-width;
   }
 
   .page__inner-wrap {

@@ -31,11 +31,9 @@
 
 
 
-  <meta property="article:published_time" content="2019-12-23T03:34:04-05:00">
+  <meta property="article:published_time" content="2019-12-24T19:46:00-05:00">
 
 
-
-  <meta property="article:modified_time" content="2019-08-20T21:36:11-04:00">
 
 
 
@@ -315,6 +313,22 @@
       
 
       <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> Section ToC</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#setup-spark-shell">Setup spark-shell</a></li>
+  <li><a href="#insert-data">Insert data</a></li>
+  <li><a href="#query-data">Query data</a></li>
+  <li><a href="#update-data">Update data</a></li>
+  <li><a href="#incremental-query">Incremental query</a></li>
+  <li><a href="#point-in-time-query">Point in time query</a></li>
+  <li><a href="#where-to-go-from-here">Where to go from here?</a></li>
+</ul>
+          </nav>
+        </aside>
+        
         <p>This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through 
 code snippets that allows you to insert and update a Hudi dataset of default storage type: 
 <a href="/docs/concepts.html#copy-on-write-storage">Copy on Write</a>. 

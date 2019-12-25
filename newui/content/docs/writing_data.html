@@ -31,7 +31,7 @@
 
 
 
-  <meta property="article:published_time" content="2019-12-23T03:34:04-05:00">
+  <meta property="article:published_time" content="2019-12-24T19:46:00-05:00">
 
 
 
@@ -313,6 +313,21 @@
       
 
       <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> Section ToC</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#write-operations">Write Operations</a></li>
+  <li><a href="#deltastreamer">DeltaStreamer</a></li>
+  <li><a href="#datasource-writer">Datasource Writer</a></li>
+  <li><a href="#syncing-to-hive">Syncing to Hive</a></li>
+  <li><a href="#deletes">Deletes</a></li>
+  <li><a href="#storage-management">Storage Management</a></li>
+</ul>
+          </nav>
+        </aside>
+        
         <p>In this section, we will cover ways to ingest new changes from external sources or even other Hudi datasets using the <a href="#deltastreamer">DeltaStreamer</a> tool, as well as 
 speeding up large Spark jobs via upserts using the <a href="#datasource-writer">Hudi datasource</a>. Such datasets can then be <a href="querying_data.html">queried</a> using various query engines.</p>
 
