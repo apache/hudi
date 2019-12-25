@@ -92,7 +92,7 @@ import scala.Tuple2;
  * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient mutations on a HDFS
  * dataset [upsert()]
  * <p>
- * Note that, at any given time, there can only be one Spark job performing these operatons on a Hoodie dataset.
+ * Note that, at any given time, there can only be one Spark job performing these operations on a Hoodie dataset.
  */
 public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
