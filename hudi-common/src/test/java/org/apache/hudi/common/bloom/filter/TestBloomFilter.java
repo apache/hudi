@@ -39,7 +39,7 @@ public class TestBloomFilter {
 
   private final String versionToTest;
 
-  // name attribute is optional, provide an unique name for test
+  // name attribute is optional, provide a unique name for test
   // multiple parameters, uses Collection<Object[]>
   @Parameters()
   public static Collection<Object[]> data() {
