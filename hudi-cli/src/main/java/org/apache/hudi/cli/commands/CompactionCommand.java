@@ -42,6 +42,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.func.OperationResult;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
@@ -101,7 +102,7 @@ public class CompactionCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     for (HoodieInstant instant : instants) {
       HoodieCompactionPlan compactionPlan = null;
-      if (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
+      if (!HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
         try {
           // This could be a completed compaction. Assume a compaction request file is present but skip if fails
           compactionPlan = AvroUtils.deserializeCompactionPlan(
@@ -275,7 +276,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = null;
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -289,10 +290,10 @@ public class CompactionCommand implements CommandMarker {
         return "Failed to validate compaction for " + compactionInstant;
       }
       List<ValidationOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
-      boolean valid = res.stream().map(r -> r.isSuccess()).reduce(Boolean::logicalAnd).orElse(true);
+      boolean valid = res.stream().map(OperationResult::isSuccess).reduce(Boolean::logicalAnd).orElse(true);
       String message = "\n\n\t COMPACTION PLAN " + (valid ? "VALID" : "INVALID") + "\n\n";
       List<Comparable[]> rows = new ArrayList<>();
-      res.stream().forEach(r -> {
+      res.forEach(r -> {
         Comparable[] row = new Comparable[] {r.getOperation().getFileId(), r.getOperation().getBaseInstantTime(),
             r.getOperation().getDataFileName().isPresent() ? r.getOperation().getDataFileName().get() : "",
             r.getOperation().getDeltaFileNames().size(), r.isSuccess(),
@@ -336,7 +337,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = "";
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -380,7 +381,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = "";
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
@@ -426,7 +427,7 @@ public class CompactionCommand implements CommandMarker {
 
     String outputPathStr = getTmpSerializerFile();
     Path outputPath = new Path(outputPathStr);
-    String output = "";
+    String output;
     try {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
