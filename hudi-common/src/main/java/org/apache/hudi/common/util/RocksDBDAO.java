@@ -121,7 +121,7 @@ public class RocksDBDAO {
         managedDescriptorMap.put(familyNameFromDescriptor, descriptor);
       }
     } catch (RocksDBException | IOException re) {
-      LOG.error("Got exception opening rocks db instance ", re);
+      LOG.error("Got exception opening Rocks DB instance ", re);
       throw new HoodieException(re);
     }
   }
