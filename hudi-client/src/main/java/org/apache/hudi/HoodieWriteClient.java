@@ -89,7 +89,7 @@ import java.util.stream.IntStream;
 import scala.Tuple2;
 
 /**
- * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient mutations on a HDFS
+ * Hoodie Write Client helps you build datasets on HDFS [insert()] and then perform efficient mutations on an HDFS
  * dataset [upsert()]
  * <p>
  * Note that, at any given time, there can only be one Spark job performing these operatons on a Hoodie dataset.
