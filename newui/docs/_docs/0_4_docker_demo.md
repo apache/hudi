@@ -2,6 +2,7 @@
 title: Docker Demo
 keywords: hudi, docker, demo
 permalink: /docs/docker_demo
+toc: true
 ---
 
 ## A Demo using docker containers

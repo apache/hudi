@@ -84,6 +84,10 @@
     z-index: 10;
 
     &.sticky {
+
+      height: 520px;
+      overflow-y: auto;
+
       @include clearfix();
       position: -webkit-sticky;
       position: sticky;
@@ -94,8 +98,8 @@
   }
 
   @include breakpoint($x-large) {
-    width: $right-sidebar-width;
-    margin-right: -280px;
+    width: $right-tocbar-width;
+    margin-right: -265px;
   }
 }
 

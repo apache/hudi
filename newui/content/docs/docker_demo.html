@@ -31,7 +31,7 @@
 
 
 
-  <meta property="article:published_time" content="2019-12-24T19:46:00-05:00">
+  <meta property="article:published_time" content="2019-12-24T20:59:58-05:00">
 
 
 
@@ -314,11 +314,49 @@
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> Section ToC</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#a-demo-using-docker-containers">A Demo using docker containers</a>
+    <ul>
+      <li><a href="#prerequisites">Prerequisites</a></li>
+    </ul>
+  </li>
+  <li><a href="#setting-up-docker-cluster">Setting up Docker Cluster</a>
+    <ul>
+      <li><a href="#build-hudi">Build Hudi</a></li>
+      <li><a href="#bringing-up-demo-cluster">Bringing up Demo Cluster</a></li>
+    </ul>
+  </li>
+  <li><a href="#demo">Demo</a>
+    <ul>
+      <li><a href="#step-1--publish-the-first-batch-to-kafka">Step 1 : Publish the first batch to Kafka</a></li>
+      <li><a href="#step-2-incrementally-ingest-data-from-kafka-topic">Step 2: Incrementally ingest data from Kafka topic</a></li>
+      <li><a href="#step-3-sync-with-hive">Step 3: Sync with Hive</a></li>
+      <li><a href="#step-4-a-run-hive-queries">Step 4 (a): Run Hive Queries</a></li>
+      <li><a href="#step-4-b-run-spark-sql-queries">Step 4 (b): Run Spark-SQL Queries</a></li>
+      <li><a href="#step-4-c-run-presto-queries">Step 4 (c): Run Presto Queries</a></li>
+      <li><a href="#step-5-upload-second-batch-to-kafka-and-run-deltastreamer-to-ingest">Step 5: Upload second batch to Kafka and run DeltaStreamer to ingest</a></li>
+      <li><a href="#step-6a-run-hive-queries">Step 6(a): Run Hive Queries</a></li>
+      <li><a href="#step-6b-run-spark-sql-queries">Step 6(b): Run Spark SQL Queries</a></li>
+      <li><a href="#step-6c-run-presto-queries">Step 6(c): Run Presto Queries</a></li>
+      <li><a href="#step-7--incremental-query-for-copy-on-write-table">Step 7 : Incremental Query for COPY-ON-WRITE Table</a></li>
+      <li><a href="#incremental-query-with-spark-sql">Incremental Query with Spark SQL:</a></li>
+      <li><a href="#step-8-schedule-and-run-compaction-for-merge-on-read-dataset">Step 8: Schedule and Run Compaction for Merge-On-Read dataset</a></li>
+      <li><a href="#step-9-run-hive-queries-including-incremental-queries">Step 9: Run Hive Queries including incremental queries</a></li>
+      <li><a href="#step-10-read-optimized-and-realtime-views-for-mor-with-spark-sql-after-compaction">Step 10: Read Optimized and Realtime Views for MOR with Spark-SQL after compaction</a></li>
+      <li><a href="#step-11--presto-queries-over-read-optimized-view-on-mor-dataset-after-compaction">Step 11:  Presto queries over Read Optimized View on MOR dataset after compaction</a></li>
+    </ul>
+  </li>
+  <li><a href="#testing-hudi-in-local-docker-environment">Testing Hudi in Local Docker environment</a>
+    <ul>
+      <li><a href="#building-local-docker-containers">Building Local Docker Containers:</a></li>
+    </ul>
+  </li>
+</ul>
+          </nav>
+        </aside>
         
         <h2 id="a-demo-using-docker-containers">A Demo using docker containers</h2>
 
