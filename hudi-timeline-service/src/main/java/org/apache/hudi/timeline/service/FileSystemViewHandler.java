@@ -58,7 +58,6 @@ public class FileSystemViewHandler {
 
   private final FileSystemViewManager viewManager;
   private final Javalin app;
-  private final Configuration conf;
   private final TimelineHandler instantHandler;
   private final FileSliceHandler sliceHandler;
   private final DataFileHandler dataFileHandler;
@@ -66,7 +65,6 @@ public class FileSystemViewHandler {
   public FileSystemViewHandler(Javalin app, Configuration conf, FileSystemViewManager viewManager) throws IOException {
     this.viewManager = viewManager;
     this.app = app;
-    this.conf = conf;
     this.instantHandler = new TimelineHandler(conf, viewManager);
     this.sliceHandler = new FileSliceHandler(conf, viewManager);
     this.dataFileHandler = new DataFileHandler(conf, viewManager);
@@ -94,7 +92,7 @@ public class FileSystemViewHandler {
     }
 
     if ((localTimeline.getInstants().count() == 0)
-        && lastKnownInstantFromClient.equals(HoodieTimeline.INVALID_INSTANT_TS)) {
+        && HoodieTimeline.INVALID_INSTANT_TS.equals(lastKnownInstantFromClient)) {
       return false;
     }
 
@@ -131,7 +129,7 @@ public class FileSystemViewHandler {
   }
 
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {
-    boolean prettyPrint = ctx.queryParam("pretty") != null ? true : false;
+    boolean prettyPrint = ctx.queryParam("pretty") != null;
     long beginJsonTs = System.currentTimeMillis();
     String result =
         prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj) : OBJECT_MAPPER.writeValueAsString(obj);
@@ -267,7 +265,7 @@ public class FileSystemViewHandler {
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM).getOrThrow(),
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM).getOrThrow(),
-          Boolean.valueOf(
+          Boolean.parseBoolean(
               ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM)
                   .getOrThrow()));
       writeValueAsString(ctx, dtos);
@@ -294,7 +292,7 @@ public class FileSystemViewHandler {
   }
 
   private static boolean isRefreshCheckDisabledInQuery(Context ctxt) {
-    return Boolean.valueOf(ctxt.queryParam(RemoteHoodieTableFileSystemView.REFRESH_OFF));
+    return Boolean.parseBoolean(ctxt.queryParam(RemoteHoodieTableFileSystemView.REFRESH_OFF));
   }
 
   /**

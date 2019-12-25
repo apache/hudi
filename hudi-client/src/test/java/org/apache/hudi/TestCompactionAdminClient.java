@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.CompactionAdminClient.renameLogFile;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 
 public class TestCompactionAdminClient extends TestHoodieClientBase {
@@ -139,7 +140,7 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
         result.stream().flatMap(r -> client.getRenamingActionsToAlignWithCompactionOperation(metaClient,
             compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
               try {
-                client.renameLogFile(metaClient, rn.getKey(), rn.getValue());
+                renameLogFile(metaClient, rn.getKey(), rn.getValue());
               } catch (IOException e) {
                 throw new HoodieIOException(e.getMessage(), e);
               }
@@ -154,10 +155,8 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     } else {
       Assert.assertTrue("Rename Files must be empty", renameFiles.isEmpty());
     }
-    expRenameFiles.entrySet().stream().forEach(r -> {
-      LOG.info("Key :" + r.getKey() + " renamed to " + r.getValue() + " rolled back to "
-          + renameFilesFromUndo.get(r.getKey()));
-    });
+    expRenameFiles.forEach((key, value) -> LOG.info("Key :" + key + " renamed to " + value + " rolled back to "
+            + renameFilesFromUndo.get(key)));
 
     Assert.assertEquals("Undo must completely rollback renames", expRenameFiles, renameFilesFromUndo);
     // Now expect validation to succeed
@@ -185,14 +184,14 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     Set<HoodieLogFile> uniqNewLogFiles = new HashSet<>();
     Set<HoodieLogFile> uniqOldLogFiles = new HashSet<>();
 
-    renameFiles.stream().forEach(lfPair -> {
+    renameFiles.forEach(lfPair -> {
       Assert.assertFalse("Old Log File Names do not collide", uniqOldLogFiles.contains(lfPair.getKey()));
       Assert.assertFalse("New Log File Names do not collide", uniqNewLogFiles.contains(lfPair.getValue()));
       uniqOldLogFiles.add(lfPair.getKey());
       uniqNewLogFiles.add(lfPair.getValue());
     });
 
-    renameFiles.stream().forEach(lfPair -> {
+    renameFiles.forEach(lfPair -> {
       HoodieLogFile oldLogFile = lfPair.getLeft();
       HoodieLogFile newLogFile = lfPair.getValue();
       Assert.assertEquals("Base Commit time is expected", ingestionInstant, newLogFile.getBaseCommitTime());
@@ -245,9 +244,9 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
 
     if (skipUnSchedule) {
       // Do the renaming only but do not touch the compaction plan - Needed for repair tests
-      renameFiles.stream().forEach(lfPair -> {
+      renameFiles.forEach(lfPair -> {
         try {
-          client.renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
+          renameLogFile(metaClient, lfPair.getLeft(), lfPair.getRight());
         } catch (IOException e) {
           throw new HoodieIOException(e.getMessage(), e);
         }
