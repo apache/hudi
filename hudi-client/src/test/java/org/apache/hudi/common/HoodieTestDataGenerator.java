@@ -315,6 +315,24 @@ public class HoodieTestDataGenerator {
     return updates;
   }
 
+  public List<HoodieRecord> generateUpdatesWithDiffPartition(String commitTime, List<HoodieRecord> baseRecords)
+      throws IOException {
+    List<HoodieRecord> updates = new ArrayList<>();
+    for (HoodieRecord baseRecord : baseRecords) {
+      String partition = baseRecord.getPartitionPath();
+      String newPartition = "";
+      if (partitionPaths[0].equalsIgnoreCase(partition)) {
+        newPartition = partitionPaths[1];
+      } else {
+        newPartition = partitionPaths[0];
+      }
+      HoodieKey key = new HoodieKey(baseRecord.getRecordKey(), newPartition);
+      HoodieRecord record = generateUpdateRecord(key, commitTime);
+      updates.add(record);
+    }
+    return updates;
+  }
+
   /**
    * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
    * list

@@ -61,7 +61,8 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
   private String schemaStr;
   private Schema schema;
 
-  public TestHoodieGlobalBloomIndex() throws Exception {}
+  public TestHoodieGlobalBloomIndex() throws Exception {
+  }
 
   @Before
   public void setUp() throws Exception {
@@ -171,7 +172,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     partitionToFileIndexInfo.put("2017/10/23",
         Arrays.asList(new BloomIndexFileInfo("f4", "002", "007"), new BloomIndexFileInfo("f5", "009", "010")));
 
-    // the partition partition of the key of the incoming records will be ignored
+    // the partition of the key of the incoming records will be ignored
     JavaPairRDD<String, String> partitionRecordKeyPairRDD =
         jsc.parallelize(Arrays.asList(new Tuple2<>("2017/10/21", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/23", "004"))).mapToPair(t -> t);
@@ -240,7 +241,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     TestRawTripPayload rowChange5 =
         new TestRawTripPayload("{\"_row_key\":\"003\",\"time\":\"2016-02-31T03:16:41.415Z\",\"number\":12}");
     HoodieRecord record5 =
-        new HoodieRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange4);
+        new HoodieRecord(new HoodieKey(rowChange5.getRowKey(), rowChange5.getPartitionPath()), rowChange5);
 
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
@@ -257,7 +258,6 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieTable.getHoodieTable(metaClient, config, jsc);
 
-
     // Add some commits
     new File(basePath + "/.hoodie").mkdirs();
 
@@ -267,12 +267,19 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     for (HoodieRecord record : taggedRecordRDD.collect()) {
       if (record.getRecordKey().equals("000")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename0)));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange1.getJsonData());
       } else if (record.getRecordKey().equals("001")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename2)));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange2.getJsonData());
       } else if (record.getRecordKey().equals("002")) {
         assertTrue(!record.isCurrentLocationKnown());
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange3.getJsonData());
+      } else if (record.getRecordKey().equals("003")) {
+        assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange5.getJsonData());
       } else if (record.getRecordKey().equals("004")) {
         assertTrue(record.getCurrentLocation().getFileId().equals(FSUtils.getFileId(filename3)));
+        assertEquals(((TestRawTripPayload) record.getData()).getJsonData(), rowChange4.getJsonData());
       }
     }
   }
