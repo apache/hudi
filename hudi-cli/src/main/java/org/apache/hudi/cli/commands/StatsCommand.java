@@ -79,7 +79,6 @@ public class StatsCommand implements CommandMarker {
     HoodieTimeline timeline = activeTimeline.getCommitTimeline().filterCompletedInstants();
 
     List<Comparable[]> rows = new ArrayList<>();
-    int i = 0;
     DecimalFormat df = new DecimalFormat("#.00");
     for (HoodieInstant commitTime : timeline.getInstants().collect(Collectors.toList())) {
       String waf = "0";
@@ -100,7 +99,7 @@ public class StatsCommand implements CommandMarker {
     rows.add(new Comparable[] {"Total", totalRecordsUpserted, totalRecordsWritten, waf});
 
     TableHeader header = new TableHeader().addTableHeaderField("CommitTime").addTableHeaderField("Total Upserted")
-        .addTableHeaderField("Total Written").addTableHeaderField("Write Amplifiation Factor");
+        .addTableHeaderField("Total Written").addTableHeaderField("Write Amplification Factor");
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, rows);
   }
 
@@ -126,7 +125,7 @@ public class StatsCommand implements CommandMarker {
 
     // max, min, #small files < 10MB, 50th, avg, 95th
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
-    HashMap<String, Histogram> commitHistoMap = new HashMap<String, Histogram>();
+    HashMap<String, Histogram> commitHistoMap = new HashMap<>();
     for (FileStatus fileStatus : statuses) {
       String commitTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
       long sz = fileStatus.getLen();
@@ -138,7 +137,6 @@ public class StatsCommand implements CommandMarker {
     }
 
     List<Comparable[]> rows = new ArrayList<>();
-    int ind = 0;
     for (String commitTime : commitHistoMap.keySet()) {
       Snapshot s = commitHistoMap.get(commitTime).getSnapshot();
       rows.add(printFileSizeHistogram(commitTime, s));
@@ -147,7 +145,7 @@ public class StatsCommand implements CommandMarker {
     rows.add(printFileSizeHistogram("ALL", s));
 
     Function<Object, String> converterFunction =
-        entry -> NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
+        entry -> NumericUtils.humanReadableByteCount((Double.parseDouble(entry.toString())));
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put("Min", converterFunction);
     fieldNameToConverterMap.put("10th", converterFunction);

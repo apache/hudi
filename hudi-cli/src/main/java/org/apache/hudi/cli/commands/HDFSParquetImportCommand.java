@@ -24,8 +24,6 @@ import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
@@ -41,11 +39,9 @@ import scala.collection.JavaConverters;
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
 
-  private static final Logger LOG = LogManager.getLogger(HDFSParquetImportCommand.class);
-
   @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
   public String convert(
-      @CliOption(key = "upsert", mandatory = false, unspecifiedDefaultValue = "false",
+      @CliOption(key = "upsert", unspecifiedDefaultValue = "false",
           help = "Uses upsert API instead of the default insert API of WriteClient") boolean useUpsert,
       @CliOption(key = "srcPath", mandatory = true, help = "Base path for the input dataset") final String srcPath,
       @CliOption(key = "targetPath", mandatory = true,

@@ -75,7 +75,7 @@ public class SparkMain {
       case UPSERT:
         assert (args.length == 11);
         returnCode = dataLoad(jsc, command, args[1], args[2], args[3], args[4], args[5], args[6],
-            Integer.parseInt(args[7]), args[8], SparkUtil.DEFUALT_SPARK_MASTER, args[9], Integer.parseInt(args[10]));
+            Integer.parseInt(args[7]), args[8], args[9], Integer.parseInt(args[10]));
         break;
       case COMPACT_RUN:
         assert (args.length == 8);
@@ -94,19 +94,19 @@ public class SparkMain {
       case COMPACT_REPAIR:
         assert (args.length == 8);
         doCompactRepair(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]));
+            Boolean.parseBoolean(args[7]));
         returnCode = 0;
         break;
       case COMPACT_UNSCHEDULE_FILE:
         assert (args.length == 9);
         doCompactUnscheduleFile(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]), Boolean.valueOf(args[8]));
+            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
         returnCode = 0;
         break;
       case COMPACT_UNSCHEDULE_PLAN:
         assert (args.length == 9);
         doCompactUnschedule(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Boolean.valueOf(args[7]), Boolean.valueOf(args[8]));
+            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
         returnCode = 0;
         break;
       default:
@@ -116,8 +116,8 @@ public class SparkMain {
   }
 
   private static int dataLoad(JavaSparkContext jsc, String command, String srcPath, String targetPath, String tableName,
-      String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile, String sparkMaster,
-      String sparkMemory, int retry) throws Exception {
+                              String tableType, String rowKey, String partitionKey, int parallelism, String schemaFile,
+                              String sparkMemory, int retry) {
     Config cfg = new Config();
     cfg.command = command;
     cfg.srcPath = srcPath;
@@ -128,6 +128,7 @@ public class SparkMain {
     cfg.partitionKey = partitionKey;
     cfg.parallelism = parallelism;
     cfg.schemaFile = schemaFile;
+    cfg.sparkMaster = SparkUtil.DEFAULT_SPARK_MASTER;
     jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HDFSParquetImporter(cfg).dataImport(jsc, retry);
   }
@@ -200,7 +201,7 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule) throws Exception {
+      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -215,7 +216,7 @@ public class SparkMain {
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath) throws Exception {
+      String repairedOutputPath, String basePath) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
         FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
     job.fixDuplicates(true);

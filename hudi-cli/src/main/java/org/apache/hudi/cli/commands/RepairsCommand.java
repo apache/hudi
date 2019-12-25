@@ -59,7 +59,7 @@ public class RepairsCommand implements CommandMarker {
           mandatory = true) final String duplicatedPartitionPath,
       @CliOption(key = {"repairedOutputPath"}, help = "Location to place the repaired files",
           mandatory = true) final String repairedOutputPath,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properites File Path",
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path",
           mandatory = true) final String sparkPropertiesPath)
       throws Exception {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
