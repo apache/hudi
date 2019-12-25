@@ -19,13 +19,12 @@
 package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DefaultHBaseQPSResourceAllocator implements HBaseIndexQPSResourceAllocator {
   private HoodieWriteConfig hoodieWriteConfig;
-  private static final Logger LOG = LogManager.getLogger(DefaultHBaseQPSResourceAllocator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultHBaseQPSResourceAllocator.class);
 
   public DefaultHBaseQPSResourceAllocator(HoodieWriteConfig hoodieWriteConfig) {
     this.hoodieWriteConfig = hoodieWriteConfig;

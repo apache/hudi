@@ -67,8 +67,6 @@ import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
@@ -86,6 +84,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -96,7 +96,7 @@ import scala.Tuple2;
  */
 public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteClient.class);
   private static final String UPDATE_STR = "update";
   private static final String LOOKUP_STR = "lookup";
   private final boolean rollbackPending;

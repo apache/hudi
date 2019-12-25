@@ -29,8 +29,8 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,7 +48,7 @@ import java.util.stream.Stream;
  */
 public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFileSystemView.class);
 
   // mapping from partition paths to file groups contained within them
   protected Map<String, List<HoodieFileGroup>> partitionToFileGroupsMap;

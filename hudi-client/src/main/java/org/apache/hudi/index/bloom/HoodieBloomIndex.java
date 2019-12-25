@@ -34,8 +34,6 @@ import org.apache.hudi.io.HoodieRangeInfoHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import com.google.common.annotations.VisibleForTesting;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -48,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 import static java.util.stream.Collectors.groupingBy;
@@ -63,7 +63,7 @@ public class HoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieIndex
   private static final int SPARK_MAXIMUM_BYTES_PER_PARTITION = 1500 * 1024 * 1024;
   // this is how much a triplet of (partitionPath, fileId, recordKey) costs.
   private static final int BYTES_PER_PARTITION_FILE_KEY_TRIPLET = 300;
-  private static final Logger LOG = LogManager.getLogger(HoodieBloomIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieBloomIndex.class);
   private static int MAX_ITEMS_PER_SHUFFLE_PARTITION =
       SPARK_MAXIMUM_BYTES_PER_PARTITION / BYTES_PER_PARTITION_FILE_KEY_TRIPLET;
 

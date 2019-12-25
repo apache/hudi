@@ -31,8 +31,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
@@ -40,6 +38,8 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
  */
 public class SchemaUtil {
 
-  private static final Logger LOG = LogManager.getLogger(SchemaUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   /**

@@ -38,8 +38,8 @@ import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -54,7 +54,7 @@ import java.util.Map;
 class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
-  private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogFileReader.class);
 
   private final FSDataInputStream inputStream;
   private final HoodieLogFile logFile;

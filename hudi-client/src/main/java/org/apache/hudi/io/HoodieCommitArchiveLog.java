@@ -54,9 +54,9 @@ import com.google.common.collect.Sets;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -71,7 +71,7 @@ import java.util.stream.Stream;
  */
 public class HoodieCommitArchiveLog {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCommitArchiveLog.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCommitArchiveLog.class);
 
   private final Path archiveFilePath;
   private final HoodieTableMetaClient metaClient;

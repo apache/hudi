@@ -35,8 +35,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -51,6 +49,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -58,7 +58,7 @@ import scala.Tuple2;
  */
 public class HoodieReadClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieReadClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieReadClient.class);
 
   /**
    * TODO: We need to persist the index type into hoodie.properties and be able to access the index just with a simple

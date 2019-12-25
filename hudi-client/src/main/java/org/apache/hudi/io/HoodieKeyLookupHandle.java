@@ -31,8 +31,8 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -44,7 +44,7 @@ import java.util.Set;
  */
 public class HoodieKeyLookupHandle<T extends HoodieRecordPayload> extends HoodieReadHandle<T> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieKeyLookupHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieKeyLookupHandle.class);
 
   private final HoodieTableType tableType;
 

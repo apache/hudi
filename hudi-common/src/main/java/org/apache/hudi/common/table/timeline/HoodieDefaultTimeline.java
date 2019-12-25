@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import com.google.common.collect.Sets;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -47,7 +47,7 @@ import static java.util.Collections.reverse;
  */
 public class HoodieDefaultTimeline implements HoodieTimeline {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieDefaultTimeline.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieDefaultTimeline.class);
 
   private static final String HASHING_ALGORITHM = "SHA-256";
 

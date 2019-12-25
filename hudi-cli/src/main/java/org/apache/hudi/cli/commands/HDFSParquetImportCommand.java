@@ -24,10 +24,10 @@ import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.utilities.HDFSParquetImporter.FormatValidator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
@@ -41,7 +41,7 @@ import scala.collection.JavaConverters;
 @Component
 public class HDFSParquetImportCommand implements CommandMarker {
 
-  private static final Logger LOG = LogManager.getLogger(HDFSParquetImportCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HDFSParquetImportCommand.class);
 
   @CliCommand(value = "hdfsparquetimport", help = "Imports Parquet dataset to a hoodie dataset")
   public String convert(

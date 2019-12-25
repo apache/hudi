@@ -33,12 +33,12 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrPullSource extends AvroSource {
 
-  private static final Logger LOG = LogManager.getLogger(HiveIncrPullSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrPullSource.class);
 
   private final transient FileSystem fs;
 

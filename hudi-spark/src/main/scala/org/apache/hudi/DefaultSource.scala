@@ -20,13 +20,13 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
-import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.slf4j.LoggerFactory
 
 /**
   * Hoodie Spark Datasource, for reading and writing hoodie datasets
@@ -39,7 +39,7 @@ class DefaultSource extends RelationProvider
   with StreamSinkProvider
   with Serializable {
 
-  private val log = LogManager.getLogger(classOf[DefaultSource])
+  private val log = LoggerFactory.getLogger(classOf[DefaultSource])
 
   override def createRelation(sqlContext: SQLContext,
                               parameters: Map[String, String]): BaseRelation = {

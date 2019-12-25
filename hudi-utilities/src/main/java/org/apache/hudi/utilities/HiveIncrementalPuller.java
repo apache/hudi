@@ -33,8 +33,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.stringtemplate.v4.ST;
 
 import java.io.File;
@@ -61,7 +61,7 @@ import java.util.stream.Collectors;
  */
 public class HiveIncrementalPuller {
 
-  private static final Logger LOG = LogManager.getLogger(HiveIncrementalPuller.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveIncrementalPuller.class);
   private static String driverName = "org.apache.hive.jdbc.HiveDriver";
 
   public static class Config implements Serializable {

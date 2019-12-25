@@ -49,8 +49,6 @@ import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.RegionLocator;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -64,6 +62,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -82,7 +82,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   private static final byte[] PARTITION_PATH_COLUMN = Bytes.toBytes("partition_path");
   private static final int SLEEP_TIME_MILLISECONDS = 100;
 
-  private static final Logger LOG = LogManager.getLogger(HBaseIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HBaseIndex.class);
   private static Connection hbaseConnection = null;
   private HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = null;
   private float qpsFraction;
@@ -321,7 +321,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
             doPutsAndDeletes(hTable, puts, deletes);
           } catch (Exception e) {
             Exception we = new Exception("Error updating index for " + writeStatus, e);
-            LOG.error(we);
+            LOG.error(we.getMessage());
             writeStatus.setGlobalError(we);
           }
           writeStatusList.add(writeStatus);
@@ -421,7 +421,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
   public static class HbasePutBatchSizeCalculator implements Serializable {
 
     private static final int MILLI_SECONDS_IN_A_SECOND = 1000;
-    private static final Logger LOG = LogManager.getLogger(HbasePutBatchSizeCalculator.class);
+    private static final Logger LOG = LoggerFactory.getLogger(HbasePutBatchSizeCalculator.class);
 
     /**
      * Calculate putBatch size so that sum of requests across multiple jobs in a second does not exceed
@@ -486,7 +486,7 @@ public class HBaseIndex<T extends HoodieRecordPayload> extends HoodieIndex<T> {
             .toIntExact(regionLocator.getAllRegionLocations().stream().map(e -> e.getServerName()).distinct().count());
         return numRegionServersForTable;
       } catch (IOException e) {
-        LOG.error(e);
+        LOG.error(e.getMessage());
         throw new RuntimeException(e);
       }
     }

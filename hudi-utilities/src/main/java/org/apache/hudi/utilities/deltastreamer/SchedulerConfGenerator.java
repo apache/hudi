@@ -21,9 +21,9 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -39,7 +39,7 @@ import java.util.UUID;
  */
 public class SchedulerConfGenerator {
 
-  private static final Logger LOG = LogManager.getLogger(SchedulerConfGenerator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SchedulerConfGenerator.class);
 
   public static final String DELTASYNC_POOL_NAME = "hoodiedeltasync";
   public static final String COMPACT_POOL_NAME = "hoodiecompact";

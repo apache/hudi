@@ -19,9 +19,8 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
@@ -36,7 +35,7 @@ import java.util.function.Function;
  */
 public abstract class AbstractDeltaStreamerService implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractDeltaStreamerService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractDeltaStreamerService.class);
 
   // Flag to track if the service is started.
   private boolean started;

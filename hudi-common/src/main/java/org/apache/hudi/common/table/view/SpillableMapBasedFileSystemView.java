@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,7 +42,7 @@ import java.util.stream.Stream;
  */
 public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
-  private static final Logger LOG = LogManager.getLogger(SpillableMapBasedFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SpillableMapBasedFileSystemView.class);
 
   private final long maxMemoryForFileGroupMap;
   private final long maxMemoryForPendingCompaction;

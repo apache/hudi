@@ -38,9 +38,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -61,7 +60,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieCleanHelper<T extends HoodieRecordPayload<T>> implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCleanHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleanHelper.class);
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;

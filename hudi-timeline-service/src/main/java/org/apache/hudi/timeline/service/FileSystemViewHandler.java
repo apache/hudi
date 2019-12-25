@@ -39,9 +39,9 @@ import io.javalin.Context;
 import io.javalin.Handler;
 import io.javalin.Javalin;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 public class FileSystemViewHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final Logger LOG = LogManager.getLogger(FileSystemViewHandler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemViewHandler.class);
 
   private final FileSystemViewManager viewManager;
   private final Javalin app;

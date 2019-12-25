@@ -47,10 +47,10 @@ import com.google.common.collect.Maps;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
 import org.apache.spark.util.SizeEstimator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,7 +64,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class HoodieAppendHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
   private static AtomicLong recordIndex = new AtomicLong(1);
   private final String fileId;

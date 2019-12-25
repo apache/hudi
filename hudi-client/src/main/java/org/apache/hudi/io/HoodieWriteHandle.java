@@ -36,9 +36,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.TaskContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -47,7 +47,7 @@ import java.io.IOException;
  */
 public abstract class HoodieWriteHandle<T extends HoodieRecordPayload> extends HoodieIOHandle {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteHandle.class);
   protected final Schema originalSchema;
   protected final Schema writerSchema;
   protected HoodieTimer timer;

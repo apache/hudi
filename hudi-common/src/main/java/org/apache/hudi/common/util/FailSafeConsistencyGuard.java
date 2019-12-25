@@ -22,8 +22,8 @@ import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
-  private static final Logger LOG = LogManager.getLogger(FailSafeConsistencyGuard.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FailSafeConsistencyGuard.class);
 
   private final FileSystem fs;
   private final ConsistencyGuardConfig consistencyGuardConfig;

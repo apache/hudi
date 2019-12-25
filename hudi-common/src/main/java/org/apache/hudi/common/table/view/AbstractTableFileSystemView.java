@@ -38,8 +38,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -66,7 +66,7 @@ import java.util.stream.Stream;
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractTableFileSystemView.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractTableFileSystemView.class);
 
   protected HoodieTableMetaClient metaClient;
 

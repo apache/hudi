@@ -40,10 +40,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.shell.core.CommandMarker;
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
 @Component
 public class CompactionCommand implements CommandMarker {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionCommand.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionCommand.class);
 
   private static final String TMP_DIR = "/tmp/";
 

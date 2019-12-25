@@ -31,10 +31,10 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -49,7 +49,7 @@ import static org.awaitility.Awaitility.await;
 
 public abstract class ITTestBase {
 
-  public static final Logger LOG = LogManager.getLogger(ITTestBase.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ITTestBase.class);
   protected static final String SPARK_WORKER_CONTAINER = "/spark-worker-1";
   protected static final String ADHOC_1_CONTAINER = "/adhoc-1";
   protected static final String ADHOC_2_CONTAINER = "/adhoc-2";

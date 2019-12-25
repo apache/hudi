@@ -36,8 +36,6 @@ import com.google.common.collect.Maps;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.PathFilter;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
@@ -48,6 +46,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -55,7 +55,7 @@ import scala.Tuple2;
  */
 public class RollbackExecutor implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(RollbackExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RollbackExecutor.class);
 
   private final HoodieTableMetaClient metaClient;
   private final HoodieWriteConfig config;

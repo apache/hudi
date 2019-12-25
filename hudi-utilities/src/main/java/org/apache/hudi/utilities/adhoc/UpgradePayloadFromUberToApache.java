@@ -28,8 +28,8 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -46,7 +46,7 @@ import java.util.Properties;
  */
 public class UpgradePayloadFromUberToApache implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(UpgradePayloadFromUberToApache.class);
+  private static final Logger LOG = LoggerFactory.getLogger(UpgradePayloadFromUberToApache.class);
 
   private final Config cfg;
 

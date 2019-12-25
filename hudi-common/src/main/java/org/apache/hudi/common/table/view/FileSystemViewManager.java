@@ -23,9 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.SyncableFileSystemView;
 import org.apache.hudi.common.util.Functions.Function2;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -51,7 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * clients for querying.
  */
 public class FileSystemViewManager {
-  private static final Logger LOG = LogManager.getLogger(FileSystemViewManager.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FileSystemViewManager.class);
 
   private final SerializableConfiguration conf;
   // The View Storage config used to store file-system views

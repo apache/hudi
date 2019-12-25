@@ -34,9 +34,9 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
 @SuppressWarnings("WeakerAccess")
 public class HiveSyncTool {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSyncTool.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveSyncTool.class);
   private final HoodieHiveClient hoodieHiveClient;
   public static final String SUFFIX_REALTIME_TABLE = "_rt";
   private final HiveSyncConfig cfg;

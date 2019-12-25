@@ -26,9 +26,9 @@ import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -37,7 +37,7 @@ import java.io.IOException;
  */
 public class EmbeddedTimelineService {
 
-  private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EmbeddedTimelineService.class);
 
   private int serverPort;
   private String hostAddr;

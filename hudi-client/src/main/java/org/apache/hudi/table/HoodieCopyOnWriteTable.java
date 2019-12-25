@@ -58,8 +58,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -81,6 +79,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Tuple2;
 
 /**
@@ -92,7 +92,7 @@ import scala.Tuple2;
  */
 public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieTable<T> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCopyOnWriteTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCopyOnWriteTable.class);
 
   public HoodieCopyOnWriteTable(HoodieWriteConfig config, JavaSparkContext jsc) {
     super(config, jsc);

@@ -25,8 +25,6 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.exception.HoodieDeltaStreamerException;
 
 import kafka.common.TopicAndPartition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.streaming.kafka.KafkaCluster;
 import org.apache.spark.streaming.kafka.KafkaCluster.LeaderOffset;
 import org.apache.spark.streaming.kafka.OffsetRange;
@@ -38,6 +36,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Predef;
 import scala.collection.JavaConverters;
 import scala.collection.immutable.Map;
@@ -51,7 +51,7 @@ import scala.util.Either;
  */
 public class KafkaOffsetGen {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
 
   public static class CheckpointUtils {
 

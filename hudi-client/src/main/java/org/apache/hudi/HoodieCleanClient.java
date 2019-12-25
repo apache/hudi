@@ -39,16 +39,16 @@ import org.apache.hudi.table.HoodieTable;
 import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 
 public class HoodieCleanClient<T extends HoodieRecordPayload> extends AbstractHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCleanClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCleanClient.class);
   private final transient HoodieMetrics metrics;
 
   public HoodieCleanClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, HoodieMetrics metrics) {

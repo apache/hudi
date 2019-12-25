@@ -24,8 +24,8 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -51,7 +51,7 @@ public class HoodiePartitionMetadata {
 
   private final FileSystem fs;
 
-  private static final Logger LOG = LogManager.getLogger(HoodiePartitionMetadata.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionMetadata.class);
 
   /**
    * Construct metadata from existing partition.

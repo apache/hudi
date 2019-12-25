@@ -22,10 +22,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -33,7 +33,7 @@ import java.io.Serializable;
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
  */
 public abstract class Source<T> implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(Source.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Source.class);
 
   public enum SourceType {
     JSON, AVRO, ROW

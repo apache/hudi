@@ -20,14 +20,14 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.util.TypedProperties;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
@@ -37,7 +37,7 @@ import java.util.UUID;
 public class FlatteningTransformer implements Transformer {
 
   private static final String TMP_TABLE = "HUDI_SRC_TMP_TABLE_";
-  private static final Logger LOG = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryBasedTransformer.class);
 
   /**
    * Configs supported.

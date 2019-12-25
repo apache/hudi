@@ -57,8 +57,8 @@ import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.CombineFileInputFormat;
 import org.apache.hadoop.mapred.lib.CombineFileSplit;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -93,7 +93,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     extends HiveInputFormat<K, V> {
 
   private static final String CLASS_NAME = HoodieCombineHiveInputFormat.class.getName();
-  public static final Logger LOG = LogManager.getLogger(CLASS_NAME);
+  public static final Logger LOG = LoggerFactory.getLogger(CLASS_NAME);
 
   // max number of threads we can use to check non-combinable paths
   private static final int MAX_CHECK_NONCOMBINABLE_THREAD_NUM = 50;

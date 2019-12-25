@@ -22,8 +22,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.google.common.base.Preconditions;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXConnectorServerFactory;
@@ -38,7 +38,7 @@ import java.rmi.registry.LocateRegistry;
  */
 public class JmxMetricsReporter extends MetricsReporter {
 
-  private static final Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JmxMetricsReporter.class);
   private final JMXConnectorServer connector;
   private String host;
   private int port;

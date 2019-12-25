@@ -56,8 +56,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -73,6 +71,8 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.collection.JavaConversions;
 
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
@@ -83,7 +83,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
  */
 public class DeltaSync implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(DeltaSync.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DeltaSync.class);
   public static String CHECKPOINT_KEY = "deltastreamer.checkpoint.key";
   public static String CHECKPOINT_RESET_KEY = "deltastreamer.checkpoint.reset_key";
 

@@ -47,13 +47,13 @@ import com.google.common.collect.Sets;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.util.AccumulatorV2;
 import org.apache.spark.util.LongAccumulator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -74,7 +74,7 @@ import static java.util.stream.Collectors.toList;
  */
 public class HoodieRealtimeTableCompactor implements HoodieCompactor {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieRealtimeTableCompactor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeTableCompactor.class);
   // Accumulator to keep track of total log files for a dataset
   private AccumulatorV2<Long, Long> totalLogFiles;
   // Accumulator to keep track of total log file slices for a dataset

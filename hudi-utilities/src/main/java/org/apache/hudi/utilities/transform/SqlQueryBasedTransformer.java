@@ -20,12 +20,12 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.util.TypedProperties;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
@@ -36,7 +36,7 @@ import java.util.UUID;
  */
 public class SqlQueryBasedTransformer implements Transformer {
 
-  private static final Logger LOG = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlQueryBasedTransformer.class);
 
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";

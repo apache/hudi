@@ -20,12 +20,12 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.JobContext;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HoodieHiveUtil {
 
-  public static final Logger LOG = LogManager.getLogger(HoodieHiveUtil.class);
+  public static final Logger LOG = LoggerFactory.getLogger(HoodieHiveUtil.class);
 
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.function.Function;
 
@@ -30,7 +30,7 @@ import java.util.function.Function;
  */
 public class FunctionBasedQueueProducer<I> implements BoundedInMemoryQueueProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(FunctionBasedQueueProducer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FunctionBasedQueueProducer.class);
 
   private final Function<BoundedInMemoryQueue<I, ?>, Boolean> producerFunction;
 

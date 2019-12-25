@@ -45,9 +45,9 @@ import org.apache.hudi.func.OperationResult;
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -65,7 +65,7 @@ import static org.apache.hudi.common.table.HoodieTimeline.COMPACTION_ACTION;
  */
 public class CompactionAdminClient extends AbstractHoodieClient {
 
-  private static final Logger LOG = LogManager.getLogger(CompactionAdminClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionAdminClient.class);
 
   public CompactionAdminClient(JavaSparkContext jsc, String basePath) {
     super(jsc, HoodieWriteConfig.newBuilder().withPath(basePath).build());

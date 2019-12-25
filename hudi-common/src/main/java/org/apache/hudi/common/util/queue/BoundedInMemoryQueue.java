@@ -25,8 +25,8 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -58,7 +58,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   public static final int RECORD_SAMPLING_RATE = 64;
   // maximum records that will be cached
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
-  private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BoundedInMemoryQueue.class);
   // It indicates number of records to cache. We will be using sampled record's average size to
   // determine how many
   // records we should cache and will change (increase/decrease) permits accordingly.

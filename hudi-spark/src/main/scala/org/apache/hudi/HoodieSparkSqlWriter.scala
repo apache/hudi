@@ -30,17 +30,17 @@ import org.apache.hudi.common.util.{FSUtils, TypedProperties}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.log4j.LogManager
 import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
 private[hudi] object HoodieSparkSqlWriter {
 
-  private val log = LogManager.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,

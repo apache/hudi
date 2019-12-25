@@ -22,9 +22,8 @@ import org.apache.hudi.common.table.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +35,7 @@ import java.util.stream.Collectors;
  */
 public class TimelineDiffHelper {
 
-  private static final Logger LOG = LogManager.getLogger(TimelineDiffHelper.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TimelineDiffHelper.class);
 
   public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldTimeline,
       HoodieTimeline newTimeline) {

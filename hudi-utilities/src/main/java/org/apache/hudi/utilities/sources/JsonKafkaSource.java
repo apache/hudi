@@ -25,20 +25,20 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
 import kafka.serializer.StringDecoder;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.apache.spark.streaming.kafka.OffsetRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Read json kafka data.
  */
 public class JsonKafkaSource extends JsonSource {
 
-  private static final Logger LOG = LogManager.getLogger(JsonKafkaSource.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JsonKafkaSource.class);
 
   private final KafkaOffsetGen offsetGen;
 
