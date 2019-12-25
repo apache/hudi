@@ -75,7 +75,7 @@ public class FileSliceHandler extends Handler {
 
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
     return viewManager.getFileSystemView(basePath).getLatestFileSlice(partitionPath, fileId)
-        .map(FileSliceDTO::fromFileSlice).map(dto -> Arrays.asList(dto)).orElse(new ArrayList<>());
+        .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(new ArrayList<>());
   }
 
   public List<CompactionOpDTO> getPendingCompactionOperations(String basePath) {
