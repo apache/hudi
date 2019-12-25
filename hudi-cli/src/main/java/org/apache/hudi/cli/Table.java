@@ -85,7 +85,7 @@ public class Table implements Iterable<List<String>> {
   /**
    * Add all rows.
    * 
-   * @param rows Rows to be aded
+   * @param rows Rows to be added
    * @return
    */
   public Table addAll(List<List<Comparable>> rows) {
