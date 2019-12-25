@@ -103,9 +103,7 @@ public class InMemoryFileSystem extends FileSystem {
 
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
-    System.out.println("GetFileStatus invoked");
     throw new UnsupportedOperationException("No support for getFileStatus");
-    // return inlinePath.getFileSystem(conf).getFileStatus(inlinePath);
   }
 
   @Override

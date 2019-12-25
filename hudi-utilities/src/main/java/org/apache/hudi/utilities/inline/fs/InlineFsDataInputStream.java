@@ -47,7 +47,7 @@ public class InlineFsDataInputStream extends FSDataInputStream {
 
   @Override
   public long getPos() throws IOException {
-    return outerStream.getPos() + startOffset;
+    return outerStream.getPos() - startOffset;
   }
 
   @Override
@@ -69,7 +69,6 @@ public class InlineFsDataInputStream extends FSDataInputStream {
   @Override
   public boolean seekToNewSource(long targetPos) throws IOException {
     boolean toReturn = outerStream.seekToNewSource(startOffset + targetPos);
-    System.out.println("start Offset "+ startOffset +" targetPos "+ targetPos +" new pos "+ outerStream.getPos());
     return toReturn;
   }
 
