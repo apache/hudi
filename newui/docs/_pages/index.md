@@ -15,6 +15,6 @@ power_items:
   - img_path: /assets/images/powers/alibaba.png
   - img_path: /assets/images/powers/yotpo.png
   - img_path: /assets/images/powers/kyligence.png
-  - img_path: /assets/images/powers/bmw.png
   - img_path: /assets/images/powers/shunfeng.png
+  - img_path: /assets/images/powers/lingyue.png
 ---
