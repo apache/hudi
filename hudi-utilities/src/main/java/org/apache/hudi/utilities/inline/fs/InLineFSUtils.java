@@ -54,7 +54,7 @@ public class InLineFSUtils {
   }
 
   /**
-   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40"
+   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40".
    * Output : "file:/file1"
    *
    * @param inlinePath
@@ -68,7 +68,7 @@ public class InLineFSUtils {
   }
 
   /**
-   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40"
+   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40".
    * output: 20
    *
    * @param inlinePath
@@ -80,7 +80,7 @@ public class InLineFSUtils {
   }
 
   /**
-   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40"
+   * Eg input : "inlinefs:/file1/file/inline_file/?start_offset=20&length=40".
    * Output: 40
    *
    * @param inlinePath
