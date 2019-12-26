@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.{FSUtils, TypedProperties}
@@ -80,7 +81,8 @@ private[hudi] object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     var exists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
 
-    val writeSuccessful = if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
+    val (writeStatuses,writeClient: HoodieWriteClient[HoodieRecordPayload[Nothing]]) =
+      if (!operation.equalsIgnoreCase(DELETE_OPERATION_OPT_VAL)) {
       // register classes & schemas
       val structName = s"${tblName.get}_record"
       val nameSpace = s"hoodie.${tblName.get}"
@@ -142,8 +144,7 @@ private[hudi] object HoodieSparkSqlWriter {
       }
       client.startCommitWithTime(commitTime)
       val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, commitTime, operation)
-      // Check for errors and commit the write.
-      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
+      (writeStatuses, client)
     } else {
 
       // Handle save modes
@@ -175,9 +176,11 @@ private[hudi] object HoodieSparkSqlWriter {
       // Issue deletes
       client.startCommitWithTime(commitTime)
       val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, commitTime)
-      checkWriteStatus(writeStatuses, parameters, client, commitTime, basePath, operation, jsc)
+      (writeStatuses, client)
     }
 
+    // Check for errors and commit the write.
+    val writeSuccessful = checkWriteStatus(writeStatuses, parameters, writeClient, commitTime, basePath, operation, jsc)
     (writeSuccessful, common.util.Option.ofNullable(commitTime))
   }
 
