@@ -34,7 +34,7 @@ These instructions have been tested on IntelliJ.
 
 Here's a typical lifecycle of events to contribute to Hudi.
 
- - [Recommended] Share your intent on the mailing list, so that community can provide early feedback, point out any similar JIRAs or HIPs.
+ - [Recommended] Share your intent on the mailing list, so that community can provide early feedback, point out any similar JIRAs or RFCs.
  - [Optional] If you want to get involved, but don't have a project in mind, please check JIRA for small, quick-starters.
  - [Optional] Familiarize yourself with internals of Hudi using content on this page, as well as [wiki](https://cwiki.apache.org/confluence/display/HUDI)
  - Once you finalize on a project/task, please open a new JIRA or assign an existing one to yourself. (If you don't have perms to do this, please email the dev mailing list with your JIRA id and a small intro for yourself. We'd be happy to add you as a contributor)
