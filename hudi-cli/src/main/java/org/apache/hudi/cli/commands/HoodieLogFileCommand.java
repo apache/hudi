@@ -227,7 +227,7 @@ public class HoodieLogFileCommand implements CommandMarker {
         }
       }
     }
-    String[][] rows = new String[allRecords.size() + 1][];
+    String[][] rows = new String[allRecords.size()][];
     int i = 0;
     for (IndexedRecord record : allRecords) {
       String[] data = new String[1];
