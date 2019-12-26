@@ -31,7 +31,7 @@
 
 
 
-  <meta property="article:published_time" content="2019-12-24T20:59:58-05:00">
+  <meta property="article:published_time" content="2019-12-27T00:36:58-05:00">
 
 
 
@@ -115,17 +115,17 @@
           <span class="site-subtitle">Incubating</span>
         </a>
         <ul class="visible-links"><li class="masthead__menu-item">
-              <a href="/docs/quick-start-guide/" target="_self" >Documentation</a>
+              <a href="/docs/quick-start-guide" target="_self" >Documentation</a>
             </li><li class="masthead__menu-item">
-              <a href="/community/" target="_self" >Community</a>
+              <a href="/community" target="_self" >Community</a>
             </li><li class="masthead__menu-item">
-              <a href="/roadmap/" target="_self" >Roadmap</a>
+              <a href="/roadmap" target="_self" >Roadmap</a>
             </li><li class="masthead__menu-item">
-              <a href="/activity/" target="_self" >Activities</a>
+              <a href="/activity" target="_self" >Activities</a>
             </li><li class="masthead__menu-item">
               <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
             </li><li class="masthead__menu-item">
-              <a href="/releases/" target="_self" >Releases</a>
+              <a href="/releases" target="_self" >Releases</a>
             </li></ul>
         <button class="greedy-nav__toggle hidden" type="button">
           <span class="visually-hidden">Toggle menu</span>
@@ -177,7 +177,7 @@
             
             
 
-            <li><a href="/docs/quick-start-guide/" class="">Quick Start</a></li>
+            <li><a href="/docs/quick-start-guide" class="">Quick Start</a></li>
           
             
             
@@ -314,11 +314,23 @@
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> Section Nav</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#timeline">Timeline</a></li>
+  <li><a href="#file-management">File management</a></li>
+  <li><a href="#storage-types--views">Storage Types &amp; Views</a>
+    <ul>
+      <li><a href="#storage-types">Storage Types</a></li>
+      <li><a href="#views">Views</a></li>
+    </ul>
+  </li>
+  <li><a href="#copy-on-write-storage">Copy On Write Storage</a></li>
+  <li><a href="#merge-on-read-storage">Merge On Read Storage</a></li>
+</ul>
+          </nav>
+        </aside>
         
         <p>Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over datasets on DFS</p>
 

@@ -3,6 +3,7 @@ title: Configurations
 keywords: garbage collection, hudi, jvm, configs, tuning
 permalink: /docs/configurations
 summary: "Here we list all possible configurations and what they mean"
+toc: false
 ---
 This page covers the different ways of configuring your job to write/read Hudi datasets. 
 At a high level, you can control behaviour at few levels. 

@@ -1,7 +1,8 @@
 ---
 title: "Releases"
-permalink: /releases/
+permalink: /releases
 layout: releases
+toc: true
 ---
 
 ## [Release 0.5.0-incubating](https://github.com/apache/incubator-hudi/releases/tag/release-0.5.0-incubating)

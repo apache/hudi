@@ -22,7 +22,7 @@ var store = [{
         "title": "Quick-Start Guide",
         "excerpt":"This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi dataset of default storage type: Copy on Write. After each write operation we will also show how to read the data...","categories": [],
         "tags": [],
-        "url": "http://0.0.0.0:4000/docs/quick-start-guide/",
+        "url": "http://0.0.0.0:4000/docs/quick-start-guide",
         "teaser":"http://0.0.0.0:4000/assets/images/500x300.png"},{
         "title": "Structure",
         "excerpt":"Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical datasets over DFS (HDFS or cloud stores) and provides three logical views for query access. Read Optimized View - Provides excellent query performance on pure columnar storage, much like plain Parquet tables. Incremental View - Provides a change stream out...","categories": [],

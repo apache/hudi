@@ -1,5 +1,5 @@
 ---
 title: "Activities"
-permalink: /activity/
+permalink: /activity
 layout: posts
 ---

@@ -2,24 +2,24 @@
 # main links
 main:
   - title: "Documentation"
-    url: /docs/quick-start-guide/
+    url: /docs/quick-start-guide
   - title: "Community"
-    url: /community/
+    url: /community
   - title: "Roadmap"
-    url: /roadmap/
+    url: /roadmap
   - title: "Activities"
-    url: /activity/
+    url: /activity
   - title: "FAQ"
     url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
   - title: "Releases"
-    url: /releases/
+    url: /releases
 
 # doc links
 docs:
   - title: Getting Started
     children:
       - title: "Quick Start"
-        url: /docs/quick-start-guide/
+        url: /docs/quick-start-guide
       - title: "Structure"
         url: /docs/structure
       - title: "User Cases"

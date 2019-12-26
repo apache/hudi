@@ -20,7 +20,7 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="Apache Hudi">
 <meta property="og:title" content="Community">
-<meta property="og:url" content="http://0.0.0.0:4000/community/">
+<meta property="og:url" content="http://0.0.0.0:4000/community">
 
 
 
@@ -34,7 +34,7 @@
 
 
 
-<link rel="canonical" href="http://0.0.0.0:4000/community/">
+<link rel="canonical" href="http://0.0.0.0:4000/community">
 
 
 
@@ -111,17 +111,17 @@
           <span class="site-subtitle">Incubating</span>
         </a>
         <ul class="visible-links"><li class="masthead__menu-item">
-              <a href="/docs/quick-start-guide/" target="_self" >Documentation</a>
+              <a href="/docs/quick-start-guide" target="_self" >Documentation</a>
             </li><li class="masthead__menu-item">
-              <a href="/community/" target="_self" >Community</a>
+              <a href="/community" target="_self" >Community</a>
             </li><li class="masthead__menu-item">
-              <a href="/roadmap/" target="_self" >Roadmap</a>
+              <a href="/roadmap" target="_self" >Roadmap</a>
             </li><li class="masthead__menu-item">
-              <a href="/activity/" target="_self" >Activities</a>
+              <a href="/activity" target="_self" >Activities</a>
             </li><li class="masthead__menu-item">
               <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
             </li><li class="masthead__menu-item">
-              <a href="/releases/" target="_self" >Releases</a>
+              <a href="/releases" target="_self" >Releases</a>
             </li></ul>
         <button class="greedy-nav__toggle hidden" type="button">
           <span class="visually-hidden">Toggle menu</span>
@@ -161,7 +161,7 @@
     <ul class="author__urls social-icons">
       
         
-          <li><a href="/docs/quick-start-guide/" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+          <li><a href="/docs/quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
 
           
         
@@ -208,15 +208,24 @@
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> Section Nav</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#engage-with-us">Engage with us</a></li>
+  <li><a href="#contributing">Contributing</a></li>
+  <li><a href="#become-a-committer">Become a Committer</a>
+    <ul>
+      <li><a href="#the-committers">The Committers</a></li>
+    </ul>
+  </li>
+  <li><a href="#code-contributions">Code Contributions</a></li>
+  <li><a href="#accounts">Accounts</a></li>
+</ul>
+          </nav>
+        </aside>
         
-        <p>Welcome to Apache Hudi Community, this guide helps you how to engage with us quickly.</p>
-
-<h2 id="engage-with-us">Engage with us</h2>
+        <h2 id="engage-with-us">Engage with us</h2>
 
 <p>There are several ways to get in touch with the Hudi community.</p>
 
@@ -238,11 +247,11 @@
     </tr>
     <tr>
       <td>For quick pings &amp; 1-1 chats</td>
-      <td>Join our <a href="https://join.slack.com/t/apache-hudi/signup">slack group</a></td>
+      <td>Join our <a href="https://join.slack.com/t/apache-hudi/signup">slack group</a>. In case your mail domain is not there in pre-approved list for joining slack group, please check out the <a href="https://github.com/apache/incubator-hudi/issues/143">github issue</a></td>
     </tr>
     <tr>
       <td>For proposing large features, changes</td>
-      <td>Start a Hudi Improvement Process (HIP). Instructions <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=103091449#ApacheHudi(Incubating)-Designdocuments/HIPs">here</a>.</td>
+      <td>Start a RFC. Instructions <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+Process">here</a>.</td>
     </tr>
     <tr>
       <td>See <a href="#accounts">#here</a> for wiki access</td>
@@ -255,7 +264,7 @@
   </tbody>
 </table>
 
-<p class="notice--info">If you wish to report a security vulnerability, please contact <a href="mailto:security@apache.org">security@apache.org</a>.
+<p>If you wish to report a security vulnerability, please contact <a href="mailto:security@apache.org">security@apache.org</a>.
 Apache Hudi follows the typical Apache vulnerability handling <a href="https://apache.org/security/committers.html#vulnerability-handling">process</a>.</p>
 
 <h2 id="contributing">Contributing</h2>
@@ -266,11 +275,11 @@ Apache Hudi follows the typical Apache vulnerability handling <a href="https://a
 
 <ul>
   <li>Ask (and/or) answer questions on our support channels listed above.</li>
-  <li>Review code or HIPs</li>
+  <li>Review code or RFCs</li>
   <li>Help improve documentation</li>
   <li>Author blogs on our wiki</li>
   <li>Testing; Improving out-of-box experience by reporting bugs</li>
-  <li>Share new ideas/directions to pursue or propose a new HIP</li>
+  <li>Share new ideas/directions to pursue or propose a new RFC</li>
   <li>Contributing code to the project (<a href="https://issues.apache.org/jira/issues/?jql=project+%3D+HUDI+AND+component+%3D+newbie">newbie JIRAs</a>)</li>
 </ul>
 
@@ -281,7 +290,7 @@ Committers are chosen by a majority vote of the Apache Hudi <a href="https://www
 
 <ul>
   <li>Embodies the ASF model code of <a href="https://www.apache.org/foundation/policies/conduct.html">conduct</a></li>
-  <li>Has made significant technical contributions such as submitting PRs, filing bugs, testing, benchmarking, authoring HIPs, providing feedback/code reviews (+ more).</li>
+  <li>Has made significant technical contributions such as submitting PRs, filing bugs, testing, benchmarking, authoring RFCs, providing feedback/code reviews (+ more).</li>
   <li>Has helped the community over a few months, by answering questions on support channels above and triaging issues/jiras.</li>
   <li>Demonstrates clear code/design ownership of a component or code area (eg: Delta Streamer, Hive/Presto Integration etc).</li>
   <li>Brought thought leadership and new ideas into the project and evangelized them with the community via conference talks, blog posts.</li>
@@ -289,7 +298,7 @@ Committers are chosen by a majority vote of the Apache Hudi <a href="https://www
   <li>Proven commitment to the project by way of upholding all agreed upon processes, conventions and principles of the community.</li>
 </ul>
 
-<h2 id="the-committers">The Committers</h2>
+<h3 id="the-committers">The Committers</h3>
 
 <table>
   <thead>
@@ -385,7 +394,7 @@ Committers are chosen by a majority vote of the Apache Hudi <a href="https://www
 <h2 id="code-contributions">Code Contributions</h2>
 
 <p>Useful resources for contributing can be found under the “Developers” top menu.
-Specifically, please refer to the detailed <a href="/contributing">contribution guide</a>.</p>
+Specifically, please refer to the detailed <a href="contributing.html">contribution guide</a>.</p>
 
 <h2 id="accounts">Accounts</h2>
 
@@ -394,7 +403,7 @@ Specifically, please refer to the detailed <a href="/contributing">contribution 
 <ul>
   <li>Github account is needed to send pull requests to Hudi</li>
   <li>Sign-up/in to the Apache <a href="https://issues.apache.org/jira">JIRA</a>. Then please email the dev mailing list with your username, asking to be added as a contributor to the project. This enables you to assign/be-assigned tickets and comment on them.</li>
-  <li>Sign-up/in to the Apache <a href="https://cwiki.apache.org/confluence/signup.action">cWiki</a>, to be able to contribute to the wiki pages/HIPs.</li>
+  <li>Sign-up/in to the Apache <a href="https://cwiki.apache.org/confluence/signup.action">cWiki</a>, to be able to contribute to the wiki pages/RFCs.</li>
 </ul>
 
         

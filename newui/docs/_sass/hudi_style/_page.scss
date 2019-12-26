@@ -38,14 +38,14 @@ body {
 .page {
   @include breakpoint($large) {
     float: left;
-    width: calc(100% - #{$right-sidebar-width-narrow} + 20px);
+    width: calc(100% - #{$right-sidebar-width-narrow} + 90px);
     padding-left: 30px;
     padding-right: $right-tocbar-width;
   }
 
   @include breakpoint($x-large) {
     width: calc(100% - #{$right-sidebar-width});
-    padding-right: $right-tocbar-width;
+    padding-right: 215px;
   }
 
   .page__inner-wrap {
