@@ -215,7 +215,7 @@ public class HoodieLogFileCommand implements CommandMarker {
           if (n instanceof HoodieAvroDataBlock) {
             HoodieAvroDataBlock blk = (HoodieAvroDataBlock) n;
             List<IndexedRecord> records = blk.getRecords();
-            for(IndexedRecord record : records) {
+            for (IndexedRecord record : records) {
               if (allRecords.size() >= limit) {
                 break;
               }
