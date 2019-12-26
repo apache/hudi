@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import scala.Tuple2;
 
@@ -130,7 +129,7 @@ public class RollbackExecutor implements Serializable {
           // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
           // cloud-storage : HUDI-168
           Map<FileStatus, Long> filesToNumBlocksRollback = new HashMap<>();
-          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()), 1L);
+          filesToNumBlocksRollback.put(metaClient.getFs().getFileStatus(Preconditions.checkNotNull(writer).getLogFile().getPath()), 1L);
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
                   HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                           .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
