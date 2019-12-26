@@ -84,7 +84,7 @@ public class HoodiePrintHelper {
     buffer.getFieldNames().toArray(header);
 
     String[][] rows =
-        buffer.getRenderRows().stream().map(l -> l.toArray(new String[0])).toArray(String[][]::new);
+        buffer.getRenderRows().stream().map(l -> l.toArray(new String[l.size()])).toArray(String[][]::new);
     return printTextTable(header, rows);
   }
 
