@@ -1,7 +1,7 @@
 ---
 title: Performance
 keywords: hudi, index, storage, compaction, cleaning, implementation
-permalink: /docs/performance
+permalink: /docs/performance.html
 toc: false
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "Talks & Powered By"
 keywords: hudi, talks, presentation
-permalink: /docs/powered_by
+permalink: /docs/powered_by.html
 ---
 
 ## Adoption

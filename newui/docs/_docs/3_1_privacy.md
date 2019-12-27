@@ -1,7 +1,7 @@
 ---
 title: Privacy Policy
 keywords: hudi, privacy
-permalink: /docs/privacy
+permalink: /docs/privacy.html
 ---
 
 Information about your use of this website is collected using server access logs and a tracking cookie.

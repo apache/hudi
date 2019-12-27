@@ -8,11 +8,18 @@
 #
 hudi_style_skin          : "hudi"
 
+version : &version "0.5.1-SNAPSHOT"
+
+previous_docs:
+  latest: /docs/quick-start-guide.html
+  0.5.0-incubating: /versions/0.5.0-incubating/docs/quick-start-guide.html
+
+
 # Site Settings
 locale                   : "en-US"
 title                    : "Apache Hudi"
 title_separator          : "-"
-subtitle                 : "Incubating"
+subtitle                 : *version
 description              : "A flexible Jekyll theme."
 url                      : https://github.com/apache/incubator-hudi # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 repository               : "apache/incubator-hudi"

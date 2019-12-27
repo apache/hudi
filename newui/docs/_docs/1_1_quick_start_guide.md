@@ -1,6 +1,6 @@
 ---
 title: "Quick-Start Guide"
-permalink: /docs/quick-start-guide
+permalink: /docs/quick-start-guide.html
 toc: true
 ---
 

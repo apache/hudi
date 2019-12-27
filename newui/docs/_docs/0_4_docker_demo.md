@@ -1,7 +1,7 @@
 ---
 title: Docker Demo
 keywords: hudi, docker, demo
-permalink: /docs/docker_demo
+permalink: /docs/docker_demo.html
 toc: true
 ---
 

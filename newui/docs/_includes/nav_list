@@ -37,7 +37,12 @@
               {% assign active = "" %}
             {% endif %}
 
-            <li><a href="{{ child_url }}" class="{{ active }}">{{ child.title }}</a></li>
+            {% if site.version contains "SNAPSHOT" %}
+              <li><a href="{{ child_url }}" class="{{ active }}">{{ child.title }}</a></li>
+            {% else %}
+              <li><a href="/versions/{{ site.version }}{{ child_url }}" class="{{ active }}">{{ child.title }}</a></li>
+            {% endif %}
+
           {% endfor %}
         </ul>
         {% endif %}

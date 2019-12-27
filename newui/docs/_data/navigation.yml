@@ -2,48 +2,50 @@
 # main links
 main:
   - title: "Documentation"
-    url: /docs/quick-start-guide
+    url: /docs/quick-start-guide.html
   - title: "Community"
-    url: /community
+    url: /community.html
   - title: "Roadmap"
-    url: /roadmap
+    url: /roadmap.html
   - title: "Activities"
-    url: /activity
+    url: /activity.html
   - title: "FAQ"
     url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
   - title: "Releases"
-    url: /releases
+    url: /releases.html
 
 # doc links
 docs:
   - title: Getting Started
     children:
       - title: "Quick Start"
-        url: /docs/quick-start-guide
+        url: /docs/quick-start-guide.html
       - title: "Structure"
-        url: /docs/structure
+        url: /docs/structure.html
       - title: "User Cases"
-        url: /docs/use_cases
+        url: /docs/use_cases.html
       - title: "Talks & Powered By"
-        url: /docs/powered_by
+        url: /docs/powered_by.html
       - title: "Comparison"
-        url: /docs/comparison
+        url: /docs/comparison.html
   - title: Documentation
     children:
       - title: "Concepts"
-        url: /docs/concepts
+        url: /docs/concepts.html
       - title: "Writing Data"
-        url: /docs/writing_data
+        url: /docs/writing_data.html
       - title: "Querying Data"
-        url: /docs/querying_data
+        url: /docs/querying_data.html
       - title: "Configuration"
-        url: /docs/configurations
+        url: /docs/configurations.html
       - title: "Performance"
-        url: /docs/performance
+        url: /docs/performance.html
       - title: "Administering"
-        url: /docs/admin_guide
+        url: /docs/admin_guide.html
   - title: Meta Info
     children:
+      - title: "Docs Versions"
+        url: /docs/docs-versions.html
       - title: "Privacy Policy"
-        url: /docs/privacy
+        url: /docs/privacy.html
 

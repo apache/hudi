@@ -1,7 +1,7 @@
 ---
 title: Migration Guide
 keywords: hudi, migration, use case
-permalink: /docs/migration_guide
+permalink: /docs/migration_guide.html
 summary: In this page, we will discuss some available tools for migrating your existing dataset into a Hudi dataset
 ---
 

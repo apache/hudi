@@ -1,7 +1,7 @@
 ---
 title: "Concepts"
 keywords: hudi, design, storage, views, timeline
-permalink: /docs/concepts
+permalink: /docs/concepts.html
 summary: "Here we introduce some basic concepts & give a broad technical overview of Hudi"
 toc: true
 ---
