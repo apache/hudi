@@ -179,7 +179,11 @@
                 <li>
                     <!--start search-->
                     <div id="search-demo-container">
+
+                        
                         <input type="text" id="search-input" placeholder="search...">
+                        
+
                         <ul id="results-container"></ul>
                     </div>
                     <script src="/js/jekyll-search.js" type="text/javascript"></script>
@@ -400,7 +404,7 @@ Here we are using the default write operation : <code class="highlighter-rouge">
     read.
     format("org.apache.hudi").
     load(basePath + "/*/*/*/*")
-roViewDF.registerTempTable("hudi_ro_table")
+roViewDF.createOrReplaceTempView("hudi_ro_table")
 spark.sql("select fare, begin_lon, begin_lat, ts from  hudi_ro_table where fare &gt; 20.0").show()
 spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_path, rider, driver, fare from  hudi_ro_table").show()
 </code></pre>
@@ -434,7 +438,14 @@ denoted by the timestamp. Look for changes in <code class="highlighter-rouge">_h
 This can be achieved using Hudi’s incremental view and providing a begin time from which changes need to be streamed. 
 We do not need to specify endTime, if we want all changes after the given commit (as is the common case).</p>
 
-<pre><code class="language-Scala">val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k =&gt; k.getString(0)).take(50)
+<pre><code class="language-Scala">// reload data
+spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*").
+    createOrReplaceTempView("hudi_ro_table")
+
+val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k =&gt; k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // incrementally query data
@@ -468,13 +479,13 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 </code></pre>
 
 <h2 id="where-to-go-from-here">Where to go from here?</h2>
-<p>You can also do the quickstart by <a href="https://github.com/apache/incubator-hudi#building-apache-hudi-from-source-building-hudi">building hudi yourself</a>, 
+<p>You can also do the quickstart by <a href="https://github.com/apache/incubator-hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
 and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
 instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating</code></p>
 
 <p>Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple storage types/views and 
 Hudi datasets can be queried from query engines like Hive, Spark, Presto and much more. We have put together a 
-<a href="https://www.youtube.com/watch?v=VhNgUsxdrD0">demo video</a> that showcases all of this on a docker based setup with all 
+<a href="https://www.youtube.com/watch?v=VhNgUsxdrD0">demo video</a> that show cases all of this on a docker based setup with all 
 dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
 steps <a href="docker_demo.html">here</a> to get a taste for it. Also, if you are looking for ways to migrate your existing data 
 to Hudi, refer to <a href="migration_guide.html">migration guide</a>.</p>

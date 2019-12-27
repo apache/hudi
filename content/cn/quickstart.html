@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="">
 <meta name="keywords" content="hudi, quickstart">
-<title>Quickstart | Hudi</title>
+<title>快速开始 | Hudi</title>
 <link rel="stylesheet" href="/css/syntax.css">
 
 
@@ -115,7 +115,7 @@
                 
                 
                 
-                <li><a href="news">新闻</a></li>
+                <li><a href="releases.html">发布</a></li>
                 
                 
                 
@@ -164,7 +164,7 @@
 
 
 
-  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the Quickstart page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
+  <a class="email" title="Submit feedback" href="#" onclick="javascript:window.location='mailto:dev@hudi.apache.org?subject=Hudi Documentation feedback&body=I have some feedback about the 快速开始 page: ' + window.location.href;"><i class="fa fa-envelope-o"></i> Feedback</a>
 
 <li>
 
@@ -178,7 +178,11 @@
                 <li>
                     <!--start search-->
                     <div id="search-demo-container">
-                        <input type="text" id="search-input" placeholder="search...">
+
+                        
+                        <input type="text" id="search-input" placeholder="搜索...">
+                        
+
                         <ul id="results-container"></ul>
                     </div>
                     <script src="/js/jekyll-search.js" type="text/javascript"></script>
@@ -187,7 +191,7 @@
                                 searchInput: document.getElementById('search-input'),
                                 resultsContainer: document.getElementById('results-container'),
                                 dataSource: '/search.json',
-                                searchResultTemplate: '<li><a href="{url}" title="Quickstart">{title}</a></li>',
+                                searchResultTemplate: '<li><a href="{url}" title="快速开始">{title}</a></li>',
                     noResultsText: 'No results found.',
                             limit: 10,
                             fuzzy: true,
@@ -223,26 +227,26 @@
     
     
     <li>
-        <a href="#">Getting Started</a>
+        <a href="#">入门指南</a>
         <ul>
             
             
             
-            <li><a href="quickstart.html">Quickstart</a></li>
+            <li><a href="quickstart.html">快速开始</a></li>
             
             
             
             
             
             
-            <li><a href="use_cases.html">用户案例</a></li>
+            <li><a href="use_cases.html">使用案例</a></li>
             
             
             
             
             
             
-            <li><a href="powered_by.html">演讲 & Powered By</a></li>
+            <li><a href="powered_by.html">演讲 & Hudi 用户</a></li>
             
             
             
@@ -323,7 +327,7 @@
         <!-- Content Column -->
         <div class="col-md-8">
             <div class="post-header">
-   <h1 class="post-title-main">Quickstart</h1>
+   <h1 class="post-title-main">快速开始</h1>
 </div>
 
 
@@ -348,7 +352,7 @@
 
 <p>设置表名、基本路径和数据生成器来为本指南生成记录。</p>
 
-<pre><code class="language-Java">import org.apache.hudi.QuickstartUtils._
+<pre><code class="language-Scala">import org.apache.hudi.QuickstartUtils._
 import scala.collection.JavaConversions._
 import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
@@ -367,7 +371,7 @@ val dataGen = new DataGenerator
 <h2 id="inserts">插入数据</h2>
 <p>生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。</p>
 
-<pre><code class="language-Java">val inserts = convertToStringList(dataGen.generateInserts(10))
+<pre><code class="language-Scala">val inserts = convertToStringList(dataGen.generateInserts(10))
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("org.apache.hudi").
     options(getQuickstartWriteConfigs).
@@ -381,7 +385,7 @@ df.write.format("org.apache.hudi").
 
 <p><code class="highlighter-rouge">mode(Overwrite)</code>覆盖并重新创建数据集(如果已经存在)。
 您可以检查在<code class="highlighter-rouge">/tmp/hudi_cow_table/&lt;region&gt;/&lt;country&gt;/&lt;city&gt;/</code>下生成的数据。我们提供了一个记录键
-(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/county/city</code>）和组合逻辑(<code class="highlighter-rouge">ts</code><a href="#sample-schema">schema</a>)
+(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">uuid</code>)，分区字段(<code class="highlighter-rouge">region/county/city</code>）和组合逻辑(<a href="#sample-schema">schema</a>中的<code class="highlighter-rouge">ts</code>)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#Frequentlyaskedquestions(FAQ)-HowdoImodelthedatastoredinHudi?">对Hudi中的数据进行建模</a>，
 有关将数据提取到Hudi中的方法的信息，请参阅<a href="https://hudi.apache.org/writing_data.html">写入Hudi数据集</a>。
@@ -390,9 +394,9 @@ df.write.format("org.apache.hudi").
 
 <h2 id="query">查询数据</h2>
 
-<p>将数据文件加载到数据帧中。</p>
+<p>将数据文件加载到DataFrame中。</p>
 
-<pre><code class="language-Java">val roViewDF = spark.
+<pre><code class="language-Scala">val roViewDF = spark.
     read.
     format("org.apache.hudi").
     load(basePath + "/*/*/*/*")
@@ -407,9 +411,9 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 <h2 id="updates">更新数据</h2>
 
-<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到数据帧并将数据帧写入hudi数据集。</p>
+<p>这类似于插入新数据。使用数据生成器生成对现有行程的更新，加载到DataFrame中并将DataFrame写入hudi数据集。</p>
 
-<pre><code class="language-Java">val updates = convertToStringList(dataGen.generateUpdates(10))
+<pre><code class="language-Scala">val updates = convertToStringList(dataGen.generateUpdates(10))
 val df = spark.read.json(spark.sparkContext.parallelize(updates, 2));
 df.write.format("org.apache.hudi").
     options(getQuickstartWriteConfigs).
@@ -431,7 +435,14 @@ df.write.format("org.apache.hudi").
 这可以通过使用Hudi的增量视图并提供所需更改的开始时间来实现。
 如果我们需要给定提交之后的所有更改(这是常见的情况)，则无需指定结束时间。</p>
 
-<pre><code class="language-Java">val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k =&gt; k.getString(0)).take(50)
+<pre><code class="language-Scala">// reload data
+spark.
+    read.
+    format("org.apache.hudi").
+    load(basePath + "/*/*/*/*").
+    createOrReplaceTempView("hudi_ro_table")
+
+val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from  hudi_ro_table order by commitTime").map(k =&gt; k.getString(0)).take(50)
 val beginTime = commits(commits.length - 2) // commit time we are interested in
 
 // 增量查询数据
@@ -451,7 +462,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 <p>让我们看一下如何查询特定时间的数据。可以通过将结束时间指向特定的提交时间，将开始时间指向”000”(表示最早的提交时间)来表示特定时间。</p>
 
-<pre><code class="language-Java">val beginTime = "000" // Represents all commits &gt; this time.
+<pre><code class="language-Scala">val beginTime = "000" // Represents all commits &gt; this time.
 val endTime = commits(commits.length - 2) // commit time we are interested in
 
 // 增量查询数据
@@ -466,7 +477,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 <h2 id="从这开始下一步">从这开始下一步？</h2>
 
-<p>您也可以通过<a href="https://github.com/apache/incubator-hudi#building-apache-hudi-from-source-building-hudi">自己构建hudi</a>来快速入门，
+<p>您也可以通过<a href="https://github.com/apache/incubator-hudi#building-apache-hudi-from-source">自己构建hudi</a>来快速开始，
 并在spark-shell命令中使用<code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar</code>，
 而不是<code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating</code></p>
 

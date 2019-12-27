@@ -246,6 +246,12 @@
   
   
   <url>
+    <loc>http://0.0.0.0:4000/cn/releases.html</loc>
+  </url>
+  
+  
+  
+  <url>
     <loc>http://0.0.0.0:4000/releases.html</loc>
   </url>
   

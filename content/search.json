@@ -50,7 +50,7 @@
 
 
 {
-"title": "Administering Hudi Pipelines",
+"title": "管理 Hudi Pipelines",
 "tags": "",
 "keywords": "hudi, administration, operation, devops",
 "url": "cnadmin_guide.html",
@@ -94,7 +94,7 @@
 
 
 {
-"title": "Comparison",
+"title": "对比",
 "tags": "",
 "keywords": "apache, hudi, kafka, kudu, hive, hbase, stream processing",
 "url": "cncomparison.html",
@@ -116,7 +116,7 @@
 
 
 {
-"title": "Concepts",
+"title": "概念",
 "tags": "",
 "keywords": "hudi, design, storage, views, timeline",
 "url": "cnconcepts.html",
@@ -349,7 +349,7 @@
 
 
 {
-"title": "Talks &amp; Powered By",
+"title": "演讲 &amp; Hudi 用户",
 "tags": "",
 "keywords": "hudi, talks, presentation",
 "url": "cnpowered_by.html",
@@ -415,7 +415,7 @@
 
 
 {
-"title": "Quickstart",
+"title": "快速开始",
 "tags": "",
 "keywords": "hudi, quickstart",
 "url": "cnquickstart.html",
@@ -430,6 +430,17 @@
 "tags": "",
 "keywords": "hudi, quickstart",
 "url": "quickstart.html",
+"summary": ""
+}
+,
+
+
+
+{
+"title": "发布",
+"tags": "",
+"keywords": "apache, hudi, release, data lake, upsert",
+"url": "cnreleases.html",
 "summary": ""
 }
 ,
@@ -474,7 +485,7 @@
 
 
 {
-"title": "Use Cases",
+"title": "使用案例",
 "tags": "",
 "keywords": "hudi, data ingestion, etl, real time, use cases",
 "url": "cnuse_cases.html",
